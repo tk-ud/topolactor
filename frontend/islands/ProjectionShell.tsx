@@ -33,6 +33,10 @@ import {
   type RuntimeStateDispatcher,
   type UiEventEffectRunner,
 } from "../runtime/uiEventEffectRunner.ts";
+import {
+  createLiveNodeValueTracker,
+  type LiveNodeValueTracker,
+} from "../runtime/liveNodeValueTracker.ts";
 import type { WiringNode } from "../lib/uiBuilderWiringProjection.ts";
 import {
   adoptResolvedManifestIdentity,
@@ -120,6 +124,17 @@ export default function ProjectionShell(): JSX.Element {
   // sync across both mutation paths.
   const stateDispatcherRef = useRef<RuntimeStateDispatcher | null>(null);
   const effectRunnerRef = useRef<UiEventEffectRunner | null>(null);
+  // Live node value tracking (component_runtime_state_effect_boundary /
+  // remaining_write_payload_capture_gap): stable-node-identity register/
+  // update/deregister store backing renderEmission's payloadFromNodeValues —
+  // the read side dispatchExternalPort/dispatchInstanceOperation/admin_runtime
+  // Lane 2 payloadFrom resolution consumes via `node:<nodeId>.value`. A ref
+  // (not state) — snapshot() returns the SAME object every render so a
+  // runtimeSpec closure captured at an earlier render still observes later
+  // value updates without requiring a new renderEmission() call.
+  const nodeValueTrackerRef = useRef<LiveNodeValueTracker>(
+    createLiveNodeValueTracker(),
+  );
   // Latest emission for store-notification re-render (closed-over state is stale in [] effect).
   const emissionRef = useRef<Emission | null>(null);
   const storeUnsubscribeRef = useRef<(() => void) | null>(null);
@@ -253,6 +268,9 @@ export default function ProjectionShell(): JSX.Element {
       // rendered event bindings already write through the guarded, shared
       // mutation path — there is no separate un-guarded first render.
       const runnerNodes = toRunnerWiringNodes(nextEmission.layoutNodes);
+      nodeValueTrackerRef.current.reconcile(
+        runnerNodes.map((n) => n.nodeId),
+      );
       if (!stateDispatcherRef.current) {
         stateDispatcherRef.current = createProjectionStateDispatcher(
           runnerNodes,
@@ -265,6 +283,8 @@ export default function ProjectionShell(): JSX.Element {
       emissionRef.current = nextEmission;
       setSpecs(renderEmission(nextEmission, defaultComponentRegistry, {
         localStateStore: stateDispatcher,
+        payloadFromNodeValues: nodeValueTrackerRef.current.snapshot(),
+        onNodeValueChange: nodeValueTrackerRef.current.set,
       }));
       setLoading(false);
 
@@ -283,6 +303,8 @@ export default function ProjectionShell(): JSX.Element {
             if (!current || !mounted) return;
             setSpecs(renderEmission(current, defaultComponentRegistry, {
               localStateStore: stateDispatcherRef.current ?? stateDispatcher,
+              payloadFromNodeValues: nodeValueTrackerRef.current.snapshot(),
+              onNodeValueChange: nodeValueTrackerRef.current.set,
             }));
           },
         );
@@ -412,6 +434,13 @@ export default function ProjectionShell(): JSX.Element {
             // index) guarantees an existing node's already-fired interaction does
             // not re-execute.
             const refreshedNodes = toRunnerWiringNodes(updated.layoutNodes);
+            // Reconcile tracked live values to the refreshed node list BEFORE
+            // the effect runner reconciliation below and the renderEmission()
+            // call further down — a removed/replaced node's stale tracked
+            // value must not leak into a later dispatch on this same mount.
+            nodeValueTrackerRef.current.reconcile(
+              refreshedNodes.map((n) => n.nodeId),
+            );
             if (effectRunnerRef.current) {
               effectRunnerRef.current.updateNodes(refreshedNodes);
               for (
@@ -437,6 +466,8 @@ export default function ProjectionShell(): JSX.Element {
             }
             setSpecs(renderEmission(updated, defaultComponentRegistry, {
               localStateStore: stateDispatcherRef.current ?? undefined,
+              payloadFromNodeValues: nodeValueTrackerRef.current.snapshot(),
+              onNodeValueChange: nodeValueTrackerRef.current.set,
             }));
           } catch (err) {
             if (gen !== refreshGenRef.current || !mounted) return;

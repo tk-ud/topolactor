@@ -55,6 +55,13 @@ export type RenderEmissionOptions = {
   localStateStore?: RuntimeGuardedStateStore;
   /** Snapshot for dispatchExternalPort payloadFrom node:<nodeId>.value resolution. */
   payloadFromNodeValues?: Record<string, unknown>;
+  /**
+   * Registers a node's own latest scalar value under its stable nodeId — the
+   * write side of payloadFromNodeValues. See liveNodeValueTracker.ts. Absent
+   * by default (no-op) — callers that never wire this in keep today's
+   * behavior unchanged.
+   */
+  onNodeValueChange?: (nodeId: string, value: unknown) => void;
 };
 
 export type ComponentSpec = {
@@ -377,20 +384,75 @@ export function mergeNodeLocalProps(
   return { ok: true, props };
 }
 
+const ADMIN_RUNTIME_PAYLOAD_FROM_ACTION_TYPE = "bindRuntimeDispatchPayload";
+
+/**
+ * Reads per-trigger payloadFrom maps authored on a node's OWN runtimeInteractions[]
+ * entries (a per-node column, independent of the layout-wide wiring_kind=admin_runtime
+ * broadcast target/layer/action) for the generic, non-surface-specific
+ * "bindRuntimeDispatchPayload" actionType. Every admin_runtime action (enum_dictionary:*,
+ * auth_users:*, team_markdown:*, scheduler_jobs:*, ...) reuses this SAME actionType —
+ * no per-operation case. Outside the closed WIRING_SETTING_CATEGORIES taxonomy
+ * (uiBuilderWiringProjection.ts) on purpose: that taxonomy governs UI-Builder
+ * canvas-authoring policy checks, not this seed-authored runtime dispatch path — an
+ * unrecognized actionType there is silently skipped (never a hard error) by
+ * buildLocalUiStateEventBinding/buildExternalPortEventBinding, and the
+ * RUNTIME_INTERACTION_UNATTRIBUTABLE fail-close below only fires when the overall
+ * componentEventBinding ends up empty, which an admin_runtime node's own
+ * wiringKind-derived baseEventBinding already prevents.
+ * SSOT: docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
+ * lane_storage_boundary.known_gaps.remaining_write_payload_capture_gap.
+ */
+function buildAdminRuntimePayloadFromByTrigger(
+  rawWirings: unknown,
+): Record<string, Record<string, string>> {
+  if (!Array.isArray(rawWirings)) return {};
+  const byTrigger: Record<string, Record<string, string>> = {};
+  for (const raw of rawWirings) {
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) continue;
+    const wiring = raw as Record<string, unknown>;
+    if (wiring.actionType !== ADMIN_RUNTIME_PAYLOAD_FROM_ACTION_TYPE) continue;
+    const trigger = normalizeAuthoredEventType(
+      wiring.trigger ?? wiring.eventType,
+    );
+    if (!trigger) continue;
+    const payloadFromRaw = wiring.payloadFrom;
+    if (
+      typeof payloadFromRaw !== "object" || payloadFromRaw === null ||
+      Array.isArray(payloadFromRaw)
+    ) continue;
+    const payloadFrom = Object.fromEntries(
+      Object.entries(payloadFromRaw).filter(([, value]) =>
+        typeof value === "string"
+      ),
+    ) as Record<string, string>;
+    if (Object.keys(payloadFrom).length === 0) continue;
+    byTrigger[trigger] = { ...(byTrigger[trigger] ?? {}), ...payloadFrom };
+  }
+  return byTrigger;
+}
+
 /**
  * Builds an eventBinding for a catalog_component node from its RuntimeDispatchSpec.
  * Populates standard triggers (click, change, select, submit, toggle) each carrying
  * the full runtimeDispatch spec so emitBoundEvent fires both log and dispatch lanes.
- * Returns empty object when spec is null/absent (log lane only).
+ * Returns empty object when spec is null/absent (log lane only). payloadFromByTrigger
+ * (built by buildAdminRuntimePayloadFromByTrigger) attaches a per-trigger payloadFrom
+ * map onto that trigger's own spec copy — absent for triggers with no authored entry.
  */
 export function buildCatalogComponentEventBinding(
   spec: RuntimeDispatchSpec | null,
+  payloadFromByTrigger: Record<string, Record<string, string>> = {},
 ): Record<string, unknown> {
   if (!spec) return {};
   const triggers = ["click", "change", "select", "submit", "toggle"] as const;
   const binding: Record<string, unknown> = {};
   for (const trigger of triggers) {
-    binding[trigger] = { eventType: trigger, runtimeDispatch: spec };
+    const payloadFrom = payloadFromByTrigger[trigger];
+    binding[trigger] = {
+      eventType: trigger,
+      runtimeDispatch: payloadFrom ? { ...spec, payloadFrom } : spec,
+    };
   }
   return binding;
 }
@@ -956,7 +1018,10 @@ export function renderEmission(
           ? buildPreviewInertEventBinding()
           : isNavigationWiringKind(nodeWiringKind)
           ? buildRouteNavigationEventBinding(node.targetRef)
-          : buildCatalogComponentEventBinding(buildRuntimeDispatchSpec(node));
+          : buildCatalogComponentEventBinding(
+            buildRuntimeDispatchSpec(node),
+            buildAdminRuntimePayloadFromByTrigger(node.runtimeInteractions),
+          );
         const rawLocalInteractions = node.runtimeInteractions ??
           propsWithDesign.eventWirings;
         const localStateEventBinding = previewMode
@@ -1056,6 +1121,9 @@ export function renderEmission(
           eventBinding: componentEventBinding,
           localStateStore: options?.localStateStore,
           payloadFromNodeValues: options?.payloadFromNodeValues,
+          onNodeValueChange: (options?.onNodeValueChange && node.nodeId)
+            ? (value: unknown) => options.onNodeValueChange!(node.nodeId!, value)
+            : undefined,
           design: hubDesign,
         };
         const adapted = adaptComponentDataHub(hub);

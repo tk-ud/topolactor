@@ -357,6 +357,17 @@ export type RuntimeDispatchSpec = {
    * backend derives from wiring/screen_data_shape configuration instead.
    */
   payload?: Record<string, unknown>;
+  /**
+   * SSOT remaining_write_payload_capture_gap: seed-authored field->source map,
+   * resolved via the SAME resolvePayloadFrom() authority dispatchExternalPort /
+   * dispatchInstanceOperation already use (payloadFromResolver.ts) — node:<id>.value
+   * / event.<path> / literal:<value>. When present and non-empty, the RESOLVED
+   * payload is the dispatch's sole payload (mirrors the external/instance lanes'
+   * own contract exactly); when absent/empty, the pre-existing raw event-time
+   * payload passthrough (see emitBoundEvent's component_wiring_execution_lane
+   * branch) is unchanged.
+   */
+  payloadFrom?: Record<string, string>;
 };
 
 export type ExternalPortDispatchSpec = {

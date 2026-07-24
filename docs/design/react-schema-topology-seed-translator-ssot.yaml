@@ -1168,7 +1168,15 @@ react_schema_topology_seed_translator_ssot:
     known_gaps:
       - gap: admin_runtime_layer_action_dispatch_lane_not_yet_defined
         classification: missing_lane_ssot_gap
-        status: open
+        status: resolved_direction_selected_generic_mechanism_implemented
+        status_note: >-
+          Mirrors docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
+          lane_storage_boundary.known_gaps[0].status (that entry is this cross-reference's
+          own primary/authoritative source -- kept in sync here rather than left stale).
+          2026-07-24: the same entry's write_payload_capture_mechanism_implemented sibling
+          field additionally resolves the write-side sub-gap (node value tracking +
+          Lane 2 payloadFrom resolution, live-DB write+reread proof) this cross-reference
+          also covers.
         note: >-
           Cross-reference: docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
           lane_storage_boundary.known_gaps carries the full determination (confirmed via

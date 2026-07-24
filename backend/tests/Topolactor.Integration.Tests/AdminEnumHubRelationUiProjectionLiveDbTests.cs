@@ -314,6 +314,135 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         Assert.Contains("groupName", dataText);
     }
 
+    /// <summary>
+    /// Write-side live-DB proof (2026-07-24, admin-runtime-operation-dispatch-lane-determination
+    /// remaining_write_payload_capture_gap resolution). Unlike the read-circuit test above, this
+    /// dispatches enum_dictionary:create_group / delete_group directly against real PostgreSQL --
+    /// the SAME dispatcher chain (ManifestDispatcher -> AdminRuntimeDispatchAdapter ->
+    /// AdminRuntime.ExecuteDataAsync -> EnumDictionaryRepository) the frontend's now-payloadFrom-
+    /// capable admin_runtime Lane 2 (frontend/runtime/runtimeComponentFactory.ts emitBoundEvent,
+    /// frontend/tests/liveNodeValueTrackerAndAdminRuntimePayloadFrom.test.ts) would drive in
+    /// production. Proves: (1) write persists to real PostgreSQL, (2) a subsequent
+    /// enum_dictionary:list_groups re-dispatch reflects the write (create appears, delete is
+    /// gone) -- the diff/evidence boundary -- and (3) two negative cases fail close instead of
+    /// silently succeeding: deleting a nonexistent groupId, and a malformed (non-UUID) groupId.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_AdminEnumManagementManifest_CreateGroupThenDeleteGroup_PersistsAndReListReflectsDiff()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var groupName = $"live-db-write-proof-{suffix}";
+        string? createdGroupId = null;
+
+        async Task<string> ListGroupsRawAsync()
+        {
+            var listPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups",
+            });
+            var listRequest = new EndpointRequestDto(
+                "list_groups", "manifest", "enum_dictionary", "list_groups",
+                IdOrHubId: null, Payload: listPayload, Context: null, TriggerKind: "client", Role: "admin");
+            var listResponse = await dispatcher.DispatchAsync(listRequest);
+            Assert.True(listResponse.Success, string.Join(";", listResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+            return listResponse.Emission!.Data!.Value.GetRawText();
+        }
+
+        try
+        {
+            // Baseline: the not-yet-created group name is absent from a real re-list.
+            Assert.DoesNotContain(groupName, await ListGroupsRawAsync());
+
+            // WRITE: enum_dictionary:create_group -- the payload shape a resolved
+            // payloadFrom (node:<nameInputNodeId>.value) would produce.
+            var createPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:create_group",
+                groupName,
+            });
+            var createRequest = new EndpointRequestDto(
+                "create_group", "manifest", "enum_dictionary", "create_group",
+                IdOrHubId: null, Payload: createPayload, Context: null, TriggerKind: "client", Role: "admin");
+            var createResponse = await dispatcher.DispatchAsync(createRequest);
+            Assert.True(createResponse.Success, string.Join(";", createResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+            var createdText = createResponse.Emission!.Data!.Value.GetRawText();
+            using (var createdDoc = System.Text.Json.JsonDocument.Parse(createdText))
+            {
+                createdGroupId = createdDoc.RootElement.GetProperty("groupId").GetString();
+            }
+            Assert.False(string.IsNullOrWhiteSpace(createdGroupId));
+
+            // READ REPROJECTION: the write's effect is visible through the SAME read circuit
+            // the admin-enum screen dispatches (real Postgres round trip, not an in-memory echo).
+            Assert.Contains(groupName, await ListGroupsRawAsync());
+
+            // NEGATIVE: malformed (non-UUID) groupId fails close, never silently "succeeds".
+            var malformedDeletePayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:delete_group",
+                groupId = "not-a-uuid",
+            });
+            var malformedDeleteRequest = new EndpointRequestDto(
+                "delete_group", "manifest", "enum_dictionary", "delete_group",
+                IdOrHubId: null, Payload: malformedDeletePayload, Context: null, TriggerKind: "client", Role: "admin");
+            var malformedDeleteResponse = await dispatcher.DispatchAsync(malformedDeleteRequest);
+            Assert.False(malformedDeleteResponse.Success);
+            Assert.Contains(malformedDeleteResponse.Errors, e => e.Code == "ENUM_GROUP_ID_MALFORMED");
+
+            // NEGATIVE: a syntactically valid but nonexistent groupId fails close.
+            var nonexistentDeletePayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:delete_group",
+                groupId = Guid.NewGuid().ToString(),
+            });
+            var nonexistentDeleteRequest = new EndpointRequestDto(
+                "delete_group", "manifest", "enum_dictionary", "delete_group",
+                IdOrHubId: null, Payload: nonexistentDeletePayload, Context: null, TriggerKind: "client", Role: "admin");
+            var nonexistentDeleteResponse = await dispatcher.DispatchAsync(nonexistentDeleteRequest);
+            Assert.False(nonexistentDeleteResponse.Success);
+            Assert.Contains(nonexistentDeleteResponse.Errors, e => e.Code == "ENUM_GROUP_NOT_FOUND");
+
+            // The group created above must still be present -- neither negative case above
+            // silently deleted it.
+            Assert.Contains(groupName, await ListGroupsRawAsync());
+
+            // WRITE: enum_dictionary:delete_group -- the payload shape the trigger's OWN native
+            // event payload (a table row-click event's own {row:{groupId:...}}) resolves via
+            // event.row.groupId, without needing the node-value-tracking fix at all.
+            var deletePayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:delete_group",
+                groupId = createdGroupId,
+            });
+            var deleteRequest = new EndpointRequestDto(
+                "delete_group", "manifest", "enum_dictionary", "delete_group",
+                IdOrHubId: null, Payload: deletePayload, Context: null, TriggerKind: "client", Role: "admin");
+            var deleteResponse = await dispatcher.DispatchAsync(deleteRequest);
+            Assert.True(deleteResponse.Success, string.Join(";", deleteResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+            createdGroupId = null; // deleted -- no cleanup needed in finally.
+
+            // READ REPROJECTION: the delete's effect is visible through a real re-list too.
+            Assert.DoesNotContain(groupName, await ListGroupsRawAsync());
+        }
+        finally
+        {
+            // Best-effort cleanup if an assertion above failed before the delete step ran.
+            if (createdGroupId is not null)
+            {
+                await using var conn = new NpgsqlConnection(cs);
+                await conn.OpenAsync();
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = "DELETE FROM enum.groups WHERE group_id = @id";
+                cmd.Parameters.AddWithValue("id", Guid.Parse(createdGroupId));
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+    }
+
     [Fact]
     public async Task AdminEnumManagementManifest_OwnsNoHubRelationsRows_SeedOnly()
     {

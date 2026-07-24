@@ -322,6 +322,71 @@ admin_uibuilder_ui_structure_wiring_ssot:
           id field(s) (enum_dictionary:delete_item/delete_group) are the closest
           candidates for the next real write-side proof, not create/update (which need
           genuinely new typed input, not an existing row's own value).
+        write_payload_capture_mechanism_implemented: >-
+          2026-07-24. Both cross-cutting prerequisites named above are implemented and
+          tested; this gap's own diagnosis text above is kept as history and superseded
+          by this entry, not rewritten. (1)
+          frontend/runtime/liveNodeValueTracker.ts createLiveNodeValueTracker() is a new,
+          surface-independent, stable-node-identity register/update/deregister store
+          (set/snapshot/reconcile). frontend/islands/ProjectionShell.tsx now owns one
+          instance per mount (a ref, never re-created across rerenders/SSE refresh) and
+          passes it into every renderEmission() call as
+          payloadFromNodeValues:tracker.snapshot() (same object reference every call, so
+          a runtimeSpec closure captured at an earlier render still observes later
+          writes) and onNodeValueChange:tracker.set. reconcile() runs on initial mount
+          and on every SSE refresh against the CURRENT layoutNodes list, so a
+          removed/replaced node's stale tracked value cannot leak into a later dispatch
+          -- this closes the negative cases stale_node_value / node_reconciliation.
+          renderEmission.ts wires onNodeValueChange into a per-node closure on
+          ComponentDataHub/RuntimeComponentSpec (mirrors the existing
+          payloadFromNodeValues plumbing exactly).
+          runtime/runtimeComponentFactory.ts emitBoundEvent gained a node-value-tracking
+          lane (fires on change/input/select when payload carries "value", BEFORE the
+          previewMode gate, same event-time-extraction pattern as the pre-existing
+          calcTriggerCallback lane) -- this is the write side of payloadFromNodeValues,
+          proven in production for the first time (frontend/tests/
+          liveNodeValueTrackerAndAdminRuntimePayloadFrom.test.ts). (2) Lane 2
+          (component_wiring_execution_lane, admin_runtime) reuses the SAME
+          resolvePayloadFrom() single resolution authority
+          (frontend/runtime/payloadFromResolver.ts) dispatchExternalPort/
+          dispatchInstanceOperation already use -- no new resolver, no surface-specific
+          payload builder. frontend/runtime/frontendScheduler.ts RuntimeDispatchSpec
+          gained an optional payloadFrom field; renderEmission.ts's new
+          buildAdminRuntimePayloadFromByTrigger() reads it from a node's OWN
+          runtimeInteractions[] entries carrying the new, generic (non-surface-specific,
+          reusable by any admin_runtime layer:action) actionType
+          "bindRuntimeDispatchPayload" -- deliberately outside the closed
+          WIRING_SETTING_CATEGORIES taxonomy (uiBuilderWiringProjection.ts), since that
+          taxonomy governs UI-Builder canvas-authoring policy checks, not this
+          seed-authored runtime dispatch path; an unrecognized actionType there is
+          silently skipped by the existing category builders and never trips
+          RUNTIME_INTERACTION_UNATTRIBUTABLE (which only fires when the overall
+          eventBinding ends up empty -- an admin_runtime node's wiringKind-derived base
+          binding already prevents that). Priority/conflict rule (the canonical contract
+          per this gap's own remaining_granularity_constraint discussion above): when a
+          payloadFrom map is authored for a trigger, RESOLVING it is the SOLE payload
+          authority for that dispatch -- unresolved node value / malformed event path is
+          a hard fail-close (PAYLOAD_FROM_NODE_NOT_FOUND / PAYLOAD_FROM_EVENT_PATH_NOT_FOUND
+          / PAYLOAD_FROM_UNRESOLVED_REF, never a silent empty/false/null degrade); when no
+          payloadFrom is authored for a trigger, the pre-existing PR597 raw event-time
+          payload passthrough is unchanged (regression-proven). Live-DB proof (real
+          PostgreSQL, not an in-memory echo): backend/tests/Topolactor.Integration.Tests/
+          AdminEnumHubRelationUiProjectionLiveDbTests.cs
+          DispatchAsync_AdminEnumManagementManifest_CreateGroupThenDeleteGroup_
+          PersistsAndReListReflectsDiff dispatches enum_dictionary:create_group then
+          enum_dictionary:delete_group directly against the SAME dispatcher chain the
+          frontend mechanism above drives, asserts the write persists AND that a
+          subsequent enum_dictionary:list_groups re-dispatch reflects the diff (create
+          appears, delete is gone -- the write/reread/evidence boundary), and asserts two
+          negative cases fail close (malformed groupId, nonexistent groupId) without
+          corrupting the row created earlier in the same test. This resolves
+          admin-runtime-operation-dispatch-lane-determination's third acceptance
+          condition (admin-enum/team-dashboard/scheduler-settings write-dispatch CAN now
+          proceed under the single component_wiring_execution_lane contract) -- it does
+          NOT itself ship admin-enum's/team-dashboard's/scheduler-settings' own
+          production write UI (buttons, forms, seed wiring rows beyond this proof); that
+          remains admin-surface-topology-seed-conversion's own subBundle scope, now
+          unblocked rather than completed by this entry.
         affected_subbundles: [admin-enum, team-dashboard, scheduler-settings]
         follow_up_ref: .agent/tasks/todo.md admin-runtime-operation-dispatch-lane-determination Bundle
     manifest_topology_boundary:
