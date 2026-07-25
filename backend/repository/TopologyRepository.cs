@@ -284,6 +284,14 @@ public record LayoutNodeRecord(
     string? PropBindingsJson = null,
     /// <summary>Canonical runtime UI interactions JSON array from layout_patch_json.nodes[].runtimeInteractions. Null when not authored.</summary>
     string? RuntimeInteractionsJson = null,
+    /// <summary>
+    /// Node-local admin_runtime dispatch payload binding JSON object from
+    /// layout_patch_json.nodes[].dispatchPayloadFromByTrigger — { trigger: { field: source } }.
+    /// Data-only: supplies payloadFrom fields for this SAME node's admin_runtime dispatch
+    /// (WiringKind="admin_runtime" + TargetRef); carries no action authority of its own and is
+    /// independent of runtimeInteractions/actionType. Null when not authored.
+    /// </summary>
+    string? DispatchPayloadFromByTriggerJson = null,
     /// <summary>Sizing mode from layout_patch_json: auto | preset | custom.</summary>
     string? WidthMode = null,
     string? HeightMode = null,

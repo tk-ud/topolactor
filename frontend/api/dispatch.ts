@@ -38,7 +38,6 @@ export type ContextRouteRecommendation = {
   statusDetail?: string;
 };
 
-
 export type RecommendRuntimeDispatchSpec = {
   operationType: string;
   target: string;
@@ -49,7 +48,11 @@ export type RecommendRuntimeDispatchSpec = {
   targetRef?: string | null;
 };
 
-export type RecommendProjectionStatus = "ok" | "insufficient_history" | "explicit_unavailable" | "explicit_error";
+export type RecommendProjectionStatus =
+  | "ok"
+  | "insufficient_history"
+  | "explicit_unavailable"
+  | "explicit_error";
 
 export type RecommendProjectionCandidate = {
   value: string;
@@ -62,7 +65,14 @@ export type RecommendProjectionCandidate = {
 
 export type RecommendProjectionSection = {
   lane: "ui_pressure" | "state_pressure";
-  candidateKind: "next_operation" | "next_component" | "next_route_action" | "next_context_token" | "next_enum_item" | "likely_status" | "state_shift_candidate";
+  candidateKind:
+    | "next_operation"
+    | "next_component"
+    | "next_route_action"
+    | "next_context_token"
+    | "next_enum_item"
+    | "likely_status"
+    | "state_shift_candidate";
   title: string;
   status: RecommendProjectionStatus;
   statusDetail?: string | null;
@@ -135,28 +145,38 @@ export type LayoutNode = {
    */
   propBindings?: Record<string, PropBinding> | null;
   /** Canonical runtime UI interactions. Legacy propsJson.eventWirings is fallback only. */
-  runtimeInteractions?: Array<{
-    trigger: string;
-    actionType: string;
-    targetNodeId?: string;
-    statePath?: string;
-    value?: unknown;
-    portTargetRef?: string;
-    instanceTargetRef?: string;
-    payloadFrom?: Record<string, string>;
-    outputProp?: string;
-    debounceMs?: number;
-    lifecycleDispatchConfirmed?: boolean;
-    idempotencyPolicy?: string;
-    sideEffectNone?: boolean;
-    /**
-     * SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
-     * lifecycle_policy.projection_authority_runtime_interaction_identity.
-     * Backend-assigned stable id (never generated on the frontend). Absent on
-     * entries not yet re-persisted since the field was introduced.
-     */
-    runtimeInteractionId?: string;
-  }> | null;
+  runtimeInteractions?:
+    | Array<{
+      trigger: string;
+      actionType: string;
+      targetNodeId?: string;
+      statePath?: string;
+      value?: unknown;
+      portTargetRef?: string;
+      instanceTargetRef?: string;
+      payloadFrom?: Record<string, string>;
+      outputProp?: string;
+      debounceMs?: number;
+      lifecycleDispatchConfirmed?: boolean;
+      idempotencyPolicy?: string;
+      sideEffectNone?: boolean;
+      /**
+       * SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
+       * lifecycle_policy.projection_authority_runtime_interaction_identity.
+       * Backend-assigned stable id (never generated on the frontend). Absent on
+       * entries not yet re-persisted since the field was introduced.
+       */
+      runtimeInteractionId?: string;
+    }>
+    | null;
+  /**
+   * Node-local admin_runtime dispatch payload binding — { trigger: { field: source } }. Supplies
+   * payloadFrom fields for this SAME node's admin_runtime dispatch (wiringKind="admin_runtime" +
+   * targetRef). Data-only: carries no action authority and is independent of
+   * runtimeInteractions/actionType — see renderEmission.ts's admin_runtime payload binding
+   * contract. Absent when not authored.
+   */
+  dispatchPayloadFromByTrigger?: Record<string, Record<string, string>> | null;
   widthMode?: "auto" | "preset" | "custom";
   heightMode?: "auto" | "preset" | "custom";
   /**
@@ -308,7 +328,9 @@ export async function dispatchOperation(
   token?: string,
 ): Promise<DispatchResponse> {
   try {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
     if (token) headers["Authorization"] = `Bearer ${token}`;
     const response = await fetch("/api/dispatch", {
       method: "POST",
@@ -329,7 +351,9 @@ export async function dispatchOperation(
 
     return {
       success: false,
-      errors: [{ message: "dispatch: unexpected response shape from /api/dispatch" }],
+      errors: [{
+        message: "dispatch: unexpected response shape from /api/dispatch",
+      }],
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

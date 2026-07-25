@@ -257,20 +257,6 @@ export const WIRING_SETTING_CATEGORIES = [
 
 export type WiringSettingCategory = typeof WIRING_SETTING_CATEGORIES[number];
 
-/**
- * "bindRuntimeDispatchPayload" (SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
- * lane_storage_boundary.admin_runtime_payload_binding_contract) is the conventional
- * actionType a seed authors for a component_wiring_execution_lane admin_runtime
- * dispatch's payload data. It carries no special recognition here: it is classified
- * by wiringSettingCategoryOf below through the SAME structural field_boundary the
- * SSOT already declares for 副作用設定 (ui_event_settings.setting_category_taxonomy.
- * frontend_side.side_effect_setting.field_boundary: "payloadFrom / outputProp /
- * targetNode state assignment are effect fields, not the effect authority itself"),
- * via the existing hasSideEffectFields check — not a dedicated actionType constant.
- * Its own value-level validation still lives solely in renderEmission.ts
- * buildAdminRuntimePayloadFromByTrigger and runtimeComponentFactory.ts
- * parseEventBinding (single validation authority; not duplicated here).
- */
 const UI_STATE_UPDATE_ACTIONS = new Set([
   "openModal",
   "closeModal",
@@ -291,9 +277,7 @@ const UI_STATE_UPDATE_ACTIONS = new Set([
 ]);
 
 /** Effect fields present on an interaction (副作用設定 fields, not the effect authority itself). */
-export function hasSideEffectFields(
-  w: Pick<WiringInteraction, "payloadFrom" | "outputProp">,
-): boolean {
+export function hasSideEffectFields(w: WiringInteraction): boolean {
   return Boolean(
     w.outputProp?.trim() ||
       (w.payloadFrom && Object.keys(w.payloadFrom).length > 0),
@@ -301,16 +285,20 @@ export function hasSideEffectFields(
 }
 
 /**
- * Classify one runtimeInteraction into the canonical taxonomy. Falls back to
- * side_effect_setting (SSOT field_boundary: payloadFrom / outputProp are effect
- * fields, not the effect authority itself) for any actionType outside the other
- * three branches that carries those fields — the taxonomy classifies by field
- * boundary, not by an actionType allowlist, for this category. Returns null only
- * when neither an actionType match nor a side-effect field is present (fail-close;
- * no implementation-derived catch-all beyond the SSOT-declared field boundary).
+ * Classify one runtimeInteraction into the canonical taxonomy.
+ * Returns null for actionTypes outside the taxonomy (fail-close; no catch-all).
+ *
+ * actionType is action AUTHORITY — a closed vocabulary matched here by exact identity
+ * only. payloadFrom/outputProp are effect DATA, never a substitute authority: an
+ * unrecognized actionType stays unrecognized regardless of which fields it happens to
+ * carry (PR #599 review round 6). side_effect_setting (SSOT ui_event_settings.
+ * setting_category_taxonomy.frontend_side.side_effect_setting) has no actionType
+ * membership defined in this codebase yet — it stays a declared-but-orphaned taxonomy
+ * category here until a real actionType is introduced for it, rather than being
+ * back-filled by an actionType-independent field-presence rule.
  */
 export function wiringSettingCategoryOf(
-  w: Pick<WiringInteraction, "actionType" | "payloadFrom" | "outputProp">,
+  w: Pick<WiringInteraction, "actionType">,
 ): WiringSettingCategory | null {
   if (w.actionType === "dispatchExternalPort") {
     return "external_api_integration";
@@ -319,7 +307,6 @@ export function wiringSettingCategoryOf(
     return "external_instance_integration";
   }
   if (UI_STATE_UPDATE_ACTIONS.has(w.actionType)) return "ui_state_update";
-  if (hasSideEffectFields(w)) return "side_effect_setting";
   return null;
 }
 

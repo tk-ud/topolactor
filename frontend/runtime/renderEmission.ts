@@ -402,70 +402,59 @@ export type AdminRuntimePayloadFromByTriggerResult =
   | { ok: false; error: string };
 
 /**
- * Reads per-trigger payloadFrom maps authored on a node's OWN runtimeInteractions[]
- * entries (a per-node column, independent of the layout-wide wiring_kind=admin_runtime
- * broadcast target/layer/action) — the canonical, data-defined payload-binding
- * extension of component_wiring_execution_lane's admin_runtime case (SSOT:
+ * Reads a node's OWN dispatchPayloadFromByTrigger field — { trigger: { field: source } } —
+ * a per-node, data-only payload binding for this SAME node's admin_runtime dispatch
+ * (component_wiring_execution_lane, wiring_kind="admin_runtime"). SSOT:
  * admin-uibuilder-ui-structure-wiring-ssot.yaml lane_storage_boundary.known_gaps.
- * remaining_write_payload_capture_gap write_payload_capture_mechanism_implemented).
- * The conventional actionType is "bindRuntimeDispatchPayload"; every admin_runtime
- * action (enum_dictionary:*, auth_users:*, team_markdown:*, scheduler_jobs:*, ...)
- * reuses it — no per-operation case. Selection below does not key on that string.
+ * remaining_write_payload_capture_gap write_payload_capture_mechanism_implemented.
  *
- * Selected via wiringSettingCategoryOf(uiBuilderWiringProjection.ts) === "side_effect_setting"
- * — the SAME classification the UI-Builder canvas-authoring inspector taxonomy already
- * uses for any entry carrying payloadFrom/outputProp effect fields (SSOT
- * ui_event_settings.setting_category_taxonomy.frontend_side.side_effect_setting.
- * field_boundary), not a dedicated actionType. Being classified here does NOT mean
- * malformed entries are silently ignored — every selected entry with a non-empty
- * payloadFrom is validated and fails the whole result closed on any malformation
- * (never skipped/filtered/merged-with-last-wins): unrecognized trigger, non-object/empty
- * payloadFrom, a non-string payloadFrom value, or two entries authoring the same field
- * for the same trigger (duplicate_field_conflict — resolved via silent overwrite, never
- * — the entries disagree, and dispatch must not guess which wins). An entry selected by
- * this classification with no payloadFrom at all (e.g. an outputProp-only local echo
- * entry) carries nothing for this contract and is skipped, not failed.
+ * This field carries NO action authority of its own and lives OUTSIDE
+ * runtimeInteractions[]/actionType entirely (PR #599 review round 6: action authority
+ * (actionType, closed vocabulary) and effect data (payloadFrom) are separate concepts —
+ * a data-only payload binding must not be expressed as a fake runtimeInteractions[]
+ * actionType, and effect fields must never promote an unrecognized actionType past
+ * ACTION_OUTSIDE_VOCABULARY). Every admin_runtime action (enum_dictionary:*, auth_users:*,
+ * team_markdown:*, scheduler_jobs:*, ...) reuses this SAME node-level field — no
+ * per-operation case.
+ *
+ * Because dispatchPayloadFromByTrigger is a single object keyed by trigger (not an array
+ * of independently-authored entries), two authors can no longer disagree on the same
+ * field for the same trigger — JSON object keys are inherently unique, so the
+ * duplicate_field_conflict case round 1-5 validated is now structurally impossible, not
+ * merely checked. A present-but-malformed value still fails the WHOLE node closed, never
+ * silently skipped/filtered: an unrecognized trigger key, a non-object per-trigger map, or
+ * a non-string field value — the SAME error-code vocabulary
+ * (RUNTIME_INTERACTION_PAYLOAD_FROM_MUST_BE_OBJECT / _VALUE_MUST_BE_STRING /
+ * RUNTIME_INTERACTION_TRIGGER_REQUIRED) the backend's own ValidateDispatchPayloadFromByTrigger
+ * (NpgsqlUiTopologyRepository.cs, reusing its existing ValidatePayloadFromShape helper also
+ * used by dispatchExternalPort/dispatchInstanceOperation's own payloadFrom) validates at the
+ * persistence boundary — not an admin-specific vocabulary. An empty per-trigger map ({}) is
+ * intentionally NOT rejected here, matching the backend's own leniency for the same shape on
+ * dispatchExternalPort/dispatchInstanceOperation's payloadFrom.
  */
 function buildAdminRuntimePayloadFromByTrigger(
-  rawWirings: unknown,
+  rawByTrigger: unknown,
 ): AdminRuntimePayloadFromByTriggerResult {
-  if (!Array.isArray(rawWirings)) return { ok: true, byTrigger: {} };
+  if (rawByTrigger === undefined || rawByTrigger === null) {
+    return { ok: true, byTrigger: {} };
+  }
+  if (typeof rawByTrigger !== "object" || Array.isArray(rawByTrigger)) {
+    return {
+      ok: false,
+      error:
+        `RUNTIME_INTERACTION_DISPATCH_PAYLOAD_FROM_BY_TRIGGER_MUST_BE_OBJECT: dispatchPayloadFromByTrigger must be an object`,
+    };
+  }
   const byTrigger: Record<string, Record<string, string>> = {};
-  for (const raw of rawWirings) {
-    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) continue;
-    const wiring = raw as Record<string, unknown>;
-    // dispatchExternalPort/dispatchInstanceOperation/ui_state_update actions own their
-    // own payloadFrom (resolved directly in emitBoundEvent's own dispatch lane) -- never
-    // swept into this contract's byTrigger map even if one happens to carry the field.
-    // Everything else that authored an own payloadFrom key (even null/empty/malformed --
-    // validated, never silently skipped) is a candidate for this contract.
-    const category = wiringSettingCategoryOf(
-      wiring as {
-        actionType: string;
-        payloadFrom?: Record<string, string>;
-        outputProp?: string;
-      },
-    );
-    if (
-      category === "external_api_integration" ||
-      category === "external_instance_integration" ||
-      category === "ui_state_update"
-    ) continue;
-    if (!Object.prototype.hasOwnProperty.call(wiring, "payloadFrom")) continue;
-
-    const rawTrigger = wiring.trigger ?? wiring.eventType;
+  for (const [rawTrigger, payloadFromRaw] of Object.entries(rawByTrigger)) {
     const trigger = normalizeAuthoredEventType(rawTrigger);
     if (!trigger) {
       return {
         ok: false,
         error:
-          `ADMIN_RUNTIME_PAYLOAD_FROM_INVALID_TRIGGER: bindRuntimeDispatchPayload entry has an unrecognized trigger "${
-            String(rawTrigger)
-          }"`,
+          `RUNTIME_INTERACTION_TRIGGER_REQUIRED: dispatchPayloadFromByTrigger has an unrecognized trigger key "${rawTrigger}"`,
       };
     }
-
-    const payloadFromRaw = wiring.payloadFrom;
     if (
       typeof payloadFromRaw !== "object" || payloadFromRaw === null ||
       Array.isArray(payloadFromRaw)
@@ -473,45 +462,21 @@ function buildAdminRuntimePayloadFromByTrigger(
       return {
         ok: false,
         error:
-          `ADMIN_RUNTIME_PAYLOAD_FROM_MALFORMED: bindRuntimeDispatchPayload entry for trigger "${trigger}" has a non-object payloadFrom`,
-      };
-    }
-    const payloadFromEntries = Object.entries(payloadFromRaw);
-    if (payloadFromEntries.length === 0) {
-      return {
-        ok: false,
-        error:
-          `ADMIN_RUNTIME_PAYLOAD_FROM_EMPTY: bindRuntimeDispatchPayload entry for trigger "${trigger}" declares no payloadFrom fields`,
+          `RUNTIME_INTERACTION_PAYLOAD_FROM_MUST_BE_OBJECT: dispatchPayloadFromByTrigger entry for trigger "${trigger}" is not an object`,
       };
     }
     const payloadFrom: Record<string, string> = {};
-    for (const [field, value] of payloadFromEntries) {
+    for (const [field, value] of Object.entries(payloadFromRaw)) {
       if (typeof value !== "string") {
         return {
           ok: false,
           error:
-            `ADMIN_RUNTIME_PAYLOAD_FROM_MALFORMED: bindRuntimeDispatchPayload entry for trigger "${trigger}" field "${field}" is not a string source`,
+            `RUNTIME_INTERACTION_PAYLOAD_FROM_VALUE_MUST_BE_STRING: dispatchPayloadFromByTrigger entry for trigger "${trigger}" field "${field}" is not a string source`,
         };
       }
       payloadFrom[field] = value;
     }
-
-    const existing = byTrigger[trigger];
-    if (existing) {
-      const conflicting = Object.keys(payloadFrom).find((field) =>
-        Object.prototype.hasOwnProperty.call(existing, field)
-      );
-      if (conflicting) {
-        return {
-          ok: false,
-          error:
-            `ADMIN_RUNTIME_PAYLOAD_FROM_DUPLICATE_FIELD_CONFLICT: trigger "${trigger}" has more than one bindRuntimeDispatchPayload entry authoring field "${conflicting}"`,
-        };
-      }
-      byTrigger[trigger] = { ...existing, ...payloadFrom };
-    } else {
-      byTrigger[trigger] = payloadFrom;
-    }
+    byTrigger[trigger] = payloadFrom;
   }
   return { ok: true, byTrigger };
 }
@@ -1159,13 +1124,15 @@ export function renderEmission(
             ? { ...design, linkHref: linkHrefResult.value || design.linkHref }
             : undefined,
         );
-        // bindRuntimeDispatchPayload validation is fail-closed for the whole node —
-        // never silently skipped/filtered/last-wins-merged (SSOT
-        // remaining_write_payload_capture_gap negative-case contract).
+        // dispatchPayloadFromByTrigger validation is fail-closed for the whole node —
+        // never silently skipped/filtered (SSOT remaining_write_payload_capture_gap
+        // negative-case contract).
         const adminRuntimePayloadFrom = previewMode ||
             isNavigationWiringKind(nodeWiringKind)
           ? { ok: true as const, byTrigger: {} }
-          : buildAdminRuntimePayloadFromByTrigger(node.runtimeInteractions);
+          : buildAdminRuntimePayloadFromByTrigger(
+            node.dispatchPayloadFromByTrigger,
+          );
         if (!adminRuntimePayloadFrom.ok) {
           return {
             componentId: node.componentId,

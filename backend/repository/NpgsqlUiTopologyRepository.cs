@@ -749,6 +749,51 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         return false;
     }
 
+    /// <summary>
+    /// Shared payloadFrom-shape validation authority: a payloadFrom value must be a JSON object
+    /// whose entries are all strings. Reused by ValidateRuntimeInteractions (dispatchExternalPort/
+    /// dispatchInstanceOperation's own payloadFrom) and ValidateDispatchPayloadFromByTrigger (the
+    /// node-level admin_runtime payload binding field) so both share one validation owner and one
+    /// error-code vocabulary rather than each declaring its own.
+    /// </summary>
+    private static string? ValidatePayloadFromShape(JsonElement payloadFromEl)
+    {
+        if (payloadFromEl.ValueKind != JsonValueKind.Object)
+            return "RUNTIME_INTERACTION_PAYLOAD_FROM_MUST_BE_OBJECT";
+        foreach (var entry in payloadFromEl.EnumerateObject())
+        {
+            if (entry.Value.ValueKind != JsonValueKind.String)
+                return $"RUNTIME_INTERACTION_PAYLOAD_FROM_VALUE_MUST_BE_STRING:{entry.Name}";
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Validates the node-level dispatchPayloadFromByTrigger field — { trigger: { field: source } }
+    /// — data-only payload binding for this SAME node's admin_runtime dispatch, independent of
+    /// runtimeInteractions/actionType (see LayoutNodeRecord.DispatchPayloadFromByTriggerJson).
+    /// A present-but-malformed value fails the WHOLE layout patch closed, mirroring
+    /// ValidateRuntimeInteractions' own contract for the same JSON boundary.
+    /// </summary>
+    private static string? ValidateDispatchPayloadFromByTrigger(JsonElement nodes)
+    {
+        foreach (var node in nodes.EnumerateArray())
+        {
+            if (node.ValueKind != JsonValueKind.Object) continue;
+            if (!node.TryGetProperty("dispatchPayloadFromByTrigger", out var byTriggerEl)) continue;
+            if (byTriggerEl.ValueKind != JsonValueKind.Object)
+                return "RUNTIME_INTERACTION_DISPATCH_PAYLOAD_FROM_BY_TRIGGER_MUST_BE_OBJECT";
+            foreach (var triggerEntry in byTriggerEl.EnumerateObject())
+            {
+                if (string.IsNullOrWhiteSpace(triggerEntry.Name))
+                    return "RUNTIME_INTERACTION_TRIGGER_REQUIRED";
+                var payloadFromError = ValidatePayloadFromShape(triggerEntry.Value);
+                if (payloadFromError is not null) return payloadFromError;
+            }
+        }
+        return null;
+    }
+
     private static string? ValidateRuntimeInteractions(
         JsonElement nodes,
         IReadOnlySet<string>? approvedInstanceTargetRefs = null,
@@ -832,13 +877,8 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                         return $"RUNTIME_INTERACTION_INSTANCE_TARGET_REF_NOT_APPROVED:{targetRef}";
                     if (interaction.TryGetProperty("payloadFrom", out var payloadFromEl))
                     {
-                        if (payloadFromEl.ValueKind != JsonValueKind.Object)
-                            return "RUNTIME_INTERACTION_PAYLOAD_FROM_MUST_BE_OBJECT";
-                        foreach (var entry in payloadFromEl.EnumerateObject())
-                        {
-                            if (entry.Value.ValueKind != JsonValueKind.String)
-                                return $"RUNTIME_INTERACTION_PAYLOAD_FROM_VALUE_MUST_BE_STRING:{entry.Name}";
-                        }
+                        var payloadFromError = ValidatePayloadFromShape(payloadFromEl);
+                        if (payloadFromError is not null) return payloadFromError;
                     }
                     if (interaction.TryGetProperty("outputProp", out var outputPropEl))
                     {
@@ -1183,6 +1223,9 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                     var runtimeInteractionError = ValidateRuntimeInteractions(runtimeNodes, approvedInstanceTargetRefs, instanceCandidateSourceError);
                     if (runtimeInteractionError is not null)
                         return normalized with { Ok = false, Valid = false, Message = runtimeInteractionError };
+                    var dispatchPayloadFromByTriggerError = ValidateDispatchPayloadFromByTrigger(runtimeNodes);
+                    if (dispatchPayloadFromByTriggerError is not null)
+                        return normalized with { Ok = false, Valid = false, Message = dispatchPayloadFromByTriggerError };
                 }
             }
 

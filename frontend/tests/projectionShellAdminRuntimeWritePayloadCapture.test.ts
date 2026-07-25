@@ -1,7 +1,8 @@
 // frontend/tests/projectionShellAdminRuntimeWritePayloadCapture.test.ts
 //
-// Production-path scenario proof (PR #599 review, rounds 1 and 3): the mechanism
-// tests in liveNodeValueTrackerAndAdminRuntimePayloadFrom.test.ts exercise
+// Production-path scenario proof (PR #599 review, rounds 1, 3, 6): the mechanism
+// tests (uiEventEffectRunner.test.ts, payloadFromResolver.test.ts,
+// runtimeComponentFactory.test.ts, renderEmissionPropBindings.test.ts) exercise
 // renderEmission()/emitBoundEvent() directly against hand-built RuntimeComponentSpec
 // objects. This file instead mounts the REAL frontend/islands/ProjectionShell.tsx
 // production component, simulates genuine DOM input/click events AND a genuine SSE
@@ -19,7 +20,7 @@ import {
   assertExists,
 } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { h, options, render } from "preact";
-import { setupDom, flushUpdates } from "./test-dom-setup.ts";
+import { flushUpdates, setupDom } from "./test-dom-setup.ts";
 import { ensureRuntimeComponentRegistryInitialized } from "../runtime/runtimeComponentRegistry.ts";
 import { __testOnly as schedulerTestOnly } from "../runtime/frontendScheduler.ts";
 import ProjectionShell from "../islands/ProjectionShell.tsx";
@@ -227,13 +228,9 @@ Deno.test(
                 targetSurface: "manifest",
                 targetRef:
                   `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:create_group`,
-                runtimeInteractions: [
-                  {
-                    trigger: "click",
-                    actionType: "bindRuntimeDispatchPayload",
-                    payloadFrom: { groupName: "node:node-name-input.value" },
-                  },
-                ],
+                dispatchPayloadFromByTrigger: {
+                  click: { groupName: "node:node-name-input.value" },
+                },
               },
             ],
           },
@@ -329,13 +326,9 @@ Deno.test(
           targetSurface: "manifest",
           targetRef:
             `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:create_group`,
-          runtimeInteractions: [
-            {
-              trigger: "click",
-              actionType: "bindRuntimeDispatchPayload",
-              payloadFrom: { groupName: "node:node-name-input.value" },
-            },
-          ],
+          dispatchPayloadFromByTrigger: {
+            click: { groupName: "node:node-name-input.value" },
+          },
         },
       ],
     };
@@ -359,13 +352,9 @@ Deno.test(
           targetSurface: "manifest",
           targetRef:
             `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:create_group`,
-          runtimeInteractions: [
-            {
-              trigger: "click",
-              actionType: "bindRuntimeDispatchPayload",
-              payloadFrom: { groupName: "node:node-name-input.value" },
-            },
-          ],
+          dispatchPayloadFromByTrigger: {
+            click: { groupName: "node:node-name-input.value" },
+          },
         },
       ],
     };
@@ -520,16 +509,12 @@ Deno.test(
             targetSurface: "manifest",
             targetRef:
               `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:create_group`,
-            runtimeInteractions: [
-              {
-                trigger: "click",
-                actionType: "bindRuntimeDispatchPayload",
-                payloadFrom: {
-                  fieldA: "node:node-input-a.value",
-                  fieldB: "node:node-input-b.value",
-                },
+            dispatchPayloadFromByTrigger: {
+              click: {
+                fieldA: "node:node-input-a.value",
+                fieldB: "node:node-input-b.value",
               },
-            ],
+            },
           },
         ],
       };
@@ -611,10 +596,10 @@ Deno.test(
       simulateClick(refreshedButton);
       await waitFor(() => scenario.capturedDispatchBodies.length >= 4);
       assertEquals(
-        (scenario.capturedDispatchBodies[3].payload as Record<
+        scenario.capturedDispatchBodies[3].payload as Record<
           string,
           unknown
-        >),
+        >,
         {
           fieldA: "Alpha",
           fieldB: "Beta",
@@ -638,7 +623,9 @@ Deno.test(
       FakeEventSource;
     FakeEventSource.instances = [];
     const remountScenario = buildMockScenario((callIndex) => {
-      if (callIndex === 1) return { success: true, emission: twoInputEmission() };
+      if (callIndex === 1) {
+        return { success: true, emission: twoInputEmission() };
+      }
       return { success: true, errors: [] };
     });
     globalThis.fetch = remountScenario.fetch;
