@@ -195,6 +195,99 @@ Deno.test("renderEmission: onNodeValueChange option registers per-node closures 
   assertEquals(captured, [["node-nv-1", "hello"]]);
 });
 
+// ─── renderEmission: applyLiveNodeValueOverride — display authority unified
+// with dispatch authority (PR #599 review round 4) ───────────────────────────
+
+Deno.test("renderEmission: payloadFromNodeValues option overrides a form_input/input node's default displayed value when a tracked entry exists", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const emission: Emission = {
+    layoutId: "layout-display-authority-001",
+    layoutNodes: [{
+      nodeId: "node-tracked-input",
+      nodeKind: "catalog_component",
+      componentId: "comp-tracked-input-001",
+      componentKind: "form_input/input",
+      componentKey: "text_input.primitive",
+      orderIndex: 0,
+    }],
+  };
+  const specs = renderEmission(emission, {}, {
+    payloadFromNodeValues: { "node-tracked-input": "Alpha" },
+  });
+  assertExists(specs[0].runtimeSpec);
+  const data = specs[0].runtimeSpec!.props.data as Record<string, unknown>;
+  assertEquals(data.value, "Alpha");
+});
+
+Deno.test("renderEmission: payloadFromNodeValues does NOT override a node with no tracked entry (untouched nodes keep the emission-derived default, no invented value)", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const emission: Emission = {
+    layoutId: "layout-display-authority-002",
+    layoutNodes: [{
+      nodeId: "node-untouched-input",
+      nodeKind: "catalog_component",
+      componentId: "comp-untouched-input-001",
+      componentKind: "form_input/input",
+      componentKey: "text_input.primitive",
+      orderIndex: 0,
+    }],
+  };
+  const specs = renderEmission(emission, {}, {
+    payloadFromNodeValues: { "some-other-node": "Alpha" },
+  });
+  assertExists(specs[0].runtimeSpec);
+  const data = specs[0].runtimeSpec!.props.data as Record<string, unknown>;
+  assertEquals(data.value, "");
+});
+
+Deno.test("renderEmission: payloadFromNodeValues does NOT invent a 'value' field for a component kind that has none (action/button)", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const emission: Emission = {
+    layoutId: "layout-display-authority-003",
+    layoutNodes: [{
+      nodeId: "node-button",
+      nodeKind: "catalog_component",
+      componentId: "comp-button-001",
+      componentKind: "action/button",
+      componentKey: "button.primitive",
+      orderIndex: 0,
+    }],
+  };
+  const specs = renderEmission(emission, {}, {
+    // A tracked entry keyed by this exact nodeId, but action/button's default
+    // props have no data.value key at all — must not gain one.
+    payloadFromNodeValues: { "node-button": "should-not-appear" },
+  });
+  assertExists(specs[0].runtimeSpec);
+  const data = specs[0].runtimeSpec!.props.data as Record<string, unknown>;
+  assertEquals(Object.prototype.hasOwnProperty.call(data, "value"), false);
+});
+
+Deno.test("renderEmission: own-property identity — a nodeId shaped like an Object.prototype key with no real tracked entry does not override display value", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const emission: Emission = {
+    layoutId: "layout-display-authority-004",
+    layoutNodes: [{
+      nodeId: "constructor",
+      nodeKind: "catalog_component",
+      componentId: "comp-ctor-input-001",
+      componentKind: "form_input/input",
+      componentKey: "text_input.primitive",
+      orderIndex: 0,
+    }],
+  };
+  // payloadFromNodeValues is a plain {} here (own-property-identity-safe by
+  // construction per liveNodeValueTracker.ts's Object.create(null) backing;
+  // this proves applyLiveNodeValueOverride's OWN hasOwnProperty check holds
+  // even against a plain {} with an inherited "constructor" property).
+  const specs = renderEmission(emission, {}, {
+    payloadFromNodeValues: {},
+  });
+  assertExists(specs[0].runtimeSpec);
+  const data = specs[0].runtimeSpec!.props.data as Record<string, unknown>;
+  assertEquals(data.value, "");
+});
+
 // ─── Lane 2 payloadFrom resolution (admin_runtime, "bindRuntimeDispatchPayload") ──
 
 Deno.test("buildAdminRuntimePayloadFromByTrigger via buildCatalogComponentEventBinding: payloadFrom attaches to the matching trigger only", () => {

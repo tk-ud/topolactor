@@ -591,22 +591,23 @@ Deno.test(
       await waitFor(() => scenario.capturedDispatchBodies.length >= 3);
       assertEquals(scenario.capturedDispatchBodies.length, 3);
 
-      // Click again WITHOUT retyping: both surviving nodes' TRACKED (dispatch)
-      // values must still be present after the refresh/rerender.
-      //
-      // Note (honest finding, not this Bundle's scope to change): renderEmission()
-      // rebuilds each catalog_component leaf's default props from scratch on every
-      // render (buildDefaultCatalogComponentProps), so a surviving controlled
-      // <input>'s DISPLAYED value resets to its emission-derived default on
-      // refresh, same as any other controlled-input re-render in this codebase —
-      // this is pre-existing, general controlled-component behavior, not something
-      // the live node value tracker (a dispatch-payload concern) owns or affects.
-      // The tracker's OWN authority — what a later dispatch actually sends — is
-      // what this assertion (and the payload assertion below) verify.
+      // Click again WITHOUT retyping: both surviving nodes' tracked values must
+      // still be present after the refresh/rerender — AND the re-rendered DOM
+      // must display those SAME values (applyLiveNodeValueOverride in
+      // renderEmission.ts promotes the live node value tracker to the display
+      // authority too, not just the dispatch authority — closing the
+      // divergence a raw emission-derived-default rerender would otherwise
+      // reintroduce). What the user sees is what the next dispatch sends.
       const refreshedButton = container.querySelector(
         "button",
       ) as HTMLButtonElement;
       assertEquals(inputs().length, 2, "both nodes must still be rendered");
+      assertEquals(
+        inputs()[0].value,
+        "Alpha",
+        "the surviving input's DISPLAYED value must still show what the user typed, not reset to a placeholder, after a real SSE refresh",
+      );
+      assertEquals(inputs()[1].value, "Beta");
       simulateClick(refreshedButton);
       await waitFor(() => scenario.capturedDispatchBodies.length >= 4);
       assertEquals(

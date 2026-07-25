@@ -739,6 +739,56 @@ function applyLocalStateOverrides(
 }
 
 /**
+ * Promotes the live node value tracker (liveNodeValueTracker.ts) to the SAME
+ * canonical authority for a node's DISPLAYED value that Lane 2's payloadFrom
+ * resolution already uses for its DISPATCHED value — closing a real
+ * display/dispatch authority divergence: without this, an SSE-refresh-driven
+ * rerender resets a surviving controlled input's displayed value to its
+ * emission-derived default (buildDefaultCatalogComponentProps rebuilds every
+ * leaf's default props from scratch), while a later dispatch would still
+ * silently resolve and send the tracker's pre-refresh typed value — sending a
+ * value the user can no longer see on screen.
+ *
+ * Own-property identity (not `in`/bracket truthiness) matches
+ * liveNodeValueTracker.ts/payloadFromResolver.ts's existing contract. Applies
+ * ONLY when (a) the tracker has an entry for this exact nodeId (untouched
+ * nodes are entirely unaffected — no invented value) and (b) the node's
+ * already-built default props carry a `data.value` key (never invents a
+ * "value" concept for a component kind that doesn't have one — e.g.
+ * action/button, form_input/form_field). Applied BEFORE propBindings
+ * resolution (resolvePropBindings runs later in the pipeline), so a node
+ * whose value is ALSO server-data-bound via propBindings still lets that
+ * fresher, data-driven binding win — a stale local edit is not preferred over
+ * live server data once the projection actually carries one.
+ */
+function applyLiveNodeValueOverride(
+  props: Record<string, unknown>,
+  nodeId: string | undefined,
+  payloadFromNodeValues: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (!nodeId || !payloadFromNodeValues) return props;
+  if (!Object.prototype.hasOwnProperty.call(payloadFromNodeValues, nodeId)) {
+    return props;
+  }
+  const trackedValue = payloadFromNodeValues[nodeId];
+  const existingData = props.data;
+  if (
+    typeof existingData === "object" && existingData !== null &&
+    !Array.isArray(existingData) &&
+    Object.prototype.hasOwnProperty.call(existingData, "value")
+  ) {
+    return {
+      ...props,
+      data: {
+        ...(existingData as Record<string, unknown>),
+        value: trackedValue,
+      },
+    };
+  }
+  return props;
+}
+
+/**
  * Builds a map from nodeId → children (sorted by orderIndex) for tree rendering.
  * Root nodes have parentNodeId === undefined; look them up with key undefined.
  * Pure function — no DOM or Preact dependency.
@@ -1059,10 +1109,14 @@ export function renderEmission(
         const propsWithDesign = mergeCatalogPropsWithComponentDesign(
           node.componentKind,
           node.componentKey ?? node.nodeId ?? "Component",
-          applyLocalStateOverrides(
-            mergedProps.props,
+          applyLiveNodeValueOverride(
+            applyLocalStateOverrides(
+              mergedProps.props,
+              node.nodeId,
+              options?.localStateStore,
+            ),
             node.nodeId,
-            options?.localStateStore,
+            options?.payloadFromNodeValues,
           ),
           design
             ? { ...design, linkHref: linkHrefResult.value || design.linkHref }

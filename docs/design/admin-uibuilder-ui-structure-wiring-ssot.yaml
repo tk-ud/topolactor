@@ -521,26 +521,47 @@ admin_uibuilder_ui_structure_wiring_ssot:
         WHOLE binding closed (parseEventBinding returns null,
         RUNTIME_PRIMITIVE_RENDERER_INVALID_EVENT_BINDING at dispatch time) -- never a
         silently filtered subset.
-      display_value_vs_dispatch_value_authority_note: >-
-        2026-07-24 finding from the production-mount SSE-refresh scenario proof (recorded
-        here, not treated as a gap to silently paper over): renderEmission() rebuilds
-        every catalog_component leaf's default props from scratch on each render
-        (buildDefaultCatalogComponentProps), so a surviving controlled <input>'s DISPLAYED
-        value resets to its emission-derived default on any SSE-refresh-driven rerender --
-        this is pre-existing, general controlled-component behavior across this codebase,
-        not something the live node value tracker introduces or is responsible for fixing.
-        The tracker's own authority (what a LATER dispatch actually sends) is unaffected
-        and independently proven to survive the same refresh unchanged -- see proof below.
-        A user-facing "the input visibly still shows what I typed after a background
-        refresh" UX guarantee, if ever desired, is a distinct, unscoped feature (binding
-        emission-derived default props to live tracked values for display) -- out of this
-        Bundle.
+      display_value_vs_dispatch_value_authority: >-
+        2026-07-24 (PR #599 review round 4). The production-mount SSE-refresh scenario
+        proof (round 3) surfaced a real divergence, since retracted-as-out-of-scope and
+        corrected here: renderEmission() rebuilds every catalog_component leaf's default
+        props from scratch on each render (buildDefaultCatalogComponentProps), so a
+        surviving controlled <input>'s DISPLAYED value reset to its emission-derived
+        default on an SSE-refresh-driven rerender while a LATER dispatch would still
+        silently resolve and send the live node value tracker's pre-refresh typed value
+        -- sending a value the user could no longer see on screen. Introducing dispatch
+        reachability for tracked values (this Bundle's whole purpose) is what turned a
+        previously-inert display quirk into a real "invisible stale value sent" risk, so
+        it is this Bundle's own scope, not a separate concern. Resolved by promoting the
+        SAME live node value tracker to the canonical DISPLAY authority too, via
+        renderEmission.ts's new applyLiveNodeValueOverride: when the tracker holds an
+        entry for a node's exact nodeId (own-property identity, matching the read-side
+        contract above) AND that node's already-built default props carry a `data.value`
+        key, the tracked value overrides the emission-derived default -- untouched nodes
+        (no tracker entry) and value-less component kinds (e.g. action/button,
+        form_input/form_field -- no `data.value` key to begin with) are both entirely
+        unaffected, so this is surface/operation/component-kind-independent, not an
+        admin-enum-specific or per-node patch. Applied BEFORE propBindings resolution, so
+        a node whose value is ALSO server-data-bound via propBindings still lets that
+        fresher, live server data win over a stale local edit once the projection
+        actually carries one -- the tracker is display authority only in the absence of a
+        stronger, live data-bound source, never a fallback that shadows one. A node with
+        no tracked entry and no propBinding falls through to the pre-existing
+        emission-derived default unchanged (no regression for the common case). Removed
+        nodes (SSE-refresh reconciliation) are not rendered at all, so there is no display
+        to diverge from -- resolvePayloadFrom's existing PAYLOAD_FROM_NODE_NOT_FOUND
+        fail-close (not a display-side concern) covers a later dispatch attempt against
+        them.
       proof: >-
         frontend/tests/liveNodeValueTrackerAndAdminRuntimePayloadFrom.test.ts (fail-close
         cases: invalid trigger, malformed/empty payloadFrom, non-string field,
         duplicate_field_conflict, own-property identity for both the node value store and
-        event-path traversal, and the parseEventBinding dispatch-time parse-boundary
-        fail-close cases independent of build-time validation),
+        event-path traversal; the parseEventBinding dispatch-time parse-boundary
+        fail-close cases independent of build-time validation; and
+        applyLiveNodeValueOverride's display-authority cases -- overrides only when a
+        tracked entry exists for the exact nodeId, never invents a `data.value` field for
+        a component kind that has none, and own-property-identity-safe against an
+        Object.prototype-shaped nodeId),
         frontend/tests/uiBuilderWiringProjection.test.ts (policy_validator_reconciliation:
         bindRuntimeDispatchPayload does not trip ACTION_OUTSIDE_VOCABULARY or inherit
         backend/external-dispatch policy checks, while a genuinely unrecognized actionType
@@ -551,8 +572,10 @@ admin_uibuilder_ui_structure_wiring_ssot:
         path with a minimal live ProjectionDefinition -- not a test-injected payload
         map/callback or a stubbed refresh -- proving: multi-node value separation, a
         removed node's tracked value failing close on a later dispatch instead of leaking,
-        a surviving node's tracked value persisting across refresh, and a fresh
-        unmount/remount starting with no inherited values).
+        a surviving node's tracked DISPLAY value -- asserted directly against the
+        re-rendered DOM <input>.value, not only against the dispatch payload --
+        persisting across refresh and matching the value the following dispatch actually
+        sends, and a fresh unmount/remount starting with no inherited values).
     manifest_topology_boundary:
       rule: >-
         manifest.topology entries for this surface (ui_projection type per
