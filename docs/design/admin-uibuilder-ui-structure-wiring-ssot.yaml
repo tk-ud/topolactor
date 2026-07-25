@@ -426,11 +426,28 @@ admin_uibuilder_ui_structure_wiring_ssot:
         not adopt it).
       required_fields:
         trigger: >-
-          A dispatchPayloadFromByTrigger object key. Must classify via the SAME
-          normalizeAuthoredEventType/trigger_vocabulary every runtimeInteractions entry
-          uses (click/change/select/submit/toggle after normalization). An unrecognized
-          key fails the WHOLE node closed (RUNTIME_INTERACTION_TRIGGER_REQUIRED) --
-          never silently skipped.
+          2026-07-25 correction (PR #599 review round 7 -- corrects the round-6 text below,
+          which described this restriction without the implementation actually enforcing
+          it). A dispatchPayloadFromByTrigger object key is validated in two stages, not
+          one: (1) the SAME global normalizeAuthoredEventType() every runtimeInteractions
+          entry uses -- an 8-canonical-trigger alias map (click/change/input/submit/
+          toggle/focus/blur/select) shared unmodified with every other consumer of that
+          normalizer, never narrowed; a key this stage does not recognize at all fails the
+          WHOLE node closed (RUNTIME_INTERACTION_TRIGGER_REQUIRED); then (2) membership in
+          COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS (frontend/runtime/renderEmission.ts) --
+          the exact 5-trigger subset (click/change/select/submit/toggle)
+          buildCatalogComponentEventBinding actually creates an eventBinding entry for, the
+          SAME single authority both that function and this validation share. A trigger
+          stage (1) recognizes but stage (2) does not contain -- input/focus/blur, valid
+          triggers for OTHER lanes but never bound by this one -- fails the WHOLE node
+          closed too (RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED), never silently validated
+          into a payloadFrom map with nothing to attach to (the round-6 gap: the
+          implementation validated only via stage (1), so a normalizer-recognized but
+          lane-unsupported trigger passed validation and then silently produced no
+          binding). Two raw keys normalizing (stage 1) to the SAME canonical trigger (e.g.
+          "click" and "onClick") fail the WHOLE node closed too
+          (RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION), never silently
+          letting the later key win.
         payloadFrom: >-
           Each trigger's value: an object whose entries are string sources recognized by
           payloadFromResolver.ts's existing grammar (node:<nodeId>.value | event.<path> |
@@ -443,10 +460,15 @@ admin_uibuilder_ui_structure_wiring_ssot:
           dispatchInstanceOperation's own payloadFrom validation uses, not an
           admin-specific vocabulary. An empty per-trigger object ({}) is intentionally NOT
           rejected, matching that same sibling validation's own leniency for the identical
-          shape. Because this is a single object keyed by trigger (not an array of
-          independently-authored entries), two authors can no longer disagree on the same
-          field for the same trigger -- the round 1-5 duplicate_field_conflict case is now
-          structurally impossible, not merely checked.
+          shape. 2026-07-25 correction (PR #599 review round 7): round 6 claimed the
+          round 1-5 duplicate_field_conflict case became "structurally impossible" because
+          this is a single object keyed by trigger, not an array of independently-authored
+          entries -- true only for identical RAW keys (an object cannot repeat a literal
+          key), false once alias normalization is considered: distinct raw keys (e.g.
+          "click" and "onClick") can still normalize to the SAME canonical trigger. See
+          the trigger field above -- this collision is validated and fails closed
+          (RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION), it is not
+          structurally impossible.
       target_ref_shape: >-
         Unchanged from parseAdminRuntimeLayerAction's existing contract --
         "manifest:<manifestUuid>:<layer>:<action>". This binding contract adds no new
@@ -523,6 +545,36 @@ admin_uibuilder_ui_structure_wiring_ssot:
         already used). Kept for history only -- not current behavior; see
         action_authority_vs_effect_data_separation and required_fields above for the
         current contract.
+      trigger_authority_unification: >-
+        2026-07-25 (PR #599 review round 7). Round 6 introduced dispatchPayloadFromByTrigger
+        with a trigger-key check that only called normalizeAuthoredEventType() (the SAME
+        global 8-canonical-trigger alias normalizer every runtimeInteractions entry uses)
+        -- but frontend/runtime/renderEmission.ts buildCatalogComponentEventBinding, the
+        function that actually consumes a validated payloadFrom map to build an
+        eventBinding, only ever creates bindings for 5 of those 8 triggers
+        (click/change/select/submit/toggle), as a SEPARATE literal array embedded directly
+        in that function. Two gaps followed from this duplication: (1) "input"/"focus"/
+        "blur" -- valid triggers globally, never bound by this lane -- passed
+        buildAdminRuntimePayloadFromByTrigger's validation and then silently produced no
+        binding to attach to; (2) that validation wrote byTrigger[trigger] = payloadFrom
+        with a plain assignment, so two raw keys normalizing to the SAME canonical trigger
+        (e.g. "click" and "onClick") silently let the later one win instead of failing
+        closed. Fixed by extracting the single 5-trigger set into one shared constant
+        (COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS, frontend/runtime/renderEmission.ts) used
+        by BOTH buildCatalogComponentEventBinding and
+        buildAdminRuntimePayloadFromByTrigger's trigger validation, adding an explicit
+        membership check after normalization (RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED for a
+        normalizer-recognized-but-lane-unsupported trigger) and an own-property collision
+        check before writing to the result map (RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION
+        for two raw keys colliding after normalization). The backend persistence boundary
+        (NpgsqlUiTopologyRepository.cs ValidateDispatchPayloadFromByTrigger) gained its own
+        mirrored alias map (AuthoredEventTypeAliasMap) and the SAME two checks -- no shared
+        code with the frontend (different language), but the same accept/reject decision
+        for the same input. normalizeAuthoredEventType() itself, and every OTHER
+        runtimeInteractions consumer of it (setState/openModal/etc. triggers, which
+        legitimately use input/focus/blur), are unchanged -- this correction narrows only
+        dispatchPayloadFromByTrigger's own additional membership check, never the shared
+        global normalizer.
       runtime_parse_boundary_fail_close: >-
         2026-07-24 (PR #599 review round 3), still current in round 6's shape.
         buildAdminRuntimePayloadFromByTrigger's build-time validation is a SEPARATE
@@ -585,15 +637,22 @@ admin_uibuilder_ui_structure_wiring_ssot:
         own-property-identity-safe against an Object.prototype-shaped nodeId;
         buildCatalogComponentEventBinding trigger-scoping; dispatchPayloadFromByTrigger
         build-time fail-close cases -- invalid trigger key, non-object per-trigger value,
-        non-string field value), frontend/tests/uiEventEffectRunner.test.ts
+        non-string field value; 2026-07-25 round 7 additions: each of the 5 canonical
+        triggers attaches payloadFrom to its own binding, an alias key (onClick) normalizes
+        onto its canonical binding, a normalizer-recognized-but-lane-unsupported trigger
+        (input/onInput/focus/blur) fails RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED, and each
+        alias-collision pair (click+onClick, change+onChange, submit+onSubmit,
+        select+onSelect, toggle+onOpen, toggle+onClose, onOpen+onClose) fails
+        RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION rather than letting either
+        key silently win), frontend/tests/uiEventEffectRunner.test.ts
         (createLiveNodeValueTracker register/update/reconcile/own-property-identity),
         frontend/tests/uiBuilderWiringProjection.test.ts (action_authority_vs_effect_data_separation:
         an unknown actionType carrying payloadFrom/outputProp still fails
         ACTION_OUTSIDE_VOCABULARY), backend/tests/Topolactor.Runtime.Tests/
-        NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs and
-        LayoutSchemaStructuralCompositionTests.cs (backend persistence-boundary
-        validation and NodeLocalData/Compose merge-by-exact-nodeId for the new
-        dispatchPayloadFromByTriggerJson field), and frontend/tests/
+        NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs (backend persistence-boundary
+        validation, including round 7's mirrored trigger normalization/membership/collision
+        cases) and LayoutSchemaStructuralCompositionTests.cs (NodeLocalData/Compose
+        merge-by-exact-nodeId for the dispatchPayloadFromByTriggerJson field), and frontend/tests/
         projectionShellAdminRuntimeWritePayloadCapture.test.ts (production
         frontend/islands/ProjectionShell.tsx mount, real DOM input/click events and a real
         SSE "projection" event fired through the actual sseReceiver/projectionRuntime

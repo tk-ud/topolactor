@@ -769,11 +769,58 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     }
 
     /// <summary>
+    /// Mirrors frontend/runtime/renderEmission.ts normalizeAuthoredEventType()'s alias map exactly
+    /// (same 16 keys -> 8 canonical triggers) so the backend persistence boundary accepts/rejects
+    /// the SAME raw trigger keys as the frontend build boundary for dispatchPayloadFromByTrigger —
+    /// not a new/broader trigger vocabulary (PR #599 review round 7). No shared code with the
+    /// frontend implementation is required (different language); only the same decisions for the
+    /// same inputs.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, string> AuthoredEventTypeAliasMap =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["onClick"] = "click",
+            ["click"] = "click",
+            ["onChange"] = "change",
+            ["change"] = "change",
+            ["onInput"] = "input",
+            ["input"] = "input",
+            ["onSubmit"] = "submit",
+            ["submit"] = "submit",
+            ["onOpen"] = "toggle",
+            ["onClose"] = "toggle",
+            ["toggle"] = "toggle",
+            ["onFocus"] = "focus",
+            ["focus"] = "focus",
+            ["onBlur"] = "blur",
+            ["blur"] = "blur",
+            ["onSelect"] = "select",
+            ["select"] = "select",
+        };
+
+    /// <summary>
+    /// The exact set of triggers component_wiring_execution_lane's dispatch binding generator
+    /// (frontend buildCatalogComponentEventBinding) actually creates an eventBinding entry for —
+    /// mirrors frontend/runtime/renderEmission.ts COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS. A
+    /// trigger AuthoredEventTypeAliasMap recognizes but that is not a member of this set
+    /// (input/focus/blur — valid triggers for OTHER lanes, never for this one) is rejected, not
+    /// silently accepted into a payloadFrom map with nothing to attach to.
+    /// </summary>
+    private static readonly IReadOnlySet<string> ComponentWiringExecutionLaneTriggers =
+        new HashSet<string>(StringComparer.Ordinal) { "click", "change", "select", "submit", "toggle" };
+
+    /// <summary>
     /// Validates the node-level dispatchPayloadFromByTrigger field — { trigger: { field: source } }
     /// — data-only payload binding for this SAME node's admin_runtime dispatch, independent of
     /// runtimeInteractions/actionType (see LayoutNodeRecord.DispatchPayloadFromByTriggerJson).
     /// A present-but-malformed value fails the WHOLE layout patch closed, mirroring
     /// ValidateRuntimeInteractions' own contract for the same JSON boundary.
+    ///
+    /// Trigger keys are normalized (AuthoredEventTypeAliasMap) and must resolve to a
+    /// ComponentWiringExecutionLaneTriggers member; two raw keys normalizing to the SAME
+    /// canonical trigger fail closed rather than allowing either to silently win (PR #599 review
+    /// round 7 — a dispatchPayloadFromByTrigger object's raw keys are unique by construction, but
+    /// alias collisions after normalization are not).
     /// </summary>
     private static string? ValidateDispatchPayloadFromByTrigger(JsonElement nodes)
     {
@@ -783,10 +830,17 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             if (!node.TryGetProperty("dispatchPayloadFromByTrigger", out var byTriggerEl)) continue;
             if (byTriggerEl.ValueKind != JsonValueKind.Object)
                 return "RUNTIME_INTERACTION_DISPATCH_PAYLOAD_FROM_BY_TRIGGER_MUST_BE_OBJECT";
+            var seenCanonicalTriggers = new HashSet<string>(StringComparer.Ordinal);
             foreach (var triggerEntry in byTriggerEl.EnumerateObject())
             {
                 if (string.IsNullOrWhiteSpace(triggerEntry.Name))
                     return "RUNTIME_INTERACTION_TRIGGER_REQUIRED";
+                if (!AuthoredEventTypeAliasMap.TryGetValue(triggerEntry.Name, out var canonicalTrigger))
+                    return "RUNTIME_INTERACTION_TRIGGER_REQUIRED";
+                if (!ComponentWiringExecutionLaneTriggers.Contains(canonicalTrigger))
+                    return "RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED";
+                if (!seenCanonicalTriggers.Add(canonicalTrigger))
+                    return "RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION";
                 var payloadFromError = ValidatePayloadFromShape(triggerEntry.Value);
                 if (payloadFromError is not null) return payloadFromError;
             }

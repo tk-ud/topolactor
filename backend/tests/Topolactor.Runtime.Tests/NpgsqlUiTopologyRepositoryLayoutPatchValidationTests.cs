@@ -626,4 +626,112 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
         Assert.True(result.Valid);
     }
 
+    // ─── trigger authority unification (PR #599 review round 7): the backend persistence
+    // boundary must accept/reject the SAME raw trigger keys as the frontend build boundary
+    // for dispatchPayloadFromByTrigger ───────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("click")]
+    [InlineData("change")]
+    [InlineData("select")]
+    [InlineData("submit")]
+    [InlineData("toggle")]
+    public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_CanonicalTrigger_Passes(string trigger)
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchPayloadFromByTrigger": { "{{trigger}}": { "groupName": "node:name-input.value" } } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_AliasKeyOnClick_NormalizesAndPasses()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchPayloadFromByTrigger": { "onClick": { "groupName": "node:name-input.value" } } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
+    [Theory]
+    [InlineData("input")]
+    [InlineData("onInput")]
+    [InlineData("focus")]
+    [InlineData("blur")]
+    public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_RecognizedButUnsupportedTrigger_FailsClose(string trigger)
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchPayloadFromByTrigger": { "{{trigger}}": { "groupName": "node:name-input.value" } } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_UnknownTrigger_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchPayloadFromByTrigger": { "bogusTrigger": { "groupName": "node:name-input.value" } } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_TRIGGER_REQUIRED", result.Message);
+    }
+
+    [Theory]
+    [InlineData("click", "onClick")]
+    [InlineData("change", "onChange")]
+    [InlineData("submit", "onSubmit")]
+    [InlineData("select", "onSelect")]
+    [InlineData("toggle", "onOpen")]
+    [InlineData("toggle", "onClose")]
+    [InlineData("onOpen", "onClose")]
+    public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_AliasCollisionAfterNormalization_FailsClose(string a, string b)
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchPayloadFromByTrigger": { "{{a}}": { "groupName": "literal:A" }, "{{b}}": { "groupName": "literal:B" } } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION", result.Message);
+    }
+
 }

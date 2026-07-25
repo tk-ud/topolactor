@@ -656,6 +656,136 @@ Deno.test("renderEmission: dispatchPayloadFromByTrigger for DIFFERENT triggers e
   });
 });
 
+// ─── trigger authority unification (PR #599 review round 7): the SAME 5-trigger
+// set buildCatalogComponentEventBinding actually creates bindings for is the sole
+// authority dispatchPayloadFromByTrigger's trigger validation uses — a trigger
+// normalizeAuthoredEventType() recognizes but that this lane doesn't bind
+// (input/focus/blur) must fail close, never silently validate into a payloadFrom
+// map with nothing to attach to. Two raw trigger keys normalizing to the same
+// canonical trigger must also fail close, never silently let the later key win. ──
+
+Deno.test("renderEmission: dispatchPayloadFromByTrigger — each of the 5 canonical triggers attaches payloadFrom to its own binding", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  for (const trigger of ["click", "change", "select", "submit", "toggle"]) {
+    const specs = renderEmission(
+      adminRuntimeNodeEmission({
+        [trigger]: { groupName: "node:name_input.value" },
+      }),
+      {},
+    );
+    assertExists(specs[0].runtimeSpec, `trigger "${trigger}"`);
+    const binding = specs[0].runtimeSpec!.eventBinding[trigger] as Record<
+      string,
+      unknown
+    >;
+    const rd = binding.runtimeDispatch as Record<string, unknown>;
+    assertEquals(
+      rd.payloadFrom,
+      { groupName: "node:name_input.value" },
+      `trigger "${trigger}"`,
+    );
+  }
+});
+
+Deno.test("renderEmission: dispatchPayloadFromByTrigger — an alias key (e.g. onClick) normalizes onto its canonical binding", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const specs = renderEmission(
+    adminRuntimeNodeEmission({
+      onClick: { groupName: "node:name_input.value" },
+    }),
+    {},
+  );
+  assertExists(specs[0].runtimeSpec);
+  const clickBinding = specs[0].runtimeSpec!.eventBinding["click"] as Record<
+    string,
+    unknown
+  >;
+  const clickRd = clickBinding.runtimeDispatch as Record<string, unknown>;
+  assertEquals(clickRd.payloadFrom, { groupName: "node:name_input.value" });
+});
+
+Deno.test("renderEmission: dispatchPayloadFromByTrigger — trigger unspecified (absent field) keeps the pre-existing raw event-time payload passthrough for that trigger unchanged", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const specs = renderEmission(
+    adminRuntimeNodeEmission({ click: { groupName: "node:name_input.value" } }),
+    {},
+  );
+  assertExists(specs[0].runtimeSpec);
+  const submitBinding = specs[0].runtimeSpec!.eventBinding["submit"] as Record<
+    string,
+    unknown
+  >;
+  const submitRd = submitBinding.runtimeDispatch as Record<string, unknown>;
+  assertEquals(submitRd.payloadFrom, undefined);
+});
+
+for (const trigger of ["input", "onInput", "focus", "blur"]) {
+  Deno.test(`renderEmission: dispatchPayloadFromByTrigger with trigger "${trigger}" (recognized by normalizeAuthoredEventType but not bound by component_wiring_execution_lane) fails the node closed (RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED), never silently dropped`, () => {
+    ensureRuntimeComponentRegistryInitialized();
+    const specs = renderEmission(
+      adminRuntimeNodeEmission({
+        [trigger]: { groupName: "node:name_input.value" },
+      }),
+      {},
+    );
+    assertEquals(specs[0].componentType, "error");
+    assertEquals(
+      JSON.stringify(specs[0].def).includes(
+        "RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED",
+      ),
+      true,
+      trigger,
+    );
+  });
+}
+
+Deno.test("renderEmission: dispatchPayloadFromByTrigger with a completely unknown trigger fails the node closed (RUNTIME_INTERACTION_TRIGGER_REQUIRED)", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const specs = renderEmission(
+    adminRuntimeNodeEmission({
+      bogusTrigger: { groupName: "node:name_input.value" },
+    }),
+    {},
+  );
+  assertEquals(specs[0].componentType, "error");
+  assertEquals(
+    JSON.stringify(specs[0].def).includes(
+      "RUNTIME_INTERACTION_TRIGGER_REQUIRED",
+    ),
+    true,
+  );
+});
+
+for (
+  const [a, b] of [
+    ["click", "onClick"],
+    ["change", "onChange"],
+    ["submit", "onSubmit"],
+    ["select", "onSelect"],
+    ["toggle", "onOpen"],
+    ["toggle", "onClose"],
+    ["onOpen", "onClose"],
+  ] as const
+) {
+  Deno.test(`renderEmission: dispatchPayloadFromByTrigger — "${a}" + "${b}" normalize to the SAME canonical trigger and fail the node closed (RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION), never last-wins`, () => {
+    ensureRuntimeComponentRegistryInitialized();
+    const specs = renderEmission(
+      adminRuntimeNodeEmission({
+        [a]: { groupName: "literal:A" },
+        [b]: { groupName: "literal:B" },
+      }),
+      {},
+    );
+    assertEquals(specs[0].componentType, "error");
+    assertEquals(
+      JSON.stringify(specs[0].def).includes(
+        "RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION",
+      ),
+      true,
+    );
+  });
+}
+
 Deno.test("renderEmission: absent dispatchPayloadFromByTrigger renders normally (no payloadFrom attached)", () => {
   ensureRuntimeComponentRegistryInitialized();
   const specs = renderEmission(adminRuntimeNodeEmission(undefined), {});

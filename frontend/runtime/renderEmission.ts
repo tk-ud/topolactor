@@ -397,6 +397,26 @@ export function mergeNodeLocalProps(
   return { ok: true, props };
 }
 
+/**
+ * The exact set of triggers component_wiring_execution_lane's dispatch binding
+ * generator (buildCatalogComponentEventBinding below) actually creates an
+ * eventBinding entry for — the single authority both that function and
+ * buildAdminRuntimePayloadFromByTrigger's trigger validation share (PR #599
+ * review round 7: previously duplicated as a separate literal array in each,
+ * which is how "input"/"focus"/"blur" — recognized by the broader
+ * normalizeAuthoredEventType() but never members of this 5-trigger set — could
+ * pass dispatchPayloadFromByTrigger's trigger validation yet silently have no
+ * binding to attach to). SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
+ * admin_runtime_payload_binding_contract.required_fields.trigger.
+ */
+const COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS = [
+  "click",
+  "change",
+  "select",
+  "submit",
+  "toggle",
+] as const;
+
 export type AdminRuntimePayloadFromByTriggerResult =
   | { ok: true; byTrigger: Record<string, Record<string, string>> }
   | { ok: false; error: string };
@@ -417,17 +437,28 @@ export type AdminRuntimePayloadFromByTriggerResult =
  * team_markdown:*, scheduler_jobs:*, ...) reuses this SAME node-level field — no
  * per-operation case.
  *
- * Because dispatchPayloadFromByTrigger is a single object keyed by trigger (not an array
- * of independently-authored entries), two authors can no longer disagree on the same
- * field for the same trigger — JSON object keys are inherently unique, so the
- * duplicate_field_conflict case round 1-5 validated is now structurally impossible, not
- * merely checked. A present-but-malformed value still fails the WHOLE node closed, never
+ * dispatchPayloadFromByTrigger is a single object keyed by RAW trigger key, so two
+ * entries can never share the exact same raw key — but normalizeAuthoredEventType()
+ * maps multiple raw aliases onto the same canonical trigger (e.g. "click" and
+ * "onClick" both -> "click"), so a conflict CAN still occur after normalization
+ * (PR #599 review round 7 correction: round 6's claim that duplicate_field_conflict
+ * became "structurally impossible" was true only for identical raw keys, not for
+ * alias collisions — the two are different claims). Two raw keys normalizing to the
+ * same canonical trigger fail the WHOLE node closed
+ * (RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION) rather than silently
+ * letting the later one win. A raw trigger key that normalizeAuthoredEventType()
+ * recognizes but that is not a member of COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS
+ * (e.g. "input"/"focus"/"blur" — valid triggers for OTHER lanes, never for this
+ * one) also fails the WHOLE node closed (RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED)
+ * instead of silently validating into a payloadFrom map with no binding to ever
+ * attach to. A present-but-malformed value still fails the WHOLE node closed, never
  * silently skipped/filtered: an unrecognized trigger key, a non-object per-trigger map, or
  * a non-string field value — the SAME error-code vocabulary
  * (RUNTIME_INTERACTION_PAYLOAD_FROM_MUST_BE_OBJECT / _VALUE_MUST_BE_STRING /
- * RUNTIME_INTERACTION_TRIGGER_REQUIRED) the backend's own ValidateDispatchPayloadFromByTrigger
- * (NpgsqlUiTopologyRepository.cs, reusing its existing ValidatePayloadFromShape helper also
- * used by dispatchExternalPort/dispatchInstanceOperation's own payloadFrom) validates at the
+ * RUNTIME_INTERACTION_TRIGGER_REQUIRED / _UNSUPPORTED / _CONFLICT_AFTER_NORMALIZATION)
+ * the backend's own ValidateDispatchPayloadFromByTrigger (NpgsqlUiTopologyRepository.cs,
+ * reusing its existing ValidatePayloadFromShape helper also used by
+ * dispatchExternalPort/dispatchInstanceOperation's own payloadFrom) validates at the
  * persistence boundary — not an admin-specific vocabulary. An empty per-trigger map ({}) is
  * intentionally NOT rejected here, matching the backend's own leniency for the same shape on
  * dispatchExternalPort/dispatchInstanceOperation's payloadFrom.
@@ -453,6 +484,26 @@ function buildAdminRuntimePayloadFromByTrigger(
         ok: false,
         error:
           `RUNTIME_INTERACTION_TRIGGER_REQUIRED: dispatchPayloadFromByTrigger has an unrecognized trigger key "${rawTrigger}"`,
+      };
+    }
+    if (
+      !(COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS as readonly string[]).includes(
+        trigger,
+      )
+    ) {
+      return {
+        ok: false,
+        error:
+          `RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED: dispatchPayloadFromByTrigger trigger "${rawTrigger}" normalizes to "${trigger}", which component_wiring_execution_lane does not bind (supported: ${
+            COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS.join(", ")
+          })`,
+      };
+    }
+    if (Object.prototype.hasOwnProperty.call(byTrigger, trigger)) {
+      return {
+        ok: false,
+        error:
+          `RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION: dispatchPayloadFromByTrigger has more than one raw trigger key normalizing to "${trigger}"`,
       };
     }
     if (
@@ -494,7 +545,7 @@ export function buildCatalogComponentEventBinding(
   payloadFromByTrigger: Record<string, Record<string, string>> = {},
 ): Record<string, unknown> {
   if (!spec) return {};
-  const triggers = ["click", "change", "select", "submit", "toggle"] as const;
+  const triggers = COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS;
   const binding: Record<string, unknown> = {};
   for (const trigger of triggers) {
     const payloadFrom = payloadFromByTrigger[trigger];
@@ -518,7 +569,7 @@ export function buildRouteNavigationEventBinding(
   if (!targetRef) return {};
   const ref = targetRef.trim();
   if (!ref.startsWith("route:")) return {};
-  const triggers = ["click", "change", "select", "submit", "toggle"] as const;
+  const triggers = COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS;
   const binding: Record<string, unknown> = {};
   for (const trigger of triggers) {
     binding[trigger] = {
