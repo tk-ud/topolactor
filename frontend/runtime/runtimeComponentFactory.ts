@@ -220,6 +220,31 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
     const operationType = typeof rd.operationType === "string"
       ? rd.operationType.trim()
       : action.trim();
+    // Own parse-boundary fail-close for payloadFrom — mirrors externalPortDispatch's
+    // pre-existing contract below exactly (return null for the WHOLE binding on any
+    // malformation), independent of whether the upstream builder
+    // (renderEmission.ts buildAdminRuntimePayloadFromByTrigger) already validated
+    // this shape. This function re-parses spec.eventBinding[trigger] — untyped JSON
+    // that could reach here from any construction path, not only that builder — so
+    // build-time validation existing elsewhere is never a substitute for this
+    // boundary's own explicit fail-close. A present-but-malformed payloadFrom
+    // (non-object, non-string value, or empty object) fails the whole binding
+    // closed; it is never silently filtered down to a subset or dropped to
+    // "unspecified" (which would fall back to raw event-time payload passthrough).
+    const rdPayloadFromRaw = rd.payloadFrom;
+    let rdPayloadFrom: Record<string, string> | undefined;
+    if (rdPayloadFromRaw !== undefined) {
+      if (
+        typeof rdPayloadFromRaw !== "object" || rdPayloadFromRaw === null ||
+        Array.isArray(rdPayloadFromRaw)
+      ) return null;
+      const entries = Object.entries(rdPayloadFromRaw);
+      if (
+        entries.length === 0 ||
+        !entries.every(([, v]) => typeof v === "string")
+      ) return null;
+      rdPayloadFrom = Object.fromEntries(entries) as Record<string, string>;
+    }
     runtimeDispatch = {
       operationType,
       target: target.trim(),
@@ -228,6 +253,7 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
       wiringKey: typeof rd.wiringKey === "string" ? rd.wiringKey : undefined,
       wiringId: typeof rd.wiringId === "string" ? rd.wiringId : undefined,
       targetRef: typeof rd.targetRef === "string" ? rd.targetRef : undefined,
+      payloadFrom: rdPayloadFrom,
     };
   }
   const routeNavigationRaw = (value as Record<string, unknown>).routeNavigation;
@@ -399,6 +425,22 @@ function emitBoundEvent(
     const q = typeof payload.query === "string" ? payload.query : "";
     spec.searchCallback(spec.componentId, q);
   }
+  // Lane 3 (node value tracking): registers this node's own latest scalar value
+  // under its stable nodeId — the write side of payloadFromNodeValues, the
+  // read side dispatchExternalPort/dispatchInstanceOperation/admin_runtime
+  // Lane 2 payloadFrom resolution (below) consumes via `node:<nodeId>.value`.
+  // Fires BEFORE previewMode gate, unconditionally (independent of any
+  // calc/dispatch wiring being configured for this node) — mirrors
+  // calcTriggerCallback's own event-time-value extraction.
+  // SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
+  // lane_storage_boundary.known_gaps.remaining_write_payload_capture_gap.
+  if (
+    spec.onNodeValueChange &&
+    (trigger === "change" || trigger === "input" || trigger === "select") &&
+    "value" in payload
+  ) {
+    spec.onNodeValueChange(payload.value);
+  }
   if (isPreviewMode(spec)) return { ok: true };
   const binding = parseEventBinding(spec.eventBinding[trigger]);
   if (!binding) {
@@ -428,10 +470,33 @@ function emitBoundEvent(
   // aggregate/create/update/delete wiringKinds ignore it (their payload comes
   // from wiring/screen_data_shape configuration instead).
   if (binding.runtimeDispatch) {
-    void enqueueRuntimeComponentCommand({
-      ...binding.runtimeDispatch,
-      payload: { ...binding.runtimeDispatch.payload, ...binding.payload, ...payload },
-    });
+    const payloadFrom = binding.runtimeDispatch.payloadFrom;
+    // Priority/conflict rule (SSOT remaining_write_payload_capture_gap): when a
+    // payloadFrom map is authored, it is the SOLE payload authority for this
+    // dispatch — same fail-close contract as dispatchExternalPort/
+    // dispatchInstanceOperation below (unresolved node value / event path is a
+    // hard error, never a silent partial payload). When no payloadFrom is
+    // authored, the pre-existing raw event-time payload passthrough (static
+    // config payload + Lane 1's merged payload) is unchanged.
+    if (payloadFrom && Object.keys(payloadFrom).length > 0) {
+      const resolved = resolvePayloadFrom(
+        payloadFrom,
+        spec.payloadFromNodeValues ?? {},
+        payload,
+      );
+      if (!resolved.ok) {
+        return { ok: false, error: resolved.errors.join("; ") };
+      }
+      void enqueueRuntimeComponentCommand({
+        ...binding.runtimeDispatch,
+        payload: resolved.payload,
+      });
+    } else {
+      void enqueueRuntimeComponentCommand({
+        ...binding.runtimeDispatch,
+        payload: { ...binding.runtimeDispatch.payload, ...binding.payload, ...payload },
+      });
+    }
   }
   // Lane 2 (external_port): Design Inspector-authored dispatchExternalPort.
   // high_frequency_policy runtime guard: a high-frequency trigger without a

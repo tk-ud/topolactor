@@ -149,7 +149,9 @@ function stableStringify(value: unknown): string {
   const record = value as Record<string, unknown>;
   const keys = Object.keys(record).sort();
   return `{${
-    keys.map((k) => `${JSON.stringify(k)}:${stableStringify(record[k])}`).join(",")
+    keys.map((k) => `${JSON.stringify(k)}:${stableStringify(record[k])}`).join(
+      ",",
+    )
   }}`;
 }
 
@@ -274,9 +276,26 @@ const UI_STATE_UPDATE_ACTIONS = new Set([
   "localStateMutation",
 ]);
 
+/** Effect fields present on an interaction (副作用設定 fields, not the effect authority itself). */
+export function hasSideEffectFields(w: WiringInteraction): boolean {
+  return Boolean(
+    w.outputProp?.trim() ||
+      (w.payloadFrom && Object.keys(w.payloadFrom).length > 0),
+  );
+}
+
 /**
  * Classify one runtimeInteraction into the canonical taxonomy.
  * Returns null for actionTypes outside the taxonomy (fail-close; no catch-all).
+ *
+ * actionType is action AUTHORITY — a closed vocabulary matched here by exact identity
+ * only. payloadFrom/outputProp are effect DATA, never a substitute authority: an
+ * unrecognized actionType stays unrecognized regardless of which fields it happens to
+ * carry (PR #599 review round 6). side_effect_setting (SSOT ui_event_settings.
+ * setting_category_taxonomy.frontend_side.side_effect_setting) has no actionType
+ * membership defined in this codebase yet — it stays a declared-but-orphaned taxonomy
+ * category here until a real actionType is introduced for it, rather than being
+ * back-filled by an actionType-independent field-presence rule.
  */
 export function wiringSettingCategoryOf(
   w: Pick<WiringInteraction, "actionType">,
@@ -289,14 +308,6 @@ export function wiringSettingCategoryOf(
   }
   if (UI_STATE_UPDATE_ACTIONS.has(w.actionType)) return "ui_state_update";
   return null;
-}
-
-/** Effect fields present on an interaction (副作用設定 fields, not the effect authority itself). */
-export function hasSideEffectFields(w: WiringInteraction): boolean {
-  return Boolean(
-    w.outputProp?.trim() ||
-      (w.payloadFrom && Object.keys(w.payloadFrom).length > 0),
-  );
 }
 
 /**

@@ -31,6 +31,7 @@ import {
 } from "../runtime/uiEventEffectRunner.ts";
 import { enqueueInstanceOperationDispatchCommand } from "../runtime/frontendScheduler.ts";
 import { renderEmission } from "../runtime/renderEmission.ts";
+import { createLiveNodeValueTracker } from "../runtime/liveNodeValueTracker.ts";
 import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
 import {
   computeDispatchIdempotencyKey,
@@ -63,8 +64,13 @@ function modalNodes(): WiringNode[] {
 
 Deno.test("parseUiLocalTargetRef: parses 'ui-local:<nodeId>.<stateKey>' into {targetNodeId, statePath}", () => {
   assertEquals(
-    parseUiLocalTargetRef("ui-local:instance_settings_import_form.template_download_trigger"),
-    { targetNodeId: "instance_settings_import_form", statePath: "template_download_trigger" },
+    parseUiLocalTargetRef(
+      "ui-local:instance_settings_import_form.template_download_trigger",
+    ),
+    {
+      targetNodeId: "instance_settings_import_form",
+      statePath: "template_download_trigger",
+    },
   );
 });
 
@@ -72,13 +78,17 @@ Deno.test("parseUiLocalTargetRef: malformed/non-matching/absent targetRef resolv
   assertEquals(parseUiLocalTargetRef(undefined), undefined);
   assertEquals(parseUiLocalTargetRef(""), undefined);
   assertEquals(parseUiLocalTargetRef("not-ui-local-shaped"), undefined);
-  assertEquals(parseUiLocalTargetRef("ui-local:missing-dot-separator"), undefined);
+  assertEquals(
+    parseUiLocalTargetRef("ui-local:missing-dot-separator"),
+    undefined,
+  );
 });
 
 Deno.test("resolveUiStateUpdateMutation: localStateMutation resolves targetNodeId/statePath from targetRef (no separate targetNodeId/statePath fields) and writes true — SSOT wiring_lane_contract.lanes.internal_instance_wiring", () => {
   const resolved = resolveUiStateUpdateMutation({
     actionType: "localStateMutation",
-    targetRef: "ui-local:instance_settings_import_form.template_download_trigger",
+    targetRef:
+      "ui-local:instance_settings_import_form.template_download_trigger",
   });
   assertEquals(resolved, {
     targetNodeId: "instance_settings_import_form",
@@ -100,7 +110,10 @@ Deno.test("resolveUiStateUpdateMutation: an explicit targetNodeId/statePath alwa
 });
 
 Deno.test("resolveUiStateUpdateMutation: localStateMutation with no targetNodeId and no targetRef resolves to null (nothing to mutate)", () => {
-  assertEquals(resolveUiStateUpdateMutation({ actionType: "localStateMutation" }), null);
+  assertEquals(
+    resolveUiStateUpdateMutation({ actionType: "localStateMutation" }),
+    null,
+  );
 });
 
 Deno.test("localStateMutation end-to-end: predeclare (from targetRef) -> resolve -> guarded write -> real state change — matches manifest 092's json_template_download/json_import shape (target is the OWNING FORM's own node, a sibling of the Action, not the Action itself)", () => {
@@ -118,7 +131,8 @@ Deno.test("localStateMutation end-to-end: predeclare (from targetRef) -> resolve
         {
           trigger: "click",
           actionType: "localStateMutation",
-          targetRef: "ui-local:instance_settings_import_form.template_download_trigger",
+          targetRef:
+            "ui-local:instance_settings_import_form.template_download_trigger",
         },
       ],
     },
@@ -127,15 +141,37 @@ Deno.test("localStateMutation end-to-end: predeclare (from targetRef) -> resolve
   const dispatcher = createProjectionStateDispatcher(nodes, store);
 
   // Predeclared (from the targetRef-resolved identity) before any mutation can run.
-  assert(dispatcher.isDeclared("instance_settings_import_form", "template_download_trigger"));
-  assertEquals(dispatcher.get("instance_settings_import_form", "template_download_trigger"), undefined);
+  assert(
+    dispatcher.isDeclared(
+      "instance_settings_import_form",
+      "template_download_trigger",
+    ),
+  );
+  assertEquals(
+    dispatcher.get(
+      "instance_settings_import_form",
+      "template_download_trigger",
+    ),
+    undefined,
+  );
 
   const interaction = nodes[1].runtimeInteractions![0];
   const resolved = resolveUiStateUpdateMutation(interaction);
   assert(resolved, "localStateMutation must resolve via its targetRef");
   const applyResult = applyGuardedLocalStateMutation(dispatcher, resolved!);
-  assert(applyResult.ok, `expected the guarded write to succeed; got: ${JSON.stringify(applyResult)}`);
-  assertEquals(dispatcher.get("instance_settings_import_form", "template_download_trigger"), true);
+  assert(
+    applyResult.ok,
+    `expected the guarded write to succeed; got: ${
+      JSON.stringify(applyResult)
+    }`,
+  );
+  assertEquals(
+    dispatcher.get(
+      "instance_settings_import_form",
+      "template_download_trigger",
+    ),
+    true,
+  );
 });
 
 Deno.test("predeclareProjectionState: a localStateMutation target that resolves via targetRef to a real node in the list IS predeclared (parity with targetNodeId-based UI状態更新 actions)", () => {
@@ -144,15 +180,25 @@ Deno.test("predeclareProjectionState: a localStateMutation target that resolves 
     {
       nodeId: "trigger_action",
       runtimeInteractions: [
-        { trigger: "click", actionType: "localStateMutation", targetRef: "ui-local:owning_form.some_flag" },
+        {
+          trigger: "click",
+          actionType: "localStateMutation",
+          targetRef: "ui-local:owning_form.some_flag",
+        },
       ],
     },
   ];
-  const dispatcher = createRuntimeStateDispatcher(createRuntimeLocalStateStore());
+  const dispatcher = createRuntimeStateDispatcher(
+    createRuntimeLocalStateStore(),
+  );
   const declared = predeclareProjectionState(nodes, dispatcher);
   assert(
-    declared.some((s) => s.nodeId === "owning_form" && s.stateKey === "some_flag"),
-    `expected owning_form.some_flag to be predeclared; got: ${JSON.stringify(declared)}`,
+    declared.some((s) =>
+      s.nodeId === "owning_form" && s.stateKey === "some_flag"
+    ),
+    `expected owning_form.some_flag to be predeclared; got: ${
+      JSON.stringify(declared)
+    }`,
   );
 });
 
@@ -869,5 +915,74 @@ Deno.test("retry_safe_dispatch_idempotency: lifecycle path without runtimeIntera
   assert(
     capturedWithId[0].idempotencyKey !== capturedWithoutId[0].idempotencyKey,
     "an assigned runtimeInteractionId must produce a different key than the id-less structural fallback for the same nodeId",
+  );
+});
+
+// ─── liveNodeValueTracker (frontend/runtime/liveNodeValueTracker.ts): a
+// sibling runtime-local value primitive, NOT createRuntimeLocalStateStore
+// above — declare-before-set guarding and iterate/delete-free
+// RuntimeLocalStateStore don't fit a dynamically-appearing/disappearing
+// node's live value capture; see liveNodeValueTracker.ts's own doc comment
+// for the full interface-shape comparison (PR #599 review round 5) ─────────
+
+Deno.test("createLiveNodeValueTracker: set() registers a node's value", () => {
+  const tracker = createLiveNodeValueTracker();
+  tracker.set("node-1", "Status");
+  assertEquals(tracker.snapshot(), { "node-1": "Status" });
+});
+
+Deno.test("createLiveNodeValueTracker: set() updates an already-registered node's value", () => {
+  const tracker = createLiveNodeValueTracker();
+  tracker.set("node-1", "Status");
+  tracker.set("node-1", "Priority");
+  assertEquals(tracker.snapshot(), { "node-1": "Priority" });
+});
+
+Deno.test("createLiveNodeValueTracker: snapshot() returns the SAME object reference across calls", () => {
+  const tracker = createLiveNodeValueTracker();
+  const first = tracker.snapshot();
+  tracker.set("node-1", "x");
+  const second = tracker.snapshot();
+  assertEquals(first, second, "same reference must reflect later mutations");
+  assertEquals(first === second, true);
+});
+
+Deno.test("createLiveNodeValueTracker: reconcile() deregisters nodes absent from the current node list", () => {
+  const tracker = createLiveNodeValueTracker();
+  tracker.set("node-1", "a");
+  tracker.set("node-2", "b");
+  tracker.reconcile(["node-1"]);
+  assertEquals(tracker.snapshot(), { "node-1": "a" });
+});
+
+Deno.test("createLiveNodeValueTracker: reconcile() keeps values for nodes still present", () => {
+  const tracker = createLiveNodeValueTracker();
+  tracker.set("node-1", "a");
+  tracker.reconcile(["node-1", "node-2"]);
+  assertEquals(tracker.snapshot(), { "node-1": "a" });
+});
+
+Deno.test("createLiveNodeValueTracker: set() with empty nodeId is a no-op (fail-close, no anonymous key)", () => {
+  const tracker = createLiveNodeValueTracker();
+  tracker.set("", "x");
+  assertEquals(tracker.snapshot(), {});
+});
+
+// ─── own-property identity (PR #599 review): a nodeId colliding with an
+// inherited Object.prototype key must never resolve as an inherited value ──
+
+Deno.test("createLiveNodeValueTracker: a nodeId shaped like an Object.prototype key is a genuinely separate, unset slot until set()", () => {
+  const tracker = createLiveNodeValueTracker();
+  // Before any set() call, "constructor"/"toString" must read as absent, not
+  // as the inherited Object.prototype function a plain {} would expose.
+  assertEquals(
+    Object.prototype.hasOwnProperty.call(tracker.snapshot(), "constructor"),
+    false,
+  );
+  tracker.set("constructor", "actual-value");
+  assertEquals(tracker.snapshot()["constructor"], "actual-value");
+  assertEquals(
+    Object.prototype.hasOwnProperty.call(tracker.snapshot(), "constructor"),
+    true,
   );
 });

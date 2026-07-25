@@ -113,6 +113,14 @@ public record LayoutNode(
     /// <summary>Canonical runtime UI interactions from layout_patch_json.nodes[].runtimeInteractions. Legacy propsJson.eventWirings is fallback only.</summary>
     JsonElement? RuntimeInteractions = null,
     /// <summary>
+    /// Node-local admin_runtime dispatch payload binding from
+    /// layout_patch_json.nodes[].dispatchPayloadFromByTrigger — { trigger: { field: source } }.
+    /// Data-only: supplies payloadFrom fields for this SAME node's admin_runtime dispatch
+    /// (WiringKind="admin_runtime" + TargetRef); carries no action authority and is independent
+    /// of RuntimeInteractions/actionType. Null when not authored.
+    /// </summary>
+    JsonElement? DispatchPayloadFromByTrigger = null,
+    /// <summary>
     /// Structural-node semantic type (topology_ui_category/topology_ui_section/topology_ui_form/
     /// topology_ui_workflow/topology_ui_validation) when NodeKind is "structural_node" — sourced
     /// from components_layout_design.layout_schema_json.records[], the structural authority tree.

@@ -347,24 +347,26 @@ public static class LayoutSchemaTensorComposer
     }
 
     /// <summary>
-    /// Node-local propsJson/stateJson/propBindings JSON string triple, keyed by the exact tensor
-    /// nodeId. Distinct from BuildInteractionsBySourceActionKey's sourceActionKey-scoped map:
-    /// these three fields describe a single node's own static/bound configuration (table
-    /// columns, propBindings reading emission.data, etc.) rather than a form's collection of
-    /// child leaves' interaction entries, so the match key is the tensor node's own NodeId
-    /// directly, not "{formNodeId}::{sourceActionKey}".
+    /// Node-local propsJson/stateJson/propBindings/dispatchPayloadFromByTrigger JSON string
+    /// quadruple, keyed by the exact tensor nodeId. Distinct from
+    /// BuildInteractionsBySourceActionKey's sourceActionKey-scoped map: these fields describe a
+    /// single node's own static/bound configuration (table columns, propBindings reading
+    /// emission.data, this SAME node's own admin_runtime dispatch payload binding, etc.) rather
+    /// than a form's collection of child leaves' interaction entries, so the match key is the
+    /// tensor node's own NodeId directly, not "{formNodeId}::{sourceActionKey}".
     /// </summary>
     public readonly record struct NodeLocalData(
         string? PropsJson,
         string? StateJson,
-        string? PropBindingsJson);
+        string? PropBindingsJson,
+        string? DispatchPayloadFromByTriggerJson = null);
 
     /// <summary>
     /// Builds a NodeId -> NodeLocalData map from the tensor's own layout_patch_json.nodes[]
     /// entries, for schema-composed leaves to merge onto by exact NodeId match (see Compose).
-    /// A tensor node with none of the three fields set is simply absent from the result — there
+    /// A tensor node with none of the fields set is simply absent from the result — there
     /// is nothing to attach. This is purely additive seed authoring: a schema-composed layout
-    /// with no matching tensor node entries composes exactly as before (all three fields null on
+    /// with no matching tensor node entries composes exactly as before (all fields null on
     /// every leaf), so this never changes behavior for existing layouts that only use tensor
     /// nodes for runtimeInteractions.
     /// </summary>
@@ -374,9 +376,11 @@ public static class LayoutSchemaTensorComposer
         var result = new Dictionary<string, NodeLocalData>(StringComparer.Ordinal);
         foreach (var node in tensorNodes)
         {
-            if (node.PropsJson is null && node.StateJson is null && node.PropBindingsJson is null)
+            if (node.PropsJson is null && node.StateJson is null && node.PropBindingsJson is null &&
+                node.DispatchPayloadFromByTriggerJson is null)
                 continue;
-            result[node.NodeId] = new NodeLocalData(node.PropsJson, node.StateJson, node.PropBindingsJson);
+            result[node.NodeId] = new NodeLocalData(
+                node.PropsJson, node.StateJson, node.PropBindingsJson, node.DispatchPayloadFromByTriggerJson);
         }
         return result;
     }
@@ -504,6 +508,7 @@ public static class LayoutSchemaTensorComposer
                 PropsJson: localData?.PropsJson,
                 StateJson: localData?.StateJson,
                 PropBindingsJson: localData?.PropBindingsJson,
+                DispatchPayloadFromByTriggerJson: localData?.DispatchPayloadFromByTriggerJson,
                 RecordType: (isStructural || isUnresolved) ? row.RecordType : null,
                 // Every schema record carries an authored label (record_common_required_fields)
                 // — a catalog_component leaf's own label must survive composition the same way a

@@ -245,6 +245,9 @@ public class StructureMapResolver
         RuntimeInteractions: row.RuntimeInteractionsJson != null
             ? JsonSerializer.Deserialize<JsonElement>(row.RuntimeInteractionsJson)
             : null,
+        DispatchPayloadFromByTrigger: row.DispatchPayloadFromByTriggerJson != null
+            ? JsonSerializer.Deserialize<JsonElement>(row.DispatchPayloadFromByTriggerJson)
+            : null,
         RecordType: row.RecordType,
         Label: row.Label,
         KnownGapRefs: row.KnownGapRefs

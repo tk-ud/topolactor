@@ -18,9 +18,9 @@ import {
 } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
   parsePayloadFromSource,
-  resolvePayloadFromSource,
-  resolvePayloadFrom,
   type PayloadFromSource,
+  resolvePayloadFrom,
+  resolvePayloadFromSource,
 } from "../runtime/payloadFromResolver.ts";
 
 // ---------------------------------------------------------------------------
@@ -93,12 +93,12 @@ Deno.test("payloadFromResolver: literal: with empty string parses to literal wit
 
 Deno.test("payloadFromResolver: unrecognized pattern parses to unresolved_ref — no silent fallback", () => {
   const unrecognized = [
-    "hub:search",           // old hub:search pattern — not recognized
-    "query",                // bare field name
-    "node:foo",             // missing .value
-    "event",                // bare event — no path
-    "emission.data.rows",   // prop binding path — not a payloadFrom pattern
-    "",                     // empty string
+    "hub:search", // old hub:search pattern — not recognized
+    "query", // bare field name
+    "node:foo", // missing .value
+    "event", // bare event — no path
+    "emission.data.rows", // prop binding path — not a payloadFrom pattern
+    "", // empty string
   ];
   for (const raw of unrecognized) {
     const result = parsePayloadFromSource(raw);
@@ -115,7 +115,10 @@ Deno.test("payloadFromResolver: unrecognized pattern parses to unresolved_ref �
 // ---------------------------------------------------------------------------
 
 Deno.test("payloadFromResolver: node_value resolves to current node value", () => {
-  const source: PayloadFromSource = { kind: "node_value", nodeId: "hub_search_input" };
+  const source: PayloadFromSource = {
+    kind: "node_value",
+    nodeId: "hub_search_input",
+  };
   const nodeValues = { hub_search_input: "topology search" };
   const result = resolvePayloadFromSource(source, nodeValues, {});
   assertEquals(result.ok, true);
@@ -123,7 +126,10 @@ Deno.test("payloadFromResolver: node_value resolves to current node value", () =
 });
 
 Deno.test("payloadFromResolver: node_value with undefined value resolves ok (empty input is valid)", () => {
-  const source: PayloadFromSource = { kind: "node_value", nodeId: "crud_search_input" };
+  const source: PayloadFromSource = {
+    kind: "node_value",
+    nodeId: "crud_search_input",
+  };
   const nodeValues = { crud_search_input: undefined };
   const result = resolvePayloadFromSource(source, nodeValues, {});
   assertEquals(result.ok, true);
@@ -131,7 +137,10 @@ Deno.test("payloadFromResolver: node_value with undefined value resolves ok (emp
 });
 
 Deno.test("payloadFromResolver: node_value produces PAYLOAD_FROM_NODE_NOT_FOUND when nodeId absent — no silent fallback", () => {
-  const source: PayloadFromSource = { kind: "node_value", nodeId: "missing_node" };
+  const source: PayloadFromSource = {
+    kind: "node_value",
+    nodeId: "missing_node",
+  };
   const nodeValues = { other_node: "foo" };
   const result = resolvePayloadFromSource(source, nodeValues, {});
   assertEquals(result.ok, false);
@@ -146,7 +155,10 @@ Deno.test("payloadFromResolver: node_value produces PAYLOAD_FROM_NODE_NOT_FOUND 
 // ---------------------------------------------------------------------------
 
 Deno.test("payloadFromResolver: event.item.id resolves from eventPayload", () => {
-  const source: PayloadFromSource = { kind: "event_path", path: ["item", "id"] };
+  const source: PayloadFromSource = {
+    kind: "event_path",
+    path: ["item", "id"],
+  };
   const eventPayload = { item: { id: "hub-uuid-123" } };
   const result = resolvePayloadFromSource(source, {}, eventPayload);
   assertEquals(result.ok, true);
@@ -162,7 +174,10 @@ Deno.test("payloadFromResolver: event.row.id resolves from eventPayload", () => 
 });
 
 Deno.test("payloadFromResolver: event.record.id resolves from eventPayload", () => {
-  const source: PayloadFromSource = { kind: "event_path", path: ["record", "id"] };
+  const source: PayloadFromSource = {
+    kind: "event_path",
+    path: ["record", "id"],
+  };
   const eventPayload = { record: { id: "record-uuid-789" } };
   const result = resolvePayloadFromSource(source, {}, eventPayload);
   assertEquals(result.ok, true);
@@ -170,7 +185,10 @@ Deno.test("payloadFromResolver: event.record.id resolves from eventPayload", () 
 });
 
 Deno.test("payloadFromResolver: event path returns PAYLOAD_FROM_EVENT_PATH_NOT_FOUND when path not traversable — no silent fallback", () => {
-  const source: PayloadFromSource = { kind: "event_path", path: ["item", "id"] };
+  const source: PayloadFromSource = {
+    kind: "event_path",
+    path: ["item", "id"],
+  };
   const eventPayload = { item: "not_an_object" }; // item is a string, not an object
   const result = resolvePayloadFromSource(source, {}, eventPayload);
   assertEquals(result.ok, false);
@@ -181,7 +199,10 @@ Deno.test("payloadFromResolver: event path returns PAYLOAD_FROM_EVENT_PATH_NOT_F
 
 Deno.test("payloadFromResolver: event path returns error when intermediate segment is undefined (not traversable)", () => {
   // event.item.id where eventPayload has no item → item is undefined → .id traversal fails
-  const source: PayloadFromSource = { kind: "event_path", path: ["item", "id"] };
+  const source: PayloadFromSource = {
+    kind: "event_path",
+    path: ["item", "id"],
+  };
   const eventPayload = {}; // no item
   const result = resolvePayloadFromSource(source, {}, eventPayload);
   // undefined is not an object, so traversal of .id on undefined is an error (not silent fallback)
@@ -218,7 +239,10 @@ Deno.test("payloadFromResolver: literal value resolves to static string", () => 
 // ---------------------------------------------------------------------------
 
 Deno.test("payloadFromResolver: unresolved_ref returns PAYLOAD_FROM_UNRESOLVED_REF error", () => {
-  const source: PayloadFromSource = { kind: "unresolved_ref", raw: "hub:search" };
+  const source: PayloadFromSource = {
+    kind: "unresolved_ref",
+    raw: "hub:search",
+  };
   const result = resolvePayloadFromSource(source, {}, {});
   assertEquals(result.ok, false);
   if (!result.ok) {
@@ -262,14 +286,18 @@ Deno.test("payloadFromResolver: resolvePayloadFrom resolves multiple fields from
   const result = resolvePayloadFrom(payloadFrom, nodeValues, eventPayload);
   assertEquals(result.ok, true);
   if (result.ok) {
-    assertEquals(result.payload, { keyword: "foo", entityId: "uuid-123", state: "active" });
+    assertEquals(result.payload, {
+      keyword: "foo",
+      entityId: "uuid-123",
+      state: "active",
+    });
   }
 });
 
 Deno.test("payloadFromResolver: resolvePayloadFrom returns all errors when any field fails — no partial payload", () => {
   const payloadFrom = {
-    keyword: "node:missing_node.value",  // node not in nodeValues
-    entityId: "hub:search",              // unrecognized pattern
+    keyword: "node:missing_node.value", // node not in nodeValues
+    entityId: "hub:search", // unrecognized pattern
   };
   const nodeValues = {};
   const result = resolvePayloadFrom(payloadFrom, nodeValues, {});
@@ -308,4 +336,41 @@ Deno.test("payloadFromResolver: hub_search seed payloadFrom { keyword } resolves
 Deno.test("payloadFromResolver: hub:search is NOT a recognized payloadFrom pattern (SSOT alignment)", () => {
   const source = parsePayloadFromSource("hub:search");
   assertEquals(source.kind, "unresolved_ref");
+});
+
+// ─── own-property identity (PR #599 review): a nodeId/event-path segment
+// colliding with an inherited Object.prototype key must never resolve as an
+// inherited value ────────────────────────────────────────────────────────
+
+Deno.test("resolvePayloadFrom: node:<id>.value fails close (PAYLOAD_FROM_NODE_NOT_FOUND) for an Object.prototype-shaped nodeId that was never set — even against a plain {} nodeValues map", () => {
+  const nodeValues: Record<string, unknown> = {};
+  const result = resolvePayloadFrom(
+    { id: "node:constructor.value" },
+    nodeValues,
+    {},
+  );
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertEquals(
+      result.errors.some((e) => e.includes("PAYLOAD_FROM_NODE_NOT_FOUND")),
+      true,
+    );
+  }
+});
+
+Deno.test("resolvePayloadFrom: event.<path> fails close for an Object.prototype-shaped path segment that was never actually present on the event payload", () => {
+  const result = resolvePayloadFrom(
+    { id: "event.toString" },
+    {},
+    { unrelated: true },
+  );
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertEquals(
+      result.errors.some((e) =>
+        e.includes("PAYLOAD_FROM_EVENT_PATH_NOT_FOUND")
+      ),
+      true,
+    );
+  }
 });

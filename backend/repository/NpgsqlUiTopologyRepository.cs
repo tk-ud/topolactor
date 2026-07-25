@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
+using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Topolactor.Schema;
@@ -749,6 +750,124 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         return false;
     }
 
+    /// <summary>
+    /// Shared payloadFrom-shape validation authority: a payloadFrom value must be a JSON object
+    /// whose entries are all strings. Reused by ValidateRuntimeInteractions (dispatchExternalPort/
+    /// dispatchInstanceOperation's own payloadFrom) and ValidateDispatchPayloadFromByTrigger (the
+    /// node-level admin_runtime payload binding field) so both share one validation owner and one
+    /// error-code vocabulary rather than each declaring its own.
+    ///
+    /// rejectEmpty (PR #599 review round 8, default false): when true, an empty object ({}) fails
+    /// closed (RUNTIME_INTERACTION_PAYLOAD_FROM_EMPTY) instead of passing. Opt-in per caller,
+    /// not a change to the shared default — dispatchExternalPort/dispatchInstanceOperation's own
+    /// payloadFrom (via ValidateRuntimeInteractions) keeps its existing leniency for {} unchanged
+    /// (that pairing's own frontend dispatch-time parse boundary already tolerates {} too, so
+    /// tightening only the backend side here would newly diverge FROM it, not converge). Only
+    /// ValidateDispatchPayloadFromByTrigger passes rejectEmpty: true, because frontend
+    /// buildAdminRuntimePayloadFromByTrigger's build boundary now also rejects {}, and the
+    /// existing dispatch-time parse boundary (runtimeComponentFactory.ts parseEventBinding's
+    /// runtimeDispatch.payloadFrom branch) already rejected {} before this round — all three
+    /// boundaries for THIS field must agree, not diverge in a new direction.
+    /// </summary>
+    private static string? ValidatePayloadFromShape(JsonElement payloadFromEl, bool rejectEmpty = false)
+    {
+        if (payloadFromEl.ValueKind != JsonValueKind.Object)
+            return "RUNTIME_INTERACTION_PAYLOAD_FROM_MUST_BE_OBJECT";
+        if (rejectEmpty && !payloadFromEl.EnumerateObject().Any())
+            return "RUNTIME_INTERACTION_PAYLOAD_FROM_EMPTY";
+        foreach (var entry in payloadFromEl.EnumerateObject())
+        {
+            if (entry.Value.ValueKind != JsonValueKind.String)
+                return $"RUNTIME_INTERACTION_PAYLOAD_FROM_VALUE_MUST_BE_STRING:{entry.Name}";
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Mirrors frontend/runtime/renderEmission.ts normalizeAuthoredEventType()'s alias map exactly
+    /// (same 17 keys -> 8 canonical triggers) so the backend persistence boundary accepts/rejects
+    /// the SAME raw trigger keys as the frontend build boundary for dispatchPayloadFromByTrigger —
+    /// not a new/broader trigger vocabulary (PR #599 review round 7). No shared code with the
+    /// frontend implementation is required (different language); only the same decisions for the
+    /// same inputs.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, string> AuthoredEventTypeAliasMap =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["onClick"] = "click",
+            ["click"] = "click",
+            ["onChange"] = "change",
+            ["change"] = "change",
+            ["onInput"] = "input",
+            ["input"] = "input",
+            ["onSubmit"] = "submit",
+            ["submit"] = "submit",
+            ["onOpen"] = "toggle",
+            ["onClose"] = "toggle",
+            ["toggle"] = "toggle",
+            ["onFocus"] = "focus",
+            ["focus"] = "focus",
+            ["onBlur"] = "blur",
+            ["blur"] = "blur",
+            ["onSelect"] = "select",
+            ["select"] = "select",
+        };
+
+    /// <summary>
+    /// The exact set of triggers component_wiring_execution_lane's dispatch binding generator
+    /// (frontend buildCatalogComponentEventBinding) actually creates an eventBinding entry for —
+    /// mirrors frontend/runtime/renderEmission.ts COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS. A
+    /// trigger AuthoredEventTypeAliasMap recognizes but that is not a member of this set
+    /// (input/focus/blur — valid triggers for OTHER lanes, never for this one) is rejected, not
+    /// silently accepted into a payloadFrom map with nothing to attach to.
+    /// </summary>
+    private static readonly IReadOnlySet<string> ComponentWiringExecutionLaneTriggers =
+        new HashSet<string>(StringComparer.Ordinal) { "click", "change", "select", "submit", "toggle" };
+
+    /// <summary>
+    /// Validates the node-level dispatchPayloadFromByTrigger field — { trigger: { field: source } }
+    /// — data-only payload binding for this SAME node's admin_runtime dispatch, independent of
+    /// runtimeInteractions/actionType (see LayoutNodeRecord.DispatchPayloadFromByTriggerJson).
+    /// A present-but-malformed value fails the WHOLE layout patch closed, mirroring
+    /// ValidateRuntimeInteractions' own contract for the same JSON boundary.
+    ///
+    /// Trigger keys are TRIMMED before alias lookup (PR #599 review round 8 — matches frontend
+    /// normalizeAuthoredEventType()'s value.trim() exactly; a raw key differing only by
+    /// leading/trailing whitespace, e.g. " click ", must accept/reject identically on both
+    /// boundaries) then normalized (AuthoredEventTypeAliasMap) and must resolve to a
+    /// ComponentWiringExecutionLaneTriggers member; two raw keys normalizing (after trim) to the
+    /// SAME canonical trigger fail closed rather than allowing either to silently win (round 7 —
+    /// a dispatchPayloadFromByTrigger object's raw keys are unique by construction, but alias/
+    /// whitespace collisions after normalization are not). A whitespace-only key trims to empty,
+    /// which the alias map does not contain, so it falls through to the SAME
+    /// RUNTIME_INTERACTION_TRIGGER_REQUIRED an absent/unrecognized key produces.
+    /// </summary>
+    private static string? ValidateDispatchPayloadFromByTrigger(JsonElement nodes)
+    {
+        foreach (var node in nodes.EnumerateArray())
+        {
+            if (node.ValueKind != JsonValueKind.Object) continue;
+            if (!node.TryGetProperty("dispatchPayloadFromByTrigger", out var byTriggerEl)) continue;
+            if (byTriggerEl.ValueKind != JsonValueKind.Object)
+                return "RUNTIME_INTERACTION_DISPATCH_PAYLOAD_FROM_BY_TRIGGER_MUST_BE_OBJECT";
+            var seenCanonicalTriggers = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var triggerEntry in byTriggerEl.EnumerateObject())
+            {
+                if (string.IsNullOrWhiteSpace(triggerEntry.Name))
+                    return "RUNTIME_INTERACTION_TRIGGER_REQUIRED";
+                if (!AuthoredEventTypeAliasMap.TryGetValue(triggerEntry.Name.Trim(), out var canonicalTrigger))
+                    return "RUNTIME_INTERACTION_TRIGGER_REQUIRED";
+                if (!ComponentWiringExecutionLaneTriggers.Contains(canonicalTrigger))
+                    return "RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED";
+                if (!seenCanonicalTriggers.Add(canonicalTrigger))
+                    return "RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION";
+                var payloadFromError = ValidatePayloadFromShape(triggerEntry.Value, rejectEmpty: true);
+                if (payloadFromError is not null) return payloadFromError;
+            }
+        }
+        return null;
+    }
+
     private static string? ValidateRuntimeInteractions(
         JsonElement nodes,
         IReadOnlySet<string>? approvedInstanceTargetRefs = null,
@@ -832,13 +951,8 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                         return $"RUNTIME_INTERACTION_INSTANCE_TARGET_REF_NOT_APPROVED:{targetRef}";
                     if (interaction.TryGetProperty("payloadFrom", out var payloadFromEl))
                     {
-                        if (payloadFromEl.ValueKind != JsonValueKind.Object)
-                            return "RUNTIME_INTERACTION_PAYLOAD_FROM_MUST_BE_OBJECT";
-                        foreach (var entry in payloadFromEl.EnumerateObject())
-                        {
-                            if (entry.Value.ValueKind != JsonValueKind.String)
-                                return $"RUNTIME_INTERACTION_PAYLOAD_FROM_VALUE_MUST_BE_STRING:{entry.Name}";
-                        }
+                        var payloadFromError = ValidatePayloadFromShape(payloadFromEl);
+                        if (payloadFromError is not null) return payloadFromError;
                     }
                     if (interaction.TryGetProperty("outputProp", out var outputPropEl))
                     {
@@ -1183,6 +1297,9 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                     var runtimeInteractionError = ValidateRuntimeInteractions(runtimeNodes, approvedInstanceTargetRefs, instanceCandidateSourceError);
                     if (runtimeInteractionError is not null)
                         return normalized with { Ok = false, Valid = false, Message = runtimeInteractionError };
+                    var dispatchPayloadFromByTriggerError = ValidateDispatchPayloadFromByTrigger(runtimeNodes);
+                    if (dispatchPayloadFromByTriggerError is not null)
+                        return normalized with { Ok = false, Valid = false, Message = dispatchPayloadFromByTriggerError };
                 }
             }
 

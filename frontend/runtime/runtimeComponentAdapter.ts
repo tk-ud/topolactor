@@ -50,6 +50,8 @@ export type RuntimeComponentSpec = {
   localStateStore?: RuntimeGuardedStateStore;
   /** Snapshot used by dispatchExternalPort payloadFrom node:<nodeId>.value resolution. */
   payloadFromNodeValues?: Record<string, unknown>;
+  /** Fires with this node's own latest scalar value on a value-bearing trigger (change/input/select). */
+  onNodeValueChange?: (value: unknown) => void;
 };
 
 /** Raw projection-local state store (read/write, no guard). Wrapped by RuntimeGuardedStateStore. */
@@ -215,6 +217,7 @@ export function adaptComponentDataHub(hub: ComponentDataHub): AdaptResult {
       eventBinding: hub.eventBinding,
       localStateStore: hub.localStateStore,
       payloadFromNodeValues: hub.payloadFromNodeValues,
+      onNodeValueChange: hub.onNodeValueChange,
       className,
       design,
     },

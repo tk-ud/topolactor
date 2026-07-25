@@ -322,8 +322,407 @@ admin_uibuilder_ui_structure_wiring_ssot:
           id field(s) (enum_dictionary:delete_item/delete_group) are the closest
           candidates for the next real write-side proof, not create/update (which need
           genuinely new typed input, not an existing row's own value).
+        write_payload_capture_mechanism_implemented: >-
+          2026-07-24. Both cross-cutting prerequisites named above are implemented and
+          tested; this gap's own diagnosis text above is kept as history and superseded
+          by this entry, not rewritten. (1)
+          frontend/runtime/liveNodeValueTracker.ts createLiveNodeValueTracker() is a new,
+          surface-independent, stable-node-identity register/update/deregister store
+          (set/snapshot/reconcile). frontend/islands/ProjectionShell.tsx now owns one
+          instance per mount (a ref, never re-created across rerenders/SSE refresh) and
+          passes it into every renderEmission() call as
+          payloadFromNodeValues:tracker.snapshot() (same object reference every call, so
+          a runtimeSpec closure captured at an earlier render still observes later
+          writes) and onNodeValueChange:tracker.set. reconcile() runs on initial mount
+          and on every SSE refresh against the CURRENT layoutNodes list, so a
+          removed/replaced node's stale tracked value cannot leak into a later dispatch
+          -- this closes the negative cases stale_node_value / node_reconciliation.
+          renderEmission.ts wires onNodeValueChange into a per-node closure on
+          ComponentDataHub/RuntimeComponentSpec (mirrors the existing
+          payloadFromNodeValues plumbing exactly).
+          runtime/runtimeComponentFactory.ts emitBoundEvent gained a node-value-tracking
+          lane (fires on change/input/select when payload carries "value", BEFORE the
+          previewMode gate, same event-time-extraction pattern as the pre-existing
+          calcTriggerCallback lane) -- this is the write side of payloadFromNodeValues,
+          proven in production for the first time (frontend/tests/
+          liveNodeValueTrackerAndAdminRuntimePayloadFrom.test.ts). (2) Lane 2
+          (component_wiring_execution_lane, admin_runtime) reuses the SAME
+          resolvePayloadFrom() single resolution authority
+          (frontend/runtime/payloadFromResolver.ts) dispatchExternalPort/
+          dispatchInstanceOperation already use -- no new resolver, no surface-specific
+          payload builder. frontend/runtime/frontendScheduler.ts RuntimeDispatchSpec
+          gained an optional payloadFrom field; renderEmission.ts's new
+          buildAdminRuntimePayloadFromByTrigger() reads it from a node's OWN
+          runtimeInteractions[] entries carrying the new, generic (non-surface-specific,
+          reusable by any admin_runtime layer:action) actionType
+          "bindRuntimeDispatchPayload" -- deliberately outside the closed
+          WIRING_SETTING_CATEGORIES taxonomy (uiBuilderWiringProjection.ts), since that
+          taxonomy governs UI-Builder canvas-authoring policy checks, not this
+          seed-authored runtime dispatch path; an unrecognized actionType there is
+          silently skipped by the existing category builders and never trips
+          RUNTIME_INTERACTION_UNATTRIBUTABLE (which only fires when the overall
+          eventBinding ends up empty -- an admin_runtime node's wiringKind-derived base
+          binding already prevents that). Priority/conflict rule (the canonical contract
+          per this gap's own remaining_granularity_constraint discussion above): when a
+          payloadFrom map is authored for a trigger, RESOLVING it is the SOLE payload
+          authority for that dispatch -- unresolved node value / malformed event path is
+          a hard fail-close (PAYLOAD_FROM_NODE_NOT_FOUND / PAYLOAD_FROM_EVENT_PATH_NOT_FOUND
+          / PAYLOAD_FROM_UNRESOLVED_REF, never a silent empty/false/null degrade); when no
+          payloadFrom is authored for a trigger, the pre-existing PR597 raw event-time
+          payload passthrough is unchanged (regression-proven). Live-DB proof (real
+          PostgreSQL, not an in-memory echo): backend/tests/Topolactor.Integration.Tests/
+          AdminEnumHubRelationUiProjectionLiveDbTests.cs
+          DispatchAsync_AdminEnumManagementManifest_CreateGroupThenDeleteGroup_
+          PersistsAndReListReflectsDiff dispatches enum_dictionary:create_group then
+          enum_dictionary:delete_group directly against the SAME dispatcher chain the
+          frontend mechanism above drives, asserts the write persists AND that a
+          subsequent enum_dictionary:list_groups re-dispatch reflects the diff (create
+          appears, delete is gone -- the write/reread/evidence boundary), and asserts two
+          negative cases fail close (malformed groupId, nonexistent groupId) without
+          corrupting the row created earlier in the same test. This resolves
+          admin-runtime-operation-dispatch-lane-determination's third acceptance
+          condition (admin-enum/team-dashboard/scheduler-settings write-dispatch CAN now
+          proceed under the single component_wiring_execution_lane contract) -- it does
+          NOT itself ship admin-enum's/team-dashboard's/scheduler-settings' own
+          production write UI (buttons, forms, seed wiring rows beyond this proof); that
+          remains admin-surface-topology-seed-conversion's own subBundle scope, now
+          unblocked rather than completed by this entry.
         affected_subbundles: [admin-enum, team-dashboard, scheduler-settings]
         follow_up_ref: .agent/tasks/todo.md admin-runtime-operation-dispatch-lane-determination Bundle
+    admin_runtime_payload_binding_contract:
+      role: >-
+        2026-07-24, formalizes a canonical, validated payload-binding extension of
+        component_wiring_execution_lane's admin_runtime case. 2026-07-25 (PR #599
+        review round 6, current shape) separates action AUTHORITY from effect DATA:
+        this binding carries no action authority of its own, so it is NOT authored as
+        a runtimeInteractions[]/actionType entry at all (the round 1-5 shape, which used
+        the actionType string "bindRuntimeDispatchPayload" and progressively tried to
+        reconcile it with the closed actionType vocabulary, is retired -- see
+        superseded_history below). It is a dedicated per-node field --
+        dispatchPayloadFromByTrigger -- independent of runtimeInteractions entirely.
+      authority: >-
+        Frontend build-time authoring only (frontend/runtime/renderEmission.ts
+        buildAdminRuntimePayloadFromByTrigger). Never a backend authority, never a
+        second target/layer/action resolution path -- it only supplies DATA (the
+        payload) for the target/layer/action the SAME node's wiringKind="admin_runtime"
+        + targetRef already resolve (parseAdminRuntimeLayerAction). Backend-side, the
+        SAME field is validated at the layout_patch persistence boundary
+        (NpgsqlUiTopologyRepository.cs ValidateDispatchPayloadFromByTrigger) and threaded
+        node-locally through LayoutNodeRecord/LayoutSchemaTensorComposer.NodeLocalData/
+        StructureMapResolver.ToLayoutNode/Contracts.cs LayoutNode -- the SAME per-node
+        plumbing propsJson/stateJson/propBindings already use -- so it reaches the
+        production Emission response, not only test fixtures.
+      applicability: >-
+        Any wiring_kind="admin_runtime" node, any layer:action (enum_dictionary:*,
+        auth_users:*, team_markdown:*, scheduler_jobs:*, ...) -- reuses the SAME field,
+        no per-operation/per-subBundle case.
+      authored_surface: >-
+        A per-node topology.ui_topology_tensor.layout_patch_json.nodes[].dispatchPayloadFromByTrigger
+        field -- { trigger: { field: source } } -- the SAME per-node authoring column
+        family propsJson/stateJson/propBindings/runtimeInteractions already use, but its
+        OWN top-level key, structurally separate from runtimeInteractions -- never
+        topology.ui_wiring_registry.wiring_schema_json (that column remains a
+        zero-consumer surface per this file's known_gaps note above; this contract does
+        not adopt it).
+      required_fields:
+        trigger: >-
+          2026-07-25 correction (PR #599 review round 7 -- corrects the round-6 text below,
+          which described this restriction without the implementation actually enforcing
+          it). A dispatchPayloadFromByTrigger object key is validated in two stages, not
+          one: (1) the SAME global normalizeAuthoredEventType() every runtimeInteractions
+          entry uses -- an 8-canonical-trigger alias map (click/change/input/submit/
+          toggle/focus/blur/select) shared unmodified with every other consumer of that
+          normalizer, never narrowed; a key this stage does not recognize at all fails the
+          WHOLE node closed (RUNTIME_INTERACTION_TRIGGER_REQUIRED); then (2) membership in
+          COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS (frontend/runtime/renderEmission.ts) --
+          the exact 5-trigger subset (click/change/select/submit/toggle)
+          buildCatalogComponentEventBinding actually creates an eventBinding entry for, the
+          SAME single authority both that function and this validation share. A trigger
+          stage (1) recognizes but stage (2) does not contain -- input/focus/blur, valid
+          triggers for OTHER lanes but never bound by this one -- fails the WHOLE node
+          closed too (RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED), never silently validated
+          into a payloadFrom map with nothing to attach to (the round-6 gap: the
+          implementation validated only via stage (1), so a normalizer-recognized but
+          lane-unsupported trigger passed validation and then silently produced no
+          binding). Two raw keys normalizing (stage 1) to the SAME canonical trigger (e.g.
+          "click" and "onClick") fail the WHOLE node closed too
+          (RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION), never silently
+          letting the later key win. 2026-07-25 addition (PR #599 review round 8): stage
+          (1) trims the raw key before alias lookup (normalizeAuthoredEventType's own
+          value.trim()) -- so " click " and "click" are the SAME canonical trigger, and a
+          whitespace-only key trims to "" (not in the alias map) and fails
+          RUNTIME_INTERACTION_TRIGGER_REQUIRED, the same code an absent/unrecognized key
+          produces. The backend persistence boundary (NpgsqlUiTopologyRepository.cs
+          ValidateDispatchPayloadFromByTrigger) mirrors this trim-then-lookup order exactly
+          (round 7 introduced the mirrored alias map but validated the untrimmed raw key,
+          so a whitespace-padded key was accepted by the frontend build boundary but
+          rejected by backend persistence -- round 8 closes that gap).
+        payloadFrom: >-
+          Each trigger's value: an object whose entries are string sources recognized by
+          payloadFromResolver.ts's existing grammar (node:<nodeId>.value | event.<path> |
+          literal:<value>) -- the SAME grammar/resolver dispatchExternalPort/
+          dispatchInstanceOperation already use; this contract adds no new source syntax.
+          A non-object per-trigger value (RUNTIME_INTERACTION_PAYLOAD_FROM_MUST_BE_OBJECT),
+          an empty per-trigger object ({}, RUNTIME_INTERACTION_PAYLOAD_FROM_EMPTY), or a
+          non-string field value (RUNTIME_INTERACTION_PAYLOAD_FROM_VALUE_MUST_BE_STRING)
+          fails the whole node closed -- the SAME error-code vocabulary (and, backend-side,
+          the SAME ValidatePayloadFromShape helper, called with rejectEmpty:true only for
+          this field) dispatchExternalPort/dispatchInstanceOperation's own payloadFrom
+          validation uses, not an admin-specific vocabulary. 2026-07-25 correction (PR #599
+          review round 8, supersedes the round-7 empty-object leniency claim immediately
+          below, kept for history): an empty per-trigger object was previously described as
+          "intentionally NOT rejected, matching [dispatchExternalPort/dispatchInstanceOperation's]
+          own leniency for the identical shape" -- accurate for those two actionTypes'
+          persistence-time check, but this field's OWN dispatch-time boundary
+          (runtimeComponentFactory.ts parseEventBinding's runtimeDispatch.payloadFrom
+          branch) already rejected {} before round 8, so build time and persistence time
+          silently accepting what dispatch time would later reject was a genuine
+          three-boundary mismatch for this field specifically -- not a deliberate leniency
+          match. All three boundaries (build/persistence/dispatch) now reject {} for
+          dispatchPayloadFromByTrigger; dispatchExternalPort/dispatchInstanceOperation's own
+          payloadFrom keeps its separate, unchanged leniency (its own dispatch-time boundary
+          tolerates {} too, so there is no mismatch to fix there, and it is out of this
+          Bundle's scope regardless). 2026-07-25 correction (PR #599 review round 7): round 6
+          claimed the round 1-5 duplicate_field_conflict case became "structurally
+          impossible" because this is a single object keyed by trigger, not an array of
+          independently-authored entries -- true only for identical RAW keys (an object
+          cannot repeat a literal key), false once alias normalization is considered:
+          distinct raw keys (e.g. "click" and "onClick", or "click" and " click " after
+          round 8's trim fix) can still normalize to the SAME canonical trigger. See the
+          trigger field above -- this collision is validated and fails closed
+          (RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION), it is not structurally
+          impossible.
+      target_ref_shape: >-
+        Unchanged from parseAdminRuntimeLayerAction's existing contract --
+        "manifest:<manifestUuid>:<layer>:<action>". This binding contract adds no new
+        target_ref grammar; targetRef stays exclusively the node's own
+        wiringKind="admin_runtime" column, never re-derived from dispatchPayloadFromByTrigger.
+      allowed_payload_sources: >-
+        Exactly payloadFromResolver.ts's three source kinds (node_value / event_path /
+        literal). No new source kind is introduced by this contract -- doing so would
+        require its own SSOT amendment and resolver change, out of this contract's scope.
+      validation_and_fail_close: >-
+        renderEmission.ts buildAdminRuntimePayloadFromByTrigger returns a result type
+        (never a bare map): any invalid trigger key, non-object per-trigger value, or
+        non-string field value fails the WHOLE node's render closed as an explicit error
+        ComponentSpec, mirroring the existing CATALOG_COMPONENT_KIND_REQUIRED-class
+        fail-close pattern this file already uses elsewhere in renderEmission.ts. The SAME
+        shape is independently validated at the backend persistence boundary
+        (NpgsqlUiTopologyRepository.cs ValidateDispatchPayloadFromByTrigger, called
+        alongside ValidateRuntimeInteractions from the SAME layout_patch validation path) --
+        two independent fail-close boundaries, not one relying on the other. At dispatch
+        time (runtimeComponentFactory.ts emitBoundEvent), a payloadFrom map (once
+        validated at build time) is resolved via the SAME resolvePayloadFrom() single
+        authority dispatchExternalPort/dispatchInstanceOperation use --
+        PAYLOAD_FROM_NODE_NOT_FOUND / PAYLOAD_FROM_EVENT_PATH_NOT_FOUND /
+        PAYLOAD_FROM_UNRESOLVED_REF fail close and never enqueue a dispatch; no unresolved
+        value is ever silently degraded to empty string, null, or false.
+      priority_conflict_rule: >-
+        When a payloadFrom map is authored for a trigger, the RESOLVED payload is the
+        sole payload authority for that dispatch (mirrors dispatchExternalPort/
+        dispatchInstanceOperation's own contract exactly -- resolved.payload replaces,
+        never merges with, any other payload source). When no payloadFrom is authored
+        for a trigger, the pre-existing (PR #597) raw event-time payload passthrough
+        (static config payload + Lane 1's merged event payload) is unchanged.
+      own_property_identity: >-
+        Both the live node value store (frontend/runtime/liveNodeValueTracker.ts,
+        Object.create(null) backing) and payloadFromResolver.ts's node_value/event_path
+        existence checks (Object.prototype.hasOwnProperty.call, never the `in` operator
+        or bracket-index truthiness) treat a nodeId/event-path segment that collides with
+        an inherited Object.prototype key (constructor, toString, hasOwnProperty, ...) as
+        genuinely missing, never as an inherited function value.
+      action_authority_vs_effect_data_separation: >-
+        2026-07-25 (PR #599 review round 6). actionType (on runtimeInteractions[]
+        entries) is action AUTHORITY -- a closed vocabulary matched by exact identity
+        only (wiringSettingCategoryOf: dispatchExternalPort / dispatchInstanceOperation /
+        the fixed UI_STATE_UPDATE_ACTIONS set); payloadFrom/outputProp are effect DATA
+        and must never promote an unrecognized actionType past ACTION_OUTSIDE_VOCABULARY.
+        Round 5 (superseded, see superseded_history) added a field-presence fallback
+        that classified ANY actionType carrying payloadFrom/outputProp as
+        side_effect_setting -- reviewed as conflating the two concepts (effect fields
+        used as an authority substitute). Retired by removing this binding from
+        runtimeInteractions entirely: dispatchPayloadFromByTrigger is a node-level field
+        with no actionType at all, so the question "does an unrecognized actionType with
+        payloadFrom pass policy" no longer arises for this contract.
+        ui_event_settings.setting_category_taxonomy.frontend_side.side_effect_setting
+        remains a declared-but-orphaned taxonomy category (no actionType membership
+        defined in this codebase yet) rather than being back-filled by a
+        field-presence rule.
+      superseded_history: >-
+        Rounds 1-5 (2026-07-24 -- 2026-07-25) used a runtimeInteractions[] entry with
+        actionType "bindRuntimeDispatchPayload" for this binding, then progressively
+        tried to reconcile that actionType with findRuntimeInteractionPolicyErrors'
+        closed-vocabulary fail-close: round 3 added a dedicated
+        ADMIN_RUNTIME_PAYLOAD_BINDING_ACTION_TYPE constant + isAdminRuntimePayloadBindingAction()
+        special-case skip; round 5 replaced that with a wiringSettingCategoryOf
+        field-presence fallback (side_effect_setting for any actionType carrying
+        payloadFrom/outputProp). Round 6 (PR #599 review) identified BOTH as
+        unnecessary implementation-derived special-casing of a concern that was never
+        really an "action" to begin with, and retired the runtimeInteractions-based
+        shape for the node-level dispatchPayloadFromByTrigger field described above --
+        removing ADMIN_RUNTIME_PAYLOAD_BINDING_ACTION_TYPE / isAdminRuntimePayloadBindingAction
+        and the wiringSettingCategoryOf fallback entirely, and with them the
+        ADMIN_RUNTIME_PAYLOAD_FROM_* error-code family (replaced by the SAME generic
+        RUNTIME_INTERACTION_PAYLOAD_FROM_*/RUNTIME_INTERACTION_TRIGGER_REQUIRED codes
+        dispatchExternalPort/dispatchInstanceOperation's own payloadFrom validation
+        already used). Kept for history only -- not current behavior; see
+        action_authority_vs_effect_data_separation and required_fields above for the
+        current contract.
+      trigger_authority_unification: >-
+        2026-07-25 (PR #599 review round 7). Round 6 introduced dispatchPayloadFromByTrigger
+        with a trigger-key check that only called normalizeAuthoredEventType() (the SAME
+        global 8-canonical-trigger alias normalizer every runtimeInteractions entry uses)
+        -- but frontend/runtime/renderEmission.ts buildCatalogComponentEventBinding, the
+        function that actually consumes a validated payloadFrom map to build an
+        eventBinding, only ever creates bindings for 5 of those 8 triggers
+        (click/change/select/submit/toggle), as a SEPARATE literal array embedded directly
+        in that function. Two gaps followed from this duplication: (1) "input"/"focus"/
+        "blur" -- valid triggers globally, never bound by this lane -- passed
+        buildAdminRuntimePayloadFromByTrigger's validation and then silently produced no
+        binding to attach to; (2) that validation wrote byTrigger[trigger] = payloadFrom
+        with a plain assignment, so two raw keys normalizing to the SAME canonical trigger
+        (e.g. "click" and "onClick") silently let the later one win instead of failing
+        closed. Fixed by extracting the single 5-trigger set into one shared constant
+        (COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS, frontend/runtime/renderEmission.ts) used
+        by BOTH buildCatalogComponentEventBinding and
+        buildAdminRuntimePayloadFromByTrigger's trigger validation, adding an explicit
+        membership check after normalization (RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED for a
+        normalizer-recognized-but-lane-unsupported trigger) and an own-property collision
+        check before writing to the result map (RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION
+        for two raw keys colliding after normalization). The backend persistence boundary
+        (NpgsqlUiTopologyRepository.cs ValidateDispatchPayloadFromByTrigger) gained its own
+        mirrored alias map (AuthoredEventTypeAliasMap) and the SAME two checks -- no shared
+        code with the frontend (different language), but the same accept/reject decision
+        for the same input. normalizeAuthoredEventType() itself, and every OTHER
+        runtimeInteractions consumer of it (setState/openModal/etc. triggers, which
+        legitimately use input/focus/blur), are unchanged -- this correction narrows only
+        dispatchPayloadFromByTrigger's own additional membership check, never the shared
+        global normalizer.
+      trim_and_empty_boundary_unification: >-
+        2026-07-25 (PR #599 review round 8). A further audit of round 7's fix found two
+        remaining boundary mismatches, both now closed:
+        (1) frontend normalizeAuthoredEventType() trims the raw trigger key before alias
+        lookup (value.trim()), but backend ValidateDispatchPayloadFromByTrigger's
+        AuthoredEventTypeAliasMap.TryGetValue call used the untrimmed JSON property name
+        directly -- so a whitespace-padded raw key (e.g. " click ") was accepted at the
+        frontend build boundary but rejected as unrecognized at backend persistence.
+        Fixed by trimming the raw key before the backend lookup too (see required_fields.
+        trigger above); collision detection (RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION)
+        now operates on the post-trim canonical trigger on both boundaries, so "click" and
+        " click " collide identically to "click" and "onClick".
+        (2) dispatchPayloadFromByTrigger.<trigger>'s empty payloadFrom ({}) passed both the
+        frontend build boundary and the backend persistence boundary, but the SAME field's
+        dispatch-time parse boundary (runtimeComponentFactory.ts parseEventBinding's
+        runtimeDispatch.payloadFrom branch) already rejected {} -- a genuine three-boundary
+        mismatch (see required_fields.payloadFrom above for the full correction). Fixed by
+        adding an explicit empty check (RUNTIME_INTERACTION_PAYLOAD_FROM_EMPTY) to both the
+        frontend build boundary and, via an opt-in rejectEmpty parameter on the SHARED
+        backend ValidatePayloadFromShape helper (default false, so the existing
+        dispatchExternalPort/dispatchInstanceOperation callers keep their own unchanged,
+        separately-scoped leniency for {} -- that pairing's own dispatch-time boundary
+        tolerates {} too, so there is no mismatch to fix there and doing so would be
+        out-of-Bundle scope creep), the backend persistence boundary.
+        Also corrected in this round: the backend AuthoredEventTypeAliasMap comment and
+        this file's earlier text both said "16 keys" for the alias map; the actual count
+        (onClick/click, onChange/change, onInput/input, onSubmit/submit, onOpen/onClose/
+        toggle, onFocus/focus, onBlur/blur, onSelect/select) is 17.
+      runtime_parse_boundary_fail_close: >-
+        2026-07-24 (PR #599 review round 3), still current in round 6's shape.
+        buildAdminRuntimePayloadFromByTrigger's build-time validation is a SEPARATE
+        boundary from runtimeComponentFactory.ts parseEventBinding(), which re-parses
+        the untyped JSON eventBinding[trigger] carried on RuntimeComponentSpec at
+        DISPATCH time -- a boundary that could in principle be reached by any
+        construction path, not only that builder. parseEventBinding's own payloadFrom
+        handling mirrors externalPortDispatch's own pre-existing contract exactly: a
+        present-but-malformed payloadFrom (non-object, empty object, or any non-string
+        value) fails the WHOLE binding closed (parseEventBinding returns null,
+        RUNTIME_PRIMITIVE_RENDERER_INVALID_EVENT_BINDING at dispatch time) -- never a
+        silently filtered subset. This boundary is unaffected by round 6's move from
+        runtimeInteractions to a node-level field, since it operates on the ALREADY-BUILT
+        eventBinding[trigger].runtimeDispatch.payloadFrom RuntimeDispatchSpec shape either
+        way.
+      display_value_vs_dispatch_value_authority: >-
+        2026-07-24 (PR #599 review round 4). The production-mount SSE-refresh scenario
+        proof (round 3) surfaced a real divergence, since retracted-as-out-of-scope and
+        corrected here: renderEmission() rebuilds every catalog_component leaf's default
+        props from scratch on each render (buildDefaultCatalogComponentProps), so a
+        surviving controlled <input>'s DISPLAYED value reset to its emission-derived
+        default on an SSE-refresh-driven rerender while a LATER dispatch would still
+        silently resolve and send the live node value tracker's pre-refresh typed value
+        -- sending a value the user could no longer see on screen. Introducing dispatch
+        reachability for tracked values (this Bundle's whole purpose) is what turned a
+        previously-inert display quirk into a real "invisible stale value sent" risk, so
+        it is this Bundle's own scope, not a separate concern. Resolved by promoting the
+        SAME live node value tracker to the canonical DISPLAY authority too, via
+        renderEmission.ts's new applyLiveNodeValueOverride: when the tracker holds an
+        entry for a node's exact nodeId (own-property identity, matching the read-side
+        contract above) AND that node's already-built default props carry a `data.value`
+        key, the tracked value overrides the emission-derived default -- untouched nodes
+        (no tracker entry) and value-less component kinds (e.g. action/button,
+        form_input/form_field -- no `data.value` key to begin with) are both entirely
+        unaffected, so this is surface/operation/component-kind-independent, not an
+        admin-enum-specific or per-node patch. Applied BEFORE propBindings resolution, so
+        a node whose value is ALSO server-data-bound via propBindings still lets that
+        fresher, live server data win over a stale local edit once the projection
+        actually carries one -- the tracker is display authority only in the absence of a
+        stronger, live data-bound source, never a fallback that shadows one. A node with
+        no tracked entry and no propBinding falls through to the pre-existing
+        emission-derived default unchanged (no regression for the common case). Removed
+        nodes (SSE-refresh reconciliation) are not rendered at all, so there is no display
+        to diverge from -- resolvePayloadFrom's existing PAYLOAD_FROM_NODE_NOT_FOUND
+        fail-close (not a display-side concern) covers a later dispatch attempt against
+        them.
+      proof: >-
+        2026-07-25 (round 6): dedicated-file assertions were migrated by responsibility
+        into their owning existing test files, per PR #599 review round 6 (professional
+        precedent: extend existing test surfaces over standalone dedicated files).
+        frontend/tests/payloadFromResolver.test.ts (own-property identity for both the
+        node value store and event-path traversal), frontend/tests/
+        runtimeComponentFactory.test.ts (onNodeValueChange node-value-tracking lane;
+        admin_runtime Lane 2 payloadFrom resolution success/fail-close cases; the
+        parseEventBinding dispatch-time parse-boundary fail-close cases independent of
+        build-time validation), frontend/tests/renderEmissionPropBindings.test.ts
+        (onNodeValueChange option wiring; applyLiveNodeValueOverride's display-authority
+        cases -- overrides only when a tracked entry exists for the exact nodeId, never
+        invents a `data.value` field for a component kind that has none, and
+        own-property-identity-safe against an Object.prototype-shaped nodeId;
+        buildCatalogComponentEventBinding trigger-scoping; dispatchPayloadFromByTrigger
+        build-time fail-close cases -- invalid trigger key, non-object per-trigger value,
+        non-string field value; 2026-07-25 round 7 additions: each of the 5 canonical
+        triggers attaches payloadFrom to its own binding, an alias key (onClick) normalizes
+        onto its canonical binding, a normalizer-recognized-but-lane-unsupported trigger
+        (input/onInput/focus/blur) fails RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED, and each
+        alias-collision pair (click+onClick, change+onChange, submit+onSubmit,
+        select+onSelect, toggle+onOpen, toggle+onClose, onOpen+onClose) fails
+        RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION rather than letting either
+        key silently win; 2026-07-25 round 8 additions: whitespace-padded canonical/alias
+        keys (" click ", " onClick ") trim and normalize correctly, a whitespace-only key
+        fails RUNTIME_INTERACTION_TRIGGER_REQUIRED, a canonical/whitespace-padded pair
+        ("click"+" click ", "onClick"+" onClick ") fails
+        RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION, and an empty per-trigger
+        payloadFrom ({}) fails RUNTIME_INTERACTION_PAYLOAD_FROM_EMPTY), frontend/tests/
+        uiEventEffectRunner.test.ts
+        (createLiveNodeValueTracker register/update/reconcile/own-property-identity),
+        frontend/tests/uiBuilderWiringProjection.test.ts (action_authority_vs_effect_data_separation:
+        an unknown actionType carrying payloadFrom/outputProp still fails
+        ACTION_OUTSIDE_VOCABULARY), backend/tests/Topolactor.Runtime.Tests/
+        NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs (backend persistence-boundary
+        validation, including round 7's mirrored trigger normalization/membership/collision
+        cases and round 8's trim/whitespace-collision/empty-payloadFrom cases, plus a
+        regression case proving dispatchExternalPort's own empty-payloadFrom leniency stays
+        unchanged) and LayoutSchemaStructuralCompositionTests.cs (NodeLocalData/Compose
+        merge-by-exact-nodeId for the dispatchPayloadFromByTriggerJson field), and frontend/tests/
+        projectionShellAdminRuntimeWritePayloadCapture.test.ts (production
+        frontend/islands/ProjectionShell.tsx mount, real DOM input/click events and a real
+        SSE "projection" event fired through the actual sseReceiver/projectionRuntime
+        path with a minimal live ProjectionDefinition -- not a test-injected payload
+        map/callback or a stubbed refresh -- proving: multi-node value separation, a
+        removed node's tracked value failing close on a later dispatch instead of leaking,
+        a surviving node's tracked DISPLAY value -- asserted directly against the
+        re-rendered DOM <input>.value, not only against the dispatch payload --
+        persisting across refresh and matching the value the following dispatch actually
+        sends, and a fresh unmount/remount starting with no inherited values -- kept as a
+        focused dedicated scenario file, ProjectionShell-specific proof only).
     manifest_topology_boundary:
       rule: >-
         manifest.topology entries for this surface (ui_projection type per

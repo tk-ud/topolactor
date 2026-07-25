@@ -55,6 +55,13 @@ export type RenderEmissionOptions = {
   localStateStore?: RuntimeGuardedStateStore;
   /** Snapshot for dispatchExternalPort payloadFrom node:<nodeId>.value resolution. */
   payloadFromNodeValues?: Record<string, unknown>;
+  /**
+   * Registers a node's own latest scalar value under its stable nodeId — the
+   * write side of payloadFromNodeValues. See liveNodeValueTracker.ts. Absent
+   * by default (no-op) — callers that never wire this in keep today's
+   * behavior unchanged.
+   */
+  onNodeValueChange?: (nodeId: string, value: unknown) => void;
 };
 
 export type ComponentSpec = {
@@ -264,7 +271,11 @@ function buildProductionCatalogComponentProps(
   switch (componentKind) {
     case "action/button":
       return {
-        data: { label: authoredLabel || componentKey, variant: "primary", disabled: false },
+        data: {
+          label: authoredLabel || componentKey,
+          variant: "primary",
+          disabled: false,
+        },
       };
     case "form_input/form_field":
       return { data: { label: authoredLabel || componentKey } };
@@ -272,7 +283,12 @@ function buildProductionCatalogComponentProps(
       // The option list is business data the schema record does not carry — an honest empty
       // list, never a fabricated sample option, until real option data is wired.
       return {
-        data: { value: "", options: [], label: authoredLabel, placeholder: authoredLabel || "" },
+        data: {
+          value: "",
+          options: [],
+          label: authoredLabel,
+          placeholder: authoredLabel || "",
+        },
       };
     default:
       return buildLayoutPreviewPlaceholderProps(componentKind, componentKey);
@@ -299,7 +315,11 @@ function buildDefaultCatalogComponentProps(
   if (previewMode) {
     return buildLayoutPreviewPlaceholderProps(componentKind, componentKey);
   }
-  return buildProductionCatalogComponentProps(node, componentKind, componentKey);
+  return buildProductionCatalogComponentProps(
+    node,
+    componentKind,
+    componentKey,
+  );
 }
 
 /**
@@ -378,19 +398,179 @@ export function mergeNodeLocalProps(
 }
 
 /**
+ * The exact set of triggers component_wiring_execution_lane's dispatch binding
+ * generator (buildCatalogComponentEventBinding below) actually creates an
+ * eventBinding entry for — the single authority both that function and
+ * buildAdminRuntimePayloadFromByTrigger's trigger validation share (PR #599
+ * review round 7: previously duplicated as a separate literal array in each,
+ * which is how "input"/"focus"/"blur" — recognized by the broader
+ * normalizeAuthoredEventType() but never members of this 5-trigger set — could
+ * pass dispatchPayloadFromByTrigger's trigger validation yet silently have no
+ * binding to attach to). SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
+ * admin_runtime_payload_binding_contract.required_fields.trigger.
+ */
+const COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS = [
+  "click",
+  "change",
+  "select",
+  "submit",
+  "toggle",
+] as const;
+
+export type AdminRuntimePayloadFromByTriggerResult =
+  | { ok: true; byTrigger: Record<string, Record<string, string>> }
+  | { ok: false; error: string };
+
+/**
+ * Reads a node's OWN dispatchPayloadFromByTrigger field — { trigger: { field: source } } —
+ * a per-node, data-only payload binding for this SAME node's admin_runtime dispatch
+ * (component_wiring_execution_lane, wiring_kind="admin_runtime"). SSOT:
+ * admin-uibuilder-ui-structure-wiring-ssot.yaml lane_storage_boundary.known_gaps.
+ * remaining_write_payload_capture_gap write_payload_capture_mechanism_implemented.
+ *
+ * This field carries NO action authority of its own and lives OUTSIDE
+ * runtimeInteractions[]/actionType entirely (PR #599 review round 6: action authority
+ * (actionType, closed vocabulary) and effect data (payloadFrom) are separate concepts —
+ * a data-only payload binding must not be expressed as a fake runtimeInteractions[]
+ * actionType, and effect fields must never promote an unrecognized actionType past
+ * ACTION_OUTSIDE_VOCABULARY). Every admin_runtime action (enum_dictionary:*, auth_users:*,
+ * team_markdown:*, scheduler_jobs:*, ...) reuses this SAME node-level field — no
+ * per-operation case.
+ *
+ * dispatchPayloadFromByTrigger is a single object keyed by RAW trigger key, so two
+ * entries can never share the exact same raw key — but normalizeAuthoredEventType()
+ * maps multiple raw aliases onto the same canonical trigger (e.g. "click" and
+ * "onClick" both -> "click"), so a conflict CAN still occur after normalization
+ * (PR #599 review round 7 correction: round 6's claim that duplicate_field_conflict
+ * became "structurally impossible" was true only for identical raw keys, not for
+ * alias collisions — the two are different claims). Two raw keys normalizing to the
+ * same canonical trigger fail the WHOLE node closed
+ * (RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION) rather than silently
+ * letting the later one win. A raw trigger key that normalizeAuthoredEventType()
+ * recognizes but that is not a member of COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS
+ * (e.g. "input"/"focus"/"blur" — valid triggers for OTHER lanes, never for this
+ * one) also fails the WHOLE node closed (RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED)
+ * instead of silently validating into a payloadFrom map with no binding to ever
+ * attach to. A present-but-malformed value still fails the WHOLE node closed, never
+ * silently skipped/filtered: an unrecognized trigger key, a non-object per-trigger map, or
+ * a non-string field value, or an empty per-trigger map ({}) — the SAME error-code vocabulary
+ * (RUNTIME_INTERACTION_PAYLOAD_FROM_MUST_BE_OBJECT / _VALUE_MUST_BE_STRING / _EMPTY /
+ * RUNTIME_INTERACTION_TRIGGER_REQUIRED / _UNSUPPORTED / _CONFLICT_AFTER_NORMALIZATION)
+ * the backend's own ValidateDispatchPayloadFromByTrigger (NpgsqlUiTopologyRepository.cs,
+ * reusing its existing ValidatePayloadFromShape helper — with rejectEmpty:true only for THIS
+ * caller — also used by dispatchExternalPort/dispatchInstanceOperation's own payloadFrom)
+ * validates at the persistence boundary — not an admin-specific vocabulary.
+ *
+ * PR #599 review round 8 correction: an earlier version of this function let an empty
+ * per-trigger map ({}) pass, reasoning it matched the backend's own leniency for
+ * dispatchExternalPort/dispatchInstanceOperation's payloadFrom shape. That leniency claim
+ * was accurate for THOSE two actionTypes' own persistence-time check, but this field's own
+ * DISPATCH-time boundary (runtimeComponentFactory.ts parseEventBinding's
+ * runtimeDispatch.payloadFrom branch) already rejected {} before this correction — so build
+ * time and persistence time silently accepting what dispatch time would later reject was a
+ * genuine three-boundary mismatch for this field specifically, not a deliberate leniency
+ * match. Now build time, persistence time, and dispatch time all reject {} for
+ * dispatchPayloadFromByTrigger; dispatchExternalPort/dispatchInstanceOperation's own
+ * payloadFrom keeps its separate, unchanged (still lenient) contract, since ITS dispatch-time
+ * boundary tolerates {} too and is out of this Bundle's scope.
+ */
+function buildAdminRuntimePayloadFromByTrigger(
+  rawByTrigger: unknown,
+): AdminRuntimePayloadFromByTriggerResult {
+  if (rawByTrigger === undefined || rawByTrigger === null) {
+    return { ok: true, byTrigger: {} };
+  }
+  if (typeof rawByTrigger !== "object" || Array.isArray(rawByTrigger)) {
+    return {
+      ok: false,
+      error:
+        `RUNTIME_INTERACTION_DISPATCH_PAYLOAD_FROM_BY_TRIGGER_MUST_BE_OBJECT: dispatchPayloadFromByTrigger must be an object`,
+    };
+  }
+  const byTrigger: Record<string, Record<string, string>> = {};
+  for (const [rawTrigger, payloadFromRaw] of Object.entries(rawByTrigger)) {
+    const trigger = normalizeAuthoredEventType(rawTrigger);
+    if (!trigger) {
+      return {
+        ok: false,
+        error:
+          `RUNTIME_INTERACTION_TRIGGER_REQUIRED: dispatchPayloadFromByTrigger has an unrecognized trigger key "${rawTrigger}"`,
+      };
+    }
+    if (
+      !(COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS as readonly string[]).includes(
+        trigger,
+      )
+    ) {
+      return {
+        ok: false,
+        error:
+          `RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED: dispatchPayloadFromByTrigger trigger "${rawTrigger}" normalizes to "${trigger}", which component_wiring_execution_lane does not bind (supported: ${
+            COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS.join(", ")
+          })`,
+      };
+    }
+    if (Object.prototype.hasOwnProperty.call(byTrigger, trigger)) {
+      return {
+        ok: false,
+        error:
+          `RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION: dispatchPayloadFromByTrigger has more than one raw trigger key normalizing to "${trigger}"`,
+      };
+    }
+    if (
+      typeof payloadFromRaw !== "object" || payloadFromRaw === null ||
+      Array.isArray(payloadFromRaw)
+    ) {
+      return {
+        ok: false,
+        error:
+          `RUNTIME_INTERACTION_PAYLOAD_FROM_MUST_BE_OBJECT: dispatchPayloadFromByTrigger entry for trigger "${trigger}" is not an object`,
+      };
+    }
+    if (Object.keys(payloadFromRaw).length === 0) {
+      return {
+        ok: false,
+        error:
+          `RUNTIME_INTERACTION_PAYLOAD_FROM_EMPTY: dispatchPayloadFromByTrigger entry for trigger "${trigger}" declares no fields`,
+      };
+    }
+    const payloadFrom: Record<string, string> = {};
+    for (const [field, value] of Object.entries(payloadFromRaw)) {
+      if (typeof value !== "string") {
+        return {
+          ok: false,
+          error:
+            `RUNTIME_INTERACTION_PAYLOAD_FROM_VALUE_MUST_BE_STRING: dispatchPayloadFromByTrigger entry for trigger "${trigger}" field "${field}" is not a string source`,
+        };
+      }
+      payloadFrom[field] = value;
+    }
+    byTrigger[trigger] = payloadFrom;
+  }
+  return { ok: true, byTrigger };
+}
+
+/**
  * Builds an eventBinding for a catalog_component node from its RuntimeDispatchSpec.
  * Populates standard triggers (click, change, select, submit, toggle) each carrying
  * the full runtimeDispatch spec so emitBoundEvent fires both log and dispatch lanes.
- * Returns empty object when spec is null/absent (log lane only).
+ * Returns empty object when spec is null/absent (log lane only). payloadFromByTrigger
+ * (built by buildAdminRuntimePayloadFromByTrigger) attaches a per-trigger payloadFrom
+ * map onto that trigger's own spec copy — absent for triggers with no authored entry.
  */
 export function buildCatalogComponentEventBinding(
   spec: RuntimeDispatchSpec | null,
+  payloadFromByTrigger: Record<string, Record<string, string>> = {},
 ): Record<string, unknown> {
   if (!spec) return {};
-  const triggers = ["click", "change", "select", "submit", "toggle"] as const;
+  const triggers = COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS;
   const binding: Record<string, unknown> = {};
   for (const trigger of triggers) {
-    binding[trigger] = { eventType: trigger, runtimeDispatch: spec };
+    const payloadFrom = payloadFromByTrigger[trigger];
+    binding[trigger] = {
+      eventType: trigger,
+      runtimeDispatch: payloadFrom ? { ...spec, payloadFrom } : spec,
+    };
   }
   return binding;
 }
@@ -407,7 +587,7 @@ export function buildRouteNavigationEventBinding(
   if (!targetRef) return {};
   const ref = targetRef.trim();
   if (!ref.startsWith("route:")) return {};
-  const triggers = ["click", "change", "select", "submit", "toggle"] as const;
+  const triggers = COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS;
   const binding: Record<string, unknown> = {};
   for (const trigger of triggers) {
     binding[trigger] = {
@@ -502,7 +682,11 @@ function buildLocalUiStateEventBinding(
  */
 function buildExternalPortEventBinding(
   rawWirings: unknown,
-  identity: { layoutId?: string | null; packageId?: string | null; nodeId: string },
+  identity: {
+    layoutId?: string | null;
+    packageId?: string | null;
+    nodeId: string;
+  },
 ): Record<string, unknown> {
   if (!Array.isArray(rawWirings)) return {};
   const binding: Record<string, unknown> = {};
@@ -540,10 +724,11 @@ function buildExternalPortEventBinding(
     // backend-assigned id (never generated/mutated here). Absent on entries not
     // yet re-persisted since the field was introduced — computeDispatchIdempotencyKey
     // falls back to nodeId+interactionIndex in that case.
-    const runtimeInteractionId = typeof wiring.runtimeInteractionId === "string" &&
+    const runtimeInteractionId =
+      typeof wiring.runtimeInteractionId === "string" &&
         wiring.runtimeInteractionId.trim()
-      ? wiring.runtimeInteractionId.trim()
-      : undefined;
+        ? wiring.runtimeInteractionId.trim()
+        : undefined;
     if (wiring.actionType === "dispatchExternalPort") {
       const portTargetRef = typeof wiring.portTargetRef === "string"
         ? wiring.portTargetRef.trim()
@@ -620,6 +805,56 @@ function applyLocalStateOverrides(
     };
   }
   return { ...props, open };
+}
+
+/**
+ * Promotes the live node value tracker (liveNodeValueTracker.ts) to the SAME
+ * canonical authority for a node's DISPLAYED value that Lane 2's payloadFrom
+ * resolution already uses for its DISPATCHED value — closing a real
+ * display/dispatch authority divergence: without this, an SSE-refresh-driven
+ * rerender resets a surviving controlled input's displayed value to its
+ * emission-derived default (buildDefaultCatalogComponentProps rebuilds every
+ * leaf's default props from scratch), while a later dispatch would still
+ * silently resolve and send the tracker's pre-refresh typed value — sending a
+ * value the user can no longer see on screen.
+ *
+ * Own-property identity (not `in`/bracket truthiness) matches
+ * liveNodeValueTracker.ts/payloadFromResolver.ts's existing contract. Applies
+ * ONLY when (a) the tracker has an entry for this exact nodeId (untouched
+ * nodes are entirely unaffected — no invented value) and (b) the node's
+ * already-built default props carry a `data.value` key (never invents a
+ * "value" concept for a component kind that doesn't have one — e.g.
+ * action/button, form_input/form_field). Applied BEFORE propBindings
+ * resolution (resolvePropBindings runs later in the pipeline), so a node
+ * whose value is ALSO server-data-bound via propBindings still lets that
+ * fresher, data-driven binding win — a stale local edit is not preferred over
+ * live server data once the projection actually carries one.
+ */
+function applyLiveNodeValueOverride(
+  props: Record<string, unknown>,
+  nodeId: string | undefined,
+  payloadFromNodeValues: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (!nodeId || !payloadFromNodeValues) return props;
+  if (!Object.prototype.hasOwnProperty.call(payloadFromNodeValues, nodeId)) {
+    return props;
+  }
+  const trackedValue = payloadFromNodeValues[nodeId];
+  const existingData = props.data;
+  if (
+    typeof existingData === "object" && existingData !== null &&
+    !Array.isArray(existingData) &&
+    Object.prototype.hasOwnProperty.call(existingData, "value")
+  ) {
+    return {
+      ...props,
+      data: {
+        ...(existingData as Record<string, unknown>),
+        value: trackedValue,
+      },
+    };
+  }
+  return props;
 }
 
 /**
@@ -866,10 +1101,9 @@ export function renderEmission(
           return {
             componentType: "error",
             def: {
-              error:
-                `TOPOLOGY_UI_UNRESOLVED_GAP_REF: layout node "${
-                  node.nodeId ?? "(unnamed)"
-                }" is an unresolved authoring gap (recordType="${node.recordType}").`,
+              error: `TOPOLOGY_UI_UNRESOLVED_GAP_REF: layout node "${
+                node.nodeId ?? "(unnamed)"
+              }" is an unresolved authoring gap (recordType="${node.recordType}").`,
               code: "TOPOLOGY_UI_UNRESOLVED_GAP_REF",
               knownGapRefs: node.knownGapRefs ?? [],
             },
@@ -926,7 +1160,10 @@ export function renderEmission(
         const nodeWiringKind = node.wiringKind ?? "";
 
         ensureRuntimeComponentRegistryInitialized();
-        const defaultProps = buildDefaultCatalogComponentProps(node, previewMode);
+        const defaultProps = buildDefaultCatalogComponentProps(
+          node,
+          previewMode,
+        );
         const mergedProps = mergeNodeLocalProps(
           defaultProps,
           node.propsJson,
@@ -943,20 +1180,47 @@ export function renderEmission(
         const propsWithDesign = mergeCatalogPropsWithComponentDesign(
           node.componentKind,
           node.componentKey ?? node.nodeId ?? "Component",
-          applyLocalStateOverrides(
-            mergedProps.props,
+          applyLiveNodeValueOverride(
+            applyLocalStateOverrides(
+              mergedProps.props,
+              node.nodeId,
+              options?.localStateStore,
+            ),
             node.nodeId,
-            options?.localStateStore,
+            options?.payloadFromNodeValues,
           ),
           design
             ? { ...design, linkHref: linkHrefResult.value || design.linkHref }
             : undefined,
         );
+        // dispatchPayloadFromByTrigger validation is fail-closed for the whole node —
+        // never silently skipped/filtered (SSOT remaining_write_payload_capture_gap
+        // negative-case contract).
+        const adminRuntimePayloadFrom = previewMode ||
+            isNavigationWiringKind(nodeWiringKind)
+          ? { ok: true as const, byTrigger: {} }
+          : buildAdminRuntimePayloadFromByTrigger(
+            node.dispatchPayloadFromByTrigger,
+          );
+        if (!adminRuntimePayloadFrom.ok) {
+          return {
+            componentId: node.componentId,
+            componentType: "error",
+            def: {
+              error: adminRuntimePayloadFrom.error,
+              componentId: node.componentId,
+            },
+            ...layoutFields,
+          };
+        }
         const baseEventBinding = previewMode
           ? buildPreviewInertEventBinding()
           : isNavigationWiringKind(nodeWiringKind)
           ? buildRouteNavigationEventBinding(node.targetRef)
-          : buildCatalogComponentEventBinding(buildRuntimeDispatchSpec(node));
+          : buildCatalogComponentEventBinding(
+            buildRuntimeDispatchSpec(node),
+            adminRuntimePayloadFrom.byTrigger,
+          );
         const rawLocalInteractions = node.runtimeInteractions ??
           propsWithDesign.eventWirings;
         const localStateEventBinding = previewMode
@@ -1056,6 +1320,10 @@ export function renderEmission(
           eventBinding: componentEventBinding,
           localStateStore: options?.localStateStore,
           payloadFromNodeValues: options?.payloadFromNodeValues,
+          onNodeValueChange: (options?.onNodeValueChange && node.nodeId)
+            ? (value: unknown) =>
+              options.onNodeValueChange!(node.nodeId!, value)
+            : undefined,
           design: hubDesign,
         };
         const adapted = adaptComponentDataHub(hub);

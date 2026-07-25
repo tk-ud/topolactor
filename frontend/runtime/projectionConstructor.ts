@@ -61,6 +61,12 @@ export type ComponentDataHub = {
     isDeclared(targetNodeId: string, statePath: string): boolean;
   };
   payloadFromNodeValues?: Record<string, unknown>;
+  /**
+   * Fires with this node's own latest scalar value on a value-bearing trigger
+   * (change/input/select). Registers into whatever LiveNodeValueTracker the
+   * caller backs payloadFromNodeValues with — see liveNodeValueTracker.ts.
+   */
+  onNodeValueChange?: (value: unknown) => void;
 };
 
 type RuntimeTopologyComponentProps = JsonObject & {

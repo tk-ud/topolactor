@@ -534,4 +534,306 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
             => throw new InvalidOperationException("candidate source unavailable");
     }
 
+    // ─── dispatchPayloadFromByTrigger (PR #599 review round 6): a node-level field,
+    // independent of runtimeInteractions/actionType — validated via the SAME
+    // ValidatePayloadFromShape authority dispatchExternalPort/dispatchInstanceOperation's
+    // own payloadFrom uses above ──────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_ValidShape_Passes()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "wiringKind": "admin_runtime", "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:create_group",
+            "dispatchPayloadFromByTrigger": { "click": { "groupName": "node:name-input.value" } } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok);
+        Assert.True(result.Valid);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_NonObjectValue_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchPayloadFromByTrigger": ["bad"] }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_DISPATCH_PAYLOAD_FROM_BY_TRIGGER_MUST_BE_OBJECT", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_NonObjectTriggerEntry_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchPayloadFromByTrigger": { "click": "not-an-object" } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_PAYLOAD_FROM_MUST_BE_OBJECT", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_NonStringFieldValue_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchPayloadFromByTrigger": { "click": { "groupName": 42 } } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_PAYLOAD_FROM_VALUE_MUST_BE_STRING:groupName", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_Absent_Passes()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button" }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok);
+        Assert.True(result.Valid);
+    }
+
+    // ─── trigger authority unification (PR #599 review round 7): the backend persistence
+    // boundary must accept/reject the SAME raw trigger keys as the frontend build boundary
+    // for dispatchPayloadFromByTrigger ───────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("click")]
+    [InlineData("change")]
+    [InlineData("select")]
+    [InlineData("submit")]
+    [InlineData("toggle")]
+    public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_CanonicalTrigger_Passes(string trigger)
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchPayloadFromByTrigger": { "{{trigger}}": { "groupName": "node:name-input.value" } } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_AliasKeyOnClick_NormalizesAndPasses()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchPayloadFromByTrigger": { "onClick": { "groupName": "node:name-input.value" } } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
+    [Theory]
+    [InlineData("input")]
+    [InlineData("onInput")]
+    [InlineData("focus")]
+    [InlineData("blur")]
+    public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_RecognizedButUnsupportedTrigger_FailsClose(string trigger)
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchPayloadFromByTrigger": { "{{trigger}}": { "groupName": "node:name-input.value" } } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_UnknownTrigger_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchPayloadFromByTrigger": { "bogusTrigger": { "groupName": "node:name-input.value" } } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_TRIGGER_REQUIRED", result.Message);
+    }
+
+    [Theory]
+    [InlineData("click", "onClick")]
+    [InlineData("change", "onChange")]
+    [InlineData("submit", "onSubmit")]
+    [InlineData("select", "onSelect")]
+    [InlineData("toggle", "onOpen")]
+    [InlineData("toggle", "onClose")]
+    [InlineData("onOpen", "onClose")]
+    public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_AliasCollisionAfterNormalization_FailsClose(string a, string b)
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchPayloadFromByTrigger": { "{{a}}": { "groupName": "literal:A" }, "{{b}}": { "groupName": "literal:B" } } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION", result.Message);
+    }
+
+    // ─── trim / whitespace-only / empty payloadFrom boundary unification (PR #599 review
+    // round 8): backend must accept/reject the SAME raw trigger key inputs as frontend
+    // normalizeAuthoredEventType(), including leading/trailing whitespace, and an empty
+    // per-trigger payloadFrom ({}) must fail closed here too, not only at dispatch time ──
+
+    [Theory]
+    [InlineData(" click ")]
+    [InlineData(" onClick ")]
+    public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_WhitespacePaddedTrigger_TrimsAndPasses(string trigger)
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchPayloadFromByTrigger": { "{{trigger}}": { "groupName": "node:name-input.value" } } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_WhitespaceOnlyTrigger_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchPayloadFromByTrigger": { "   ": { "groupName": "node:name-input.value" } } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_TRIGGER_REQUIRED", result.Message);
+    }
+
+    [Theory]
+    [InlineData("click", " click ")]
+    [InlineData("onClick", " onClick ")]
+    public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_WhitespaceOnlyCollisionAfterTrim_FailsClose(string a, string b)
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchPayloadFromByTrigger": { "{{a}}": { "groupName": "literal:A" }, "{{b}}": { "groupName": "literal:B" } } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_EmptyPayloadFrom_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchPayloadFromByTrigger": { "click": {} } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_PAYLOAD_FROM_EMPTY", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchExternalPort_EmptyPayloadFrom_StillPasses_UnchangedLeniency()
+    {
+        // dispatchExternalPort/dispatchInstanceOperation's OWN payloadFrom (ValidateRuntimeInteractions)
+        // keeps its separate, pre-existing leniency for {} unchanged — round 8 only tightened
+        // ValidateDispatchPayloadFromByTrigger (rejectEmpty: true), not the shared
+        // ValidatePayloadFromShape's default behavior other callers rely on.
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "runtimeInteractions": [
+            { "trigger": "click", "actionType": "dispatchExternalPort", "portTargetRef": "external-port:access_port:port-abc-123", "payloadFrom": {} }
+          ] }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
 }

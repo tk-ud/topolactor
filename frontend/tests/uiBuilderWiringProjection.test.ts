@@ -180,6 +180,66 @@ Deno.test("policy: actionType outside taxonomy fails close (no catch-all roundin
   assert(errors[0].includes("ACTION_OUTSIDE_VOCABULARY"));
 });
 
+// ─── action authority vs effect fields (PR #599 review round 6): actionType is a
+// closed-vocabulary action AUTHORITY matched by exact identity only; payloadFrom/
+// outputProp are effect DATA and never promote an unrecognized actionType past
+// ACTION_OUTSIDE_VOCABULARY. Round 5's field-presence fallback (classifying ANY
+// actionType carrying payloadFrom/outputProp as side_effect_setting) conflated the
+// two and is reverted — admin_runtime payload binding data now lives OUTSIDE
+// runtimeInteractions entirely (renderEmission.ts node.dispatchPayloadFromByTrigger),
+// so it is never authored as a runtimeInteractions[] entry at all. ─────────────────
+
+Deno.test("wiringSettingCategoryOf: an unknown actionType classifies as null even when it carries payloadFrom", () => {
+  assertEquals(
+    wiringSettingCategoryOf({ actionType: "somethingUnknown" }),
+    null,
+  );
+});
+
+Deno.test("policy: an unknown actionType + payloadFrom still fails ACTION_OUTSIDE_VOCABULARY (effect fields are not an authority substitute)", () => {
+  const nodes: WiringNode[] = [{
+    nodeId: "n1",
+    componentKey: "action/button",
+    runtimeInteractions: [{
+      trigger: "click",
+      actionType: "somethingUnknown",
+      payloadFrom: { groupName: "node:name_input.value" },
+    }],
+  }];
+  const errors = findRuntimeInteractionPolicyErrors(nodes);
+  assertEquals(errors.length, 1);
+  assert(errors[0].includes("ACTION_OUTSIDE_VOCABULARY"));
+});
+
+Deno.test("policy: an unknown actionType + outputProp still fails ACTION_OUTSIDE_VOCABULARY (effect fields are not an authority substitute)", () => {
+  const nodes: WiringNode[] = [{
+    nodeId: "n1",
+    componentKey: "action/button",
+    runtimeInteractions: [{
+      trigger: "click",
+      actionType: "somethingUnknown",
+      outputProp: "result",
+    }],
+  }];
+  const errors = findRuntimeInteractionPolicyErrors(nodes);
+  assertEquals(errors.length, 1);
+  assert(errors[0].includes("ACTION_OUTSIDE_VOCABULARY"));
+});
+
+Deno.test("policy: bindRuntimeDispatchPayload (a stray leftover actionType, no longer meaningful) still fails ACTION_OUTSIDE_VOCABULARY like any other unknown actionType", () => {
+  const nodes: WiringNode[] = [{
+    nodeId: "n1",
+    componentKey: "action/button",
+    runtimeInteractions: [{
+      trigger: "click",
+      actionType: "bindRuntimeDispatchPayload",
+    }],
+  }];
+  const errors = findRuntimeInteractionPolicyErrors(nodes);
+  assertEquals(errors.length, 1);
+  assert(errors[0].includes("ACTION_OUTSIDE_VOCABULARY"));
+});
+
 // ─── UI監視割当（宣言）と UI状態更新（更新）の分離 ───────────────────────────
 
 Deno.test("UI監視割当: declarations derive from state slots and are distinct from mutations", () => {
