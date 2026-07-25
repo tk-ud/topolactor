@@ -447,28 +447,51 @@ admin_uibuilder_ui_structure_wiring_ssot:
           binding). Two raw keys normalizing (stage 1) to the SAME canonical trigger (e.g.
           "click" and "onClick") fail the WHOLE node closed too
           (RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION), never silently
-          letting the later key win.
+          letting the later key win. 2026-07-25 addition (PR #599 review round 8): stage
+          (1) trims the raw key before alias lookup (normalizeAuthoredEventType's own
+          value.trim()) -- so " click " and "click" are the SAME canonical trigger, and a
+          whitespace-only key trims to "" (not in the alias map) and fails
+          RUNTIME_INTERACTION_TRIGGER_REQUIRED, the same code an absent/unrecognized key
+          produces. The backend persistence boundary (NpgsqlUiTopologyRepository.cs
+          ValidateDispatchPayloadFromByTrigger) mirrors this trim-then-lookup order exactly
+          (round 7 introduced the mirrored alias map but validated the untrimmed raw key,
+          so a whitespace-padded key was accepted by the frontend build boundary but
+          rejected by backend persistence -- round 8 closes that gap).
         payloadFrom: >-
           Each trigger's value: an object whose entries are string sources recognized by
           payloadFromResolver.ts's existing grammar (node:<nodeId>.value | event.<path> |
           literal:<value>) -- the SAME grammar/resolver dispatchExternalPort/
           dispatchInstanceOperation already use; this contract adds no new source syntax.
-          A non-object per-trigger value (RUNTIME_INTERACTION_PAYLOAD_FROM_MUST_BE_OBJECT)
-          or a non-string field value (RUNTIME_INTERACTION_PAYLOAD_FROM_VALUE_MUST_BE_STRING)
+          A non-object per-trigger value (RUNTIME_INTERACTION_PAYLOAD_FROM_MUST_BE_OBJECT),
+          an empty per-trigger object ({}, RUNTIME_INTERACTION_PAYLOAD_FROM_EMPTY), or a
+          non-string field value (RUNTIME_INTERACTION_PAYLOAD_FROM_VALUE_MUST_BE_STRING)
           fails the whole node closed -- the SAME error-code vocabulary (and, backend-side,
-          the SAME ValidatePayloadFromShape helper) dispatchExternalPort/
-          dispatchInstanceOperation's own payloadFrom validation uses, not an
-          admin-specific vocabulary. An empty per-trigger object ({}) is intentionally NOT
-          rejected, matching that same sibling validation's own leniency for the identical
-          shape. 2026-07-25 correction (PR #599 review round 7): round 6 claimed the
-          round 1-5 duplicate_field_conflict case became "structurally impossible" because
-          this is a single object keyed by trigger, not an array of independently-authored
-          entries -- true only for identical RAW keys (an object cannot repeat a literal
-          key), false once alias normalization is considered: distinct raw keys (e.g.
-          "click" and "onClick") can still normalize to the SAME canonical trigger. See
-          the trigger field above -- this collision is validated and fails closed
-          (RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION), it is not
-          structurally impossible.
+          the SAME ValidatePayloadFromShape helper, called with rejectEmpty:true only for
+          this field) dispatchExternalPort/dispatchInstanceOperation's own payloadFrom
+          validation uses, not an admin-specific vocabulary. 2026-07-25 correction (PR #599
+          review round 8, supersedes the round-7 empty-object leniency claim immediately
+          below, kept for history): an empty per-trigger object was previously described as
+          "intentionally NOT rejected, matching [dispatchExternalPort/dispatchInstanceOperation's]
+          own leniency for the identical shape" -- accurate for those two actionTypes'
+          persistence-time check, but this field's OWN dispatch-time boundary
+          (runtimeComponentFactory.ts parseEventBinding's runtimeDispatch.payloadFrom
+          branch) already rejected {} before round 8, so build time and persistence time
+          silently accepting what dispatch time would later reject was a genuine
+          three-boundary mismatch for this field specifically -- not a deliberate leniency
+          match. All three boundaries (build/persistence/dispatch) now reject {} for
+          dispatchPayloadFromByTrigger; dispatchExternalPort/dispatchInstanceOperation's own
+          payloadFrom keeps its separate, unchanged leniency (its own dispatch-time boundary
+          tolerates {} too, so there is no mismatch to fix there, and it is out of this
+          Bundle's scope regardless). 2026-07-25 correction (PR #599 review round 7): round 6
+          claimed the round 1-5 duplicate_field_conflict case became "structurally
+          impossible" because this is a single object keyed by trigger, not an array of
+          independently-authored entries -- true only for identical RAW keys (an object
+          cannot repeat a literal key), false once alias normalization is considered:
+          distinct raw keys (e.g. "click" and "onClick", or "click" and " click " after
+          round 8's trim fix) can still normalize to the SAME canonical trigger. See the
+          trigger field above -- this collision is validated and fails closed
+          (RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION), it is not structurally
+          impossible.
       target_ref_shape: >-
         Unchanged from parseAdminRuntimeLayerAction's existing contract --
         "manifest:<manifestUuid>:<layer>:<action>". This binding contract adds no new
@@ -575,6 +598,34 @@ admin_uibuilder_ui_structure_wiring_ssot:
         legitimately use input/focus/blur), are unchanged -- this correction narrows only
         dispatchPayloadFromByTrigger's own additional membership check, never the shared
         global normalizer.
+      trim_and_empty_boundary_unification: >-
+        2026-07-25 (PR #599 review round 8). A further audit of round 7's fix found two
+        remaining boundary mismatches, both now closed:
+        (1) frontend normalizeAuthoredEventType() trims the raw trigger key before alias
+        lookup (value.trim()), but backend ValidateDispatchPayloadFromByTrigger's
+        AuthoredEventTypeAliasMap.TryGetValue call used the untrimmed JSON property name
+        directly -- so a whitespace-padded raw key (e.g. " click ") was accepted at the
+        frontend build boundary but rejected as unrecognized at backend persistence.
+        Fixed by trimming the raw key before the backend lookup too (see required_fields.
+        trigger above); collision detection (RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION)
+        now operates on the post-trim canonical trigger on both boundaries, so "click" and
+        " click " collide identically to "click" and "onClick".
+        (2) dispatchPayloadFromByTrigger.<trigger>'s empty payloadFrom ({}) passed both the
+        frontend build boundary and the backend persistence boundary, but the SAME field's
+        dispatch-time parse boundary (runtimeComponentFactory.ts parseEventBinding's
+        runtimeDispatch.payloadFrom branch) already rejected {} -- a genuine three-boundary
+        mismatch (see required_fields.payloadFrom above for the full correction). Fixed by
+        adding an explicit empty check (RUNTIME_INTERACTION_PAYLOAD_FROM_EMPTY) to both the
+        frontend build boundary and, via an opt-in rejectEmpty parameter on the SHARED
+        backend ValidatePayloadFromShape helper (default false, so the existing
+        dispatchExternalPort/dispatchInstanceOperation callers keep their own unchanged,
+        separately-scoped leniency for {} -- that pairing's own dispatch-time boundary
+        tolerates {} too, so there is no mismatch to fix there and doing so would be
+        out-of-Bundle scope creep), the backend persistence boundary.
+        Also corrected in this round: the backend AuthoredEventTypeAliasMap comment and
+        this file's earlier text both said "16 keys" for the alias map; the actual count
+        (onClick/click, onChange/change, onInput/input, onSubmit/submit, onOpen/onClose/
+        toggle, onFocus/focus, onBlur/blur, onSelect/select) is 17.
       runtime_parse_boundary_fail_close: >-
         2026-07-24 (PR #599 review round 3), still current in round 6's shape.
         buildAdminRuntimePayloadFromByTrigger's build-time validation is a SEPARATE
@@ -644,14 +695,22 @@ admin_uibuilder_ui_structure_wiring_ssot:
         alias-collision pair (click+onClick, change+onChange, submit+onSubmit,
         select+onSelect, toggle+onOpen, toggle+onClose, onOpen+onClose) fails
         RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION rather than letting either
-        key silently win), frontend/tests/uiEventEffectRunner.test.ts
+        key silently win; 2026-07-25 round 8 additions: whitespace-padded canonical/alias
+        keys (" click ", " onClick ") trim and normalize correctly, a whitespace-only key
+        fails RUNTIME_INTERACTION_TRIGGER_REQUIRED, a canonical/whitespace-padded pair
+        ("click"+" click ", "onClick"+" onClick ") fails
+        RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION, and an empty per-trigger
+        payloadFrom ({}) fails RUNTIME_INTERACTION_PAYLOAD_FROM_EMPTY), frontend/tests/
+        uiEventEffectRunner.test.ts
         (createLiveNodeValueTracker register/update/reconcile/own-property-identity),
         frontend/tests/uiBuilderWiringProjection.test.ts (action_authority_vs_effect_data_separation:
         an unknown actionType carrying payloadFrom/outputProp still fails
         ACTION_OUTSIDE_VOCABULARY), backend/tests/Topolactor.Runtime.Tests/
         NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs (backend persistence-boundary
         validation, including round 7's mirrored trigger normalization/membership/collision
-        cases) and LayoutSchemaStructuralCompositionTests.cs (NodeLocalData/Compose
+        cases and round 8's trim/whitespace-collision/empty-payloadFrom cases, plus a
+        regression case proving dispatchExternalPort's own empty-payloadFrom leniency stays
+        unchanged) and LayoutSchemaStructuralCompositionTests.cs (NodeLocalData/Compose
         merge-by-exact-nodeId for the dispatchPayloadFromByTriggerJson field), and frontend/tests/
         projectionShellAdminRuntimeWritePayloadCapture.test.ts (production
         frontend/islands/ProjectionShell.tsx mount, real DOM input/click events and a real

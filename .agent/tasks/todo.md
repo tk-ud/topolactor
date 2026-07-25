@@ -997,7 +997,8 @@ owner指摘（round6が導入したnode-level field設計自体は正しいが�
 - `frontend/runtime/renderEmission.ts`に`COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS`（5 trigger）を単一constantとして抽出し、`buildCatalogComponentEventBinding()`・`buildRouteNavigationEventBinding()`・`buildAdminRuntimePayloadFromByTrigger()`の3箇所が共有するよう統一（従来は2箇所に同じ配列が別々に埋め込まれていた）。
 - `buildAdminRuntimePayloadFromByTrigger()`を二段階検証へ変更: (1) 既存`normalizeAuthoredEventType()`（グローバル、変更なし、他laneのinput/focus/blur利用に一切影響しない）、(2) `COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS`所属確認——(1)は通るが(2)に属さないtrigger（input/focus/blur）は新設`RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED`でfail-close。
 - 正規化後の衝突は、結果object書き込み前にown-property存在確認を行い、既に登録済みなら新設`RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION`でwhole nodeをfail-close（click+onClick, change+onChange, submit+onSubmit, select+onSelect, toggle+onOpen, toggle+onClose, onOpen+onCloseの7パターンをtestで確認）。
-- backend `NpgsqlUiTopologyRepository.cs`に、frontendの`normalizeAuthoredEventType()`と同一の16-key alias mapを`AuthoredEventTypeAliasMap`としてミラーし（言語が異なるため実装共有はしないが、同一inputに対して同一のaccept/reject結果を返すことを確認）、`ComponentWiringExecutionLaneTriggers`（5 trigger set）を追加。`ValidateDispatchPayloadFromByTrigger()`を正規化・membership確認・正規化後衝突検出を含む実装へ拡張。
+- backend `NpgsqlUiTopologyRepository.cs`に、frontendの`normalizeAuthoredEventType()`と同一の17-key alias mapを`AuthoredEventTypeAliasMap`としてミラーし（言語が異なるため実装共有はしないが、同一inputに対して同一のaccept/reject結果を返すことを確認）、`ComponentWiringExecutionLaneTriggers`（5 trigger set）を追加。`ValidateDispatchPayloadFromByTrigger()`を正規化・membership確認・正規化後衝突検出を含む実装へ拡張。
+  - **2026-07-25 round 8訂正**: 「16-key」は誤りで正しくは17-key（onClick/click, onChange/change, onInput/input, onSubmit/submit, onOpen/onClose/toggle, onFocus/focus, onBlur/blur, onSelect/select）——round7実装コード・SSOT双方の該当箇所を訂正済み（下記round8節参照）。
 - 新規error codeはいずれも既存の`RUNTIME_INTERACTION_*`という汎用prefix family（admin専用語彙ではない）に属する形で命名した——`RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED`（既存`RUNTIME_INTERACTION_ACTION_UNSUPPORTED`の命名パターンを踏襲）、`RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION`（owner提示の候補名をそのまま採用）。
 - **誤記訂正**: round6が主張していた「duplicate_field_conflictは構造的に発生不能」は、raw keyの一意性のみに基づく主張であり、正規化後の衝突については誤りだったため、SSOT（`required_fields.trigger`/`payloadFrom`、新設`trigger_authority_unification`節）と本ファイル（round6節、上記）の両方に訂正を明記した（履歴は削除せず、round7で訂正された旨を追記）。
 - **Bundle範囲**: `normalizeAuthoredEventType()`自体、および他のruntimeInteractions consumer（setState/openModal等がinput/focus/blurを利用する既存箇所）には一切変更を加えていない——本修正は`dispatchPayloadFromByTrigger`自身の追加membership検証のみを対象とする。`admin-surface-topology-seed-conversion`のconsumer write UIへの拡張は行っていない。
@@ -1005,6 +1006,25 @@ owner指摘（round6が導入したnode-level field設計自体は正しいが�
 **Test**: `frontend/tests/renderEmissionPropBindings.test.ts`へpass/fail-closeケースを追加——5 canonical trigger全てのpass、alias単独入力の正規化、trigger未指定時のpassthrough不変、input/onInput/focus/blurの`RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED`、完全未知triggerの`RUNTIME_INTERACTION_TRIGGER_REQUIRED`、7種のalias衝突パターンの`RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION`。backend `NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs`へ同値のcaseを追加（canonical trigger pass ×5、alias pass、input/focus/blur fail ×4、未知trigger fail、alias衝突fail ×7）。
 
 **Test結果**: frontend全体 `deno test` 1867 passed / 80 failed——既存80件のtest名が一致することを確認済み（round6実行時のfailure一覧とdiff差分ゼロ、regressionなし）。`deno check`/`deno lint`/`deno fmt` clean。backend: `dotnet build`成功、`Topolactor.Runtime.Tests` 1472/1472 pass（新規18件含む）、`Topolactor.Integration.Tests`（実PostgreSQL）192/193 pass——1件はPR本文記載済みの既存stale test（本Bundle無関係）。`.agent/tools/agent-ui-local-test summary --worktype implementation_change`はpass。GitHub Actions対象workflow（`.github/workflows/backend-tests.yml`/`.agent/tests/check-backend-tests.sh`）は本round新規SQL/DBスキーマ変更が無いため確認済みで変更不要。
+
+### 2026-07-25 PR #599 review round 8対応: trigger key trimとempty payloadFromの境界統一
+
+owner追加監査により、round7で残っていた2つの境界不整合を確認・修正した。
+
+**発見された実バグ**:
+1. frontend `normalizeAuthoredEventType()`はraw trigger keyを`trim()`してからalias mapを引くが、backend `ValidateDispatchPayloadFromByTrigger()`の`AuthoredEventTypeAliasMap.TryGetValue`は未trimのJSON property nameをそのまま引いていた——`" click "`のような前後空白付きkeyは、frontend build時は正規化されaccept、backend persistence時はunknown triggerとしてreject、という境界不一致があった。
+2. `dispatchPayloadFromByTrigger.<trigger>`のempty payloadFrom（`{}`）は、frontend build時・backend persistence時のどちらも通過していたが、同フィールドのdispatch-time parse境界（`runtimeComponentFactory.ts` `parseEventBinding`の`runtimeDispatch.payloadFrom`分岐、round3で導入済み）は既にemptyを拒否していた——build/persistenceがdispatch-timeより緩い、という3境界間の不整合があった。
+
+**修正内容**:
+- backend: `triggerEntry.Name`をalias lookup前に`.Trim()`するよう修正。collision検出もtrim後のcanonical trigger単位で行われるため、`"click"`と`" click "`の組も正しく`RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION`でfail-closeする。
+- 既存共有関数`ValidatePayloadFromShape`にopt-inの`rejectEmpty`パラメータ（既定`false`）を追加し、`{}`拒否を新設の専用関数ではなく既存関数の拡張として実装した。`ValidateDispatchPayloadFromByTrigger`のみ`rejectEmpty: true`で呼び出し、`ValidateRuntimeInteractions`（dispatchExternalPort/dispatchInstanceOperation自身のpayloadFrom検証）は引き続き既定値`false`のまま——この2 actionType自身のdispatch-time境界は元々emptyを許容しており、そちらを厳格化すると新たな不整合を生むため、本Bundle scope外として意図的に変更していない（regression testで現状維持を証明）。
+- frontend `buildAdminRuntimePayloadFromByTrigger()`にもempty per-trigger object拒否（`RUNTIME_INTERACTION_PAYLOAD_FROM_EMPTY`）を追加——同じerror codeをbackendと共有。
+- **誤記訂正**: round7で「16-key alias map」と記述していたが、実装は17-key（onClick/click, onChange/change, onInput/input, onSubmit/submit, onOpen/onClose/toggle, onFocus/focus, onBlur/blur, onSelect/select）だった——backend comment・SSOT双方を訂正。SSOTの「empty per-trigger objectは意図的に許容する」という記述も、実際にはdispatch-time境界と矛盾していたため訂正した（履歴は削除せず、round8での訂正である旨を明記）。
+- **Bundle範囲**: `ValidatePayloadFromShape`のシグネチャ拡張のみで、admin専用の新規validation関数やoperation別分岐は追加していない。dispatchExternalPort/dispatchInstanceOperation自身のempty payloadFrom許容度は変更していない。
+
+**Test**: frontend `renderEmissionPropBindings.test.ts`へ、whitespace-padded canonical/alias key（` click `/` onClick `）の正規化pass、whitespace-onlyの`RUNTIME_INTERACTION_TRIGGER_REQUIRED`、`click`+`" click "`・`onClick`+`" onClick "`の`RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION`、empty payloadFromの`RUNTIME_INTERACTION_PAYLOAD_FROM_EMPTY`を追加。backend `NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs`へ同値ケース＋dispatchExternalPortのempty payloadFrom許容度が変わっていないことを証明するregression testを追加。
+
+**Test結果**: frontend全体 `deno test` 1873 passed / 80 failed——既存80件のtest名がround6/7実行時と完全一致することを確認済み（diff差分ゼロ、regressionなし）。`deno check`/`deno lint`/`deno fmt` clean。backend: `dotnet build`成功、`Topolactor.Runtime.Tests` 1479/1479 pass（新規7件含む）、`Topolactor.Integration.Tests`（実PostgreSQL）192/193 pass——1件はPR本文記載済みの既存stale test（本Bundle無関係）。`.agent/tools/agent-ui-local-test summary --worktype implementation_change`はpass。
 
 ### 問題点
 

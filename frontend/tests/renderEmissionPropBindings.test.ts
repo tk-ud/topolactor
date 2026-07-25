@@ -786,6 +786,90 @@ for (
   });
 }
 
+// ─── trim / whitespace-only / empty payloadFrom boundary unification
+// (PR #599 review round 8): frontend and backend must accept/reject the
+// SAME raw trigger key inputs, including leading/trailing whitespace, and
+// an empty per-trigger payloadFrom ({}) must fail closed at every boundary
+// (build/persistence/dispatch), not just dispatch time. ─────────────────
+
+for (const trigger of [" click ", " onClick "]) {
+  Deno.test(`renderEmission: dispatchPayloadFromByTrigger — whitespace-padded trigger key "${trigger}" trims and normalizes onto its canonical binding`, () => {
+    ensureRuntimeComponentRegistryInitialized();
+    const specs = renderEmission(
+      adminRuntimeNodeEmission({
+        [trigger]: { groupName: "node:name_input.value" },
+      }),
+      {},
+    );
+    assertExists(specs[0].runtimeSpec, trigger);
+    const clickBinding = specs[0].runtimeSpec!.eventBinding["click"] as Record<
+      string,
+      unknown
+    >;
+    const clickRd = clickBinding.runtimeDispatch as Record<string, unknown>;
+    assertEquals(
+      clickRd.payloadFrom,
+      { groupName: "node:name_input.value" },
+      trigger,
+    );
+  });
+}
+
+Deno.test("renderEmission: dispatchPayloadFromByTrigger with a whitespace-only trigger key fails the node closed (RUNTIME_INTERACTION_TRIGGER_REQUIRED)", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const specs = renderEmission(
+    adminRuntimeNodeEmission({ "   ": { groupName: "node:name_input.value" } }),
+    {},
+  );
+  assertEquals(specs[0].componentType, "error");
+  assertEquals(
+    JSON.stringify(specs[0].def).includes(
+      "RUNTIME_INTERACTION_TRIGGER_REQUIRED",
+    ),
+    true,
+  );
+});
+
+for (
+  const [a, b] of [
+    ["click", " click "],
+    ["onClick", " onClick "],
+  ] as const
+) {
+  Deno.test(`renderEmission: dispatchPayloadFromByTrigger — "${a}" + "${b}" (whitespace-only difference) normalize to the SAME canonical trigger and fail the node closed (RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION), never last-wins`, () => {
+    ensureRuntimeComponentRegistryInitialized();
+    const specs = renderEmission(
+      adminRuntimeNodeEmission({
+        [a]: { groupName: "literal:A" },
+        [b]: { groupName: "literal:B" },
+      }),
+      {},
+    );
+    assertEquals(specs[0].componentType, "error");
+    assertEquals(
+      JSON.stringify(specs[0].def).includes(
+        "RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION",
+      ),
+      true,
+    );
+  });
+}
+
+Deno.test("renderEmission: dispatchPayloadFromByTrigger with an empty per-trigger payloadFrom ({}) fails the node closed (RUNTIME_INTERACTION_PAYLOAD_FROM_EMPTY), never silently degraded to binding-unspecified", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const specs = renderEmission(
+    adminRuntimeNodeEmission({ click: {} }),
+    {},
+  );
+  assertEquals(specs[0].componentType, "error");
+  assertEquals(
+    JSON.stringify(specs[0].def).includes(
+      "RUNTIME_INTERACTION_PAYLOAD_FROM_EMPTY",
+    ),
+    true,
+  );
+});
+
 Deno.test("renderEmission: absent dispatchPayloadFromByTrigger renders normally (no payloadFrom attached)", () => {
   ensureRuntimeComponentRegistryInitialized();
   const specs = renderEmission(adminRuntimeNodeEmission(undefined), {});

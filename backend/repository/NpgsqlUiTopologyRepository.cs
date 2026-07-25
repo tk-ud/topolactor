@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
+using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Topolactor.Schema;
@@ -755,11 +756,25 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     /// dispatchInstanceOperation's own payloadFrom) and ValidateDispatchPayloadFromByTrigger (the
     /// node-level admin_runtime payload binding field) so both share one validation owner and one
     /// error-code vocabulary rather than each declaring its own.
+    ///
+    /// rejectEmpty (PR #599 review round 8, default false): when true, an empty object ({}) fails
+    /// closed (RUNTIME_INTERACTION_PAYLOAD_FROM_EMPTY) instead of passing. Opt-in per caller,
+    /// not a change to the shared default — dispatchExternalPort/dispatchInstanceOperation's own
+    /// payloadFrom (via ValidateRuntimeInteractions) keeps its existing leniency for {} unchanged
+    /// (that pairing's own frontend dispatch-time parse boundary already tolerates {} too, so
+    /// tightening only the backend side here would newly diverge FROM it, not converge). Only
+    /// ValidateDispatchPayloadFromByTrigger passes rejectEmpty: true, because frontend
+    /// buildAdminRuntimePayloadFromByTrigger's build boundary now also rejects {}, and the
+    /// existing dispatch-time parse boundary (runtimeComponentFactory.ts parseEventBinding's
+    /// runtimeDispatch.payloadFrom branch) already rejected {} before this round — all three
+    /// boundaries for THIS field must agree, not diverge in a new direction.
     /// </summary>
-    private static string? ValidatePayloadFromShape(JsonElement payloadFromEl)
+    private static string? ValidatePayloadFromShape(JsonElement payloadFromEl, bool rejectEmpty = false)
     {
         if (payloadFromEl.ValueKind != JsonValueKind.Object)
             return "RUNTIME_INTERACTION_PAYLOAD_FROM_MUST_BE_OBJECT";
+        if (rejectEmpty && !payloadFromEl.EnumerateObject().Any())
+            return "RUNTIME_INTERACTION_PAYLOAD_FROM_EMPTY";
         foreach (var entry in payloadFromEl.EnumerateObject())
         {
             if (entry.Value.ValueKind != JsonValueKind.String)
@@ -770,7 +785,7 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
 
     /// <summary>
     /// Mirrors frontend/runtime/renderEmission.ts normalizeAuthoredEventType()'s alias map exactly
-    /// (same 16 keys -> 8 canonical triggers) so the backend persistence boundary accepts/rejects
+    /// (same 17 keys -> 8 canonical triggers) so the backend persistence boundary accepts/rejects
     /// the SAME raw trigger keys as the frontend build boundary for dispatchPayloadFromByTrigger —
     /// not a new/broader trigger vocabulary (PR #599 review round 7). No shared code with the
     /// frontend implementation is required (different language); only the same decisions for the
@@ -816,11 +831,16 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     /// A present-but-malformed value fails the WHOLE layout patch closed, mirroring
     /// ValidateRuntimeInteractions' own contract for the same JSON boundary.
     ///
-    /// Trigger keys are normalized (AuthoredEventTypeAliasMap) and must resolve to a
-    /// ComponentWiringExecutionLaneTriggers member; two raw keys normalizing to the SAME
-    /// canonical trigger fail closed rather than allowing either to silently win (PR #599 review
-    /// round 7 — a dispatchPayloadFromByTrigger object's raw keys are unique by construction, but
-    /// alias collisions after normalization are not).
+    /// Trigger keys are TRIMMED before alias lookup (PR #599 review round 8 — matches frontend
+    /// normalizeAuthoredEventType()'s value.trim() exactly; a raw key differing only by
+    /// leading/trailing whitespace, e.g. " click ", must accept/reject identically on both
+    /// boundaries) then normalized (AuthoredEventTypeAliasMap) and must resolve to a
+    /// ComponentWiringExecutionLaneTriggers member; two raw keys normalizing (after trim) to the
+    /// SAME canonical trigger fail closed rather than allowing either to silently win (round 7 —
+    /// a dispatchPayloadFromByTrigger object's raw keys are unique by construction, but alias/
+    /// whitespace collisions after normalization are not). A whitespace-only key trims to empty,
+    /// which the alias map does not contain, so it falls through to the SAME
+    /// RUNTIME_INTERACTION_TRIGGER_REQUIRED an absent/unrecognized key produces.
     /// </summary>
     private static string? ValidateDispatchPayloadFromByTrigger(JsonElement nodes)
     {
@@ -835,13 +855,13 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             {
                 if (string.IsNullOrWhiteSpace(triggerEntry.Name))
                     return "RUNTIME_INTERACTION_TRIGGER_REQUIRED";
-                if (!AuthoredEventTypeAliasMap.TryGetValue(triggerEntry.Name, out var canonicalTrigger))
+                if (!AuthoredEventTypeAliasMap.TryGetValue(triggerEntry.Name.Trim(), out var canonicalTrigger))
                     return "RUNTIME_INTERACTION_TRIGGER_REQUIRED";
                 if (!ComponentWiringExecutionLaneTriggers.Contains(canonicalTrigger))
                     return "RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED";
                 if (!seenCanonicalTriggers.Add(canonicalTrigger))
                     return "RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION";
-                var payloadFromError = ValidatePayloadFromShape(triggerEntry.Value);
+                var payloadFromError = ValidatePayloadFromShape(triggerEntry.Value, rejectEmpty: true);
                 if (payloadFromError is not null) return payloadFromError;
             }
         }

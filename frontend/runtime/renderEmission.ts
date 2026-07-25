@@ -453,15 +453,26 @@ export type AdminRuntimePayloadFromByTriggerResult =
  * instead of silently validating into a payloadFrom map with no binding to ever
  * attach to. A present-but-malformed value still fails the WHOLE node closed, never
  * silently skipped/filtered: an unrecognized trigger key, a non-object per-trigger map, or
- * a non-string field value — the SAME error-code vocabulary
- * (RUNTIME_INTERACTION_PAYLOAD_FROM_MUST_BE_OBJECT / _VALUE_MUST_BE_STRING /
+ * a non-string field value, or an empty per-trigger map ({}) — the SAME error-code vocabulary
+ * (RUNTIME_INTERACTION_PAYLOAD_FROM_MUST_BE_OBJECT / _VALUE_MUST_BE_STRING / _EMPTY /
  * RUNTIME_INTERACTION_TRIGGER_REQUIRED / _UNSUPPORTED / _CONFLICT_AFTER_NORMALIZATION)
  * the backend's own ValidateDispatchPayloadFromByTrigger (NpgsqlUiTopologyRepository.cs,
- * reusing its existing ValidatePayloadFromShape helper also used by
- * dispatchExternalPort/dispatchInstanceOperation's own payloadFrom) validates at the
- * persistence boundary — not an admin-specific vocabulary. An empty per-trigger map ({}) is
- * intentionally NOT rejected here, matching the backend's own leniency for the same shape on
- * dispatchExternalPort/dispatchInstanceOperation's payloadFrom.
+ * reusing its existing ValidatePayloadFromShape helper — with rejectEmpty:true only for THIS
+ * caller — also used by dispatchExternalPort/dispatchInstanceOperation's own payloadFrom)
+ * validates at the persistence boundary — not an admin-specific vocabulary.
+ *
+ * PR #599 review round 8 correction: an earlier version of this function let an empty
+ * per-trigger map ({}) pass, reasoning it matched the backend's own leniency for
+ * dispatchExternalPort/dispatchInstanceOperation's payloadFrom shape. That leniency claim
+ * was accurate for THOSE two actionTypes' own persistence-time check, but this field's own
+ * DISPATCH-time boundary (runtimeComponentFactory.ts parseEventBinding's
+ * runtimeDispatch.payloadFrom branch) already rejected {} before this correction — so build
+ * time and persistence time silently accepting what dispatch time would later reject was a
+ * genuine three-boundary mismatch for this field specifically, not a deliberate leniency
+ * match. Now build time, persistence time, and dispatch time all reject {} for
+ * dispatchPayloadFromByTrigger; dispatchExternalPort/dispatchInstanceOperation's own
+ * payloadFrom keeps its separate, unchanged (still lenient) contract, since ITS dispatch-time
+ * boundary tolerates {} too and is out of this Bundle's scope.
  */
 function buildAdminRuntimePayloadFromByTrigger(
   rawByTrigger: unknown,
@@ -514,6 +525,13 @@ function buildAdminRuntimePayloadFromByTrigger(
         ok: false,
         error:
           `RUNTIME_INTERACTION_PAYLOAD_FROM_MUST_BE_OBJECT: dispatchPayloadFromByTrigger entry for trigger "${trigger}" is not an object`,
+      };
+    }
+    if (Object.keys(payloadFromRaw).length === 0) {
+      return {
+        ok: false,
+        error:
+          `RUNTIME_INTERACTION_PAYLOAD_FROM_EMPTY: dispatchPayloadFromByTrigger entry for trigger "${trigger}" declares no fields`,
       };
     }
     const payloadFrom: Record<string, string> = {};
