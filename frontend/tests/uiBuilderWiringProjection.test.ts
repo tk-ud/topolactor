@@ -180,20 +180,40 @@ Deno.test("policy: actionType outside taxonomy fails close (no catch-all roundin
   assert(errors[0].includes("ACTION_OUTSIDE_VOCABULARY"));
 });
 
-// ─── bindRuntimeDispatchPayload: a KNOWN, explicitly recognized authority
-// outside the six-category taxonomy (admin-uibuilder-ui-structure-wiring-ssot.yaml
-// lane_storage_boundary.admin_runtime_payload_binding_contract) — reconciled with
-// this UI-Builder authoring/apply policy validator (PR #599 review round 3): being
-// outside the taxonomy must not silently pass OR silently block ────────────────
+// ─── bindRuntimeDispatchPayload: classified via the EXISTING side_effect_setting
+// field boundary (admin-uibuilder-ui-structure-wiring-ssot.yaml ui_event_settings.
+// setting_category_taxonomy.frontend_side.side_effect_setting.field_boundary —
+// payloadFrom/outputProp are effect fields), not a dedicated actionType constant
+// (PR #599 review round 5: no implementation-derived special case where the SSOT
+// already declares a structural category) ──────────────────────────────────────
 
-Deno.test("wiringSettingCategoryOf: bindRuntimeDispatchPayload classifies as null (honestly outside the six categories, not silently rounded into one)", () => {
+Deno.test("wiringSettingCategoryOf: an actionType carrying payloadFrom classifies as side_effect_setting regardless of its actionType string", () => {
+  assertEquals(
+    wiringSettingCategoryOf({
+      actionType: "bindRuntimeDispatchPayload",
+      payloadFrom: { groupName: "node:name_input.value" },
+    }),
+    "side_effect_setting",
+  );
+  // Same field-boundary classification for a differently-named actionType — the
+  // taxonomy is field-based, not an actionType allowlist.
+  assertEquals(
+    wiringSettingCategoryOf({
+      actionType: "someOtherEffectAction",
+      outputProp: "result",
+    }),
+    "side_effect_setting",
+  );
+});
+
+Deno.test("wiringSettingCategoryOf: an actionType with no side-effect fields at all still classifies as null (fail-close for a degenerate/incomplete entry)", () => {
   assertEquals(
     wiringSettingCategoryOf({ actionType: "bindRuntimeDispatchPayload" }),
     null,
   );
 });
 
-Deno.test("policy: bindRuntimeDispatchPayload is recognized and does NOT trip ACTION_OUTSIDE_VOCABULARY, unlike a genuinely unknown actionType", () => {
+Deno.test("policy: bindRuntimeDispatchPayload with payloadFrom classifies as side_effect_setting and does NOT trip ACTION_OUTSIDE_VOCABULARY", () => {
   const nodes: WiringNode[] = [{
     nodeId: "n1",
     componentKey: "action/button",
@@ -207,14 +227,15 @@ Deno.test("policy: bindRuntimeDispatchPayload is recognized and does NOT trip AC
   assertEquals(
     errors,
     [],
-    "a node authoring a recognized bindRuntimeDispatchPayload entry must not fail UI-Builder validate/apply policy — a future author opening this layout for an unrelated edit must not be spuriously blocked",
+    "a node authoring a payloadFrom-bearing bindRuntimeDispatchPayload entry must not fail UI-Builder validate/apply policy — a future author opening this layout for an unrelated edit must not be spuriously blocked",
   );
 });
 
 Deno.test("policy: bindRuntimeDispatchPayload does not fall through to backend/external dispatch policy checks (debounce/lifecycle-confirmation), which govern a different authority", () => {
   // High-frequency trigger + no debounceMs would fail HIGH_FREQUENCY_DISPATCH_REQUIRES_DEBOUNCE
   // for dispatchExternalPort/dispatchInstanceOperation — bindRuntimeDispatchPayload is not
-  // that authority and must not inherit its policy checks.
+  // that authority (isBackendOrExternalDispatchAction matches by exact actionType only) and
+  // must not inherit its policy checks merely by sharing the side_effect_setting category.
   const nodes: WiringNode[] = [{
     nodeId: "n1",
     componentKey: "form_input/input",
@@ -227,7 +248,7 @@ Deno.test("policy: bindRuntimeDispatchPayload does not fall through to backend/e
   assertEquals(findRuntimeInteractionPolicyErrors(nodes), []);
 });
 
-Deno.test("policy: a genuinely unrecognized actionType still fails close even when superficially near bindRuntimeDispatchPayload (no fuzzy/prefix matching)", () => {
+Deno.test("policy: an actionType with no payloadFrom/outputProp still fails ACTION_OUTSIDE_VOCABULARY (field-based classification, no fuzzy/prefix matching on the actionType string)", () => {
   const nodes: WiringNode[] = [{
     nodeId: "n1",
     componentKey: "action/button",

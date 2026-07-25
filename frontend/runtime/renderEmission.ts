@@ -30,7 +30,6 @@ import {
 } from "./frontendLocalCalculationResolver.ts";
 import { projectionInputFromData } from "./projectionInput.ts";
 import {
-  ADMIN_RUNTIME_PAYLOAD_BINDING_ACTION_TYPE,
   computeDispatchIdempotencyKey,
   wiringSettingCategoryOf,
 } from "../lib/uiBuilderWiringProjection.ts";
@@ -272,7 +271,11 @@ function buildProductionCatalogComponentProps(
   switch (componentKind) {
     case "action/button":
       return {
-        data: { label: authoredLabel || componentKey, variant: "primary", disabled: false },
+        data: {
+          label: authoredLabel || componentKey,
+          variant: "primary",
+          disabled: false,
+        },
       };
     case "form_input/form_field":
       return { data: { label: authoredLabel || componentKey } };
@@ -280,7 +283,12 @@ function buildProductionCatalogComponentProps(
       // The option list is business data the schema record does not carry — an honest empty
       // list, never a fabricated sample option, until real option data is wired.
       return {
-        data: { value: "", options: [], label: authoredLabel, placeholder: authoredLabel || "" },
+        data: {
+          value: "",
+          options: [],
+          label: authoredLabel,
+          placeholder: authoredLabel || "",
+        },
       };
     default:
       return buildLayoutPreviewPlaceholderProps(componentKind, componentKey);
@@ -307,7 +315,11 @@ function buildDefaultCatalogComponentProps(
   if (previewMode) {
     return buildLayoutPreviewPlaceholderProps(componentKind, componentKey);
   }
-  return buildProductionCatalogComponentProps(node, componentKind, componentKey);
+  return buildProductionCatalogComponentProps(
+    node,
+    componentKind,
+    componentKey,
+  );
 }
 
 /**
@@ -385,7 +397,6 @@ export function mergeNodeLocalProps(
   return { ok: true, props };
 }
 
-
 export type AdminRuntimePayloadFromByTriggerResult =
   | { ok: true; byTrigger: Record<string, Record<string, string>> }
   | { ok: false; error: string };
@@ -393,25 +404,27 @@ export type AdminRuntimePayloadFromByTriggerResult =
 /**
  * Reads per-trigger payloadFrom maps authored on a node's OWN runtimeInteractions[]
  * entries (a per-node column, independent of the layout-wide wiring_kind=admin_runtime
- * broadcast target/layer/action) for the generic, non-surface-specific
- * "bindRuntimeDispatchPayload" actionType — the canonical, data-defined payload-binding
+ * broadcast target/layer/action) — the canonical, data-defined payload-binding
  * extension of component_wiring_execution_lane's admin_runtime case (SSOT:
  * admin-uibuilder-ui-structure-wiring-ssot.yaml lane_storage_boundary.known_gaps.
  * remaining_write_payload_capture_gap write_payload_capture_mechanism_implemented).
- * Every admin_runtime action (enum_dictionary:*, auth_users:*, team_markdown:*,
- * scheduler_jobs:*, ...) reuses this SAME actionType — no per-operation case.
+ * The conventional actionType is "bindRuntimeDispatchPayload"; every admin_runtime
+ * action (enum_dictionary:*, auth_users:*, team_markdown:*, scheduler_jobs:*, ...)
+ * reuses it — no per-operation case. Selection below does not key on that string.
  *
- * Outside the closed WIRING_SETTING_CATEGORIES taxonomy (uiBuilderWiringProjection.ts)
- * by design: that taxonomy classifies UI-Builder canvas-authoring inspector categories
- * for a human editing runtimeInteractions in the canvas, a different concern from this
- * seed-authored runtime dispatch payload-binding contract. Being outside that taxonomy
- * does NOT mean malformed entries are silently ignored here — every entry whose
- * actionType is exactly "bindRuntimeDispatchPayload" is validated and fails the whole
- * result closed on any malformation (never skipped/filtered/merged-with-last-wins):
- * unrecognized trigger, non-object/empty payloadFrom, a non-string payloadFrom value,
- * or two entries authoring the same field for the same trigger (duplicate_field_conflict
- * — resolved via silent overwrite, never — the entries disagree, and dispatch must not
- * guess which wins).
+ * Selected via wiringSettingCategoryOf(uiBuilderWiringProjection.ts) === "side_effect_setting"
+ * — the SAME classification the UI-Builder canvas-authoring inspector taxonomy already
+ * uses for any entry carrying payloadFrom/outputProp effect fields (SSOT
+ * ui_event_settings.setting_category_taxonomy.frontend_side.side_effect_setting.
+ * field_boundary), not a dedicated actionType. Being classified here does NOT mean
+ * malformed entries are silently ignored — every selected entry with a non-empty
+ * payloadFrom is validated and fails the whole result closed on any malformation
+ * (never skipped/filtered/merged-with-last-wins): unrecognized trigger, non-object/empty
+ * payloadFrom, a non-string payloadFrom value, or two entries authoring the same field
+ * for the same trigger (duplicate_field_conflict — resolved via silent overwrite, never
+ * — the entries disagree, and dispatch must not guess which wins). An entry selected by
+ * this classification with no payloadFrom at all (e.g. an outputProp-only local echo
+ * entry) carries nothing for this contract and is skipped, not failed.
  */
 function buildAdminRuntimePayloadFromByTrigger(
   rawWirings: unknown,
@@ -421,7 +434,24 @@ function buildAdminRuntimePayloadFromByTrigger(
   for (const raw of rawWirings) {
     if (typeof raw !== "object" || raw === null || Array.isArray(raw)) continue;
     const wiring = raw as Record<string, unknown>;
-    if (wiring.actionType !== ADMIN_RUNTIME_PAYLOAD_BINDING_ACTION_TYPE) continue;
+    // dispatchExternalPort/dispatchInstanceOperation/ui_state_update actions own their
+    // own payloadFrom (resolved directly in emitBoundEvent's own dispatch lane) -- never
+    // swept into this contract's byTrigger map even if one happens to carry the field.
+    // Everything else that authored an own payloadFrom key (even null/empty/malformed --
+    // validated, never silently skipped) is a candidate for this contract.
+    const category = wiringSettingCategoryOf(
+      wiring as {
+        actionType: string;
+        payloadFrom?: Record<string, string>;
+        outputProp?: string;
+      },
+    );
+    if (
+      category === "external_api_integration" ||
+      category === "external_instance_integration" ||
+      category === "ui_state_update"
+    ) continue;
+    if (!Object.prototype.hasOwnProperty.call(wiring, "payloadFrom")) continue;
 
     const rawTrigger = wiring.trigger ?? wiring.eventType;
     const trigger = normalizeAuthoredEventType(rawTrigger);
@@ -618,7 +648,11 @@ function buildLocalUiStateEventBinding(
  */
 function buildExternalPortEventBinding(
   rawWirings: unknown,
-  identity: { layoutId?: string | null; packageId?: string | null; nodeId: string },
+  identity: {
+    layoutId?: string | null;
+    packageId?: string | null;
+    nodeId: string;
+  },
 ): Record<string, unknown> {
   if (!Array.isArray(rawWirings)) return {};
   const binding: Record<string, unknown> = {};
@@ -656,10 +690,11 @@ function buildExternalPortEventBinding(
     // backend-assigned id (never generated/mutated here). Absent on entries not
     // yet re-persisted since the field was introduced — computeDispatchIdempotencyKey
     // falls back to nodeId+interactionIndex in that case.
-    const runtimeInteractionId = typeof wiring.runtimeInteractionId === "string" &&
+    const runtimeInteractionId =
+      typeof wiring.runtimeInteractionId === "string" &&
         wiring.runtimeInteractionId.trim()
-      ? wiring.runtimeInteractionId.trim()
-      : undefined;
+        ? wiring.runtimeInteractionId.trim()
+        : undefined;
     if (wiring.actionType === "dispatchExternalPort") {
       const portTargetRef = typeof wiring.portTargetRef === "string"
         ? wiring.portTargetRef.trim()
@@ -1032,10 +1067,9 @@ export function renderEmission(
           return {
             componentType: "error",
             def: {
-              error:
-                `TOPOLOGY_UI_UNRESOLVED_GAP_REF: layout node "${
-                  node.nodeId ?? "(unnamed)"
-                }" is an unresolved authoring gap (recordType="${node.recordType}").`,
+              error: `TOPOLOGY_UI_UNRESOLVED_GAP_REF: layout node "${
+                node.nodeId ?? "(unnamed)"
+              }" is an unresolved authoring gap (recordType="${node.recordType}").`,
               code: "TOPOLOGY_UI_UNRESOLVED_GAP_REF",
               knownGapRefs: node.knownGapRefs ?? [],
             },
@@ -1092,7 +1126,10 @@ export function renderEmission(
         const nodeWiringKind = node.wiringKind ?? "";
 
         ensureRuntimeComponentRegistryInitialized();
-        const defaultProps = buildDefaultCatalogComponentProps(node, previewMode);
+        const defaultProps = buildDefaultCatalogComponentProps(
+          node,
+          previewMode,
+        );
         const mergedProps = mergeNodeLocalProps(
           defaultProps,
           node.propsJson,
@@ -1248,7 +1285,8 @@ export function renderEmission(
           localStateStore: options?.localStateStore,
           payloadFromNodeValues: options?.payloadFromNodeValues,
           onNodeValueChange: (options?.onNodeValueChange && node.nodeId)
-            ? (value: unknown) => options.onNodeValueChange!(node.nodeId!, value)
+            ? (value: unknown) =>
+              options.onNodeValueChange!(node.nodeId!, value)
             : undefined,
           design: hubDesign,
         };

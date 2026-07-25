@@ -29,6 +29,34 @@
  * must resolve as genuinely missing, never as an inherited function value —
  * see payloadFromResolver.ts's matching own-property fix for the read side of
  * this same identity contract.
+ *
+ * Why this is a standalone primitive rather than reusing the existing local
+ * state substrate (uiEventEffectRunner.ts createRuntimeLocalStateStore /
+ * createRuntimeStateDispatcher — PR #599 review round 5 asked this question
+ * explicitly, so the answer is recorded here instead of only in a PR comment):
+ *   - createRuntimeStateDispatcher (RuntimeGuardedStateStore) requires
+ *     declare(nodeId, stateKey, initialValue) before any set() — set() on an
+ *     undeclared slot fails RUNTIME_STATE_SLOT_NOT_DECLARED. That "UI監視割当
+ *     before UI状態更新" ordering fits a fixed, authoring-time-known set of
+ *     state slots. Live node values are the opposite: any node carrying a
+ *     value-bearing trigger can start reporting a value the first time it
+ *     fires, with no predeclaration step, and the node set itself changes
+ *     across SSE refreshes. Forcing a declare() call per node on every mount/
+ *     refresh would require re-deriving the same reconcile() logic this
+ *     module already provides, just to satisfy a guard this store doesn't
+ *     need.
+ *   - The raw store under it (RuntimeLocalStateStore: get/set only, see
+ *     runtimeComponentAdapter.ts) exposes no iteration or delete — reconcile()
+ *     (drop a value for a node no longer present) cannot be built on top of it
+ *     without widening that shared interface, which would ripple into every
+ *     other RuntimeLocalStateStore consumer (the lifecycle effect runner, the
+ *     UI状態更新 dispatcher) for a need only this tracker has.
+ *   - This tracker also does not fire change listeners on set() the way
+ *     NotifyingRuntimeLocalStateStore does — a value-bearing keystroke updates
+ *     the tracker for later dispatch/display-override use, not to trigger a
+ *     reactive UI状態更新-style re-render loop.
+ * These are genuine interface-shape mismatches, not convenience — reusing
+ * either layer means changing what it guarantees for its existing callers.
  */
 
 export type LiveNodeValueTracker = {

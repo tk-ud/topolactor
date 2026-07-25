@@ -397,7 +397,11 @@ admin_uibuilder_ui_structure_wiring_ssot:
         case -- not an undocumented ad-hoc string recognized by one function. This
         section is that binding's own vocabulary/authority/validation contract, per
         PR #599 review (2026-07-24): a "canonical lane" statement requires more than a
-        recognized string constant.
+        recognized string constant. 2026-07-25 (PR #599 review round 5) removed the
+        remaining dedicated actionType-equality special case
+        (ADMIN_RUNTIME_PAYLOAD_BINDING_ACTION_TYPE / isAdminRuntimePayloadBindingAction)
+        -- see policy_validator_reconciliation and taxonomy_classification below; the
+        actionType string stays the authoring convention, not the classification key.
       actionType: bindRuntimeDispatchPayload
       authority: >-
         Frontend build-time authoring only (frontend/runtime/renderEmission.ts
@@ -472,37 +476,61 @@ admin_uibuilder_ui_structure_wiring_ssot:
         or bracket-index truthiness) treat a nodeId/event-path segment that collides with
         an inherited Object.prototype key (constructor, toString, hasOwnProperty, ...) as
         genuinely missing, never as an inherited function value.
+      taxonomy_classification: >-
+        2026-07-25 (PR #599 review round 5, supersedes the 2026-07-24 round-3
+        out_of_scope_for_this_contract entry below, kept for history). The
+        round-3/round-4 shape added a DEDICATED actionType-equality special case
+        (ADMIN_RUNTIME_PAYLOAD_BINDING_ACTION_TYPE constant + isAdminRuntimePayloadBindingAction()
+        + an explicit skip inside findRuntimeInteractionPolicyErrors) to keep this
+        actionType from tripping ACTION_OUTSIDE_VOCABULARY -- reviewed as unnecessary
+        new implementation-derived vocabulary, because ui_event_settings.
+        setting_category_taxonomy.frontend_side.side_effect_setting.field_boundary
+        ALREADY declares the correct classification structurally: "payloadFrom /
+        outputProp / targetNode state assignment are effect fields, not the effect
+        authority itself" -- i.e. 副作用設定 is a field-boundary category, not an
+        actionType allowlist. wiringSettingCategoryOf (uiBuilderWiringProjection.ts)
+        now classifies any actionType outside the other three branches as
+        side_effect_setting when it carries payloadFrom/outputProp (reusing the
+        existing hasSideEffectFields check, unchanged), and returns null only for an
+        actionType with neither -- a degenerate/incomplete entry (e.g. the action
+        picked but no payloadFrom field authored yet) now correctly fails
+        ACTION_OUTSIDE_VOCABULARY instead of silently passing via the old
+        actionType-only special case, matching this file's general fail-close-over-
+        silent-pass posture. The dedicated constant/predicate and the special-case
+        skip in findRuntimeInteractionPolicyErrors are removed; the actionType string
+        "bindRuntimeDispatchPayload" remains only the authoring convention seed data
+        uses, not a classification key any function branches on.
       out_of_scope_for_this_contract: >-
-        Extending WIRING_SETTING_CATEGORIES (uiBuilderWiringProjection.ts) -- the array
-        literal type of the six SSOT ui_event_settings.setting_category_taxonomy
-        categories -- to include this actionType. That taxonomy classifies UI-Builder
-        canvas-authoring inspector categories for a human editing runtimeInteractions in
-        the canvas -- a different concern from this seed-authored runtime dispatch
-        payload-binding contract. wiringSettingCategoryOf still classifies this actionType
-        as null (honestly outside the six categories, never silently rounded into one).
-        This is NOT the same as being unreconciled with UI-Builder's own authoring/apply
-        policy validator -- see policy_validator_reconciliation below, added 2026-07-24
-        after PR #599 review round 3 confirmed the two were not yet reconciled.
+        [2026-07-24, PR #599 review round 3 framing -- superseded 2026-07-25 by
+        taxonomy_classification above; kept verbatim for history, not current
+        behavior.] Extending WIRING_SETTING_CATEGORIES (uiBuilderWiringProjection.ts)
+        -- the array literal type of the six SSOT ui_event_settings.
+        setting_category_taxonomy categories -- to include this actionType. That
+        taxonomy classifies UI-Builder canvas-authoring inspector categories for a
+        human editing runtimeInteractions in the canvas -- a different concern from
+        this seed-authored runtime dispatch payload-binding contract.
+        wiringSettingCategoryOf still classifies this actionType as null (honestly
+        outside the six categories, never silently rounded into one).
       policy_validator_reconciliation: >-
-        2026-07-24 (PR #599 review round 3). Both this contract's payload-binding entries
-        and UI-Builder's own authoring/apply/readiness policy validator
-        (frontend/lib/uiBuilderWiringProjection.ts findRuntimeInteractionPolicyErrors)
-        share the SAME storage/authoring surface -- topology.ui_topology_tensor.
-        layout_patch_json.nodes[].runtimeInteractions[] -- so an entry with actionType
-        "bindRuntimeDispatchPayload" that a human later opens in the UI Builder canvas
-        (for an unrelated edit on the same layout) must not silently trip that validator's
-        ACTION_OUTSIDE_VOCABULARY (a blocking error on validate/apply/readiness paths, per
-        that function's own contract) just because it is honestly outside the six
-        categories. uiBuilderWiringProjection.ts now exports
-        ADMIN_RUNTIME_PAYLOAD_BINDING_ACTION_TYPE / isAdminRuntimePayloadBindingAction()
-        (the single source of truth renderEmission.ts's buildAdminRuntimePayloadFromByTrigger
-        also imports, replacing its own prior local string-literal duplicate) and
-        findRuntimeInteractionPolicyErrors explicitly recognizes it: neither
-        ACTION_OUTSIDE_VOCABULARY nor the backend/external-dispatch policy checks below it
-        (debounce / lifecycle-confirmation, which govern a DIFFERENT authority --
-        dispatchExternalPort/dispatchInstanceOperation) apply to it. This entry's OWN
-        validation (required trigger/payloadFrom shape, duplicate_field_conflict) is not
-        duplicated into this validator -- it stays solely renderEmission.ts
+        2026-07-24 (PR #599 review round 3), mechanism updated 2026-07-25 (round 5).
+        Both this contract's payload-binding entries and UI-Builder's own
+        authoring/apply/readiness policy validator (frontend/lib/uiBuilderWiringProjection.ts
+        findRuntimeInteractionPolicyErrors) share the SAME storage/authoring surface --
+        topology.ui_topology_tensor.layout_patch_json.nodes[].runtimeInteractions[] --
+        so a payloadFrom-bearing entry that a human later opens in the UI Builder
+        canvas (for an unrelated edit on the same layout) must not silently trip that
+        validator's ACTION_OUTSIDE_VOCABULARY (a blocking error on validate/apply/
+        readiness paths, per that function's own contract). As of round 5 this is no
+        longer a dedicated actionType-equality special case -- see
+        taxonomy_classification above: wiringSettingCategoryOf classifies such an
+        entry as side_effect_setting (not null), so it never reaches the
+        ACTION_OUTSIDE_VOCABULARY branch in the first place, and (because
+        isBackendOrExternalDispatchAction still matches only dispatchExternalPort/
+        dispatchInstanceOperation by exact actionType) it does not inherit the
+        backend/external-dispatch policy checks below it (debounce /
+        lifecycle-confirmation) either. This entry's OWN validation (required
+        trigger/payloadFrom shape, duplicate_field_conflict) is not duplicated into
+        this validator -- it stays solely renderEmission.ts
         buildAdminRuntimePayloadFromByTrigger's authority, keeping a single validation
         owner per SSOT design_order.
       runtime_parse_boundary_fail_close: >-
