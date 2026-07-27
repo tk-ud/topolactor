@@ -726,6 +726,7 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             Assert.Equal("{}", write.Before);
             Assert.Contains(groupName, write.After);
             Assert.Contains(createdGroupId!, write.After);
+            Assert.Equal("client", write.Actor);
         }
         finally
         {
@@ -878,17 +879,26 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
     }
 
     /// <summary>
-    /// Fetches the single most recent matching logs.diff row's before/after JSON text, for
-    /// asserting actual diff content (not just row presence).
+    /// Fetches the single most recent matching logs.diff row's before/after/actor, for asserting
+    /// actual diff content (not just row presence). Covers 3 of the 8 logical_envelope_fields
+    /// declared by docs/design/admin-master-roster-management-ssot.yaml logs_diff_admin_projection
+    /// beyond target_table/target_id/operation (already the query's own WHERE clause) and timestamp
+    /// (already bounded by the since-t0 window): before, after, actor. changed_fields is NOT
+    /// asserted here because it is not physically persisted anywhere today -- see
+    /// AdminMasterRosterAudit.AppendAsync's dead-code envelope (built, never passed to
+    /// AppendLogsDiffAsync) and logs.diff's own DDL (db/sql_attention_logs_tables.sql), which has no
+    /// column for it. That is a real, pre-existing, cross-cutting gap in the shared audit envelope,
+    /// not something this test can prove around; it is tracked as its own Bundle
+    /// (admin-master-roster-audit-envelope-changed-fields-gap, .agent/tasks/todo.md), not fixed here.
     /// </summary>
-    private static async Task<(string Before, string After)> ReadLatestLogsDiffAsync(
+    private static async Task<(string Before, string After, string? Actor)> ReadLatestLogsDiffAsync(
         string cs, string physicalTableName, string recordId, string operationKind, DateTimeOffset since)
     {
         await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            SELECT before_state_or_diff_json::text, after_state_or_diff_json::text
+            SELECT before_state_or_diff_json::text, after_state_or_diff_json::text, actor_or_source
             FROM logs.diff
             WHERE source_set_id = 'admin_master_roster'
               AND physical_table_name = @t
@@ -903,7 +913,7 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         cmd.Parameters.AddWithValue("since", since);
         await using var reader = await cmd.ExecuteReaderAsync();
         Assert.True(await reader.ReadAsync(), $"expected a logs.diff row for {physicalTableName}/{recordId}/{operationKind} since {since:o}");
-        return (reader.GetString(0), reader.GetString(1));
+        return (reader.GetString(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2));
     }
 
     /// <summary>
@@ -963,6 +973,7 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             var diff = await ReadLatestLogsDiffAsync(cs, "enum.groups", groupId!, "update", t0);
             Assert.Contains(originalName, diff.Before);
             Assert.Contains(renamedName, diff.After);
+            Assert.Equal("client", diff.Actor);
         }
         finally
         {
@@ -1029,6 +1040,7 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             var diff = await ReadLatestLogsDiffAsync(cs, "enum.groups", deletedGroupId, "delete", t0);
             Assert.Contains(groupName, diff.Before);
             Assert.Equal("{}", diff.After);
+            Assert.Equal("client", diff.Actor);
         }
         finally
         {
@@ -1098,6 +1110,7 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             var diff = await ReadLatestLogsDiffAsync(cs, "enum.items", indexNum.ToString(), "create", t0);
             Assert.Equal("{}", diff.Before);
             Assert.Contains(name, diff.After);
+            Assert.Equal("client", diff.Actor);
         }
         finally
         {
@@ -1166,6 +1179,7 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             var diff = await ReadLatestLogsDiffAsync(cs, "enum.items", indexNum.ToString(), "update", t0);
             Assert.Contains(originalName, diff.Before);
             Assert.Contains(renamedName, diff.After);
+            Assert.Equal("client", diff.Actor);
         }
         finally
         {
@@ -1231,6 +1245,7 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             var diff = await ReadLatestLogsDiffAsync(cs, "enum.items", indexNum.ToString(), "delete", t0);
             Assert.Contains(name, diff.Before);
             Assert.Equal("{}", diff.After);
+            Assert.Equal("client", diff.Actor);
         }
         finally
         {
@@ -1327,6 +1342,7 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
                 Assert.Equal(
                     new[] { 10, 11 },
                     afterDoc.RootElement.GetProperty("itemsIndexNums").EnumerateArray().Select(e => e.GetInt32()));
+            Assert.Equal("client", diff.Actor);
         }
         finally
         {
