@@ -447,9 +447,18 @@ public partial class AdminRuntime
         var before = await _enumDictionaryRepository.GetItemAsync(request.IndexNum, ct);
         if (before is null)
             return (null, new ValidationError("ENUM_ITEM_NOT_FOUND", $"Enum item index {request.IndexNum} was not found."));
-        if (request.NewIndexNum.HasValue && request.NewIndexNum.Value != request.IndexNum &&
-            await _enumDictionaryRepository.GetItemAsync(request.NewIndexNum.Value, ct) is not null)
+        var indexChanging = request.NewIndexNum.HasValue && request.NewIndexNum.Value != request.IndexNum;
+        if (indexChanging &&
+            await _enumDictionaryRepository.GetItemAsync(request.NewIndexNum!.Value, ct) is not null)
             return (null, new ValidationError("ENUM_ITEM_INDEX_CONFLICT", $"indexNum {request.NewIndexNum} is already in use."));
+        // enum.group_items.enum_index_num REFERENCES enum.items(index_num) with no ON UPDATE CASCADE
+        // (db/enum_tables.sql) -- moving index_num out from under an existing group membership row
+        // violates that FK. Renaming (name-only, index_num unchanged) does not touch this FK and
+        // remains allowed for group members; only an actual index_num change is blocked. Mirrors
+        // delete_item's existing ENUM_ITEM_IN_USE gate for the same underlying constraint, run
+        // identically for dryRun and confirmed (validation_parity_rule).
+        if (indexChanging && await _enumDictionaryRepository.IsItemReferencedInGroupsAsync(request.IndexNum, ct))
+            return (null, new ValidationError("ENUM_ITEM_IN_USE", "Enum item is a member of an enum group."));
 
         if (IsTruthyPayloadFlag(vector.Payload, "dryRun"))
         {
@@ -474,6 +483,10 @@ public partial class AdminRuntime
         {
             updated = await _enumDictionaryRepository.UpdateItemAsync(
                 request.IndexNum, request.Name?.Trim(), request.NewIndexNum, ct);
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "ENUM_ITEM_IN_USE")
+        {
+            return (null, new ValidationError("ENUM_ITEM_IN_USE", "Enum item is a member of an enum group."));
         }
         catch (InvalidOperationException)
         {

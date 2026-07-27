@@ -188,6 +188,13 @@ public class NpgsqlEnumDictionaryRepository : EnumDictionaryRepository
             {
                 throw new InvalidOperationException("ENUM_ITEM_INDEX_CONFLICT");
             }
+            catch (PostgresException pe) when (pe.SqlState == PostgresErrorCodes.ForeignKeyViolation)
+            {
+                // Defense in depth: AdminRuntimeMasterRoster.DataEnumDictionaryUpdateItemAsync already
+                // gates this with IsItemReferencedInGroupsAsync before reaching here (same constraint
+                // DeleteItemAsync above guards), so this should not normally trigger.
+                throw new InvalidOperationException("ENUM_ITEM_IN_USE");
+            }
             indexNum = newIndexNum.Value;
         }
 

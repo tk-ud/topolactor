@@ -14,7 +14,7 @@
 | `admin-surface-topology-seed-conversion` | Admin hardcoded surface topology seed conversion（`role-based-surface-separation` はこの Bundle の pre-seed-implementation evidence として統合済み — 2026-07-14、下記 Bundle 本文の該当 subsection 参照）。`admin-dashboard` subBundle は実装完了（PR #595、2026-07-19、下記「admin-dashboard subBundle 実装完了記録」参照）。`admin-enum` subBundle は seed登録・structural render proof・navigation closure proof・read circuit・7 write action全ての mutation_confirmation_contract（dryRun/confirmed/validation parity、実DBで7 action個別に証明済み、`logs.diff`行の実persistence込み——ただしSSOT論理contractの8フィールドのうちactor/target_table/target_id/operation/before/after/timestampの7つのみ証明済みで、changed_fieldsは物理未実装のため対象外、詳細は`admin-master-roster-audit-envelope-contract-gap` Bundle参照）を実装済みだが、hardcoded `/admin/enums`（`AdminEnumsRoster.tsx`）のUX-parity production replacementのみ、既存substrateの範囲外の gap（`admin-write-surface-selection-context-and-mode-composition-gap` Bundle参照）により未達（下記「admin-enum subBundle 実装記録」参照、implemented 扱いにしない）。残り3 subBundle（`team-dashboard`/`credential-management`/`scheduler-settings`）は未着手。 | not_started | 5 subBundle（うち1件実装完了、1件 hardcoded route撤去のみ残り部分実装、3件未着手） | `product.dynamic_support_nocode_loop` / admin hardcoded surface retirement | `docs/design/admin-normal-surface-projection-seed-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/instance-port-substrate-ssot.yaml` |
 | `admin-runtime-operation-dispatch-lane-determination` | PR #597 Gate0再監査で確定した、seed-authored Actionからmanifest-authorizedなadmin_runtime layer:action dispatchへ到達する既存canonical laneの不在。owner decision確定（2026-07-22、新規lane不採用／enum専用handler不採用／既存component_wiring_execution_laneへ収束）を受け、`wiring_kind="admin_runtime"`による具体境界を実装・test証明済み（下記Bundle本文参照）。2026-07-23にread circuit（search/filter/table）を実dispatch化・live-DB証明。2026-07-24、残っていたremaining_write_payload_capture_gap（typed値をdispatch payloadへ載せるproduction-provenな既存mechanismの不在）を、`frontend/runtime/liveNodeValueTracker.ts`（ProjectionShell live node value tracking）と、Lane 2の既存`resolvePayloadFrom`再利用によるpayloadFrom解決追加で解消し、enum_dictionary:create_group/delete_groupの実write+re-list live-DB証明（実PostgreSQL）まで完了した（下記「2026-07-24 remaining_write_payload_capture_gap解消」節参照）。3つの受入条件すべて充足。 | implemented | 1 | `admin-surface-topology-seed-conversion`（admin-enum/team-dashboard/scheduler-settings write-dispatch面の前提。この前提を解消したのみであり、各subBundle自身の本番write UI実装は別途そちらのscope） | `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml` |
 | `admin-write-surface-selection-context-and-mode-composition-gap` | PR #600 review round 3の指摘を受けた既存substrate範囲内での hardcoded-route撤去可否調査で判明した、compound gap。round 4のowner再指摘で物理層の記述を訂正: `hubs.hub_relations.relation_config`列自体は実在する（`role: optional_sequence_metadata`、現行用途は`canonical_default_entry`マーカーと`sql_attention_score`のみ）が、production-consumed経路（`HubNavigationSequenceItemDto`/frontend`HubNavigationSequenceItem`/`resolveHubNavigationLinks`）のいずれもこの列を運ばないため、選択中の行identity（例: 編集対象groupのgroup_id）をtarget manifestのform/pre-fill/mode stateへ伝える経路が実質的に存在しない。加えて`ui_state_update`の`localStateMutation`は固定boolean専用（`UI_STATE_UPDATE_OPEN_ACTIONS`）で、ユーザー選択に応じたtyped値のui-local書き込みができない。credential-managementのseedは`ui-local:credential_management_mode_switch.value`というtargetRefを既に宣言しているが、grep確認の結果runtime実装は0件（declared-but-orphaned）。この2点により、`AdminEnumsRoster.tsx`/`AdminUsersRoster.tsx`が提供する「検索→既存行選択→現在値を読み込んで編集→確認→再取得」という単一画面UXを、既存の generic topology substrateだけでは再現できない。round 4でcompound対象を`admin-normal-surface-projection-seed-ssot.yaml`の各surface正本scopeに基づき再判定し、admin-enum/credential-managementの2 subBundleのみを対象とした（scheduler-settingsは正本scopeがcreate/editを`/admin/contents`へ委譲しenable/disableのみで、この gap を要求しないため除外。team-dashboardは自身のmanifest/seedが未生成で正本SSOT上まだ証明できないため除外——推測による複合はしない）。owner decisionが必要な設計拡張であり、本Bundleでは実装せず、3方向の改善方針比較のみを記録する。 | not_started | 1 | `admin-surface-topology-seed-conversion`（admin-enum/credential-managementのhardcoded route撤去面の前提） | `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/design/admin-normal-surface-projection-seed-ssot.yaml`, `docs/design/db-schema.yaml` |
-| `admin-master-roster-audit-envelope-contract-gap` | PR #600 review round 4-7の指摘を受けて発見・精査した、共有audit envelope substrateの齟齬。**actor authorityはround 7で解消済み**——`ResolveAuditActor`のfallback連鎖（`AuthenticatedUserId ?? ContextUserId ?? TriggerKind`）と、それを「ContextUserIdは信頼禁止」と矛盾していた直前のコメントは、`docs/design/auth-db-session-credential-ssot.yaml` `non_spoofable_actor_identity`（「it now prefers AuthenticatedUserId」）自身の記述、および`AdminRuntime.TeamMarkdown.cs`の同一fallbackの既存precedent（矛盾コメント無し）から一意に導出でき、owner decision不要と判明——コメントのみ訂正した（ロジック無変更）。**changed_fields persistenceは継続してowner decisionを要する**——round 7の再調査で、`docs/design/admin-master-roster-management-ssot.yaml` `logs_diff_admin_projection`（changed_fieldsを必須論理フィールドと宣言）と`docs/design/sql-attention-logs-ssot.yaml`（`logs.diff`の物理schema権威、`required_identity_fields`にchanged_fieldsを含まない）という2つのSSOTファイル自身が直接矛盾していることが判明したため。`AdminMasterRosterAudit.AppendAsync`の現在の呼び出し元は`enum_dictionary:*`（admin-enum、7 action）に加え`auth_users:create/update/delete`（credential-management、3 action）も含む、既に稼働中の共有substrateである。 | not_started | 1 | `admin-surface-topology-seed-conversion`（admin-enum diff_log証明範囲の完全化の前提。auth_users write actionにも既に影響する共有gap） | `docs/design/admin-master-roster-management-ssot.yaml`, `docs/design/sql-attention-logs-ssot.yaml`, `docs/design/auth-db-session-credential-ssot.yaml` |
+| `admin-master-roster-audit-envelope-contract-gap` | PR #600 review round 4-8の指摘を受けて発見・精査した、共有audit envelope substrateの齟齬。**actor authorityはround 7で解消済み**——`ResolveAuditActor`のfallback連鎖（`AuthenticatedUserId ?? ContextUserId ?? TriggerKind`）と、それを「ContextUserIdは信頼禁止」と矛盾していた直前のコメントは、`docs/design/auth-db-session-credential-ssot.yaml` `non_spoofable_actor_identity`（「it now prefers AuthenticatedUserId」）自身の記述、および`AdminRuntime.TeamMarkdown.cs`の同一fallbackの既存precedent（矛盾コメント無し）から一意に導出でき、owner decision不要と判明——コメントのみ訂正した（ロジック無変更）。**changed_fields persistenceは継続してowner decisionを要する**——ただしround 7の「2つのSSOTファイルが直接矛盾している」という記述はround 8で訂正した: `sql-attention-logs-ssot.yaml` `required_identity_fields`は`logs.diff`が最低限持つべき必須列の下限であり、それ以外の列を禁じるclosed-world契約ではない。したがって実態は「`admin-master-roster-management-ssot.yaml`が要求するchanged_fieldsに物理schema/repositoryが追いついていない」という同期ギャップであり、SSOT間の優先順位判断ではない——比較するのは永続化の実現方式（専用列 or generic JSONB envelope）のみ。`AdminMasterRosterAudit.AppendAsync`の現在の呼び出し元は`enum_dictionary:*`（admin-enum、7 action）に加え`auth_users:create/update/delete`（credential-management、3 action）も含む、既に稼働中の共有substrateである。 | not_started | 1 | `admin-surface-topology-seed-conversion`（admin-enum diff_log証明範囲の完全化の前提。auth_users write actionにも既に影響する共有gap） | `docs/design/admin-master-roster-management-ssot.yaml`, `docs/design/sql-attention-logs-ssot.yaml`, `docs/design/auth-db-session-credential-ssot.yaml` |
 | `seed-authoring-reference-routing` | `docs/reference/seed-data-authoring-guide.md`（non-SSOT authoring reference）を、schema seed translatorの全入口（entry gate core/CLI/topology-seed-discussion wrapper/README/SSOT cross-reference）から構造的に到達可能にする導線実装。2026-07-23 実装完了・test証明済み（下記Bundle本文参照）。 | implemented | 1 | seed authoring/translator利用時の反復調査防止 | `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/reference/seed-data-authoring-guide.md` |
 | `test-orchestration-review` | Seed conversion後の proof / test orchestration review | not_started | 1 | proof surface carry-over | `docs/design/pipeline-continuity-ssot.yaml` |
 | `frontend-canonical-surface-structure-label-boundary` | Seed conversion後の frontend canonical surface label boundary | not_started | 1 | frontend canonical UI structure/wiring surfaces | canonical surface UI structure/wiring SSOTs, `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml` |
@@ -951,6 +951,34 @@ owner再指摘（PR #600 review round 5）を受け、round 5の`admin-master-ro
 
 **admin-enum subBundle 全体の状態（round 6時点）:** round 5から実質的な変化なし（hardcoded route撤去のみが未達、admin-enum自身のbackend/seed/test実装は完了）。`admin-master-roster-audit-envelope-contract-gap` Bundleの範囲・問題定義がより正確になり、auth_users write actionにも既に影響する共有gapであることが明確になった。admin-enum subBundleを`implemented`と判断しないという結論は変わらない。
 
+### admin-enum subBundle 実装記録（2026-07-27 round 7: actor authority解消 + selection-context軸別比較 + changed_fieldsのSSOT間矛盾主張〔round 8で訂正判明〕）
+
+owner再指摘（PR #600 review round 6、「PR #600をpartialのまま閉じず全scope完了を目指すが、SSOT一意導出できる部分は導出し、複数の正当な設計が残る場合のみOwnerへ提示して実装前に止まる」という手続きの明示）を受け、以下に対応した。
+
+**1. actor authorityをSSOT自身の記述＋既存precedentから一意に解消:** `docs/design/auth-db-session-credential-ssot.yaml` `non_spoofable_actor_identity`が「it now prefers AuthenticatedUserId」と明記していること、および`AdminRuntime.TeamMarkdown.cs`の4 write actionが矛盾コメント無しで同一fallback連鎖を使っている既存precedentから、`ResolveAuditActor`直前の誤ったコメント（「ContextUserIdは信頼禁止」）を、SSOTが実際に記述する方針へ訂正した（ロジック無変更、コメントのみ）。owner decisionを要する新しい設計判断ではなく、既存SSOT+precedentから導出可能と判断した。
+
+**2. selection-context/mode-composition Bundle（3方向）に、軸別比較表（再利用範囲・新規抽象化範囲・authority/fail-close・migration境界・blast radius・admin-enum/credential-management双方でのproof観点）を追加した。** SSOT自身がいずれかを一意に指し示す記述は見つからず、owner decisionを要する状態のまま維持した。
+
+**3. changed_fields persistenceについて「2つのSSOTファイル自身が直接矛盾している」と記録した。** — **この主張はround 8のowner指摘により不正確と判明し、訂正した（下記round 8節参照）。**
+
+**Test結果**: `Topolactor.Runtime.Tests` 1491/1491 pass。`AdminEnumHubRelationUiProjectionLiveDbTests` 21/21 pass。`check-structure`/`check-yaml-parse-completeness` pass。`agent-ui-local-test summary` は `pass_or_fail: pass`。
+
+### admin-enum subBundle 実装記録（2026-07-27 round 8: update_item FKバグ修正 + seed業務fieldの構造的証明 + write-dispatch-pending記録の解消 + round 7誤り訂正）
+
+owner再指摘（PR #600 review round 7、全15差分監査の結果発見された4点）を受け、以下に対応した。
+
+**1. `update_item`の実バグ修正（`enum.group_items`参照中itemのindex変更がraw FK errorになる）:** `backend/runtime/AdminRuntimeMasterRoster.cs` `DataEnumDictionaryUpdateItemAsync`は、`newIndexNum`が指定された際に`IsItemReferencedInGroupsAsync`を一切呼んでおらず、dryRunは（DBに触れないため）成功するのに、confirmed writeは`enum.group_items.enum_index_num REFERENCES enum.items(index_num)`（`db/enum_tables.sql`、`ON UPDATE CASCADE`無し）に反して生の`PostgresException`（ForeignKeyViolation）を漏らす実バグだった——`delete_item`が既に持つ`ENUM_ITEM_IN_USE`ゲートと同じ制約に対する、update_item側の見落としだった。`delete_item`と同じ既存パターン（`IsItemReferencedInGroupsAsync`チェックをdryRunの前段に追加、`NpgsqlEnumDictionaryRepository.UpdateItemAsync`にForeignKeyViolationのdefense-in-depth catchを追加、`InMemoryEnumDictionaryRepository`にも同じガードを追加）で修正した——リネームのみ（index_num不変更）は既存通りgroup memberでも許可されたままである。Unit test 4件（`Topolactor.Runtime.Tests`、unaffiliated item成功/referenced item dryRun+confirmed両方fail-close/rename-only許可/duplicate index fail-close）と、実PostgreSQLに対する境界test（`DispatchAsync_AdminEnumManagementManifest_ConstraintBackedNegativeCases_FailCloseAgainstRealPostgres`への追加、db/enum_seed.sqlの実demo_activeレコードを使用）を追加した。
+
+**2. seed業務fieldの構造的証明を7 action全てへ拡張:** 既存の`DispatchAsync_EnumDictionaryWriteManifest_ResolvesSinglePurposeLayout_WithDistinctPreviewAndConfirmPayloads`（dryRun/confirmedキーのみ検証していた）を拡張し、各action固有の業務field（`groupName`/`groupId`/`indexNum`/`name`/`enumIndexNums`）のkey名と`node:<id>.value`ソースを、実際にdispatchされたEmissionから構造的に検証するようにした。副次的に、`create_item`/`create_group`にはindexNum入力field自体がseedに無い（未指定時は自動採番）こと、`update_item`にも`newIndexNum`のUI fieldがseedに無い（index変更は現状production seed UIからは到達不能で、直接dispatch payload経由でのみ到達可能）ことを発見し、testのdoc-commentへ正直に記録した——1.のFKバグ修正はdispatch境界としては必須（誰かが直接newIndexNumを送る可能性は排除できない）だが、現行の管理画面seedからは到達しない、という正確な区別を明記した。同時に、この構造的test（seedのdispatchPayloadFromByTrigger宣言の正しさ）と、実DOM input→node value tracking→payloadFromResolverというgeneric mechanism（frontend test群で別途証明済み）は別軸であり、本テストは"end-to-end"を主張しないことをdoc-commentに明記した。
+
+**3. write-dispatch-pending記録の解消:** `db/seed_empty.sql` ae204の`layout_schema_json`、および両翻訳fixture（`admin-enum-ae200.input.json`/`admin-enum-ae200.topology-seed.input.json`）が、実際には解決済みの`enum_write_dispatch_gap` validationレコードに`label: "Write dispatch pending"`/`severity: "warning"`という、resolvedなSSOT記録（`react-schema-topology-seed-translator-ssot.yaml` `status: resolved_2026_07_27`）と矛盾するactiveな警告を残したままだったことを発見した。`.agent/tools/react-schema-topology-seed-translator`（generate-react-schema→generate-topology-seed）を実際に使い、3ファイルを機械的に再生成・整合させた（手編集による3ファイル間drift回避）——`label`を解決済み内容へ、`severity`を`resolved`へ更新。`check-react-schema-topology-seed-translator.sh`実行で既知の pre-existing flaky failure（7a、`git stash`で無変更でも再現確認済み）以外は全pass。
+
+**4. round 7の「SSOT間矛盾」記録を訂正:** round 7は「`sql-attention-logs-ssot.yaml`の`required_identity_fields`（changed_fields含まず）と`admin-master-roster-management-ssot.yaml`（changed_fields必須宣言）が直接矛盾する」と記録していたが、これは不正確だった——`required_identity_fields`は`logs.diff`が最低限持つべき必須列の下限列挙であり、それ以外の列を禁じるclosed-world契約ではない（該当箇所を再読し、そのような制限が無いことを確認）。正しい記述は「論理契約側の要求に物理実装が追いついていない、通常の同期ギャップ」であり、「撤回」は正当な選択肢ではない——round 5-6の立場（撤回を提示しない、比較するのは永続化の実現方式のみ）へ差し戻した。`admin-master-roster-audit-envelope-contract-gap` Bundleの該当節を訂正した。
+
+**Test結果**: `AdminEnumHubRelationUiProjectionLiveDbTests` 21/21 pass（新規assertion込み）。CI相当12クラスfilterをフレッシュDB（`db/init.sql`と同一適用順で再構築）で85/85 pass。`Topolactor.Runtime.Tests` 1495/1495 pass（新規4件込み）。`check-structure`/`check-yaml-parse-completeness`/`check-enum-dictionary`/`check-admin-normal-surface-projection-seed-ssot`/`check-react-schema-topology-seed-translator`（既知のflaky 7a以外）すべてpass。
+
+**admin-enum subBundle 全体の状態（round 8時点）:** backend側mutation_confirmation_contract（7 action全て、validation parity・diff_log実persistence込み、update_itemのFKバグ修正込み）・seed側single-purpose write manifest配線（7 action全て、業務field構造的証明込み）・per-action live-DB round trip proof（7 action全て）・navigation reachability・write-dispatch-pending記録解消は実装・test証明済み。**残る唯一の未達は、hardcoded `/admin/enums` / `AdminEnumsRoster.tsx`のUX-parity production replacementおよびそれに伴う撤去であり、`admin-write-surface-selection-context-and-mode-composition-gap`（selection-context伝達・mode composition、案A/B/C owner decision待ち）と`admin-master-roster-audit-envelope-contract-gap`（changed_fields永続化、案A-1/A-2/A-3 owner decision待ち）という2つの共有Bundleの解決が前提である。**この理由により、admin-enum subBundleを`implemented`と判断することはできない。
+
 ---
 
 ## Bundle `admin-runtime-operation-dispatch-lane-determination`
@@ -1222,6 +1250,20 @@ owner decisionが必要な3方向（既存`runtime_interactions_lane`拡張／�
 
 唯一の既存precedentは`inline_edit/inline_editable_field` + `inline_edit/confirmed_update_button` + `inline_edit/audit_diff_drawer`（`physical_details_inline_editor_md_generator` preset、`frontend/runtime/runtimeComponentFactory.ts`でruntime-connected済み）だが、これは「既に一意に特定された1つの物理recordの、その場のフィールド編集」専用であり、「多数の行から1つを選び、その現在値をフォームへ読み込む」というlist-backed selectionシナリオはカバーしない。
 
+#### selection-context全経路のtrace（round 8、owner指摘により実装コードを辿って確定）
+
+「行が選択されたeventの発生点」から「target manifestのform pre-fill」まで、実際に存在する経路と欠落箇所を、コードを直接辿って確認した。
+
+1. **Event生成点**: ae200の`enum_table`（data_display/table、実`emission.data`行）の行クリックは、native event payloadとして行自身のフィールド値（例: `groupId`/`indexNum`）を運ぶ——これは`payloadFrom: "event.<path>"`で既に読み取り可能な、既存の生きた仕組みである（`admin-runtime-operation-dispatch-lane-determination` Bundle既述の「行自身のidのみを取るdelete相当のaction」と同型）。
+2. **Payload抽出**: ただし、この仕組みが機能するのは「同じlayout上のnodeが、そのlayoutの唯一のadmin_runtime target_refへdispatchする」場合のみ。write actionは全てae200とは**別のmanifest**（ae210〜ae270）にあるため、ae200の行クリックeventからは、そもそもwrite manifestへのdispatchが直接発生しない——選択された識別子は、まずnavigation（別ページへの遷移）を経由して運ぶ必要がある。
+3. **Carrier（欠落箇所その1）**: `frontend/runtime/projectionEntry.ts` `resolveHubNavigationLinks`が生成するnavigation linkの`href`は、`?manifest=<targetManifestId>`のみを含み、選択された行のidを運ぶquery paramは一切無い（コード確認済み、`ResolvedHubNavigationLink`型に`label`/`sequencePosition`/`hubRelationId`/`topologyManifestId`/`relatedHubId`/`href`以外のフィールドが無いことと整合）。
+4. **Target manifest受信（欠落箇所その2）**: 同ファイルの`parseProjectionEntrySelection`は`route`/`manifest`/`package`/`layout`/`wiring`のみをURLから読み取り、`resolveProjectionEntryAxes`は`payload.target_ref`しか組み立てない——`Context`オブジェクトを一切構築しない。つまり、たとえ3.でURLに何か追加しても、遷移先の初期dispatchがそれを`OperationVector.ContextRecordId`（`backend/schema/Contracts.cs`、`backend/runtime/OperationVectorResolver.cs`が`request.Context["ContextRecordId"]`から読む既存フィールド）へ渡す経路が今は存在しない。
+   - 傍証: `ContextRecordId`自体はbackendに実在する（`ContextRouteRecommendationResolver.cs`/`RuntimeExecutor.cs`が読む）が、frontend側で`ContextRecordId`という文字列を検索しても参照0件——どのdispatch呼び出しもこのcontext keyを設定していない。つまり「再利用できる既存の運び先」ではあるが、「今動いている再利用可能な経路」ではない——追加実装無しに再利用できる、という意味の"reuse"は成立しない。
+5. **Pre-fill（欠落箇所その3）**: 仮に4.が解決し、書き込み先manifestの初期Emissionが選択されたidを何らかの形で保持できたとしても、`search_input.alias`（`item_index_field`等のfield node）を生成する既存factoryには、「初期表示値をcontext/emission由来の値から設定する」bindingが無い（既存の`inputFactory`は空のtext inputを生成するのみ）——これも新規に必要な結線である。
+6. **Reload/stale-selection fail-close**: これは既に解決済みで、gapではない——各write actionの既存validation（`GetItemAsync`/`GetGroupDetailAsync`がnullを返す→`ENUM_ITEM_NOT_FOUND`/`ENUM_GROUP_NOT_FOUND`)が、選択後に対象が削除されている等のケースを既にfail-closeしている（identityがどう到達したかに関わらず、書き込み時に毎回re-validateする既存のmutation_confirmation_contractの一部）。
+
+**案A/B/Cの排他性について**: 上記3.と4.（navigation経由でのcarrier）は主に案A（navigation-context伝達拡張）が対応する領域である。しかし5.（pre-fillのbinding自体）は、案A/B/Cのいずれを採用しても追加で必要になる、独立した欠落である——3つの案は「識別子をどう運ぶか」という一つの軸のみの選択肢であり、「運ばれた識別子をどうform fieldの初期値に結びつけるか」という別軸は、どの案を選んでも別途解決が必要になる。したがって案A/B/Cは厳密に排他的ではなく、"carrier機構の選択"と"pre-fill binding機構"という2段構えで捉えるべきである（改善方針の対象ファイル名/対象関数名にこの追加観点を反映済み）。
+
 #### compound対象の再判定（round 4）
 
 owner指摘を受け、`docs/design/admin-normal-surface-projection-seed-ssot.yaml`の各surface正本scopeを基準に対象を再判定した。
@@ -1275,9 +1317,10 @@ hardcoded roster風admin画面（admin-enum/credential-management）が、既存
 
 - `backend/schema/ContentBundleContracts.cs`（`HubNavigationSequenceItemDto`、案A採用時）
 - `backend/repository/NpgsqlContentBundleRepository.cs`（`LoadHubNavigationSequenceAsync`）、`backend/runtime/HubNavigationResolver.cs`
-- `frontend/api/dispatch.ts`（`HubNavigationSequenceItem`、案A採用時）、`frontend/runtime/projectionEntry.ts`（`resolveHubNavigationLinks`、案A採用時）
+- `frontend/api/dispatch.ts`（`HubNavigationSequenceItem`、案A採用時）、`frontend/runtime/projectionEntry.ts`（`resolveHubNavigationLinks`/`parseProjectionEntrySelection`/`resolveProjectionEntryAxes`、案A採用時——round 8のtraceで確認した通り、`parseProjectionEntrySelection`がContextを一切構築しない箇所も含む）
+- `backend/schema/Contracts.cs`（`OperationVector.ContextRecordId`）、`backend/runtime/OperationVectorResolver.cs`（round 8で確認: 既存フィールドだが現在frontendのどのdispatchからも設定されていない、案A採用時の候補carrier）
 - `frontend/runtime/uiEventEffectRunner.ts`（`UI_STATE_UPDATE_OPEN_ACTIONS`、案B採用時）
-- `frontend/runtime/runtimeComponentFactory.ts`（`inline_edit/*` factory、案C採用時）
+- `frontend/runtime/runtimeComponentFactory.ts`（`inline_edit/*` factory、案C採用時。search_input.aliasの`inputFactory`——round 8のtraceで確認したpre-fill binding欠落箇所、案A/B/Cいずれを選んでも追加で必要）
 - `frontend/islands/ProjectionShell.tsx`
 - `frontend/islands/AdminEnumsRoster.tsx`、`frontend/islands/AdminUsersRoster.tsx`（gap解消後の撤去対象）
 - `db/seed_empty.sql`（admin-enum ae2xx行、credential-management manifest 092）
@@ -1310,34 +1353,34 @@ hardcoded roster風admin画面（admin-enum/credential-management）が、既存
 
 **Status:** `not_started`
 
-**Position:** PR #600（`admin-surface-topology-seed-conversion` admin-enum subBundle）review round 4-6の指示に基づく調査で発見した、admin-enum固有ではない共有audit envelope substrateの2つのgap。round 7で**actor authorityはSSOT自身の記述と既存precedentから一意に導出できると判明し、コメント修正のみで解消した**（下記「actor authority — round 7で解消」参照）。**changed_fields persistenceは、round 7の再調査で新たに、2つのSSOTファイル自身が直接矛盾していることが判明し**、依然owner decisionを要する。
+**Position:** PR #600（`admin-surface-topology-seed-conversion` admin-enum subBundle）review round 4-8の指示に基づく調査で発見した、admin-enum固有ではない共有audit envelope substrateの2つのgap。**actor authorityはSSOT自身の記述と既存precedentから一意に導出でき、round 7でコメント修正のみで解消した**（下記「actor authority — round 7で解消」参照）。**changed_fields persistenceは物理schema/repositoryの未実装ギャップであり**、依然owner decisionを要する——round 7の「2つのSSOTファイル自身が直接矛盾している」という記述はround 8のowner指摘により訂正した（下記「round 8訂正」参照）: `sql-attention-logs-ssot.yaml` `required_identity_fields`は`logs.diff`が最低限持つべき必須列の列挙であって、それ以外の列を禁じるclosed-world契約ではない。したがって`admin-master-roster-management-ssot.yaml`が要求する`changed_fields`と物理schema/repositoryとの間にあるのは「SSOT同士の矛盾」ではなく、単純な同期ギャップ（論理契約側の要求に物理実装が追いついていない）である。
 
 ### 問題点
 
 `docs/design/admin-master-roster-management-ssot.yaml` `logs_diff_admin_projection`は、`logs.diff`への監査ログ書き込みの論理契約として8フィールド（`actor`/`target_table`/`target_id`/`operation`/`before`/`after`/`changed_fields`/`timestamp`）を必須項目として宣言し、`physical_mapping`で各フィールドの物理対応先を示している。実装（`backend/runtime/AdminMasterRosterAudit.cs`）とDDL（`db/sql_attention_logs_tables.sql` `CREATE TABLE logs.diff`）を突き合わせた結果、次の齟齬を確認した。
 
-**1. changed_fields persistence gap（owner decision継続、round 7でSSOT間矛盾を発見）**: `physical_mapping.changed_fields`は「JSON envelope array」と宣言されているが、`AppendAsync`は`changed_fields`を含む`envelope`ローカル変数を構築し`JsonSerializer.Serialize(envelope)`まで実行しながら、その結果（`json`変数）を一切`AppendLogsDiffAsync`へ渡していない——完全なdead codeである。`logs.diff`の物理DDLには、`changed_fields`（またはそれに相当する汎用JSON envelope）を格納する列がそもそも存在しない（`diff_id`/`source_set_id`/`basis_window`/`physical_table_id`/`physical_table_name`/`record_id`/`operation_kind`/`before_state_or_diff_json`/`after_state_or_diff_json`/`observed_at`/`actor_or_source`/`archive_policy`のみ）。**round 7で追加確認**: `docs/design/sql-attention-logs-ssot.yaml`（`logs.diff`の物理schema権威、`ssot_roles.yaml: structural_policy_schema_runtime_contract_ssot`）自身の`layers.logs_signal_sources.initial_sources.logs.diff.required_identity_fields`は、`physical_table_id`/`physical_table_name`/`record_id`/`operation_kind`/`before_state_or_diff_json`/`after_state_or_diff_json`/`observed_at`/`actor_or_source`/`archive_policy`の9項目のみを列挙し、**`changed_fields`を一切含まない**。つまり`admin-master-roster-management-ssot.yaml`（論理契約、changed_fieldsを必須と宣言）と`sql-attention-logs-ssot.yaml`（物理schema権威、changed_fieldsを列挙しない）という2つのSSOTファイル自身が直接矛盾しており、これはAgentが実装都合で解決してよい種類の齟齬ではない——単なる「永続化方式の選択」ではなく、「そもそもchanged_fieldsをlogs.diffの物理契約に含めるべきか」というSSOT間の優先順位判断そのものがowner decisionを要する。
+**1. changed_fields persistence gap（owner decision継続。round 7の「SSOT間矛盾」framingはround 8で訂正）**: `physical_mapping.changed_fields`は「JSON envelope array」と宣言されているが、`AppendAsync`は`changed_fields`を含む`envelope`ローカル変数を構築し`JsonSerializer.Serialize(envelope)`まで実行しながら、その結果（`json`変数）を一切`AppendLogsDiffAsync`へ渡していない——完全なdead codeである。`logs.diff`の物理DDLには、`changed_fields`（またはそれに相当する汎用JSON envelope）を格納する列がそもそも存在しない（`diff_id`/`source_set_id`/`basis_window`/`physical_table_id`/`physical_table_name`/`record_id`/`operation_kind`/`before_state_or_diff_json`/`after_state_or_diff_json`/`observed_at`/`actor_or_source`/`archive_policy`のみ）。round 7は「`sql-attention-logs-ssot.yaml`の`required_identity_fields`（9項目、changed_fields含まず）と`admin-master-roster-management-ssot.yaml`（changed_fieldsを必須と宣言）が直接矛盾する」と記録したが、これは不正確だった——`required_identity_fields`は`logs.diff`が最低限持つべき列の列挙（必須の下限）であり、それ以外の列の追加を禁じるclosed-world契約ではない（この点に反する記述は`sql-attention-logs-ssot.yaml`のどこにも無いことを再確認した）。したがって正しい記述は「`admin-master-roster-management-ssot.yaml`が要求する`changed_fields`の永続化に、`logs.diff`の物理schema/`LogsDiffAppendRequest`/`NpgsqlSqlAttentionLogsRepository`という実装側が追いついていない」という同期ギャップであり、「どちらのSSOTが正しいか」という優先順位判断ではない。ただし解決には共有substrate（物理列追加を含む）への変更を要するため、admin-enum専用実装として本PRへ混在させず、引き続きowner decisionを要するBundleとして扱う——「永続化する/しない」ではなく「共有physical carrierをどう設計するか」（下記改善方針）が論点である。
 
 **2. actor authority — round 7で解消**: `AdminRuntimeMasterRoster.cs`の`ResolveAuditActor`は`vector.AuthenticatedUserId ?? vector.ContextUserId ?? vector.TriggerKind`というfallback連鎖を持つが、round 5-6時点ではその直前のコードコメントが「ContextUserId ... must never be trusted as an audit actor」と、この既存fallbackと矛盾する記述をしていた。round 7で`docs/design/auth-db-session-credential-ssot.yaml` `non_spoofable_actor_identity`を再読した結果、そのSSOT自身が「AdminRuntimeMasterRoster.ResolveAuditActorがclient-suppliableなContextUserIdを読んでいたgapを、AuthenticatedUserIdの追加で閉じた——it now **prefers** AuthenticatedUserId」と明記しており、"prefers"（排他的採用ではなく優先順位）という言葉が現行の`??`連鎖と正確に一致することを確認した。さらに`backend/runtime/AdminRuntime.TeamMarkdown.cs`の4つのwrite action（saved_view:update/refresh/clone/rebind）が、矛盾するコメントを一切付けずに同一の`AuthenticatedUserId ?? ContextUserId ?? TriggerKind ?? "unknown"`という連鎖を使っている既存precedentも確認した。これらはSSOT自身の記述と既存実装precedentから一意に導出できる結論であり、owner decisionを要する新しい設計判断ではなかった——`ResolveAuditActor`直前のコメントを、SSOTが実際に記述する「prefer」方針を正確に反映する文言へ訂正した（fallback連鎖のロジック自体は無変更）。
 
-**現在の呼び出し元（将来ではなく既に稼働中）**: `AdminMasterRosterAudit.AppendAsync`は現在、`enum_dictionary:*`（admin-enum、7 write action）に加えて`auth_users:create`/`auth_users:update`/`auth_users:delete`（credential-management/auth、3 write action）からも既に呼び出されている（`AdminRuntimeMasterRoster.cs`をgrepして確認）。`changed_fields`のSSOT間矛盾は、将来のconsumerに影響しうるという仮定の話ではなく、現在すでに稼働中の2つのsubsystemの監査ログに実際に影響している。
+**現在の呼び出し元（将来ではなく既に稼働中）**: `AdminMasterRosterAudit.AppendAsync`は現在、`enum_dictionary:*`（admin-enum、7 write action）に加えて`auth_users:create`/`auth_users:update`/`auth_users:delete`（credential-management/auth、3 write action）からも既に呼び出されている（`AdminRuntimeMasterRoster.cs`をgrepして確認）。`changed_fields`の同期ギャップは、将来のconsumerに影響しうるという仮定の話ではなく、現在すでに稼働中の2つのsubsystemの監査ログに実際に影響している。
 
 ### 目的
 
-`admin-master-roster-management-ssot.yaml` `logs_diff_admin_projection`と`sql-attention-logs-ssot.yaml`の物理schema権威との間の`changed_fields`に関する矛盾を解消する——`changed_fields`を`logs.diff`の物理契約へ正式に追加する（両SSOTを整合させる）か、`logs_diff_admin_projection`側の`changed_fields`必須宣言を撤回・降格する（同じく両SSOTを整合させる）かをownerが決定する。`AdminMasterRosterAudit.AppendAsync`の現在の呼び出し元はadmin-enum（7 action）とauth_users（3 action）の両方であり、この修正は`logs.diff`物理スキーマ・`LogsDiffAppendRequest`契約・`NpgsqlSqlAttentionLogsRepository`という共有substrateに触れるため、両方の既存consumerに影響する前提で解決すること。
+`admin-master-roster-management-ssot.yaml` `logs_diff_admin_projection`が要求する`changed_fields`を実際に永続化できるよう、`logs.diff`の物理schema/`LogsDiffAppendRequest`/`NpgsqlSqlAttentionLogsRepository`という共有substrateを拡張する（永続化しない、という選択肢は無い——SSOTで既に確定済みの必須論理フィールドであるため）。比較するのは実現方式（専用列 or generic JSONB envelope）のみ。`AdminMasterRosterAudit.AppendAsync`の現在の呼び出し元はadmin-enum（7 action）とauth_users（3 action）の両方であり、両方の既存consumerに影響する前提で解決すること。
 
 ### 改善方針（提案のみ、実装しない——owner decisionを要する）
 
-**changed_fields persistence（2つのSSOTファイル自身が矛盾しているため、「どちらのSSOTを優先するか」自体がownerの判断事項——round 5-6と異なり、今回は「撤回」も両SSOTを整合させる正当な選択肢の1つとして提示する。実装都合による恣意的な縮小ではなく、既存SSOT間の矛盾を発見した結果としての提示である）:**
-- **案A-1: `changed_fields`を`logs.diff`の物理契約へ正式採用する**: `sql-attention-logs-ssot.yaml` `required_identity_fields`へ`changed_fields`を追加し、`db/sql_attention_logs_tables.sql` `logs.diff`へ列（例: `TEXT[]`）を追加、`LogsDiffAppendRequest`・`NpgsqlSqlAttentionLogsRepository.AppendLogsDiffAsync`を拡張する。
-- **案A-2: generic audit envelope JSONBとして永続化する**: 案A-1と同じSSOT整合を行うが、専用列ではなく`AppendAsync`が既に構築している（が破棄している）`envelope`オブジェクト全体を汎用JSON envelope列（例: `audit_envelope_json JSONB`）へ書き込む——SSOTの`physical_mapping`が元々意図していた「JSON envelope」という表現に最も近い形。
-- **案A-3: `admin-master-roster-management-ssot.yaml`側の`changed_fields`必須宣言を撤回・降格する**: `sql-attention-logs-ssot.yaml`（物理schema権威）に合わせ、`logical_envelope_fields`から`changed_fields`を外すか、「未実装、optional」等の正直な記述へ訂正する。`AppendAsync`の`changedFields`パラメータ自体の要否も併せて再検討する。
-- いずれを選ぶにせよ、選択後は両SSOTファイルの記述を同時に整合させること（片方だけ直して矛盾を放置しない）。
+**changed_fields persistence（SSOTで既に必須と確定済みの論理項目であり、撤回は設計比較の対象外——比較するのは共有physical carrierの実現方式のみ）:**
+- **案A-1: 専用列を追加する**: `db/sql_attention_logs_tables.sql` `logs.diff`へ`changed_fields`列（例: `TEXT[]`）を追加し、`sql-attention-logs-ssot.yaml` `required_identity_fields`へも追加して物理schema権威を実態に合わせて更新、`LogsDiffAppendRequest`・`NpgsqlSqlAttentionLogsRepository.AppendLogsDiffAsync`を拡張する。
+- **案A-2: generic audit envelope JSONBとして永続化する**: 案A-1と同じSSOT更新を行うが、専用列ではなく`AppendAsync`が既に構築している（が破棄している）`envelope`オブジェクト全体を汎用JSON envelope列（例: `audit_envelope_json JSONB`）へ書き込む——SSOTの`physical_mapping`が元々意図していた「JSON envelope」という表現に最も近い形。
+- **案A-3: 他のSSOT整合方式**: 上記2案以外で、既存の`logs.diff`設計原則（`docs/design/sql-attention-logs-ssot.yaml`）と矛盾しない永続化方式があれば提示する。
+- いずれを選ぶにせよ、選択後は`sql-attention-logs-ssot.yaml`の`required_identity_fields`を実態（新設列を追加済み）に合わせて更新すること——追加を「禁止された矛盾の解消」ではなく「必須列の下限リストへの正当な追加」として記録する。
 
 ### 対応資料
 
 - `docs/design/admin-master-roster-management-ssot.yaml`（`logs_diff_admin_projection`）
-- `docs/design/sql-attention-logs-ssot.yaml`（`logs.diff`の物理schema権威、`required_identity_fields`がchanged_fieldsを含まない）
+- `docs/design/sql-attention-logs-ssot.yaml`（`logs.diff`の物理schema権威。`required_identity_fields`は必須列の下限であり追加列を禁じるclosed-world契約ではないことをround 8で確認）
 - `docs/design/auth-db-session-credential-ssot.yaml`（`non_spoofable_actor_identity`——actor authority解消の根拠、round 7で参照）
 - `db/sql_attention_logs_tables.sql`
 - `backend/schema/SqlAttentionContracts.cs`（`LogsDiffAppendRequest`）
@@ -1345,14 +1388,13 @@ hardcoded roster風admin画面（admin-enum/credential-management）が、既存
 - `backend/runtime/AdminRuntimeMasterRoster.cs`（`ResolveAuditActor`——round 7でコメント訂正済み、`DataAuthUsersCreateAsync`/`DataAuthUsersUpdateAsync`/`DataAuthUsersDeleteAsync`の既存呼び出し元）
 - `backend/runtime/AdminRuntime.TeamMarkdown.cs`（同一fallback連鎖の既存precedent、4 write action）
 - `backend/repository/SqlAttentionLogsRepository.cs`、`backend/repository/NpgsqlSqlAttentionLogsRepository.cs`
-- `.agent/tasks/todo.md`（`admin-surface-topology-seed-conversion` admin-enum subBundle実装記録 round 5-7節）
-- PR #600（`tk-ud/topolactor`）review round 4-6コメント履歴、PR #589（`role-based-surface-separation`、commit 15a540e、`ResolveAuditActor`導入元）
+- `.agent/tasks/todo.md`（`admin-surface-topology-seed-conversion` admin-enum subBundle実装記録 round 5-8節）
+- PR #600（`tk-ud/topolactor`）review round 4-8コメント履歴、PR #589（`role-based-surface-separation`、commit 15a540e、`ResolveAuditActor`導入元）
 
 ### 対象ファイル名
 
-- `docs/design/sql-attention-logs-ssot.yaml`（changed_fields採用時、`required_identity_fields`）
-- `docs/design/admin-master-roster-management-ssot.yaml`（changed_fields撤回時、`logical_envelope_fields`）
-- `db/sql_attention_logs_tables.sql`（changed_fields採用時）
+- `docs/design/sql-attention-logs-ssot.yaml`（`required_identity_fields`更新）
+- `db/sql_attention_logs_tables.sql`（changed_fields専用列採用時）
 - `backend/schema/SqlAttentionContracts.cs`
 - `backend/repository/NpgsqlSqlAttentionLogsRepository.cs`
 - `backend/runtime/AdminMasterRosterAudit.cs`
@@ -1364,9 +1406,9 @@ hardcoded roster風admin画面（admin-enum/credential-management）が、既存
 
 ### 受入条件
 
-- changed_fields方針（案A-1/A-2/A-3、いずれも2つのSSOTファイルを相互に整合させる）がownerに提示され、選択されている。
-- 選択された方向に応じて、`docs/design/admin-master-roster-management-ssot.yaml` `logs_diff_admin_projection`と`docs/design/sql-attention-logs-ssot.yaml` `required_identity_fields`の記述、および実装（`AdminMasterRosterAudit.AppendAsync`/`logs.diff` DDL）が一致している（矛盾したSSOTのどちらか一方だけを直した状態で終わらない）。
-- 一致を証明するtestが追加されている（案A-1/A-2採用時はchanged_fieldsの実persistence、案A-3採用時はSSOT記述と実装の非矛盾を確認するテスト）——admin-enum・auth_users双方のconsumerに対して。
+- changed_fields永続化方式（案A-1/A-2/A-3）がownerに提示され、選択されている。
+- 選択された方向に応じて、`docs/design/sql-attention-logs-ssot.yaml` `required_identity_fields`と実装（`AdminMasterRosterAudit.AppendAsync`/`logs.diff` DDL）が一致している。
+- 一致を証明するtestが追加されている（changed_fieldsの実persistence）——admin-enum・auth_users双方のconsumerに対して。
 - ~~actor authority方針がownerに提示され、選択されている。~~ → **round 7で充足済み**（SSOT自身の記述＋既存precedentから一意に導出、コメント訂正のみで解消、下記「問題点」節参照）。
 
 ### Governance NG boundary
@@ -1375,7 +1417,7 @@ hardcoded roster風admin画面（admin-enum/credential-management）が、既存
 - 本gapの解消を、admin-enum専用の`AdminRuntimeMasterRoster.cs`変更のみで完結させる（`logs.diff`物理スキーマ・`LogsDiffAppendRequest`・`NpgsqlSqlAttentionLogsRepository`という、auth_usersにも既に影響する共有substrateへの変更を要することを無視しない）。
 - 本gapを解消しないまま、diff_logの証明を「SSOT論理contract全体を証明済み」と宣言する（`changed_fields`を除外した範囲であることを明示すること）。
 - `actor_or_source`の物理persistence proof（`Assert.Equal("client", ...)`等）を、authenticated actor authorityの証明であるかのように記録する（この区別はactor authority解消後も変わらず有効——TriggerKindフォールバック値の物理persistence proofであることに変わりはない）。
-- changed_fieldsのSSOT間矛盾を、根拠なくAgent判断で一方のSSOTの勝ちと決めて実装する。
+- `required_identity_fields`への未掲載を「追加列の禁止」と解釈し、SSOTで既に必須と確定済みの`changed_fields`要求を撤回候補として提示する。
 - changed_fields gapを、小粒の別Bundleへ分割する。
 
 ---

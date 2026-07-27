@@ -115,6 +115,8 @@ public sealed class InMemoryEnumDictionaryRepository : EnumDictionaryRepository
         {
             if (_itemsByIndex.ContainsKey(newIndexNum.Value))
                 throw new InvalidOperationException("ENUM_ITEM_INDEX_CONFLICT");
+            if (_groups.Values.Any(g => g.ItemsIndexNums.Contains(indexNum)))
+                throw new InvalidOperationException("ENUM_ITEM_IN_USE");
             _itemsByIndex.Remove(indexNum);
             indexNum = newIndexNum.Value;
             _itemsByIndex[indexNum] = name ?? existingName;

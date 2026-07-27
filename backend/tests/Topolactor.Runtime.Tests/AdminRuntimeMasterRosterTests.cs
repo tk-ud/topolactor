@@ -155,6 +155,93 @@ public class AdminRuntimeMasterRosterTests
     }
 
     [Fact]
+    public async Task EnumDictionaryUpdateItem_IndexChangeOnUnaffiliatedItem_Persists()
+    {
+        var (runtime, enumRepo) = CreateRuntimeWithEnumRepo();
+        await enumRepo.CreateItemAsync("orphan_item", 501, CancellationToken.None);
+        var updateVector = new OperationVector(
+            "admin", "enum_dictionary", "update_item", null, "admin",
+            JsonSerializer.SerializeToElement(new { indexNum = 501, newIndexNum = 502, confirmed = true }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(updateVector);
+        Assert.Null(error);
+        Assert.NotNull(data);
+        Assert.Equal(502, (await enumRepo.GetItemAsync(502, CancellationToken.None))!.IndexNum);
+        Assert.Null(await enumRepo.GetItemAsync(501, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task EnumDictionaryUpdateItem_IndexChangeWhileReferencedInGroup_FailsCloseOnDryRunAndConfirmed()
+    {
+        // indexNum 10 ("active") is a member of the seeded user_status group -- enum.group_items.
+        // enum_index_num REFERENCES enum.items(index_num) with no ON UPDATE CASCADE, so moving its
+        // index_num must fail close (both dryRun and confirmed=true) rather than raise a raw
+        // ForeignKeyViolation or silently orphan the group_items row.
+        var runtime = CreateRuntime();
+        var dryRunVector = new OperationVector(
+            "admin", "enum_dictionary", "update_item", null, "admin",
+            JsonSerializer.SerializeToElement(new { indexNum = 10, newIndexNum = 999, dryRun = true }),
+            null);
+        var (dryRunData, dryRunError) = await runtime.ExecuteDataAsync(dryRunVector);
+        Assert.Null(dryRunData);
+        Assert.NotNull(dryRunError);
+        Assert.Equal("ENUM_ITEM_IN_USE", dryRunError!.Code);
+
+        var confirmedVector = new OperationVector(
+            "admin", "enum_dictionary", "update_item", null, "admin",
+            JsonSerializer.SerializeToElement(new { indexNum = 10, newIndexNum = 999, confirmed = true }),
+            null);
+        var (data, error) = await runtime.ExecuteDataAsync(confirmedVector);
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("ENUM_ITEM_IN_USE", error!.Code);
+    }
+
+    [Fact]
+    public async Task EnumDictionaryUpdateItem_RenameOnlyWhileReferencedInGroup_StillPersists()
+    {
+        // Renaming (no index_num change) does not touch the enum.group_items FK, so it must remain
+        // allowed for group members -- only an actual index_num change is blocked.
+        var runtime = CreateRuntime();
+        var updateVector = new OperationVector(
+            "admin", "enum_dictionary", "update_item", null, "admin",
+            JsonSerializer.SerializeToElement(new { indexNum = 10, name = "active_renamed", confirmed = true }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(updateVector);
+        Assert.Null(error);
+        Assert.NotNull(data);
+        Assert.Contains("active_renamed", data!.Value.GetRawText());
+    }
+
+    [Fact]
+    public async Task EnumDictionaryUpdateItem_IndexChangeToExistingIndex_FailsCloseOnDryRunAndConfirmed()
+    {
+        var (runtime, enumRepo) = CreateRuntimeWithEnumRepo();
+        await enumRepo.CreateItemAsync("orphan_a", 503, CancellationToken.None);
+        await enumRepo.CreateItemAsync("orphan_b", 504, CancellationToken.None);
+
+        var dryRunVector = new OperationVector(
+            "admin", "enum_dictionary", "update_item", null, "admin",
+            JsonSerializer.SerializeToElement(new { indexNum = 503, newIndexNum = 504, dryRun = true }),
+            null);
+        var (dryRunData, dryRunError) = await runtime.ExecuteDataAsync(dryRunVector);
+        Assert.Null(dryRunData);
+        Assert.NotNull(dryRunError);
+        Assert.Equal("ENUM_ITEM_INDEX_CONFLICT", dryRunError!.Code);
+
+        var confirmedVector = new OperationVector(
+            "admin", "enum_dictionary", "update_item", null, "admin",
+            JsonSerializer.SerializeToElement(new { indexNum = 503, newIndexNum = 504, confirmed = true }),
+            null);
+        var (data, error) = await runtime.ExecuteDataAsync(confirmedVector);
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("ENUM_ITEM_INDEX_CONFLICT", error!.Code);
+    }
+
+    [Fact]
     public async Task EnumDictionaryUpdateGroup_Nonexistent_FailsClose()
     {
         var runtime = CreateRuntime();

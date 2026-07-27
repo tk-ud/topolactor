@@ -537,6 +537,21 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         Assert.False(referencedDeleteWrite.Success);
         Assert.Contains(referencedDeleteWrite.Errors, e => e.Code == "ENUM_ITEM_IN_USE");
 
+        // demo_active (index_num=1) is a real member of demo_status -- changing its index_num must
+        // fail close the same way (enum.group_items.enum_index_num REFERENCES enum.items(index_num)
+        // with no ON UPDATE CASCADE, db/enum_tables.sql). Renaming (no index_num change, verified via
+        // the update_item write-manifest round trip test below) remains allowed for group members;
+        // this proves specifically the index_num-change path fails close against a real
+        // ForeignKeyViolation rather than leaking a raw PostgresException, dryRun and confirmed alike.
+        var referencedIndexChangeDryRun = await DispatchAsync("update_item",
+            new { indexNum = 1, newIndexNum = 88_888, dryRun = true });
+        Assert.False(referencedIndexChangeDryRun.Success);
+        Assert.Contains(referencedIndexChangeDryRun.Errors, e => e.Code == "ENUM_ITEM_IN_USE");
+        var referencedIndexChangeWrite = await DispatchAsync("update_item",
+            new { indexNum = 1, newIndexNum = 88_888, confirmed = true });
+        Assert.False(referencedIndexChangeWrite.Success);
+        Assert.Contains(referencedIndexChangeWrite.Errors, e => e.Code == "ENUM_ITEM_IN_USE");
+
         const string demoStatusGroupId = "22222222-2222-2222-2222-222222222201";
 
         // Duplicate membership within the same enumIndexNums array must fail close, dryRun and
@@ -569,6 +584,16 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         Assert.True(afterResponse.Success, string.Join(";", afterResponse.Errors.Select(e => e.Code + ":" + e.Message)));
         var afterText = afterResponse.Emission!.Data!.Value.GetRawText();
         Assert.Contains("\"itemsIndexNums\":[1,2,3]", afterText);
+
+        // demo_active's own row (enum.items, index_num=1) is unchanged too -- the failed index-change
+        // attempts above did not partially move it before failing close.
+        await using (var conn = new NpgsqlConnection(cs))
+        {
+            await conn.OpenAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT name FROM enum.items WHERE index_num = 1";
+            Assert.Equal("demo_active", (string?)await cmd.ExecuteScalarAsync());
+        }
     }
 
     [Fact]
@@ -602,19 +627,48 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
     /// SPECIFIC seed content itself (not just the generic mechanism): every write manifest
     /// structurally resolves preview_button/confirm_button to a real componentId, both share the
     /// SAME wiringKind/target_ref (the layout's one canonical operation), and each carries a
-    /// distinct, real dispatchPayloadFromByTrigger (dryRun vs confirmed) -- read from the actual
-    /// dispatched Emission, not a hand-built map.
+    /// distinct, real dispatchPayloadFromByTrigger (dryRun vs confirmed AND every business field
+    /// the action's own DTO needs) -- read from the actual dispatched Emission, not a hand-built
+    /// map. expectedFieldKeys/expectedFieldSources are parallel arrays (business fields only,
+    /// dryRun/confirmed asserted separately below) so every action's exact seed-declared field set
+    /// is pinned per action (PR #600 review round 8: create_item's name-only field set --
+    /// indexNum is intentionally NOT seed-wired, auto-assigned server-side when absent, same as
+    /// create_group's groupName-only set -- and update_item's indexNum+name-only set -- newIndexNum
+    /// is intentionally NOT seed-wired, so index-renumbering is reachable only via a direct
+    /// dispatch payload today, not through this seeded form -- are asserted explicitly rather than
+    /// silently assumed).
+    ///
+    /// Proven/unproven boundary (this is a backend Integration test, no browser/DOM available
+    /// here): this test proves (a) the seed's dispatchPayloadFromByTrigger structurally declares
+    /// exactly these node:&lt;id&gt;.value sources for exactly these keys, and (b) dispatching a
+    /// payload built with these exact key names reaches AdminRuntime and mutates/previews
+    /// correctly (see the per-action round-trip tests below, which use
+    /// DispatchViaOwnWriteManifestAsync with these same key names). It does NOT prove that a real
+    /// browser's DOM input events are actually tracked into these exact node ids and forwarded
+    /// through payloadFromResolver at runtime -- that generic, seed-independent mechanism
+    /// (liveNodeValueTracker / payloadFromResolver / emitBoundEvent Lane 2) is covered by
+    /// frontend/tests/payloadFromResolver.test.ts, runtimeComponentFactory.test.ts, and
+    /// renderEmissionPropBindings.test.ts. Together these compose into full reachability, but no
+    /// single test in this repository exercises the whole DOM-to-database path in one run; this
+    /// test never uses the word "end-to-end" for that reason.
     /// </summary>
     [Theory]
-    [InlineData("00000000-0000-0000-0000-0000000ae210", "create_group")]
-    [InlineData("00000000-0000-0000-0000-0000000ae220", "update_group")]
-    [InlineData("00000000-0000-0000-0000-0000000ae230", "delete_group")]
-    [InlineData("00000000-0000-0000-0000-0000000ae240", "create_item")]
-    [InlineData("00000000-0000-0000-0000-0000000ae250", "update_item")]
-    [InlineData("00000000-0000-0000-0000-0000000ae260", "delete_item")]
-    [InlineData("00000000-0000-0000-0000-0000000ae270", "set_group_items")]
+    [InlineData("00000000-0000-0000-0000-0000000ae210", "create_group",
+        new[] { "groupName" }, new[] { "node:group_name_field.value" })]
+    [InlineData("00000000-0000-0000-0000-0000000ae220", "update_group",
+        new[] { "groupId", "groupName" }, new[] { "node:group_id_field.value", "node:group_name_field.value" })]
+    [InlineData("00000000-0000-0000-0000-0000000ae230", "delete_group",
+        new[] { "groupId" }, new[] { "node:group_id_field.value" })]
+    [InlineData("00000000-0000-0000-0000-0000000ae240", "create_item",
+        new[] { "name" }, new[] { "node:item_name_field.value" })]
+    [InlineData("00000000-0000-0000-0000-0000000ae250", "update_item",
+        new[] { "indexNum", "name" }, new[] { "node:item_index_field.value", "node:item_name_field.value" })]
+    [InlineData("00000000-0000-0000-0000-0000000ae260", "delete_item",
+        new[] { "indexNum" }, new[] { "node:item_index_field.value" })]
+    [InlineData("00000000-0000-0000-0000-0000000ae270", "set_group_items",
+        new[] { "groupId", "enumIndexNums" }, new[] { "node:group_id_field.value", "node:items_csv_field.value" })]
     public async Task DispatchAsync_EnumDictionaryWriteManifest_ResolvesSinglePurposeLayout_WithDistinctPreviewAndConfirmPayloads(
-        string manifestId, string action)
+        string manifestId, string action, string[] expectedFieldKeys, string[] expectedFieldSources)
     {
         var cs = GetConnectionString();
         if (cs is null) return;
@@ -652,6 +706,21 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         var confirmClick = confirmButton.DispatchPayloadFromByTrigger!.Value.GetProperty("click");
         Assert.Equal("literal:true", confirmClick.GetProperty("confirmed").GetString());
         Assert.False(confirmClick.TryGetProperty("dryRun", out _));
+
+        // Business fields: the SAME key set + node source on both buttons (only dryRun/confirmed
+        // differ between preview and confirm), and NO other keys beyond dryRun/confirmed/these.
+        Assert.Equal(expectedFieldKeys.Length, expectedFieldSources.Length);
+        for (var i = 0; i < expectedFieldKeys.Length; i++)
+        {
+            Assert.Equal(expectedFieldSources[i], previewClick.GetProperty(expectedFieldKeys[i]).GetString());
+            Assert.Equal(expectedFieldSources[i], confirmClick.GetProperty(expectedFieldKeys[i]).GetString());
+        }
+        var expectedPreviewKeys = expectedFieldKeys.Append("dryRun").OrderBy(k => k, StringComparer.Ordinal).ToArray();
+        var actualPreviewKeys = previewClick.EnumerateObject().Select(p => p.Name).OrderBy(k => k, StringComparer.Ordinal).ToArray();
+        Assert.Equal(expectedPreviewKeys, actualPreviewKeys);
+        var expectedConfirmKeys = expectedFieldKeys.Append("confirmed").OrderBy(k => k, StringComparer.Ordinal).ToArray();
+        var actualConfirmKeys = confirmClick.EnumerateObject().Select(p => p.Name).OrderBy(k => k, StringComparer.Ordinal).ToArray();
+        Assert.Equal(expectedConfirmKeys, actualConfirmKeys);
     }
 
     /// <summary>
