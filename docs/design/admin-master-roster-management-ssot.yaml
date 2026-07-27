@@ -116,7 +116,19 @@ admin_master_roster_management_ssot:
       operation: operation_kind
       before: before_state_or_diff_json
       after: after_state_or_diff_json
-      changed_fields: JSON envelope array
+      changed_fields: >-
+        logs.diff.changed_fields_json (generic JSONB envelope column, additive beyond
+        sql-attention-logs-ssot.yaml's required_identity_fields floor). Shape:
+        {"schemaVersion":1,"changedFields":[{"name","type","before","after"},...]}.
+        Resolved 2026-07-27 (PR #600 review, admin-master-roster-audit-envelope-contract-gap
+        Bundle) -- AdminMasterRosterAudit.AppendAsync previously built this envelope but never
+        passed it to AppendLogsDiffAsync (dead code), and logs.diff had no column for it; both
+        are now implemented and used by all 10 existing AppendAsync call sites (enum_dictionary's
+        7 write actions, auth_users:create/update/delete). See AuditChangedField
+        (backend/runtime/AdminMasterRosterAudit.cs), AdminMasterRosterAuditTests.cs (unit proof of
+        the envelope shape), and AdminEnumHubRelationUiProjectionLiveDbTests.cs's per-action
+        GetChangedField assertions (live-Postgres persistence proof for the 7 enum_dictionary
+        actions).
       timestamp: observed_at
 
   admin_runtime_actions:

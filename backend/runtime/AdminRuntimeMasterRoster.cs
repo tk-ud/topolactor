@@ -127,7 +127,11 @@ public partial class AdminRuntime
             "create",
             null,
             created,
-            ["username", "approve", "status"],
+            [
+                new AuditChangedField("username", null, created.Username),
+                new AuditChangedField("approve", null, created.Approve),
+                new AuditChangedField("status", null, created.Status),
+            ],
             ct);
 
         return (JsonSerializer.SerializeToElement(created), null);
@@ -186,15 +190,17 @@ public partial class AdminRuntime
         if (updated is null)
             return (null, new ValidationError("AUTH_USER_NOT_FOUND", $"User {userId} was not found."));
 
-        var changed = new List<string>();
-        if (request.Username is not null) changed.Add("username");
-        if (request.Active.HasValue) changed.Add("active");
-        if (request.Approve.HasValue) changed.Add("approve");
-        if (request.Status is not null) changed.Add("status");
-        if (request.SuspendedFrom.HasValue || request.ClearSuspendedFrom) changed.Add("suspended_from");
-        if (request.SuspendedUntil.HasValue || request.ClearSuspendedUntil) changed.Add("suspended_until");
-        if (request.StateNote is not null) changed.Add("state_note");
-        if (request.RoleName is not null) changed.Add("role");
+        var changed = new List<AuditChangedField>();
+        if (request.Username is not null) changed.Add(new AuditChangedField("username", before.Username, updated.Username));
+        if (request.Active.HasValue) changed.Add(new AuditChangedField("active", before.Active, updated.Active));
+        if (request.Approve.HasValue) changed.Add(new AuditChangedField("approve", before.Approve, updated.Approve));
+        if (request.Status is not null) changed.Add(new AuditChangedField("status", before.Status, updated.Status));
+        if (request.SuspendedFrom.HasValue || request.ClearSuspendedFrom)
+            changed.Add(new AuditChangedField("suspended_from", before.SuspendedFrom, updated.SuspendedFrom));
+        if (request.SuspendedUntil.HasValue || request.ClearSuspendedUntil)
+            changed.Add(new AuditChangedField("suspended_until", before.SuspendedUntil, updated.SuspendedUntil));
+        if (request.StateNote is not null) changed.Add(new AuditChangedField("state_note", before.StateNote, updated.StateNote));
+        if (request.RoleName is not null) changed.Add(new AuditChangedField("role", before.Role, updated.Role));
 
         await AdminMasterRosterAudit.AppendAsync(
             _sqlAttentionLogsRepository,
@@ -232,7 +238,7 @@ public partial class AdminRuntime
             "delete",
             before,
             null,
-            ["user_id"],
+            [new AuditChangedField("user_id", before.UserId, null)],
             ct);
         return (JsonSerializer.SerializeToElement(new { ok = true, userId = userId.Value }), null);
     }
@@ -297,7 +303,8 @@ public partial class AdminRuntime
             return (null, new ValidationError("ENUM_GROUP_INDEX_CONFLICT", $"indexNum {request.IndexNum} is already in use."));
         }
         await AdminMasterRosterAudit.AppendAsync(_sqlAttentionLogsRepository, ResolveAuditActor(vector),
-            "enum.groups", created.GroupId.ToString(), "create", null, created, ["group_name"], ct);
+            "enum.groups", created.GroupId.ToString(), "create", null, created,
+            [new AuditChangedField("group_name", null, created.GroupName)], ct);
         return (JsonSerializer.SerializeToElement(created), null);
     }
 
@@ -347,7 +354,11 @@ public partial class AdminRuntime
         if (updated is null)
             return (null, new ValidationError("ENUM_GROUP_NOT_FOUND", $"Enum group {groupId} was not found."));
         await AdminMasterRosterAudit.AppendAsync(_sqlAttentionLogsRepository, ResolveAuditActor(vector),
-            "enum.groups", groupId.ToString(), "update", before, updated, ["group_name", "index_num"], ct);
+            "enum.groups", groupId.ToString(), "update", before, updated,
+            [
+                new AuditChangedField("group_name", before.GroupName, updated.GroupName),
+                new AuditChangedField("index_num", before.IndexNum, updated.IndexNum),
+            ], ct);
         return (JsonSerializer.SerializeToElement(updated), null);
     }
 
@@ -392,7 +403,8 @@ public partial class AdminRuntime
         }
 
         await AdminMasterRosterAudit.AppendAsync(_sqlAttentionLogsRepository, ResolveAuditActor(vector),
-            "enum.groups", groupId.ToString(), "delete", before, null, ["group_id"], ct);
+            "enum.groups", groupId.ToString(), "delete", before, null,
+            [new AuditChangedField("group_id", before.GroupId, null)], ct);
         return (JsonSerializer.SerializeToElement(new { ok = true, groupId }), null);
     }
 
@@ -432,7 +444,8 @@ public partial class AdminRuntime
             return (null, new ValidationError("ENUM_ITEM_INDEX_CONFLICT", $"indexNum {request.IndexNum} is already in use."));
         }
         await AdminMasterRosterAudit.AppendAsync(_sqlAttentionLogsRepository, ResolveAuditActor(vector),
-            "enum.items", created.IndexNum.ToString(), "create", null, created, ["name"], ct);
+            "enum.items", created.IndexNum.ToString(), "create", null, created,
+            [new AuditChangedField("name", null, created.Name)], ct);
         return (JsonSerializer.SerializeToElement(created), null);
     }
 
@@ -495,7 +508,11 @@ public partial class AdminRuntime
         if (updated is null)
             return (null, new ValidationError("ENUM_ITEM_NOT_FOUND", $"Enum item index {request.IndexNum} was not found."));
         await AdminMasterRosterAudit.AppendAsync(_sqlAttentionLogsRepository, ResolveAuditActor(vector),
-            "enum.items", updated.IndexNum.ToString(), "update", before, updated, ["name", "index_num"], ct);
+            "enum.items", updated.IndexNum.ToString(), "update", before, updated,
+            [
+                new AuditChangedField("name", before.Name, updated.Name),
+                new AuditChangedField("index_num", before.IndexNum, updated.IndexNum),
+            ], ct);
         return (JsonSerializer.SerializeToElement(updated), null);
     }
 
@@ -539,7 +556,8 @@ public partial class AdminRuntime
         if (!deleted)
             return (null, new ValidationError("ENUM_ITEM_NOT_FOUND", $"Enum item index {request.IndexNum} was not found."));
         await AdminMasterRosterAudit.AppendAsync(_sqlAttentionLogsRepository, ResolveAuditActor(vector),
-            "enum.items", request.IndexNum.ToString(), "delete", before, null, ["index_num"], ct);
+            "enum.items", request.IndexNum.ToString(), "delete", before, null,
+            [new AuditChangedField("index_num", before.IndexNum, null)], ct);
         return (JsonSerializer.SerializeToElement(new { ok = true, indexNum = request.IndexNum }), null);
     }
 
@@ -594,7 +612,8 @@ public partial class AdminRuntime
         if (detail is null)
             return (null, new ValidationError("ENUM_GROUP_NOT_FOUND", $"Enum group {groupId} was not found."));
         await AdminMasterRosterAudit.AppendAsync(_sqlAttentionLogsRepository, ResolveAuditActor(vector),
-            "enum.group_items", groupId.ToString(), "update", before, detail, ["itemsIndexNums"], ct);
+            "enum.group_items", groupId.ToString(), "update", before, detail,
+            [new AuditChangedField("itemsIndexNums", before.ItemsIndexNums, detail.ItemsIndexNums)], ct);
         return (JsonSerializer.SerializeToElement(detail), null);
     }
 

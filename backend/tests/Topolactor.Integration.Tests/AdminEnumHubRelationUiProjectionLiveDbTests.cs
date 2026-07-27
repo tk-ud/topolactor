@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using Topolactor.Repository;
@@ -796,6 +797,11 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             Assert.Contains(groupName, write.After);
             Assert.Contains(createdGroupId!, write.After);
             Assert.Equal("client", write.Actor);
+
+            var groupNameField = GetChangedField(write.ChangedFieldsJson, "group_name");
+            Assert.Equal("string", groupNameField.GetProperty("type").GetString());
+            Assert.Equal(JsonValueKind.Null, groupNameField.GetProperty("before").ValueKind);
+            Assert.Equal(groupName, groupNameField.GetProperty("after").GetString());
         }
         finally
         {
@@ -948,34 +954,31 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
     }
 
     /// <summary>
-    /// Fetches the single most recent matching logs.diff row's before/after/actor, for asserting
-    /// actual diff content (not just row presence). Covers 3 of the 8 logical_envelope_fields
-    /// declared by docs/design/admin-master-roster-management-ssot.yaml logs_diff_admin_projection
-    /// beyond target_table/target_id/operation (already the query's own WHERE clause) and timestamp
-    /// (already bounded by the since-t0 window): before, after, actor. changed_fields is NOT
-    /// asserted here because it is not physically persisted anywhere today -- see
-    /// AdminMasterRosterAudit.AppendAsync's dead-code envelope (built, never passed to
-    /// AppendLogsDiffAsync) and logs.diff's own DDL (db/sql_attention_logs_tables.sql), which has no
-    /// column for it. That is a real, pre-existing, cross-cutting gap in the shared audit envelope --
-    /// one shared with auth_users:create/update/delete, not admin-enum-specific -- not something this
-    /// test can prove around; it is tracked as its own Bundle
-    /// (admin-master-roster-audit-envelope-contract-gap, .agent/tasks/todo.md), not fixed here.
+    /// Fetches the single most recent matching logs.diff row's before/after/actor/changed_fields_json,
+    /// for asserting actual diff content (not just row presence). Covers 4 of the 8
+    /// logical_envelope_fields declared by docs/design/admin-master-roster-management-ssot.yaml
+    /// logs_diff_admin_projection beyond target_table/target_id/operation (already the query's own
+    /// WHERE clause) and timestamp (already bounded by the since-t0 window): before, after, actor,
+    /// changed_fields. changed_fields is now physically persisted (2026-07-27, PR #600 review round
+    /// 7/8/9 audit-envelope resolution) as the generic changed_fields_json JSONB column
+    /// (db/sql_attention_logs_tables.sql) -- AdminMasterRosterAudit.AppendAsync's envelope (previously
+    /// built but never passed to AppendLogsDiffAsync) is now actually written; see
+    /// ChangedFieldsJson below and its per-action assertions.
     /// The returned Actor asserts only that actor_or_source is physically persisted with the value
     /// ResolveAuditActor actually resolved for this dispatch (here, the TriggerKind "client" fallback,
     /// since these test dispatches carry no JWT/AuthenticatedUserId) -- it is NOT a proof of
-    /// authenticated actor authority. AdminRuntimeMasterRoster.ResolveAuditActor's own fallback chain
-    /// (AuthenticatedUserId ?? ContextUserId ?? TriggerKind) contradicts its adjacent code comment
-    /// ("ContextUserId ... must never be trusted as an audit actor" -- yet the fallback uses it
-    /// anyway), a separate pre-existing gap tracked in the same Bundle above, not resolved here.
+    /// authenticated actor authority (a separate, already-resolved gap -- see ResolveAuditActor's own
+    /// comment in AdminRuntimeMasterRoster.cs referencing auth-db-session-credential-ssot.yaml).
     /// </summary>
-    private static async Task<(string Before, string After, string? Actor)> ReadLatestLogsDiffAsync(
+    private static async Task<(string Before, string After, string? Actor, string ChangedFieldsJson)> ReadLatestLogsDiffAsync(
         string cs, string physicalTableName, string recordId, string operationKind, DateTimeOffset since)
     {
         await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            SELECT before_state_or_diff_json::text, after_state_or_diff_json::text, actor_or_source
+            SELECT before_state_or_diff_json::text, after_state_or_diff_json::text, actor_or_source,
+                   changed_fields_json::text
             FROM logs.diff
             WHERE source_set_id = 'admin_master_roster'
               AND physical_table_name = @t
@@ -990,7 +993,24 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         cmd.Parameters.AddWithValue("since", since);
         await using var reader = await cmd.ExecuteReaderAsync();
         Assert.True(await reader.ReadAsync(), $"expected a logs.diff row for {physicalTableName}/{recordId}/{operationKind} since {since:o}");
-        return (reader.GetString(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2));
+        return (reader.GetString(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2), reader.GetString(3));
+    }
+
+    /// <summary>
+    /// Parses a persisted changed_fields_json envelope and returns the named field entry (cloned so
+    /// it survives the backing JsonDocument's disposal). Asserts schemaVersion=1 (the current
+    /// AdminMasterRosterAudit envelope contract) as a side effect on every call.
+    /// </summary>
+    private static JsonElement GetChangedField(string changedFieldsJson, string name)
+    {
+        using var doc = JsonDocument.Parse(changedFieldsJson);
+        Assert.Equal(1, doc.RootElement.GetProperty("schemaVersion").GetInt32());
+        foreach (var field in doc.RootElement.GetProperty("changedFields").EnumerateArray())
+        {
+            if (field.GetProperty("name").GetString() == name)
+                return field.Clone();
+        }
+        throw new Xunit.Sdk.XunitException($"changedFields entry '{name}' not found in {changedFieldsJson}");
     }
 
     /// <summary>
@@ -1050,6 +1070,10 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             var diff = await ReadLatestLogsDiffAsync(cs, "enum.groups", groupId!, "update", t0);
             Assert.Contains(originalName, diff.Before);
             Assert.Contains(renamedName, diff.After);
+
+            var groupNameField = GetChangedField(diff.ChangedFieldsJson, "group_name");
+            Assert.Equal(originalName, groupNameField.GetProperty("before").GetString());
+            Assert.Equal(renamedName, groupNameField.GetProperty("after").GetString());
             Assert.Equal("client", diff.Actor);
         }
         finally
@@ -1118,6 +1142,11 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             Assert.Contains(groupName, diff.Before);
             Assert.Equal("{}", diff.After);
             Assert.Equal("client", diff.Actor);
+
+            var groupIdField = GetChangedField(diff.ChangedFieldsJson, "group_id");
+            Assert.Equal("string", groupIdField.GetProperty("type").GetString());
+            Assert.Equal(deletedGroupId, groupIdField.GetProperty("before").GetString());
+            Assert.Equal(JsonValueKind.Null, groupIdField.GetProperty("after").ValueKind);
         }
         finally
         {
@@ -1188,6 +1217,10 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             Assert.Equal("{}", diff.Before);
             Assert.Contains(name, diff.After);
             Assert.Equal("client", diff.Actor);
+
+            var nameField = GetChangedField(diff.ChangedFieldsJson, "name");
+            Assert.Equal(JsonValueKind.Null, nameField.GetProperty("before").ValueKind);
+            Assert.Equal(name, nameField.GetProperty("after").GetString());
         }
         finally
         {
@@ -1257,6 +1290,10 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             Assert.Contains(originalName, diff.Before);
             Assert.Contains(renamedName, diff.After);
             Assert.Equal("client", diff.Actor);
+
+            var nameField = GetChangedField(diff.ChangedFieldsJson, "name");
+            Assert.Equal(originalName, nameField.GetProperty("before").GetString());
+            Assert.Equal(renamedName, nameField.GetProperty("after").GetString());
         }
         finally
         {
@@ -1323,6 +1360,11 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             Assert.Contains(name, diff.Before);
             Assert.Equal("{}", diff.After);
             Assert.Equal("client", diff.Actor);
+
+            var indexNumField = GetChangedField(diff.ChangedFieldsJson, "index_num");
+            Assert.Equal("number", indexNumField.GetProperty("type").GetString());
+            Assert.Equal(indexNum, indexNumField.GetProperty("before").GetInt32());
+            Assert.Equal(JsonValueKind.Null, indexNumField.GetProperty("after").ValueKind);
         }
         finally
         {
@@ -1420,6 +1462,13 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
                     new[] { 10, 11 },
                     afterDoc.RootElement.GetProperty("itemsIndexNums").EnumerateArray().Select(e => e.GetInt32()));
             Assert.Equal("client", diff.Actor);
+
+            var itemsField = GetChangedField(diff.ChangedFieldsJson, "itemsIndexNums");
+            Assert.Equal("object", itemsField.GetProperty("type").GetString());
+            Assert.Empty(itemsField.GetProperty("before").EnumerateArray());
+            Assert.Equal(
+                new[] { 10, 11 },
+                itemsField.GetProperty("after").EnumerateArray().Select(e => e.GetInt32()));
         }
         finally
         {

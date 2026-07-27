@@ -449,4 +449,129 @@ public class AdminRuntimeMasterRosterTests
             authMasterRepository: new InMemoryAuthMasterRepository());
         return (runtime, enumRepo);
     }
+
+    // Recording SqlAttentionLogsRepository double, wired so auth_users:create/update/delete's
+    // AdminMasterRosterAudit.AppendAsync call actually builds and captures its changed_fields_json
+    // envelope (CreateRuntimeWithEnumRepo's runtime leaves this null, so AppendAsync's fail-close
+    // returns before building anything -- these 3 call sites' AuditChangedField wiring was otherwise
+    // unproven by any test).
+    private sealed class RecordingSqlAttentionLogsRepository()
+        : SqlAttentionLogsRepository(NullLogger<SqlAttentionLogsRepository>.Instance, "test-double")
+    {
+        public readonly List<LogsDiffAppendRequest> Requests = [];
+
+        public override Task AppendLogsDiffAsync(LogsDiffAppendRequest request, CancellationToken ct = default)
+        {
+            Requests.Add(request);
+            return Task.CompletedTask;
+        }
+    }
+
+    private static (AdminRuntime runtime, InMemoryAuthMasterRepository authRepo, RecordingSqlAttentionLogsRepository logsRepo)
+        CreateRuntimeWithAuditCapture(IEnumerable<AuthUserRosterDto>? seedUsers = null)
+    {
+        var ctxRepo = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "test-double");
+        var topoRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
+        var topoVector = new TopologyVectorRuntime(NullLogger<TopologyVectorRuntime>.Instance, ctxRepo);
+        var registrar = new RegistrarValidationService(
+            NullLogger<RegistrarValidationService>.Instance, topoRepo, topoVector);
+        var uiRepo = new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double");
+        var pkg = new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, uiRepo);
+        var authRepo = new InMemoryAuthMasterRepository(seedUsers);
+        var logsRepo = new RecordingSqlAttentionLogsRepository();
+        var runtime = new AdminRuntime(
+            NullLogger<AdminRuntime>.Instance,
+            ctxRepo,
+            registrar,
+            pkg,
+            uiRepo,
+            authMasterRepository: authRepo,
+            sqlAttentionLogsRepository: logsRepo);
+        return (runtime, authRepo, logsRepo);
+    }
+
+    [Fact]
+    public async Task AuthUsersCreate_PersistsChangedFieldsEnvelope_WithUsernameApproveStatus()
+    {
+        var (runtime, _, logsRepo) = CreateRuntimeWithAuditCapture();
+        var vector = new OperationVector(
+            "admin", "auth_users", "create", null, "admin",
+            JsonSerializer.SerializeToElement(new
+            {
+                username = "audit_proof_create",
+                password = "secret123",
+                approve = true,
+                status = (string?)null,
+            }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+        Assert.Null(error);
+        Assert.NotNull(data);
+
+        var request = Assert.Single(logsRepo.Requests);
+        Assert.Equal("auth.users", request.PhysicalTableName);
+        Assert.Equal("create", request.OperationKind);
+        using var doc = JsonDocument.Parse(request.ChangedFieldsJson!);
+        var fields = doc.RootElement.GetProperty("changedFields");
+        var byName = fields.EnumerateArray().ToDictionary(f => f.GetProperty("name").GetString()!);
+        Assert.Equal(JsonValueKind.Null, byName["username"].GetProperty("before").ValueKind);
+        Assert.Equal("audit_proof_create", byName["username"].GetProperty("after").GetString());
+        Assert.True(byName["approve"].GetProperty("after").GetBoolean());
+    }
+
+    [Fact]
+    public async Task AuthUsersUpdate_PersistsChangedFieldsEnvelope_WithBeforeAndAfterPerField()
+    {
+        var existing = new AuthUserRosterDto(
+            Guid.NewGuid(), "audit_proof_before", true, true, "active",
+            null, null, null, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, "user");
+        var (runtime, _, logsRepo) = CreateRuntimeWithAuditCapture([existing]);
+        var vector = new OperationVector(
+            "admin", "auth_users", "update", null, "admin",
+            JsonSerializer.SerializeToElement(new
+            {
+                userId = existing.UserId.ToString(),
+                username = "audit_proof_after",
+            }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+        Assert.Null(error);
+        Assert.NotNull(data);
+
+        var request = Assert.Single(logsRepo.Requests);
+        Assert.Equal("update", request.OperationKind);
+        using var doc = JsonDocument.Parse(request.ChangedFieldsJson!);
+        var fields = doc.RootElement.GetProperty("changedFields");
+        var byName = fields.EnumerateArray().ToDictionary(f => f.GetProperty("name").GetString()!);
+        Assert.Single(byName); // only username was in the request payload
+        Assert.Equal("audit_proof_before", byName["username"].GetProperty("before").GetString());
+        Assert.Equal("audit_proof_after", byName["username"].GetProperty("after").GetString());
+    }
+
+    [Fact]
+    public async Task AuthUsersDelete_PersistsChangedFieldsEnvelope_WithUserIdBeforeAndNullAfter()
+    {
+        var existing = new AuthUserRosterDto(
+            Guid.NewGuid(), "audit_proof_delete", true, true, "active",
+            null, null, null, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, "user");
+        var (runtime, _, logsRepo) = CreateRuntimeWithAuditCapture([existing]);
+        var vector = new OperationVector(
+            "admin", "auth_users", "delete", null, "admin",
+            JsonSerializer.SerializeToElement(new { userId = existing.UserId.ToString() }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+        Assert.Null(error);
+        Assert.NotNull(data);
+
+        var request = Assert.Single(logsRepo.Requests);
+        Assert.Equal("delete", request.OperationKind);
+        using var doc = JsonDocument.Parse(request.ChangedFieldsJson!);
+        var field = doc.RootElement.GetProperty("changedFields")[0];
+        Assert.Equal("user_id", field.GetProperty("name").GetString());
+        Assert.Equal(existing.UserId.ToString(), field.GetProperty("before").GetString());
+        Assert.Equal(JsonValueKind.Null, field.GetProperty("after").ValueKind);
+    }
 }
