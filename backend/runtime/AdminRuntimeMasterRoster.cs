@@ -262,6 +262,9 @@ public partial class AdminRuntime
         var request = DeserializePayload<EnumDictionaryCreateGroupRequestDto>(vector.Payload);
         if (request is null || string.IsNullOrWhiteSpace(request.GroupName))
             return (null, new ValidationError("ENUM_GROUP_PAYLOAD_REQUIRED", "groupName is required."));
+        if (request.IndexNum.HasValue &&
+            (await _enumDictionaryRepository.ListGroupsAsync(ct)).Any(g => g.IndexNum == request.IndexNum.Value))
+            return (null, new ValidationError("ENUM_GROUP_INDEX_CONFLICT", $"indexNum {request.IndexNum} is already in use."));
 
         if (IsTruthyPayloadFlag(vector.Payload, "dryRun"))
         {
@@ -277,7 +280,15 @@ public partial class AdminRuntime
             return (null, new ValidationError("ENUM_GROUP_WRITE_NOT_CONFIRMED",
                 "Write requires payload.confirmed=true after an explicit user confirmation step."));
 
-        var created = await _enumDictionaryRepository.CreateGroupAsync(request.GroupName.Trim(), request.IndexNum, ct);
+        EnumDictionaryGroupDto created;
+        try
+        {
+            created = await _enumDictionaryRepository.CreateGroupAsync(request.GroupName.Trim(), request.IndexNum, ct);
+        }
+        catch (InvalidOperationException)
+        {
+            return (null, new ValidationError("ENUM_GROUP_INDEX_CONFLICT", $"indexNum {request.IndexNum} is already in use."));
+        }
         await AdminMasterRosterAudit.AppendAsync(_sqlAttentionLogsRepository, ResolveAuditActor(vector),
             "enum.groups", created.GroupId.ToString(), "create", null, created, ["group_name"], ct);
         return (JsonSerializer.SerializeToElement(created), null);
@@ -294,6 +305,9 @@ public partial class AdminRuntime
         var before = await _enumDictionaryRepository.GetGroupDetailAsync(groupId, ct);
         if (before is null)
             return (null, new ValidationError("ENUM_GROUP_NOT_FOUND", $"Enum group {groupId} was not found."));
+        if (request.IndexNum.HasValue && request.IndexNum.Value != before.IndexNum &&
+            (await _enumDictionaryRepository.ListGroupsAsync(ct)).Any(g => g.GroupId != groupId && g.IndexNum == request.IndexNum.Value))
+            return (null, new ValidationError("ENUM_GROUP_INDEX_CONFLICT", $"indexNum {request.IndexNum} is already in use."));
 
         if (IsTruthyPayloadFlag(vector.Payload, "dryRun"))
         {
@@ -314,7 +328,15 @@ public partial class AdminRuntime
             return (null, new ValidationError("ENUM_GROUP_WRITE_NOT_CONFIRMED",
                 "Write requires payload.confirmed=true after an explicit user confirmation step."));
 
-        var updated = await _enumDictionaryRepository.UpdateGroupAsync(groupId, request.GroupName?.Trim(), request.IndexNum, ct);
+        EnumDictionaryGroupDto? updated;
+        try
+        {
+            updated = await _enumDictionaryRepository.UpdateGroupAsync(groupId, request.GroupName?.Trim(), request.IndexNum, ct);
+        }
+        catch (InvalidOperationException)
+        {
+            return (null, new ValidationError("ENUM_GROUP_INDEX_CONFLICT", $"indexNum {request.IndexNum} is already in use."));
+        }
         if (updated is null)
             return (null, new ValidationError("ENUM_GROUP_NOT_FOUND", $"Enum group {groupId} was not found."));
         await AdminMasterRosterAudit.AppendAsync(_sqlAttentionLogsRepository, ResolveAuditActor(vector),
@@ -375,6 +397,9 @@ public partial class AdminRuntime
         var request = DeserializePayload<EnumDictionaryCreateItemRequestDto>(vector.Payload);
         if (request is null || string.IsNullOrWhiteSpace(request.Name))
             return (null, new ValidationError("ENUM_ITEM_PAYLOAD_REQUIRED", "name is required."));
+        if (request.IndexNum.HasValue &&
+            await _enumDictionaryRepository.GetItemAsync(request.IndexNum.Value, ct) is not null)
+            return (null, new ValidationError("ENUM_ITEM_INDEX_CONFLICT", $"indexNum {request.IndexNum} is already in use."));
 
         if (IsTruthyPayloadFlag(vector.Payload, "dryRun"))
         {
@@ -390,7 +415,15 @@ public partial class AdminRuntime
             return (null, new ValidationError("ENUM_ITEM_WRITE_NOT_CONFIRMED",
                 "Write requires payload.confirmed=true after an explicit user confirmation step."));
 
-        var created = await _enumDictionaryRepository.CreateItemAsync(request.Name.Trim(), request.IndexNum, ct);
+        EnumDictionaryItemDto created;
+        try
+        {
+            created = await _enumDictionaryRepository.CreateItemAsync(request.Name.Trim(), request.IndexNum, ct);
+        }
+        catch (InvalidOperationException)
+        {
+            return (null, new ValidationError("ENUM_ITEM_INDEX_CONFLICT", $"indexNum {request.IndexNum} is already in use."));
+        }
         await AdminMasterRosterAudit.AppendAsync(_sqlAttentionLogsRepository, ResolveAuditActor(vector),
             "enum.items", created.IndexNum.ToString(), "create", null, created, ["name"], ct);
         return (JsonSerializer.SerializeToElement(created), null);
@@ -404,6 +437,12 @@ public partial class AdminRuntime
         var request = DeserializePayload<EnumDictionaryUpdateItemRequestDto>(vector.Payload);
         if (request is null)
             return (null, new ValidationError("ENUM_ITEM_PAYLOAD_REQUIRED", "payload is required."));
+        var before = await _enumDictionaryRepository.GetItemAsync(request.IndexNum, ct);
+        if (before is null)
+            return (null, new ValidationError("ENUM_ITEM_NOT_FOUND", $"Enum item index {request.IndexNum} was not found."));
+        if (request.NewIndexNum.HasValue && request.NewIndexNum.Value != request.IndexNum &&
+            await _enumDictionaryRepository.GetItemAsync(request.NewIndexNum.Value, ct) is not null)
+            return (null, new ValidationError("ENUM_ITEM_INDEX_CONFLICT", $"indexNum {request.NewIndexNum} is already in use."));
 
         if (IsTruthyPayloadFlag(vector.Payload, "dryRun"))
         {
@@ -415,7 +454,7 @@ public partial class AdminRuntime
                 preview = new
                 {
                     indexNum = request.NewIndexNum ?? request.IndexNum,
-                    name = request.Name?.Trim(),
+                    name = request.Name?.Trim() ?? before.Name,
                 },
             }), null);
         }
@@ -423,12 +462,20 @@ public partial class AdminRuntime
             return (null, new ValidationError("ENUM_ITEM_WRITE_NOT_CONFIRMED",
                 "Write requires payload.confirmed=true after an explicit user confirmation step."));
 
-        var updated = await _enumDictionaryRepository.UpdateItemAsync(
-            request.IndexNum, request.Name?.Trim(), request.NewIndexNum, ct);
+        EnumDictionaryItemDto? updated;
+        try
+        {
+            updated = await _enumDictionaryRepository.UpdateItemAsync(
+                request.IndexNum, request.Name?.Trim(), request.NewIndexNum, ct);
+        }
+        catch (InvalidOperationException)
+        {
+            return (null, new ValidationError("ENUM_ITEM_INDEX_CONFLICT", $"indexNum {request.NewIndexNum} is already in use."));
+        }
         if (updated is null)
             return (null, new ValidationError("ENUM_ITEM_NOT_FOUND", $"Enum item index {request.IndexNum} was not found."));
         await AdminMasterRosterAudit.AppendAsync(_sqlAttentionLogsRepository, ResolveAuditActor(vector),
-            "enum.items", updated.IndexNum.ToString(), "update", null, updated, ["name", "index_num"], ct);
+            "enum.items", updated.IndexNum.ToString(), "update", before, updated, ["name", "index_num"], ct);
         return (JsonSerializer.SerializeToElement(updated), null);
     }
 
@@ -440,6 +487,11 @@ public partial class AdminRuntime
         var request = DeserializePayload<EnumDictionaryDeleteItemRequestDto>(vector.Payload);
         if (request is null)
             return (null, new ValidationError("ENUM_ITEM_PAYLOAD_REQUIRED", "indexNum is required."));
+        var before = await _enumDictionaryRepository.GetItemAsync(request.IndexNum, ct);
+        if (before is null)
+            return (null, new ValidationError("ENUM_ITEM_NOT_FOUND", $"Enum item index {request.IndexNum} was not found."));
+        if (await _enumDictionaryRepository.IsItemReferencedInGroupsAsync(request.IndexNum, ct))
+            return (null, new ValidationError("ENUM_ITEM_IN_USE", "Enum item is a member of an enum group."));
 
         if (IsTruthyPayloadFlag(vector.Payload, "dryRun"))
         {
@@ -455,11 +507,19 @@ public partial class AdminRuntime
             return (null, new ValidationError("ENUM_ITEM_WRITE_NOT_CONFIRMED",
                 "Write requires payload.confirmed=true after an explicit user confirmation step."));
 
-        var deleted = await _enumDictionaryRepository.DeleteItemAsync(request.IndexNum, ct);
+        bool deleted;
+        try
+        {
+            deleted = await _enumDictionaryRepository.DeleteItemAsync(request.IndexNum, ct);
+        }
+        catch (InvalidOperationException)
+        {
+            return (null, new ValidationError("ENUM_ITEM_IN_USE", "Enum item is a member of an enum group."));
+        }
         if (!deleted)
             return (null, new ValidationError("ENUM_ITEM_NOT_FOUND", $"Enum item index {request.IndexNum} was not found."));
         await AdminMasterRosterAudit.AppendAsync(_sqlAttentionLogsRepository, ResolveAuditActor(vector),
-            "enum.items", request.IndexNum.ToString(), "delete", null, null, ["index_num"], ct);
+            "enum.items", request.IndexNum.ToString(), "delete", before, null, ["index_num"], ct);
         return (JsonSerializer.SerializeToElement(new { ok = true, indexNum = request.IndexNum }), null);
     }
 
@@ -468,12 +528,19 @@ public partial class AdminRuntime
     {
         if (_enumDictionaryRepository is null)
             return (null, EnumDictionaryNotAvailable());
-        var request = DeserializePayload<EnumDictionarySetGroupItemsRequestDto>(vector.Payload);
-        if (request is null || !Guid.TryParse(request.GroupId, out var groupId))
-            return (null, new ValidationError("ENUM_GROUP_ID_MALFORMED", "groupId must be a valid UUID."));
+        if (!TryParseSetGroupItemsPayload(vector.Payload, out var groupId, out var enumIndexNums, out var parseError))
+            return (null, parseError);
         var before = await _enumDictionaryRepository.GetGroupDetailAsync(groupId, ct);
         if (before is null)
             return (null, new ValidationError("ENUM_GROUP_NOT_FOUND", $"Enum group {groupId} was not found."));
+        if (enumIndexNums.Count != enumIndexNums.Distinct().Count())
+            return (null, new ValidationError("ENUM_GROUP_ITEMS_DUPLICATE_MEMBERSHIP",
+                "enumIndexNums must not contain duplicate values."));
+        foreach (var indexNum in enumIndexNums)
+        {
+            if (await _enumDictionaryRepository.GetItemAsync(indexNum, ct) is null)
+                return (null, new ValidationError("ENUM_ITEM_NOT_FOUND", $"Enum item index {indexNum} was not found."));
+        }
 
         if (IsTruthyPayloadFlag(vector.Payload, "dryRun"))
         {
@@ -483,19 +550,107 @@ public partial class AdminRuntime
                 dryRun = true,
                 valid = true,
                 groupId,
-                preview = new { itemsIndexNums = request.EnumIndexNums },
+                preview = new { itemsIndexNums = enumIndexNums },
             }), null);
         }
         if (!IsTruthyPayloadFlag(vector.Payload, "confirmed"))
             return (null, new ValidationError("ENUM_GROUP_WRITE_NOT_CONFIRMED",
                 "Write requires payload.confirmed=true after an explicit user confirmation step."));
 
-        var detail = await _enumDictionaryRepository.SetGroupItemsAsync(groupId, request.EnumIndexNums, ct);
+        EnumDictionaryGroupDetailDto? detail;
+        try
+        {
+            detail = await _enumDictionaryRepository.SetGroupItemsAsync(groupId, enumIndexNums, ct);
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "ENUM_GROUP_ITEMS_DUPLICATE_MEMBERSHIP")
+        {
+            return (null, new ValidationError("ENUM_GROUP_ITEMS_DUPLICATE_MEMBERSHIP",
+                "enumIndexNums must not contain duplicate values."));
+        }
+        catch (InvalidOperationException)
+        {
+            return (null, new ValidationError("ENUM_ITEM_NOT_FOUND", "One or more enumIndexNums were not found."));
+        }
         if (detail is null)
             return (null, new ValidationError("ENUM_GROUP_NOT_FOUND", $"Enum group {groupId} was not found."));
         await AdminMasterRosterAudit.AppendAsync(_sqlAttentionLogsRepository, ResolveAuditActor(vector),
             "enum.group_items", groupId.ToString(), "update", before, detail, ["itemsIndexNums"], ct);
         return (JsonSerializer.SerializeToElement(detail), null);
+    }
+
+    // update_group_members (SSOT mutation intent) resolves to this same set_group_items action.
+    // enumIndexNums accepts either a native JSON array of numbers (the shape any programmatic
+    // caller / existing test uses) or a comma-separated string (e.g. "10,11,12") -- the shape a
+    // single seed-authored text field's tracked node value produces via the existing node:/
+    // literal: payloadFrom grammar, which has no array-typed source or CSV-to-array transform.
+    // This is ordinary backend request-shape leniency (mirrors IsTruthyPayloadFlag accepting a
+    // JSON string alongside a JSON boolean for the same reason), not a new frontend payload
+    // resolver or transform.
+    private static bool TryParseSetGroupItemsPayload(
+        JsonElement? payload, out Guid groupId, out IReadOnlyList<int> enumIndexNums, out ValidationError? error)
+    {
+        groupId = default;
+        enumIndexNums = [];
+        if (payload is not { ValueKind: JsonValueKind.Object } p)
+        {
+            error = new ValidationError("ENUM_GROUP_ID_MALFORMED", "groupId must be a valid UUID.");
+            return false;
+        }
+
+        if (!p.TryGetProperty("groupId", out var groupIdEl) ||
+            groupIdEl.ValueKind != JsonValueKind.String ||
+            !Guid.TryParse(groupIdEl.GetString(), out groupId))
+        {
+            error = new ValidationError("ENUM_GROUP_ID_MALFORMED", "groupId must be a valid UUID.");
+            return false;
+        }
+
+        if (!p.TryGetProperty("enumIndexNums", out var itemsEl))
+        {
+            error = new ValidationError("ENUM_GROUP_PAYLOAD_REQUIRED", "enumIndexNums is required.");
+            return false;
+        }
+
+        if (itemsEl.ValueKind == JsonValueKind.Array)
+        {
+            var list = new List<int>();
+            foreach (var el in itemsEl.EnumerateArray())
+            {
+                if (el.ValueKind != JsonValueKind.Number || !el.TryGetInt32(out var n))
+                {
+                    error = new ValidationError("ENUM_GROUP_PAYLOAD_REQUIRED", "enumIndexNums entries must be integers.");
+                    return false;
+                }
+                list.Add(n);
+            }
+            enumIndexNums = list;
+            error = null;
+            return true;
+        }
+
+        if (itemsEl.ValueKind == JsonValueKind.String)
+        {
+            var raw = itemsEl.GetString() ?? "";
+            var parts = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var list = new List<int>();
+            foreach (var part in parts)
+            {
+                if (!int.TryParse(part, out var n))
+                {
+                    error = new ValidationError("ENUM_GROUP_PAYLOAD_REQUIRED",
+                        $"enumIndexNums entry '{part}' is not an integer.");
+                    return false;
+                }
+                list.Add(n);
+            }
+            enumIndexNums = list;
+            error = null;
+            return true;
+        }
+
+        error = new ValidationError("ENUM_GROUP_PAYLOAD_REQUIRED",
+            "enumIndexNums must be an array of integers or a comma-separated string of integers.");
+        return false;
     }
 
     private static ValidationError EnumDictionaryNotAvailable() =>
@@ -513,12 +668,23 @@ public partial class AdminRuntime
         };
     }
 
+    private static readonly JsonSerializerOptions LenientNumberDeserializeOptions = new()
+    {
+        NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString,
+    };
+
+    // Numeric request fields (e.g. EnumDictionaryUpdateItemRequestDto.IndexNum) must tolerate a
+    // JSON string value, not only a JSON number: docs/design/ui-builder-preset-ecosystem-ssot.yaml
+    // payloadFrom_resolver_contract's node:/literal: sources always resolve to a JS string, so a
+    // seed-authored dispatchPayloadFromByTrigger binding for a numeric field produces a JSON
+    // string at the wire, never a JSON number. Same rationale as IsTruthyPayloadFlag above,
+    // generalized once here for every enum dictionary request DTO rather than per-field.
     private static T? DeserializePayload<T>(JsonElement? payload) where T : class
     {
         if (payload is null || payload.Value.ValueKind != JsonValueKind.Object) return null;
         try
         {
-            return JsonSerializer.Deserialize<T>(payload.Value.GetRawText());
+            return JsonSerializer.Deserialize<T>(payload.Value.GetRawText(), LenientNumberDeserializeOptions);
         }
         catch (JsonException)
         {

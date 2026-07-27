@@ -3530,36 +3530,45 @@ ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index)
 -- enum_table.
 --
 -- The WRITE side (create_item/update_item/delete_item/create_group/
--- update_group/delete_group/set_group_items -- all already
--- production-dispatcher-mapped on the backend, and as of 2026-07-27 all seven
--- also implement the mutation_confirmation_contract's preview_dictionary_delta
--- / validate_against_enum_authority / explicit_confirm / write / diff_log
--- stages via payload.dryRun/payload.confirmed -- see
--- backend/runtime/AdminRuntimeMasterRoster.cs and
--- docs/design/enum-dictionary-ssot.yaml fail_close.mutation_confirmation_contract_gate)
--- remains unwired from THIS seed's UI nodes. The transport lane and the
--- typed-value payload capture gap (remaining_write_payload_capture_gap) are
--- both resolved (2026-07-24, admin-runtime-operation-dispatch-lane-determination
--- Bundle) and proven generically -- what blocks THIS seed specifically is a
--- newly-identified (2026-07-27) architecture constraint: wiringKind/target_ref
--- (component_wiring_execution_lane, Lane 2) is a per-wiring-row (whole-layout)
--- binding, not a per-node one -- proven by this manifest's own read-circuit
--- wiring row, where enum_search/enum_group_filter/enum_table all inherit the
--- SAME target_ref uniformly. Node-level overriding only exists for Lane 3
--- (runtimeInteractions), which cannot carry an admin_runtime dispatch. Wiring
--- seven distinct write targets into this one layout therefore needs either a
--- new per-node target_ref override mechanism (not introduced without an
--- owner decision, same Governance NG boundary as
--- admin-runtime-operation-dispatch-lane-determination) or dedicated child
--- manifests per write operation (one canonical operation per layout, reusing
--- the existing hub_relations/hub_navigation:create navigation authoring this
--- manifest's own AdminEnumHubRelationUiProjectionLiveDbTests.cs already
--- proves) -- see .agent/tasks/todo.md admin-enum subBundle 実装記録
--- (2026-07-27 追記) for the full record and handoff. explicit_confirm remains
--- the only mutation-adjacent interaction wired here (enum_confirm_button's
--- internal_instance_wiring localStateMutation opening local confirm state, no
--- backend dispatch by definition) -- the enum_write_dispatch_gap Validation
--- record below is kept, describing this precise successor gap.
+-- update_group/delete_group/set_group_items) is now real and dispatched, but
+-- NOT from this manifest's own UI nodes -- component_wiring_execution_lane's
+-- wiringKind/target_ref (Lane 2) is a per-wiring-row (whole-layout) binding,
+-- not per-node (proven by this manifest's own read-circuit wiring row, where
+-- enum_search/enum_group_filter/enum_table all inherit the SAME
+-- list_groups target_ref uniformly), and docs/design/admin-uibuilder-ui-
+-- structure-wiring-ssot.yaml lane_storage_boundary
+-- remaining_write_payload_capture_gap already settled (2026-07-23) that the
+-- correct composition is "a single-purpose write layout, exactly like the
+-- read layout above" -- not a per-node target_ref override (never
+-- introduced). Each of the 7 write actions therefore has its OWN dedicated
+-- single-purpose manifest below this block
+-- (00000000-0000-0000-0000-0000000ae210/ae220/ae230/ae240/ae250/ae260/ae270),
+-- each with its own preview_button (dispatchPayloadFromByTrigger
+-- dryRun:literal:true) and confirm_button (confirmed:literal:true) sharing
+-- that layout's own admin_runtime target_ref -- reachable today via explicit
+-- ?manifest=<id> selection like ae200 itself, and provably reachable via
+-- hub_navigation:create from ae200
+-- (AdminEnumHubRelationUiProjectionLiveDbTests.cs
+-- DispatchAsync_AdminEnumManagementManifest_HubNavigationCreate_
+-- ToCreateGroupWriteManifest_ResolutionChainReflectsIt, the representative
+-- pattern for all 7 -- no hub_relations seed rows are authored here, same
+-- discipline as ae200 itself). Backend mutation_confirmation_contract
+-- (preview_dictionary_delta / validate_against_enum_authority /
+-- explicit_confirm / write / diff_log, payload.dryRun/payload.confirmed) is
+-- implemented for all 7 in backend/runtime/AdminRuntimeMasterRoster.cs -- see
+-- docs/design/enum-dictionary-ssot.yaml fail_close.mutation_confirmation_contract_gate
+-- and .agent/tasks/todo.md admin-enum subBundle 実装記録 (2026-07-27 追記)
+-- for the full record. explicit_confirm ALSO remains wired here on THIS
+-- manifest's own enum_confirm_button (internal_instance_wiring
+-- localStateMutation opening local confirm state, no backend dispatch by
+-- definition) -- the enum_write_dispatch_gap Validation record below is kept
+-- historically but the gap it names no longer applies to the 7 dedicated
+-- write manifests below (only to THIS manifest's own nodes, which stay
+-- read/confirm-state-only by design -- single-purpose layout, not a
+-- multi-operation one). Honestly still open: hardcoded
+-- frontend/routes/admin/enums.tsx / AdminEnumsRoster.tsx retirement has NOT
+-- happened -- the 7 new manifests are separate bare single-purpose screens,
+-- not a UX-parity replacement for AdminEnumsRoster's one polished roster page.
 -- =============================================================================
 
 -- Hub owning the admin-enum-management topology_manifest. Never a
@@ -3732,6 +3741,772 @@ VALUES (
 )
 ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
     SET layout_patch_json = EXCLUDED.layout_patch_json;
+
+-- =============================================================================
+-- admin-surface-topology-seed-conversion: admin-enum subBundle -- write-side
+-- single-purpose write layouts (2026-07-27, PR #600 review round 2 correction).
+--
+-- docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml lane_storage_boundary
+-- remaining_write_payload_capture_gap already settled this design question
+-- (2026-07-23): "a single-purpose write layout, exactly like the read layout
+-- above, is a safe and sufficient composition -- no per-node extension needed".
+-- component_wiring_execution_lane's wiringKind/target_ref is a per-wiring-row
+-- (whole-layout) binding, not per-node (proven by ae205 above, where enum_search/
+-- enum_group_filter/enum_table all inherit the SAME list_groups target_ref
+-- uniformly) -- so each of the 7 enum_dictionary write actions gets its OWN
+-- dedicated hub/manifest/layout/wiring/tensor below, each single-purpose (layout =
+-- 1 canonical admin_runtime action), reusing the exact same Lane 2 mechanism ae200's
+-- own read circuit already proves, plus the node-level dispatchPayloadFromByTrigger
+-- field (round 6-8 of admin-runtime-operation-dispatch-lane-determination) for
+-- typed-value payload capture. No new component kind, action type, runtime lane, or
+-- payload resolver -- only more instances of already-registered search_input.alias
+-- (form_input/search_input, the only catalog component whose generic factory wires
+-- a real onChange -> node-value-tracked event; form_field.template's generic factory
+-- renders a static empty span, verified in frontend/runtime/runtimeComponentFactory.ts
+-- formFieldFactory, so it cannot capture a typed value today) and button.primitive.
+--
+-- Each of the 7 owns its OWN dedicated hub (not one shared hub): hubs.topology_
+-- manifests.LoadHubNavigationSequenceAsync (NpgsqlContentBundleRepository.cs) only
+-- resolves a hub_relations row's target manifest when exactly one ACTIVE topology_
+-- manifests row exists for that related_hub_id (HAVING COUNT(*) = 1) -- a shared hub
+-- across multiple active manifests would resolve to NULL (ambiguous), making every
+-- one of these 7 unreachable via hub_relations navigation. One hub per manifest, the
+-- same discipline every other manifest in this file already follows.
+--
+-- Each layout carries two Action nodes sharing the SAME layout-wide wiringKind/
+-- target_ref (the operation itself): preview_button (dispatchPayloadFromByTrigger
+-- carries dryRun:literal:true -- preview_dictionary_delta/validate_against_enum_
+-- authority, non-mutating) and confirm_button (confirmed:literal:true -- explicit_
+-- confirm -> write -> diff_log via the existing AdminMasterRosterAudit.AppendAsync,
+-- unchanged). cancel is simply never clicking confirm_button. Field nodes
+-- (search_input.alias) also inherit the SAME layout-wide Lane 2 binding on their own
+-- change trigger (no dispatchPayloadFromByTrigger of their own) -- their raw event-
+-- time payload ({value:...}) does not match the action's expected request shape, so
+-- every keystroke harmlessly fails ENUM_*_PAYLOAD_REQUIRED without persisting, the
+-- exact same accepted tradeoff already documented for ae200's read circuit ("wasteful,
+-- not incorrect") -- not a new risk this Bundle introduces.
+--
+-- All 7 also stay reachable via explicit ?manifest=<id> selection like ae200 itself;
+-- no hub_relations seed rows are authored here -- that remains an ordinary /admin/
+-- manifests admin/runtime action (hub_navigation:create), proven end to end by
+-- AdminEnumHubRelationUiProjectionLiveDbTests.cs, same discipline as ae200 itself and
+-- every other subBundle manifest in this file).
+-- =============================================================================
+
+-- single-purpose write layout: enum_dictionary:create_group
+INSERT INTO hubs.hub (hub_id, relation)
+VALUES ('00000000-0000-0000-0000-0000000ae211', '{"description": "admin_enum_management_write_create_group", "system": true}'::jsonb)
+ON CONFLICT (hub_id) DO NOTHING;
+
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae210',
+    NULL,
+    ARRAY[
+        '{"type": "hub_grouping", "manifestKey": "admin.enum.management.write.create_group", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
+        '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae213"], "layoutId": "00000000-0000-0000-0000-0000000ae214", "wiringId": "00000000-0000-0000-0000-0000000ae215", "tensorId": "00000000-0000-0000-0000-0000000ae216"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO UPDATE
+    SET topology = EXCLUDED.topology,
+        status   = EXCLUDED.status;
+
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+SELECT
+    m.manifest_id,
+    '00000000-0000-0000-0000-0000000ae211'::uuid,
+    'admin.enum.management.write.create_group',
+    m.status,
+    to_jsonb(m.topology)
+FROM manifest m
+WHERE m.manifest_id = '00000000-0000-0000-0000-0000000ae210'
+ON CONFLICT (topology_manifest_id) DO UPDATE
+    SET hub_id         = EXCLUDED.hub_id,
+        manifest_key   = EXCLUDED.manifest_key,
+        status         = EXCLUDED.status,
+        topology_jsonb = EXCLUDED.topology_jsonb,
+        updated_at     = now();
+
+INSERT INTO topology.ui_component_package (package_id, package_key, package_kind, package_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae212',
+    'admin.enum.management.write.create_group.component_group_bundle',
+    'fixed_form_projection',
+    '{"seedKey": "admin.enum.management.write.create_group", "surface": "admin.enum.management.write.create_group", "categoryKeys": ["enum_dictionary"]}'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET package_schema_json = EXCLUDED.package_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.components_package_design (package_id, name, layout, state)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae213',
+    'admin.enum.management.write.create_group.package',
+    '[]'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET layout = EXCLUDED.layout,
+        state = EXCLUDED.state;
+
+INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind, layout_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae214',
+    'admin.enum.management.write.create_group.layout',
+    'ui_builder_canvas',
+    '{"records":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (layout_id) DO UPDATE
+    SET layout_schema_json = EXCLUDED.layout_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_wiring_registry (wiring_id, wiring_key, wiring_kind, target_surface, target_ref, wiring_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae215',
+    'admin.enum.management.write.create_group.wiring',
+    'admin_runtime',
+    'manifest',
+    'manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group',
+    '{"actions":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (wiring_id) DO UPDATE
+    SET wiring_kind = EXCLUDED.wiring_kind,
+        target_surface = EXCLUDED.target_surface,
+        target_ref = EXCLUDED.target_ref,
+        wiring_schema_json = EXCLUDED.wiring_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae216',
+    'admin#enum_management_write_create_group',
+    '00000000-0000-0000-0000-0000000ae212',
+    '00000000-0000-0000-0000-0000000ae214',
+    '00000000-0000-0000-0000-0000000ae215',
+    'default',
+    0,
+    '{"nodes": [{"nodeId": "group_name_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 0}, {"nodeId": "preview_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 1, "propsJson": "{\"label\": \"Preview\"}", "dispatchPayloadFromByTrigger": {"click": {"groupName": "node:group_name_field.value", "dryRun": "literal:true"}}}, {"nodeId": "confirm_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 2, "propsJson": "{\"label\": \"Confirm & write\"}", "dispatchPayloadFromByTrigger": {"click": {"groupName": "node:group_name_field.value", "confirmed": "literal:true"}}}]}'::jsonb
+)
+ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
+    SET layout_patch_json = EXCLUDED.layout_patch_json;
+
+-- single-purpose write layout: enum_dictionary:update_group
+INSERT INTO hubs.hub (hub_id, relation)
+VALUES ('00000000-0000-0000-0000-0000000ae221', '{"description": "admin_enum_management_write_update_group", "system": true}'::jsonb)
+ON CONFLICT (hub_id) DO NOTHING;
+
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae220',
+    NULL,
+    ARRAY[
+        '{"type": "hub_grouping", "manifestKey": "admin.enum.management.write.update_group", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
+        '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae223"], "layoutId": "00000000-0000-0000-0000-0000000ae224", "wiringId": "00000000-0000-0000-0000-0000000ae225", "tensorId": "00000000-0000-0000-0000-0000000ae226"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO UPDATE
+    SET topology = EXCLUDED.topology,
+        status   = EXCLUDED.status;
+
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+SELECT
+    m.manifest_id,
+    '00000000-0000-0000-0000-0000000ae221'::uuid,
+    'admin.enum.management.write.update_group',
+    m.status,
+    to_jsonb(m.topology)
+FROM manifest m
+WHERE m.manifest_id = '00000000-0000-0000-0000-0000000ae220'
+ON CONFLICT (topology_manifest_id) DO UPDATE
+    SET hub_id         = EXCLUDED.hub_id,
+        manifest_key   = EXCLUDED.manifest_key,
+        status         = EXCLUDED.status,
+        topology_jsonb = EXCLUDED.topology_jsonb,
+        updated_at     = now();
+
+INSERT INTO topology.ui_component_package (package_id, package_key, package_kind, package_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae222',
+    'admin.enum.management.write.update_group.component_group_bundle',
+    'fixed_form_projection',
+    '{"seedKey": "admin.enum.management.write.update_group", "surface": "admin.enum.management.write.update_group", "categoryKeys": ["enum_dictionary"]}'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET package_schema_json = EXCLUDED.package_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.components_package_design (package_id, name, layout, state)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae223',
+    'admin.enum.management.write.update_group.package',
+    '[]'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET layout = EXCLUDED.layout,
+        state = EXCLUDED.state;
+
+INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind, layout_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae224',
+    'admin.enum.management.write.update_group.layout',
+    'ui_builder_canvas',
+    '{"records":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (layout_id) DO UPDATE
+    SET layout_schema_json = EXCLUDED.layout_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_wiring_registry (wiring_id, wiring_key, wiring_kind, target_surface, target_ref, wiring_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae225',
+    'admin.enum.management.write.update_group.wiring',
+    'admin_runtime',
+    'manifest',
+    'manifest:00000000-0000-0000-0000-0000000ae220:enum_dictionary:update_group',
+    '{"actions":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (wiring_id) DO UPDATE
+    SET wiring_kind = EXCLUDED.wiring_kind,
+        target_surface = EXCLUDED.target_surface,
+        target_ref = EXCLUDED.target_ref,
+        wiring_schema_json = EXCLUDED.wiring_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae226',
+    'admin#enum_management_write_update_group',
+    '00000000-0000-0000-0000-0000000ae222',
+    '00000000-0000-0000-0000-0000000ae224',
+    '00000000-0000-0000-0000-0000000ae225',
+    'default',
+    0,
+    '{"nodes": [{"nodeId": "group_id_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 0}, {"nodeId": "group_name_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 1}, {"nodeId": "preview_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 2, "propsJson": "{\"label\": \"Preview\"}", "dispatchPayloadFromByTrigger": {"click": {"groupId": "node:group_id_field.value", "groupName": "node:group_name_field.value", "dryRun": "literal:true"}}}, {"nodeId": "confirm_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 3, "propsJson": "{\"label\": \"Confirm & write\"}", "dispatchPayloadFromByTrigger": {"click": {"groupId": "node:group_id_field.value", "groupName": "node:group_name_field.value", "confirmed": "literal:true"}}}]}'::jsonb
+)
+ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
+    SET layout_patch_json = EXCLUDED.layout_patch_json;
+
+-- single-purpose write layout: enum_dictionary:delete_group
+INSERT INTO hubs.hub (hub_id, relation)
+VALUES ('00000000-0000-0000-0000-0000000ae231', '{"description": "admin_enum_management_write_delete_group", "system": true}'::jsonb)
+ON CONFLICT (hub_id) DO NOTHING;
+
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae230',
+    NULL,
+    ARRAY[
+        '{"type": "hub_grouping", "manifestKey": "admin.enum.management.write.delete_group", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
+        '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae233"], "layoutId": "00000000-0000-0000-0000-0000000ae234", "wiringId": "00000000-0000-0000-0000-0000000ae235", "tensorId": "00000000-0000-0000-0000-0000000ae236"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO UPDATE
+    SET topology = EXCLUDED.topology,
+        status   = EXCLUDED.status;
+
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+SELECT
+    m.manifest_id,
+    '00000000-0000-0000-0000-0000000ae231'::uuid,
+    'admin.enum.management.write.delete_group',
+    m.status,
+    to_jsonb(m.topology)
+FROM manifest m
+WHERE m.manifest_id = '00000000-0000-0000-0000-0000000ae230'
+ON CONFLICT (topology_manifest_id) DO UPDATE
+    SET hub_id         = EXCLUDED.hub_id,
+        manifest_key   = EXCLUDED.manifest_key,
+        status         = EXCLUDED.status,
+        topology_jsonb = EXCLUDED.topology_jsonb,
+        updated_at     = now();
+
+INSERT INTO topology.ui_component_package (package_id, package_key, package_kind, package_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae232',
+    'admin.enum.management.write.delete_group.component_group_bundle',
+    'fixed_form_projection',
+    '{"seedKey": "admin.enum.management.write.delete_group", "surface": "admin.enum.management.write.delete_group", "categoryKeys": ["enum_dictionary"]}'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET package_schema_json = EXCLUDED.package_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.components_package_design (package_id, name, layout, state)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae233',
+    'admin.enum.management.write.delete_group.package',
+    '[]'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET layout = EXCLUDED.layout,
+        state = EXCLUDED.state;
+
+INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind, layout_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae234',
+    'admin.enum.management.write.delete_group.layout',
+    'ui_builder_canvas',
+    '{"records":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (layout_id) DO UPDATE
+    SET layout_schema_json = EXCLUDED.layout_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_wiring_registry (wiring_id, wiring_key, wiring_kind, target_surface, target_ref, wiring_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae235',
+    'admin.enum.management.write.delete_group.wiring',
+    'admin_runtime',
+    'manifest',
+    'manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group',
+    '{"actions":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (wiring_id) DO UPDATE
+    SET wiring_kind = EXCLUDED.wiring_kind,
+        target_surface = EXCLUDED.target_surface,
+        target_ref = EXCLUDED.target_ref,
+        wiring_schema_json = EXCLUDED.wiring_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae236',
+    'admin#enum_management_write_delete_group',
+    '00000000-0000-0000-0000-0000000ae232',
+    '00000000-0000-0000-0000-0000000ae234',
+    '00000000-0000-0000-0000-0000000ae235',
+    'default',
+    0,
+    '{"nodes": [{"nodeId": "group_id_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 0}, {"nodeId": "preview_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 1, "propsJson": "{\"label\": \"Preview\"}", "dispatchPayloadFromByTrigger": {"click": {"groupId": "node:group_id_field.value", "dryRun": "literal:true"}}}, {"nodeId": "confirm_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 2, "propsJson": "{\"label\": \"Confirm & write\"}", "dispatchPayloadFromByTrigger": {"click": {"groupId": "node:group_id_field.value", "confirmed": "literal:true"}}}]}'::jsonb
+)
+ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
+    SET layout_patch_json = EXCLUDED.layout_patch_json;
+
+-- single-purpose write layout: enum_dictionary:create_item
+INSERT INTO hubs.hub (hub_id, relation)
+VALUES ('00000000-0000-0000-0000-0000000ae241', '{"description": "admin_enum_management_write_create_item", "system": true}'::jsonb)
+ON CONFLICT (hub_id) DO NOTHING;
+
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae240',
+    NULL,
+    ARRAY[
+        '{"type": "hub_grouping", "manifestKey": "admin.enum.management.write.create_item", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
+        '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae243"], "layoutId": "00000000-0000-0000-0000-0000000ae244", "wiringId": "00000000-0000-0000-0000-0000000ae245", "tensorId": "00000000-0000-0000-0000-0000000ae246"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO UPDATE
+    SET topology = EXCLUDED.topology,
+        status   = EXCLUDED.status;
+
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+SELECT
+    m.manifest_id,
+    '00000000-0000-0000-0000-0000000ae241'::uuid,
+    'admin.enum.management.write.create_item',
+    m.status,
+    to_jsonb(m.topology)
+FROM manifest m
+WHERE m.manifest_id = '00000000-0000-0000-0000-0000000ae240'
+ON CONFLICT (topology_manifest_id) DO UPDATE
+    SET hub_id         = EXCLUDED.hub_id,
+        manifest_key   = EXCLUDED.manifest_key,
+        status         = EXCLUDED.status,
+        topology_jsonb = EXCLUDED.topology_jsonb,
+        updated_at     = now();
+
+INSERT INTO topology.ui_component_package (package_id, package_key, package_kind, package_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae242',
+    'admin.enum.management.write.create_item.component_group_bundle',
+    'fixed_form_projection',
+    '{"seedKey": "admin.enum.management.write.create_item", "surface": "admin.enum.management.write.create_item", "categoryKeys": ["enum_dictionary"]}'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET package_schema_json = EXCLUDED.package_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.components_package_design (package_id, name, layout, state)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae243',
+    'admin.enum.management.write.create_item.package',
+    '[]'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET layout = EXCLUDED.layout,
+        state = EXCLUDED.state;
+
+INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind, layout_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae244',
+    'admin.enum.management.write.create_item.layout',
+    'ui_builder_canvas',
+    '{"records":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (layout_id) DO UPDATE
+    SET layout_schema_json = EXCLUDED.layout_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_wiring_registry (wiring_id, wiring_key, wiring_kind, target_surface, target_ref, wiring_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae245',
+    'admin.enum.management.write.create_item.wiring',
+    'admin_runtime',
+    'manifest',
+    'manifest:00000000-0000-0000-0000-0000000ae240:enum_dictionary:create_item',
+    '{"actions":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (wiring_id) DO UPDATE
+    SET wiring_kind = EXCLUDED.wiring_kind,
+        target_surface = EXCLUDED.target_surface,
+        target_ref = EXCLUDED.target_ref,
+        wiring_schema_json = EXCLUDED.wiring_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae246',
+    'admin#enum_management_write_create_item',
+    '00000000-0000-0000-0000-0000000ae242',
+    '00000000-0000-0000-0000-0000000ae244',
+    '00000000-0000-0000-0000-0000000ae245',
+    'default',
+    0,
+    '{"nodes": [{"nodeId": "item_name_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 0}, {"nodeId": "preview_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 1, "propsJson": "{\"label\": \"Preview\"}", "dispatchPayloadFromByTrigger": {"click": {"name": "node:item_name_field.value", "dryRun": "literal:true"}}}, {"nodeId": "confirm_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 2, "propsJson": "{\"label\": \"Confirm & write\"}", "dispatchPayloadFromByTrigger": {"click": {"name": "node:item_name_field.value", "confirmed": "literal:true"}}}]}'::jsonb
+)
+ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
+    SET layout_patch_json = EXCLUDED.layout_patch_json;
+
+-- single-purpose write layout: enum_dictionary:update_item
+INSERT INTO hubs.hub (hub_id, relation)
+VALUES ('00000000-0000-0000-0000-0000000ae251', '{"description": "admin_enum_management_write_update_item", "system": true}'::jsonb)
+ON CONFLICT (hub_id) DO NOTHING;
+
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae250',
+    NULL,
+    ARRAY[
+        '{"type": "hub_grouping", "manifestKey": "admin.enum.management.write.update_item", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
+        '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae253"], "layoutId": "00000000-0000-0000-0000-0000000ae254", "wiringId": "00000000-0000-0000-0000-0000000ae255", "tensorId": "00000000-0000-0000-0000-0000000ae256"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO UPDATE
+    SET topology = EXCLUDED.topology,
+        status   = EXCLUDED.status;
+
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+SELECT
+    m.manifest_id,
+    '00000000-0000-0000-0000-0000000ae251'::uuid,
+    'admin.enum.management.write.update_item',
+    m.status,
+    to_jsonb(m.topology)
+FROM manifest m
+WHERE m.manifest_id = '00000000-0000-0000-0000-0000000ae250'
+ON CONFLICT (topology_manifest_id) DO UPDATE
+    SET hub_id         = EXCLUDED.hub_id,
+        manifest_key   = EXCLUDED.manifest_key,
+        status         = EXCLUDED.status,
+        topology_jsonb = EXCLUDED.topology_jsonb,
+        updated_at     = now();
+
+INSERT INTO topology.ui_component_package (package_id, package_key, package_kind, package_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae252',
+    'admin.enum.management.write.update_item.component_group_bundle',
+    'fixed_form_projection',
+    '{"seedKey": "admin.enum.management.write.update_item", "surface": "admin.enum.management.write.update_item", "categoryKeys": ["enum_dictionary"]}'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET package_schema_json = EXCLUDED.package_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.components_package_design (package_id, name, layout, state)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae253',
+    'admin.enum.management.write.update_item.package',
+    '[]'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET layout = EXCLUDED.layout,
+        state = EXCLUDED.state;
+
+INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind, layout_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae254',
+    'admin.enum.management.write.update_item.layout',
+    'ui_builder_canvas',
+    '{"records":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (layout_id) DO UPDATE
+    SET layout_schema_json = EXCLUDED.layout_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_wiring_registry (wiring_id, wiring_key, wiring_kind, target_surface, target_ref, wiring_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae255',
+    'admin.enum.management.write.update_item.wiring',
+    'admin_runtime',
+    'manifest',
+    'manifest:00000000-0000-0000-0000-0000000ae250:enum_dictionary:update_item',
+    '{"actions":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (wiring_id) DO UPDATE
+    SET wiring_kind = EXCLUDED.wiring_kind,
+        target_surface = EXCLUDED.target_surface,
+        target_ref = EXCLUDED.target_ref,
+        wiring_schema_json = EXCLUDED.wiring_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae256',
+    'admin#enum_management_write_update_item',
+    '00000000-0000-0000-0000-0000000ae252',
+    '00000000-0000-0000-0000-0000000ae254',
+    '00000000-0000-0000-0000-0000000ae255',
+    'default',
+    0,
+    '{"nodes": [{"nodeId": "item_index_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 0}, {"nodeId": "item_name_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 1}, {"nodeId": "preview_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 2, "propsJson": "{\"label\": \"Preview\"}", "dispatchPayloadFromByTrigger": {"click": {"indexNum": "node:item_index_field.value", "name": "node:item_name_field.value", "dryRun": "literal:true"}}}, {"nodeId": "confirm_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 3, "propsJson": "{\"label\": \"Confirm & write\"}", "dispatchPayloadFromByTrigger": {"click": {"indexNum": "node:item_index_field.value", "name": "node:item_name_field.value", "confirmed": "literal:true"}}}]}'::jsonb
+)
+ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
+    SET layout_patch_json = EXCLUDED.layout_patch_json;
+
+-- single-purpose write layout: enum_dictionary:delete_item
+INSERT INTO hubs.hub (hub_id, relation)
+VALUES ('00000000-0000-0000-0000-0000000ae261', '{"description": "admin_enum_management_write_delete_item", "system": true}'::jsonb)
+ON CONFLICT (hub_id) DO NOTHING;
+
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae260',
+    NULL,
+    ARRAY[
+        '{"type": "hub_grouping", "manifestKey": "admin.enum.management.write.delete_item", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
+        '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae263"], "layoutId": "00000000-0000-0000-0000-0000000ae264", "wiringId": "00000000-0000-0000-0000-0000000ae265", "tensorId": "00000000-0000-0000-0000-0000000ae266"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO UPDATE
+    SET topology = EXCLUDED.topology,
+        status   = EXCLUDED.status;
+
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+SELECT
+    m.manifest_id,
+    '00000000-0000-0000-0000-0000000ae261'::uuid,
+    'admin.enum.management.write.delete_item',
+    m.status,
+    to_jsonb(m.topology)
+FROM manifest m
+WHERE m.manifest_id = '00000000-0000-0000-0000-0000000ae260'
+ON CONFLICT (topology_manifest_id) DO UPDATE
+    SET hub_id         = EXCLUDED.hub_id,
+        manifest_key   = EXCLUDED.manifest_key,
+        status         = EXCLUDED.status,
+        topology_jsonb = EXCLUDED.topology_jsonb,
+        updated_at     = now();
+
+INSERT INTO topology.ui_component_package (package_id, package_key, package_kind, package_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae262',
+    'admin.enum.management.write.delete_item.component_group_bundle',
+    'fixed_form_projection',
+    '{"seedKey": "admin.enum.management.write.delete_item", "surface": "admin.enum.management.write.delete_item", "categoryKeys": ["enum_dictionary"]}'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET package_schema_json = EXCLUDED.package_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.components_package_design (package_id, name, layout, state)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae263',
+    'admin.enum.management.write.delete_item.package',
+    '[]'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET layout = EXCLUDED.layout,
+        state = EXCLUDED.state;
+
+INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind, layout_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae264',
+    'admin.enum.management.write.delete_item.layout',
+    'ui_builder_canvas',
+    '{"records":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (layout_id) DO UPDATE
+    SET layout_schema_json = EXCLUDED.layout_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_wiring_registry (wiring_id, wiring_key, wiring_kind, target_surface, target_ref, wiring_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae265',
+    'admin.enum.management.write.delete_item.wiring',
+    'admin_runtime',
+    'manifest',
+    'manifest:00000000-0000-0000-0000-0000000ae260:enum_dictionary:delete_item',
+    '{"actions":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (wiring_id) DO UPDATE
+    SET wiring_kind = EXCLUDED.wiring_kind,
+        target_surface = EXCLUDED.target_surface,
+        target_ref = EXCLUDED.target_ref,
+        wiring_schema_json = EXCLUDED.wiring_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae266',
+    'admin#enum_management_write_delete_item',
+    '00000000-0000-0000-0000-0000000ae262',
+    '00000000-0000-0000-0000-0000000ae264',
+    '00000000-0000-0000-0000-0000000ae265',
+    'default',
+    0,
+    '{"nodes": [{"nodeId": "item_index_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 0}, {"nodeId": "preview_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 1, "propsJson": "{\"label\": \"Preview\"}", "dispatchPayloadFromByTrigger": {"click": {"indexNum": "node:item_index_field.value", "dryRun": "literal:true"}}}, {"nodeId": "confirm_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 2, "propsJson": "{\"label\": \"Confirm & write\"}", "dispatchPayloadFromByTrigger": {"click": {"indexNum": "node:item_index_field.value", "confirmed": "literal:true"}}}]}'::jsonb
+)
+ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
+    SET layout_patch_json = EXCLUDED.layout_patch_json;
+
+-- single-purpose write layout: enum_dictionary:set_group_items
+INSERT INTO hubs.hub (hub_id, relation)
+VALUES ('00000000-0000-0000-0000-0000000ae271', '{"description": "admin_enum_management_write_set_group_items", "system": true}'::jsonb)
+ON CONFLICT (hub_id) DO NOTHING;
+
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae270',
+    NULL,
+    ARRAY[
+        '{"type": "hub_grouping", "manifestKey": "admin.enum.management.write.set_group_items", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
+        '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae273"], "layoutId": "00000000-0000-0000-0000-0000000ae274", "wiringId": "00000000-0000-0000-0000-0000000ae275", "tensorId": "00000000-0000-0000-0000-0000000ae276"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO UPDATE
+    SET topology = EXCLUDED.topology,
+        status   = EXCLUDED.status;
+
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+SELECT
+    m.manifest_id,
+    '00000000-0000-0000-0000-0000000ae271'::uuid,
+    'admin.enum.management.write.set_group_items',
+    m.status,
+    to_jsonb(m.topology)
+FROM manifest m
+WHERE m.manifest_id = '00000000-0000-0000-0000-0000000ae270'
+ON CONFLICT (topology_manifest_id) DO UPDATE
+    SET hub_id         = EXCLUDED.hub_id,
+        manifest_key   = EXCLUDED.manifest_key,
+        status         = EXCLUDED.status,
+        topology_jsonb = EXCLUDED.topology_jsonb,
+        updated_at     = now();
+
+INSERT INTO topology.ui_component_package (package_id, package_key, package_kind, package_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae272',
+    'admin.enum.management.write.set_group_items.component_group_bundle',
+    'fixed_form_projection',
+    '{"seedKey": "admin.enum.management.write.set_group_items", "surface": "admin.enum.management.write.set_group_items", "categoryKeys": ["enum_dictionary"]}'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET package_schema_json = EXCLUDED.package_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.components_package_design (package_id, name, layout, state)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae273',
+    'admin.enum.management.write.set_group_items.package',
+    '[]'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET layout = EXCLUDED.layout,
+        state = EXCLUDED.state;
+
+INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind, layout_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae274',
+    'admin.enum.management.write.set_group_items.layout',
+    'ui_builder_canvas',
+    '{"records":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (layout_id) DO UPDATE
+    SET layout_schema_json = EXCLUDED.layout_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_wiring_registry (wiring_id, wiring_key, wiring_kind, target_surface, target_ref, wiring_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae275',
+    'admin.enum.management.write.set_group_items.wiring',
+    'admin_runtime',
+    'manifest',
+    'manifest:00000000-0000-0000-0000-0000000ae270:enum_dictionary:set_group_items',
+    '{"actions":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (wiring_id) DO UPDATE
+    SET wiring_kind = EXCLUDED.wiring_kind,
+        target_surface = EXCLUDED.target_surface,
+        target_ref = EXCLUDED.target_ref,
+        wiring_schema_json = EXCLUDED.wiring_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae276',
+    'admin#enum_management_write_set_group_items',
+    '00000000-0000-0000-0000-0000000ae272',
+    '00000000-0000-0000-0000-0000000ae274',
+    '00000000-0000-0000-0000-0000000ae275',
+    'default',
+    0,
+    '{"nodes": [{"nodeId": "group_id_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 0}, {"nodeId": "items_csv_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 1}, {"nodeId": "preview_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 2, "propsJson": "{\"label\": \"Preview\"}", "dispatchPayloadFromByTrigger": {"click": {"groupId": "node:group_id_field.value", "enumIndexNums": "node:items_csv_field.value", "dryRun": "literal:true"}}}, {"nodeId": "confirm_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 3, "propsJson": "{\"label\": \"Confirm & write\"}", "dispatchPayloadFromByTrigger": {"click": {"groupId": "node:group_id_field.value", "enumIndexNums": "node:items_csv_field.value", "confirmed": "literal:true"}}}]}'::jsonb
+)
+ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
+    SET layout_patch_json = EXCLUDED.layout_patch_json;
+
 
 -- Representative existing cron absorption: log retention.
 -- The former RetentionScheduler BackgroundService is absorbed into the scheduler

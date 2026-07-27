@@ -389,6 +389,25 @@ admin_uibuilder_ui_structure_wiring_ssot:
           unblocked rather than completed by this entry.
         affected_subbundles: [admin-enum, team-dashboard, scheduler-settings]
         follow_up_ref: .agent/tasks/todo.md admin-runtime-operation-dispatch-lane-determination Bundle
+        admin_enum_write_side_consumption: >-
+          2026-07-27 (admin-surface-topology-seed-conversion admin-enum subBundle, PR #600 review
+          round 2 correction). All 7 enum_dictionary write actions now consume this mechanism via
+          dedicated single-purpose write manifests (db/seed_empty.sql
+          00000000-0000-0000-0000-0000000ae210/ae220/ae230/ae240/ae250/ae260/ae270), exactly the
+          "single-purpose write layout" resolution already recorded above -- no per-node
+          wiringKind/target_ref extension was added; each write manifest reuses ae200's own
+          proven per-wiring-row admin_runtime binding, just scoped to its own manifest instead of
+          ae200's. Each has its own hub (not shared -- see remaining_write_payload_capture_gap's
+          own text above; hubs.topology_manifests.LoadHubNavigationSequenceAsync only resolves a
+          target manifest when exactly one ACTIVE manifest exists per hub_id). Backend gained the
+          matching payload.dryRun/payload.confirmed contract
+          (backend/runtime/AdminRuntimeMasterRoster.cs, mirrors team_markdown:saved_view:update).
+          Proof: backend/tests/Topolactor.Integration.Tests/
+          AdminEnumHubRelationUiProjectionLiveDbTests.cs. See
+          docs/design/react-schema-topology-seed-translator-ssot.yaml
+          declared_seed_surface_catalog admin.enum.management.projection known_gaps
+          resolution_note for the full record, including the honestly-open remaining item
+          (hardcoded /admin/enums retirement still pending a genuine UX-parity replacement).
     admin_runtime_payload_binding_contract:
       role: >-
         2026-07-24, formalizes a canonical, validated payload-binding extension of

@@ -97,16 +97,113 @@ public class AdminRuntimeMasterRosterTests
     [Fact]
     public async Task EnumDictionaryDeleteItem_WithoutConfirmed_FailsCloseAndDoesNotPersist()
     {
-        var runtime = CreateRuntime();
+        var (runtime, enumRepo) = CreateRuntimeWithEnumRepo();
+        // indexNum 10 ("active") is a member of the seeded user_status group -- use a fresh,
+        // unreferenced item so this test isolates the confirmed-gate check from the separate
+        // ENUM_ITEM_IN_USE check (see EnumDictionaryDeleteItem_WhileReferencedInGroup_FailsClose).
+        await enumRepo.CreateItemAsync("orphan_item", 500, CancellationToken.None);
         var deleteVector = new OperationVector(
             "admin", "enum_dictionary", "delete_item", null, "admin",
-            JsonSerializer.SerializeToElement(new { indexNum = 10 }),
+            JsonSerializer.SerializeToElement(new { indexNum = 500 }),
             null);
 
         var (data, error) = await runtime.ExecuteDataAsync(deleteVector);
         Assert.Null(data);
         Assert.NotNull(error);
         Assert.Equal("ENUM_ITEM_WRITE_NOT_CONFIRMED", error!.Code);
+    }
+
+    [Fact]
+    public async Task EnumDictionaryDeleteItem_WhileReferencedInGroup_FailsCloseEvenWithConfirmed()
+    {
+        // indexNum 10 ("active") is a member of the seeded user_status group -- deleting it must
+        // fail close (dryRun and confirmed=true both) rather than silently orphaning enum.group_items.
+        var runtime = CreateRuntime();
+        var deleteVector = new OperationVector(
+            "admin", "enum_dictionary", "delete_item", null, "admin",
+            JsonSerializer.SerializeToElement(new { indexNum = 10, confirmed = true }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(deleteVector);
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("ENUM_ITEM_IN_USE", error!.Code);
+
+        var dryRunVector = new OperationVector(
+            "admin", "enum_dictionary", "delete_item", null, "admin",
+            JsonSerializer.SerializeToElement(new { indexNum = 10, dryRun = true }),
+            null);
+        var (dryRunData, dryRunError) = await runtime.ExecuteDataAsync(dryRunVector);
+        Assert.Null(dryRunData);
+        Assert.NotNull(dryRunError);
+        Assert.Equal("ENUM_ITEM_IN_USE", dryRunError!.Code);
+    }
+
+    [Fact]
+    public async Task EnumDictionaryDeleteItem_Nonexistent_FailsClose()
+    {
+        var runtime = CreateRuntime();
+        var deleteVector = new OperationVector(
+            "admin", "enum_dictionary", "delete_item", null, "admin",
+            JsonSerializer.SerializeToElement(new { indexNum = 90210, confirmed = true }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(deleteVector);
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("ENUM_ITEM_NOT_FOUND", error!.Code);
+    }
+
+    [Fact]
+    public async Task EnumDictionaryUpdateGroup_Nonexistent_FailsClose()
+    {
+        var runtime = CreateRuntime();
+        var updateVector = new OperationVector(
+            "admin", "enum_dictionary", "update_group", null, "admin",
+            JsonSerializer.SerializeToElement(new { groupId = Guid.NewGuid().ToString(), groupName = "renamed", confirmed = true }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(updateVector);
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("ENUM_GROUP_NOT_FOUND", error!.Code);
+    }
+
+    [Fact]
+    public async Task EnumDictionaryCreateGroup_WithDuplicateIndexNum_FailsCloseOnDryRunAndWrite()
+    {
+        var runtime = CreateRuntime();
+        var dryRunVector = new OperationVector(
+            "admin", "enum_dictionary", "create_group", null, "admin",
+            JsonSerializer.SerializeToElement(new { groupName = "dup_index_group", indexNum = 2, dryRun = true }),
+            null);
+        var (dryRunData, dryRunError) = await runtime.ExecuteDataAsync(dryRunVector);
+        Assert.Null(dryRunData);
+        Assert.NotNull(dryRunError);
+        Assert.Equal("ENUM_GROUP_INDEX_CONFLICT", dryRunError!.Code);
+
+        var writeVector = new OperationVector(
+            "admin", "enum_dictionary", "create_group", null, "admin",
+            JsonSerializer.SerializeToElement(new { groupName = "dup_index_group", indexNum = 2, confirmed = true }),
+            null);
+        var (data, error) = await runtime.ExecuteDataAsync(writeVector);
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("ENUM_GROUP_INDEX_CONFLICT", error!.Code);
+    }
+
+    [Fact]
+    public async Task EnumDictionaryCreateItem_WithDuplicateIndexNum_FailsClose()
+    {
+        var runtime = CreateRuntime();
+        var writeVector = new OperationVector(
+            "admin", "enum_dictionary", "create_item", null, "admin",
+            JsonSerializer.SerializeToElement(new { name = "dup_index_item", indexNum = 10, confirmed = true }),
+            null);
+        var (data, error) = await runtime.ExecuteDataAsync(writeVector);
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("ENUM_ITEM_INDEX_CONFLICT", error!.Code);
     }
 
     [Fact]
@@ -138,6 +235,88 @@ public class AdminRuntimeMasterRosterTests
     }
 
     [Fact]
+    public async Task EnumDictionarySetGroupItems_WithCsvStringEnumIndexNums_Persists()
+    {
+        // The set_group_items write manifest's single text field tracks a scalar node value; a
+        // seed-authored payloadFrom binding for an array-shaped field like enumIndexNums produces
+        // a comma-separated JSON string at the wire (no array-typed payloadFrom source or
+        // CSV-to-array transform exists in the generic payloadFrom grammar), so the backend must
+        // accept that shape directly rather than only a native JSON array.
+        var runtime = CreateRuntime();
+        var listVector = new OperationVector(
+            "admin", "enum_dictionary", "list_groups", null, "admin", null, null);
+        var (listData, listError) = await runtime.ExecuteDataAsync(listVector);
+        Assert.Null(listError);
+        using var listDoc = JsonDocument.Parse(listData!.Value.GetRawText());
+        var groupId = listDoc.RootElement[0].GetProperty("groupId").GetString();
+
+        var setVector = new OperationVector(
+            "admin", "enum_dictionary", "set_group_items", null, "admin",
+            JsonSerializer.SerializeToElement(new
+            {
+                groupId,
+                enumIndexNums = "10, 11",
+                confirmed = true,
+            }),
+            null);
+        var (data, error) = await runtime.ExecuteDataAsync(setVector);
+        Assert.Null(error);
+        Assert.NotNull(data);
+        Assert.Contains("\"itemsIndexNums\":[10,11]", data!.Value.GetRawText());
+    }
+
+    [Fact]
+    public async Task EnumDictionarySetGroupItems_WithDuplicateMembership_FailsCloseOnDryRunAndWrite()
+    {
+        var runtime = CreateRuntime();
+        var listVector = new OperationVector(
+            "admin", "enum_dictionary", "list_groups", null, "admin", null, null);
+        var (listData, listError) = await runtime.ExecuteDataAsync(listVector);
+        Assert.Null(listError);
+        using var listDoc = JsonDocument.Parse(listData!.Value.GetRawText());
+        var groupId = listDoc.RootElement[0].GetProperty("groupId").GetString();
+
+        var dryRunVector = new OperationVector(
+            "admin", "enum_dictionary", "set_group_items", null, "admin",
+            JsonSerializer.SerializeToElement(new { groupId, enumIndexNums = new[] { 10, 10 }, dryRun = true }),
+            null);
+        var (dryRunData, dryRunError) = await runtime.ExecuteDataAsync(dryRunVector);
+        Assert.Null(dryRunData);
+        Assert.NotNull(dryRunError);
+        Assert.Equal("ENUM_GROUP_ITEMS_DUPLICATE_MEMBERSHIP", dryRunError!.Code);
+
+        var writeVector = new OperationVector(
+            "admin", "enum_dictionary", "set_group_items", null, "admin",
+            JsonSerializer.SerializeToElement(new { groupId, enumIndexNums = new[] { 10, 10 }, confirmed = true }),
+            null);
+        var (data, error) = await runtime.ExecuteDataAsync(writeVector);
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("ENUM_GROUP_ITEMS_DUPLICATE_MEMBERSHIP", error!.Code);
+    }
+
+    [Fact]
+    public async Task EnumDictionarySetGroupItems_WithNonexistentItem_FailsClose()
+    {
+        var runtime = CreateRuntime();
+        var listVector = new OperationVector(
+            "admin", "enum_dictionary", "list_groups", null, "admin", null, null);
+        var (listData, listError) = await runtime.ExecuteDataAsync(listVector);
+        Assert.Null(listError);
+        using var listDoc = JsonDocument.Parse(listData!.Value.GetRawText());
+        var groupId = listDoc.RootElement[0].GetProperty("groupId").GetString();
+
+        var writeVector = new OperationVector(
+            "admin", "enum_dictionary", "set_group_items", null, "admin",
+            JsonSerializer.SerializeToElement(new { groupId, enumIndexNums = new[] { 90210 }, confirmed = true }),
+            null);
+        var (data, error) = await runtime.ExecuteDataAsync(writeVector);
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("ENUM_ITEM_NOT_FOUND", error!.Code);
+    }
+
+    [Fact]
     public async Task AuthService_Login_BlocksUnapprovedUser()
     {
         var authRepo = new InMemoryAuthRepository();
@@ -161,7 +340,9 @@ public class AdminRuntimeMasterRosterTests
         Assert.Equal("AUTH_USER_NOT_APPROVED", response.Errors[0].Code);
     }
 
-    private static AdminRuntime CreateRuntime()
+    private static AdminRuntime CreateRuntime() => CreateRuntimeWithEnumRepo().runtime;
+
+    private static (AdminRuntime runtime, InMemoryEnumDictionaryRepository enumRepo) CreateRuntimeWithEnumRepo()
     {
         var ctxRepo = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "test-double");
         var topoRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
@@ -170,13 +351,15 @@ public class AdminRuntimeMasterRosterTests
             NullLogger<RegistrarValidationService>.Instance, topoRepo, topoVector);
         var uiRepo = new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double");
         var pkg = new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, uiRepo);
-        return new AdminRuntime(
+        var enumRepo = InMemoryEnumDictionaryRepository.WithFixtureSeed();
+        var runtime = new AdminRuntime(
             NullLogger<AdminRuntime>.Instance,
             ctxRepo,
             registrar,
             pkg,
             uiRepo,
-            enumDictionaryRepository: InMemoryEnumDictionaryRepository.WithFixtureSeed(),
+            enumDictionaryRepository: enumRepo,
             authMasterRepository: new InMemoryAuthMasterRepository());
+        return (runtime, enumRepo);
     }
 }

@@ -477,6 +477,99 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         }
     }
 
+    /// <summary>
+    /// Real-PostgreSQL proof for the constraint-backed negative cases the action layer's
+    /// pre-checks are defense-in-depth for (backend/repository/NpgsqlEnumDictionaryRepository.cs
+    /// PostgresException translation of uq_enum_items_index / uq_enum_groups_index /
+    /// enum.group_items's FK to enum.items -- db/enum_tables.sql): duplicate index_num on
+    /// create_group/create_item, deleting an item that is a real db/enum_seed.sql demo_status
+    /// group member, and set_group_items with duplicate/nonexistent membership. None of these
+    /// mutate db/enum_seed.sql's existing rows -- every attempt fails close before or during the
+    /// write and is asserted not to have persisted.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_AdminEnumManagementManifest_ConstraintBackedNegativeCases_FailCloseAgainstRealPostgres()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+
+        async Task<EndpointResponseDto> DispatchAsync(string action, object payload)
+        {
+            var node = System.Text.Json.Nodes.JsonNode.Parse(
+                System.Text.Json.JsonSerializer.SerializeToElement(payload).GetRawText())!.AsObject();
+            node["target_ref"] = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:{action}";
+            return await dispatcher.DispatchAsync(new EndpointRequestDto(
+                action, "manifest", "enum_dictionary", action,
+                IdOrHubId: null,
+                Payload: System.Text.Json.JsonSerializer.SerializeToElement(node),
+                Context: null, TriggerKind: "client", Role: "admin"));
+        }
+
+        // demo_status (index_num=1, db/enum_seed.sql) already exists -- create_group with the
+        // same index_num must fail close, dryRun and confirmed alike, never silently succeeding
+        // or shadowing the existing row.
+        var dupGroupDryRun = await DispatchAsync("create_group",
+            new { groupName = "dup-index-group", indexNum = 1, dryRun = true });
+        Assert.False(dupGroupDryRun.Success);
+        Assert.Contains(dupGroupDryRun.Errors, e => e.Code == "ENUM_GROUP_INDEX_CONFLICT");
+        var dupGroupWrite = await DispatchAsync("create_group",
+            new { groupName = "dup-index-group", indexNum = 1, confirmed = true });
+        Assert.False(dupGroupWrite.Success);
+        Assert.Contains(dupGroupWrite.Errors, e => e.Code == "ENUM_GROUP_INDEX_CONFLICT");
+
+        // demo_active (index_num=1, db/enum_seed.sql) already exists -- create_item with the same
+        // index_num must fail close the same way.
+        var dupItemWrite = await DispatchAsync("create_item",
+            new { name = "dup-index-item", indexNum = 1, confirmed = true });
+        Assert.False(dupItemWrite.Success);
+        Assert.Contains(dupItemWrite.Errors, e => e.Code == "ENUM_ITEM_INDEX_CONFLICT");
+
+        // demo_active (index_num=1) is a real member of demo_status (group_id
+        // 22222222-2222-2222-2222-222222222201, db/enum_seed.sql) -- deleting it must fail close
+        // rather than orphan enum.group_items, dryRun and confirmed alike.
+        var referencedDeleteDryRun = await DispatchAsync("delete_item", new { indexNum = 1, dryRun = true });
+        Assert.False(referencedDeleteDryRun.Success);
+        Assert.Contains(referencedDeleteDryRun.Errors, e => e.Code == "ENUM_ITEM_IN_USE");
+        var referencedDeleteWrite = await DispatchAsync("delete_item", new { indexNum = 1, confirmed = true });
+        Assert.False(referencedDeleteWrite.Success);
+        Assert.Contains(referencedDeleteWrite.Errors, e => e.Code == "ENUM_ITEM_IN_USE");
+
+        const string demoStatusGroupId = "22222222-2222-2222-2222-222222222201";
+
+        // Duplicate membership within the same enumIndexNums array must fail close, dryRun and
+        // confirmed alike, never partially applying the list.
+        var dupMembershipDryRun = await DispatchAsync("set_group_items",
+            new { groupId = demoStatusGroupId, enumIndexNums = new[] { 1, 1, 2 }, dryRun = true });
+        Assert.False(dupMembershipDryRun.Success);
+        Assert.Contains(dupMembershipDryRun.Errors, e => e.Code == "ENUM_GROUP_ITEMS_DUPLICATE_MEMBERSHIP");
+        var dupMembershipWrite = await DispatchAsync("set_group_items",
+            new { groupId = demoStatusGroupId, enumIndexNums = new[] { 1, 1, 2 }, confirmed = true });
+        Assert.False(dupMembershipWrite.Success);
+        Assert.Contains(dupMembershipWrite.Errors, e => e.Code == "ENUM_GROUP_ITEMS_DUPLICATE_MEMBERSHIP");
+
+        // A nonexistent item index in enumIndexNums must fail close rather than silently drop it
+        // (the pre-fix in-memory repository behavior filtered unknown indexes out silently).
+        var nonexistentMemberWrite = await DispatchAsync("set_group_items",
+            new { groupId = demoStatusGroupId, enumIndexNums = new[] { 1, 90210 }, confirmed = true });
+        Assert.False(nonexistentMemberWrite.Success);
+        Assert.Contains(nonexistentMemberWrite.Errors, e => e.Code == "ENUM_ITEM_NOT_FOUND");
+
+        // None of the above negative attempts altered demo_status's real membership.
+        var afterPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:get_group",
+            groupId = demoStatusGroupId,
+        });
+        var afterResponse = await dispatcher.DispatchAsync(new EndpointRequestDto(
+            "get_group", "manifest", "enum_dictionary", "get_group",
+            IdOrHubId: null, Payload: afterPayload, Context: null, TriggerKind: "client", Role: "admin"));
+        Assert.True(afterResponse.Success, string.Join(";", afterResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+        var afterText = afterResponse.Emission!.Data!.Value.GetRawText();
+        Assert.Contains("\"itemsIndexNums\":[1,2,3]", afterText);
+    }
+
     [Fact]
     public async Task AdminEnumManagementManifest_OwnsNoHubRelationsRows_SeedOnly()
     {
@@ -493,6 +586,224 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         var count = (int)(await cmd.ExecuteScalarAsync() ?? 0);
 
         Assert.Equal(0, count);
+    }
+
+    /// <summary>
+    /// Single-purpose write layouts (2026-07-27, PR #600 review round 2 correction):
+    /// docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml lane_storage_boundary
+    /// remaining_write_payload_capture_gap already settled "a single-purpose write layout,
+    /// exactly like the read layout above, is a safe and sufficient composition" -- each of the
+    /// 7 enum_dictionary write actions gets its own dedicated manifest (db/seed_empty.sql
+    /// ae210/ae220/ae230/ae240/ae250/ae260/ae270), reusing the exact Lane 2
+    /// (component_wiring_execution_lane, wiringKind=admin_runtime) + node-level
+    /// dispatchPayloadFromByTrigger mechanism ae200's own read circuit and
+    /// remaining_write_payload_capture_gap resolution already prove generically. This proves the
+    /// SPECIFIC seed content itself (not just the generic mechanism): every write manifest
+    /// structurally resolves preview_button/confirm_button to a real componentId, both share the
+    /// SAME wiringKind/target_ref (the layout's one canonical operation), and each carries a
+    /// distinct, real dispatchPayloadFromByTrigger (dryRun vs confirmed) -- read from the actual
+    /// dispatched Emission, not a hand-built map.
+    /// </summary>
+    [Theory]
+    [InlineData("00000000-0000-0000-0000-0000000ae210", "create_group")]
+    [InlineData("00000000-0000-0000-0000-0000000ae220", "update_group")]
+    [InlineData("00000000-0000-0000-0000-0000000ae230", "delete_group")]
+    [InlineData("00000000-0000-0000-0000-0000000ae240", "create_item")]
+    [InlineData("00000000-0000-0000-0000-0000000ae250", "update_item")]
+    [InlineData("00000000-0000-0000-0000-0000000ae260", "delete_item")]
+    [InlineData("00000000-0000-0000-0000-0000000ae270", "set_group_items")]
+    public async Task DispatchAsync_EnumDictionaryWriteManifest_ResolvesSinglePurposeLayout_WithDistinctPreviewAndConfirmPayloads(
+        string manifestId, string action)
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+        var payload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = $"manifest:{manifestId}:projection_entry",
+        });
+        var request = new EndpointRequestDto(
+            "Search", "default", "screen_list", "Search",
+            IdOrHubId: null, Payload: payload, Context: null, TriggerKind: "client", Role: "admin");
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
+        Assert.NotNull(response.Emission);
+        var nodes = response.Emission!.LayoutNodes!;
+
+        var unresolvedLeaves = nodes.Where(n => n.NodeKind == "catalog_component" && n.ComponentId is null).ToList();
+        Assert.Empty(unresolvedLeaves);
+
+        var expectedTargetRef = $"manifest:{manifestId}:enum_dictionary:{action}";
+        var previewButton = Assert.Single(nodes, n => n.NodeId == "preview_button");
+        Assert.Equal("admin_runtime", previewButton.WiringKind);
+        Assert.Equal(expectedTargetRef, previewButton.TargetRef);
+        Assert.NotNull(previewButton.DispatchPayloadFromByTrigger);
+        var previewClick = previewButton.DispatchPayloadFromByTrigger!.Value.GetProperty("click");
+        Assert.Equal("literal:true", previewClick.GetProperty("dryRun").GetString());
+        Assert.False(previewClick.TryGetProperty("confirmed", out _));
+
+        var confirmButton = Assert.Single(nodes, n => n.NodeId == "confirm_button");
+        Assert.Equal("admin_runtime", confirmButton.WiringKind);
+        Assert.Equal(expectedTargetRef, confirmButton.TargetRef);
+        Assert.NotNull(confirmButton.DispatchPayloadFromByTrigger);
+        var confirmClick = confirmButton.DispatchPayloadFromByTrigger!.Value.GetProperty("click");
+        Assert.Equal("literal:true", confirmClick.GetProperty("confirmed").GetString());
+        Assert.False(confirmClick.TryGetProperty("dryRun", out _));
+    }
+
+    /// <summary>
+    /// Full write round-trip through the SEED's own dedicated create_group manifest (ae210) --
+    /// not ae200 directly -- proving manifest-identity resolution for the new single-purpose
+    /// write layout works end to end: dryRun preview (non-mutating), unconfirmed fail-close,
+    /// confirmed write, and re-list reflects the diff, exactly like
+    /// DispatchAsync_AdminEnumManagementManifest_CreateGroupThenDeleteGroup_PersistsAndReListReflectsDiff
+    /// proves for the read manifest's own target_ref shape.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_EnumDictionaryCreateGroupWriteManifest_PreviewThenConfirmedWrite_PersistsAndReListReflectsDiff()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        const string createGroupManifestId = "00000000-0000-0000-0000-0000000ae210";
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var groupName = $"write-manifest-proof-{suffix}";
+        string? createdGroupId = null;
+
+        async Task<EndpointResponseDto> DispatchCreateAsync(object extra)
+        {
+            var node = System.Text.Json.Nodes.JsonNode.Parse(
+                System.Text.Json.JsonSerializer.SerializeToElement(extra).GetRawText())!.AsObject();
+            node["target_ref"] = $"manifest:{createGroupManifestId}:enum_dictionary:create_group";
+            node["groupName"] = groupName;
+            return await dispatcher.DispatchAsync(new EndpointRequestDto(
+                "create_group", "manifest", "enum_dictionary", "create_group",
+                IdOrHubId: null,
+                Payload: System.Text.Json.JsonSerializer.SerializeToElement(node),
+                Context: null, TriggerKind: "client", Role: "admin"));
+        }
+
+        try
+        {
+            // preview_button's own resolved shape: dryRun:true, non-mutating.
+            var previewResponse = await DispatchCreateAsync(new { dryRun = true });
+            Assert.True(previewResponse.Success, string.Join(";", previewResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+            Assert.Contains("\"dryRun\":true", previewResponse.Emission!.Data!.Value.GetRawText());
+
+            var listVector = new EndpointRequestDto(
+                "list_groups", "manifest", "enum_dictionary", "list_groups",
+                IdOrHubId: null,
+                Payload: System.Text.Json.JsonSerializer.SerializeToElement(new { target_ref = $"manifest:{createGroupManifestId}:enum_dictionary:list_groups" }),
+                Context: null, TriggerKind: "client", Role: "admin");
+            async Task<string> ListGroupsRawAsync()
+            {
+                var r = await dispatcher.DispatchAsync(listVector);
+                Assert.True(r.Success, string.Join(";", r.Errors.Select(e => e.Code + ":" + e.Message)));
+                return r.Emission!.Data!.Value.GetRawText();
+            }
+            Assert.DoesNotContain(groupName, await ListGroupsRawAsync());
+
+            // confirm_button's own resolved shape: confirmed:true, real write.
+            var writeResponse = await DispatchCreateAsync(new { confirmed = true });
+            Assert.True(writeResponse.Success, string.Join(";", writeResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+            using (var doc = System.Text.Json.JsonDocument.Parse(writeResponse.Emission!.Data!.Value.GetRawText()))
+                createdGroupId = doc.RootElement.GetProperty("groupId").GetString();
+            Assert.False(string.IsNullOrWhiteSpace(createdGroupId));
+
+            Assert.Contains(groupName, await ListGroupsRawAsync());
+        }
+        finally
+        {
+            if (createdGroupId is not null)
+            {
+                await using var conn = new NpgsqlConnection(cs);
+                await conn.OpenAsync();
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = "DELETE FROM enum.groups WHERE group_id = @id";
+                cmd.Parameters.AddWithValue("id", Guid.Parse(createdGroupId));
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Navigation reachability for the write manifests (governance requirement: hub relation
+    /// authoring and target manifest resolution proven via the existing /admin/manifests
+    /// authority and live-DB resolution-chain helper, same pattern as
+    /// DispatchAsync_AdminEnumManagementManifest_HubNavigationCreate_RealAuthoringPath_
+    /// ThenResolutionChainReflectsIt above): authors a real hub_relations row FROM ae200 TO the
+    /// create_group write manifest via the real hub_navigation:create dispatch action, then
+    /// re-dispatches ae200 and asserts the resolution chain reflects it.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_AdminEnumManagementManifest_HubNavigationCreate_ToCreateGroupWriteManifest_ResolutionChainReflectsIt()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        const string createGroupManifestId = "00000000-0000-0000-0000-0000000ae210";
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+
+        // create_group's own dedicated hub (db/seed_empty.sql 00000000-0000-0000-0000-0000000ae211
+        // -- NOT shared across the 7 write manifests: LoadHubNavigationSequenceAsync only
+        // resolves a target manifest when exactly one ACTIVE topology_manifests row exists per
+        // hub_id, so a shared hub across multiple active manifests would resolve to NULL).
+        var createGroupHubId = Guid.Parse("00000000-0000-0000-0000-0000000ae211");
+
+        Guid? createdHubRelationId = null;
+        try
+        {
+            var createPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                topologyManifestId = AdminEnumManagementManifestId.ToString(),
+                relatedHubId = createGroupHubId.ToString(),
+                sequencePosition = 1,
+            });
+            var createRequest = new EndpointRequestDto(
+                OperationType: "HubNavigationAdminScenario",
+                Target: "admin",
+                Layer: "hub_navigation",
+                Action: "create",
+                IdOrHubId: null, Payload: createPayload, Context: null, TriggerKind: "client", Role: "admin");
+            var createResponse = await dispatcher.DispatchAsync(createRequest);
+            Assert.True(createResponse.Success, string.Join(";", createResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+
+            var contentBundleRepo = new NpgsqlContentBundleRepository(NullLogger<NpgsqlContentBundleRepository>.Instance, cs);
+            var relations = await contentBundleRepo.ListHubRelationsByManifestAsync(AdminEnumManagementManifestId);
+            var created = Assert.Single(relations, r => r.RelatedHubId == createGroupHubId.ToString());
+            createdHubRelationId = Guid.Parse(created.HubRelationId);
+
+            var payload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{AdminEnumManagementManifestId}:projection_entry",
+            });
+            var request = new EndpointRequestDto(
+                "Search", "default", "screen_list", "Search",
+                IdOrHubId: null, Payload: payload, Context: null, TriggerKind: "client", Role: "admin");
+            var response = await dispatcher.DispatchAsync(request);
+            Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
+
+            HubRelationUiProjectionResolutionChainProof.AssertNavigationSequenceResolvesHubVector(
+                response.Emission!,
+                AdminEnumManagementManifestId,
+                [new HubRelationUiProjectionResolutionChainProof.ExpectedHubVectorEntry(
+                    createGroupHubId, 1, Guid.Parse(createGroupManifestId))]);
+        }
+        finally
+        {
+            if (createdHubRelationId is not null)
+            {
+                await using var conn = new NpgsqlConnection(cs);
+                await conn.OpenAsync();
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = "DELETE FROM hubs.hub_relations WHERE hub_relation_id = @rid";
+                cmd.Parameters.AddWithValue("rid", createdHubRelationId.Value);
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
     }
 
     private static string? GetConnectionString() => AggregateTriggerRepositoryLiveDbTests.GetConnectionString();

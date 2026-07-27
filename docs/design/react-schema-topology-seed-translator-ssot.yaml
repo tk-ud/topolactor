@@ -1592,7 +1592,39 @@ react_schema_topology_seed_translator_ssot:
         known_gaps:
           - gap: admin_runtime_layer_action_dispatch_wiring_lane_not_yet_implemented
             classification: runtime_dispatch_gap
-            status: open
+            status: resolved_2026_07_27
+            resolution_note: >-
+              admin-runtime-operation-dispatch-lane-determination Bundle resolved the dispatch
+              lane itself generically (wiringKind="admin_runtime" + node-level
+              dispatchPayloadFromByTrigger, 2026-07-22 through 2026-07-25 -- see
+              docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml lane_storage_boundary
+              admin_runtime_payload_binding_contract). admin-enum's own write side then consumed
+              it: all 7 enum_dictionary write actions (create_group/update_group/delete_group/
+              create_item/update_item/delete_item/set_group_items) are wired as dedicated
+              single-purpose write manifests (db/seed_empty.sql
+              00000000-0000-0000-0000-0000000ae210/ae220/ae230/ae240/ae250/ae260/ae270, each with
+              its own hub -- LoadHubNavigationSequenceAsync's HAVING COUNT(*)=1 target-manifest
+              resolution requires one active manifest per hub, so these do not share ae200's own
+              hub), each carrying a preview_button (dispatchPayloadFromByTrigger dryRun:
+              literal:true) and confirm_button (confirmed:literal:true) sharing the layout's one
+              canonical admin_runtime target_ref -- backend/runtime/AdminRuntimeMasterRoster.cs
+              gained the matching payload.dryRun/payload.confirmed mutation_confirmation_contract
+              gate (mirrors the pre-existing team_markdown:saved_view:update contract). Live-DB
+              proof: backend/tests/Topolactor.Integration.Tests/
+              AdminEnumHubRelationUiProjectionLiveDbTests.cs (structural resolution +
+              dispatchPayloadFromByTrigger shape for all 7, a full create_group preview/confirm/
+              write/re-list round trip through its own dedicated manifest, and a hub_navigation:
+              create authoring + resolution-chain proof from ae200 to the create_group manifest
+              as the representative pattern for all 7). historical_note_below_kept_as_history:
+              the enum_confirm_button entry described below (structural-leaf-only,
+              ADMIN_OPERATION_NOT_FOUND fallback) is now superseded for the actions listed above;
+              read-side list_groups/get_group dispatch was already resolved earlier (2026-07-23).
+              Remaining, honestly open item: hardcoded frontend/routes/admin/enums.tsx /
+              AdminEnumsRoster.tsx retirement has NOT happened -- the 7 new write manifests are
+              each a separate bare single-purpose screen (?manifest=<id>), not a UX replacement
+              for AdminEnumsRoster's single polished roster page (search/table/modal/inline-edit
+              in one surface), so retiring the hardcoded route now would violate this Bundle's own
+              NG boundary (no route removal before a genuine production replacement exists).
             note: >-
               admin-surface-topology-seed-conversion admin-enum subBundle (.agent/tasks/todo.md).
               The 9 enum_dictionary:* admin_runtime actions (docs/design/enum-dictionary-ssot.yaml

@@ -47,6 +47,9 @@ public abstract class EnumDictionaryRepository
     public abstract Task<EnumDictionaryItemDto> CreateItemAsync(
         string name, int? indexNum, CancellationToken ct = default);
 
+    public abstract Task<EnumDictionaryItemDto?> GetItemAsync(
+        int indexNum, CancellationToken ct = default);
+
     public abstract Task<EnumDictionaryItemDto?> UpdateItemAsync(
         int indexNum, string? name, int? newIndexNum, CancellationToken ct = default);
 
@@ -57,5 +60,12 @@ public abstract class EnumDictionaryRepository
 
     public virtual Task<bool> IsGroupReferencedInManifestsAsync(
         Guid groupId, CancellationToken ct = default) =>
+        Task.FromResult(false);
+
+    // Mirrors IsGroupReferencedInManifestsAsync's role for items: enum.group_items.enum_index_num
+    // REFERENCES enum.items(index_num) with no ON DELETE clause (db/enum_tables.sql), so a
+    // referenced item's delete would otherwise surface as a raw, untranslated FK violation.
+    public virtual Task<bool> IsItemReferencedInGroupsAsync(
+        int indexNum, CancellationToken ct = default) =>
         Task.FromResult(false);
 }

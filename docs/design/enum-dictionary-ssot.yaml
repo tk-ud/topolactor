@@ -57,7 +57,20 @@ enum_dictionary_ssot:
       - ENUM_GROUP_ID_MALFORMED
       - ENUM_GROUP_WRITE_NOT_CONFIRMED
       - ENUM_ITEM_WRITE_NOT_CONFIRMED
+      - ENUM_GROUP_INDEX_CONFLICT
+      - ENUM_ITEM_INDEX_CONFLICT
+      - ENUM_ITEM_IN_USE
+      - ENUM_GROUP_ITEMS_DUPLICATE_MEMBERSHIP
     rule: unresolved_enum_group_reference_must_blocking_error_not_silent_fallback
+    validation_parity_rule: >-
+      2026-07-27 (PR #600 review round 2): dryRun (preview) and confirmed (write) must run the
+      identical validation gate set for every action -- existence (GetGroupDetailAsync/
+      GetItemAsync), conflict (index_num uniqueness), and in-use (IsGroupReferencedInManifestsAsync/
+      IsItemReferencedInGroupsAsync) checks all run BEFORE the dryRun/confirmed branch, never only
+      on the write path. ENUM_ITEM_IN_USE mirrors ENUM_GROUP_IN_USE's existing role for
+      delete_item (enum.group_items.enum_index_num REFERENCES enum.items(index_num), db/
+      enum_tables.sql). ENUM_GROUP_ITEMS_DUPLICATE_MEMBERSHIP catches duplicate values within a
+      single set_group_items enumIndexNums array before persistence.
     mutation_confirmation_contract_gate: >-
       admin_runtime_actions.enum_dictionary_write group ops (create_group/update_group/
       delete_group/update_group_members->set_group_items) and item ops
