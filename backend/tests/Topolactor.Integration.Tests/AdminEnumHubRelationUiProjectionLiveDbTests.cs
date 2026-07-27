@@ -887,9 +887,17 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
     /// asserted here because it is not physically persisted anywhere today -- see
     /// AdminMasterRosterAudit.AppendAsync's dead-code envelope (built, never passed to
     /// AppendLogsDiffAsync) and logs.diff's own DDL (db/sql_attention_logs_tables.sql), which has no
-    /// column for it. That is a real, pre-existing, cross-cutting gap in the shared audit envelope,
-    /// not something this test can prove around; it is tracked as its own Bundle
-    /// (admin-master-roster-audit-envelope-changed-fields-gap, .agent/tasks/todo.md), not fixed here.
+    /// column for it. That is a real, pre-existing, cross-cutting gap in the shared audit envelope --
+    /// one shared with auth_users:create/update/delete, not admin-enum-specific -- not something this
+    /// test can prove around; it is tracked as its own Bundle
+    /// (admin-master-roster-audit-envelope-contract-gap, .agent/tasks/todo.md), not fixed here.
+    /// The returned Actor asserts only that actor_or_source is physically persisted with the value
+    /// ResolveAuditActor actually resolved for this dispatch (here, the TriggerKind "client" fallback,
+    /// since these test dispatches carry no JWT/AuthenticatedUserId) -- it is NOT a proof of
+    /// authenticated actor authority. AdminRuntimeMasterRoster.ResolveAuditActor's own fallback chain
+    /// (AuthenticatedUserId ?? ContextUserId ?? TriggerKind) contradicts its adjacent code comment
+    /// ("ContextUserId ... must never be trusted as an audit actor" -- yet the fallback uses it
+    /// anyway), a separate pre-existing gap tracked in the same Bundle above, not resolved here.
     /// </summary>
     private static async Task<(string Before, string After, string? Actor)> ReadLatestLogsDiffAsync(
         string cs, string physicalTableName, string recordId, string operationKind, DateTimeOffset since)
