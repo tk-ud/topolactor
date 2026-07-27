@@ -29,8 +29,15 @@ public partial class AdminRuntime
     }
 
     // AuthenticatedUserId is server-verified (JWT subject, stamped by DispatchAuthContext at the
-    // /dispatch boundary) and takes priority over client-supplied ContextUserId, which is not an
-    // authority signal and must never be trusted as an audit actor.
+    // /dispatch boundary) and is preferred over client-supplied ContextUserId -- per
+    // docs/design/auth-db-session-credential-ssot.yaml non_spoofable_actor_identity ("it now
+    // prefers AuthenticatedUserId"), ContextUserId is a documented, intentional fallback for
+    // dispatches without a verified identity, not primary/authoritative actor identity. The same
+    // AuthenticatedUserId ?? ContextUserId ?? TriggerKind chain is used unmodified in
+    // AdminRuntime.TeamMarkdown.cs's 4 write actions. (2026-07-27 PR #600 review: this comment
+    // previously and incorrectly said ContextUserId "must never be trusted as an audit actor",
+    // which contradicted the code's own fallback and the SSOT note above -- corrected to describe
+    // actual, SSOT-documented behavior; the fallback logic itself is unchanged.)
     private string? ResolveAuditActor(OperationVector vector) =>
         vector.AuthenticatedUserId ?? vector.ContextUserId ?? vector.TriggerKind;
 
