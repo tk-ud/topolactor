@@ -11,8 +11,9 @@
 | `helper-manual` | helper reference artifact / admin helper projection | not_started | 1 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `seed-template-runtime-interaction-assignment` | Seed/template projection runtimeInteractionId assignment path | implemented | 1 | `product.dynamic_support_nocode_loop` / seed-template projection adoption carry-over | `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 2 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
-| `admin-surface-topology-seed-conversion` | Admin hardcoded surface topology seed conversion（`role-based-surface-separation` はこの Bundle の pre-seed-implementation evidence として統合済み — 2026-07-14、下記 Bundle 本文の該当 subsection 参照）。`admin-dashboard` subBundle は実装完了（PR #595、2026-07-19、下記「admin-dashboard subBundle 実装完了記録」参照）。`admin-enum` subBundle は seed登録・structural render proof・navigation closure proof・read circuit（search/filter/table、2026-07-23実dispatch化・live-DB証明済み）を実装したが、enum_dictionary:* write dispatch（実際の作成/更新/削除）は`remaining_write_payload_capture_gap`（typed値をdispatch payloadへ載せるproduction-provenな既存mechanismの不在）により未接続のまま残る（下記「admin-enum subBundle 実装記録」参照、implemented 扱いにしない）。残り3 subBundle（`team-dashboard`/`credential-management`/`scheduler-settings`）は未着手。 | not_started | 5 subBundle（うち1件実装完了、1件 write dispatch gap 付きで部分実装、3件未着手） | `product.dynamic_support_nocode_loop` / admin hardcoded surface retirement | `docs/design/admin-normal-surface-projection-seed-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/instance-port-substrate-ssot.yaml` |
+| `admin-surface-topology-seed-conversion` | Admin hardcoded surface topology seed conversion（`role-based-surface-separation` はこの Bundle の pre-seed-implementation evidence として統合済み — 2026-07-14、下記 Bundle 本文の該当 subsection 参照）。`admin-dashboard` subBundle は実装完了（PR #595、2026-07-19、下記「admin-dashboard subBundle 実装完了記録」参照）。`admin-enum` subBundle は seed登録・structural render proof・navigation closure proof・read circuit・7 write action全ての mutation_confirmation_contract（dryRun/confirmed/validation parity/diff_log、実DBで7 action個別に証明済み、diff_log行の実persistence込み）を実装済みだが、hardcoded `/admin/enums`（`AdminEnumsRoster.tsx`）のUX-parity production replacementのみ、既存substrateの範囲外の gap（`admin-write-surface-selection-context-and-mode-composition-gap` Bundle参照）により未達（下記「admin-enum subBundle 実装記録」参照、implemented 扱いにしない）。残り3 subBundle（`team-dashboard`/`credential-management`/`scheduler-settings`）は未着手。 | not_started | 5 subBundle（うち1件実装完了、1件 hardcoded route撤去のみ残り部分実装、3件未着手） | `product.dynamic_support_nocode_loop` / admin hardcoded surface retirement | `docs/design/admin-normal-surface-projection-seed-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/instance-port-substrate-ssot.yaml` |
 | `admin-runtime-operation-dispatch-lane-determination` | PR #597 Gate0再監査で確定した、seed-authored Actionからmanifest-authorizedなadmin_runtime layer:action dispatchへ到達する既存canonical laneの不在。owner decision確定（2026-07-22、新規lane不採用／enum専用handler不採用／既存component_wiring_execution_laneへ収束）を受け、`wiring_kind="admin_runtime"`による具体境界を実装・test証明済み（下記Bundle本文参照）。2026-07-23にread circuit（search/filter/table）を実dispatch化・live-DB証明。2026-07-24、残っていたremaining_write_payload_capture_gap（typed値をdispatch payloadへ載せるproduction-provenな既存mechanismの不在）を、`frontend/runtime/liveNodeValueTracker.ts`（ProjectionShell live node value tracking）と、Lane 2の既存`resolvePayloadFrom`再利用によるpayloadFrom解決追加で解消し、enum_dictionary:create_group/delete_groupの実write+re-list live-DB証明（実PostgreSQL）まで完了した（下記「2026-07-24 remaining_write_payload_capture_gap解消」節参照）。3つの受入条件すべて充足。 | implemented | 1 | `admin-surface-topology-seed-conversion`（admin-enum/team-dashboard/scheduler-settings write-dispatch面の前提。この前提を解消したのみであり、各subBundle自身の本番write UI実装は別途そちらのscope） | `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml` |
+| `admin-write-surface-selection-context-and-mode-composition-gap` | PR #600 review round 3の指摘を受けた既存substrate範囲内での hardcoded-route撤去可否調査で判明した、compound gap。`hubs.hub_relations`によるhub_navigationは構造的なmanifest間リンク（related_hub_id/topology_manifest_id/sequence_positionのみ）であり、選択中の行identity（例: 編集対象groupのgroup_id）をtarget manifestへ運ぶ手段が無い。加えて`ui_state_update`の`localStateMutation`は固定boolean専用（`UI_STATE_UPDATE_OPEN_ACTIONS`）で、ユーザー選択に応じたtyped値のui-local書き込みができない。credential-managementのseedは`ui-local:credential_management_mode_switch.value`というtargetRefを既に宣言しているが、grep確認の結果runtime実装は0件（declared-but-orphaned）。この2点により、`AdminEnumsRoster.tsx`/`AdminUsersRoster.tsx`/`SchedulerJobSettingsPanel.tsx`が提供する「検索→既存行選択→現在値を読み込んで編集→確認→再取得」という単一画面UXを、既存の generic topology substrateだけでは再現できない——admin-enum/credential-management/scheduler-settingsの3 subBundle全てが同種のhardcoded roster UIを持つため、compound Bundleとして分離した。owner decisionが必要な設計拡張であり、本Bundleでは実装せず、3方向の改善方針比較のみを記録する。 | not_started | 1 | `admin-surface-topology-seed-conversion`（admin-enum/credential-management/scheduler-settingsのhardcoded route撤去面の前提） | `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/design/ui-ux-primitive-catalog-ssot.yaml` |
 | `seed-authoring-reference-routing` | `docs/reference/seed-data-authoring-guide.md`（non-SSOT authoring reference）を、schema seed translatorの全入口（entry gate core/CLI/topology-seed-discussion wrapper/README/SSOT cross-reference）から構造的に到達可能にする導線実装。2026-07-23 実装完了・test証明済み（下記Bundle本文参照）。 | implemented | 1 | seed authoring/translator利用時の反復調査防止 | `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/reference/seed-data-authoring-guide.md` |
 | `test-orchestration-review` | Seed conversion後の proof / test orchestration review | not_started | 1 | proof surface carry-over | `docs/design/pipeline-continuity-ssot.yaml` |
 | `frontend-canonical-surface-structure-label-boundary` | Seed conversion後の frontend canonical surface label boundary | not_started | 1 | frontend canonical UI structure/wiring surfaces | canonical surface UI structure/wiring SSOTs, `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml` |
@@ -904,6 +905,18 @@ owner再指摘（PR #600、2回目）を受け、以下3点に対応した。
 
 **admin-enum subBundle 全体の状態（round 3時点）:** backend側mutation_confirmation_contract（7 action全て、validation parity含む）・seed側single-purpose write manifest配線（7 action全て）・per-action live-DB round trip proof（7 action全て）・navigation reachability（代表証明、機構自体はae200で確立済み）は実装・test証明済み。SSOT語彙の既知の陳腐化（`blocked_pending_seed_catalog`）は本ラウンドで解消した。**残る唯一の未達は、hardcoded `/admin/enums` / `AdminEnumsRoster.tsx`のUX-parity production replacementおよびそれに伴う撤去であり、これは既存の generic topology substrate（`component_wiring_execution_lane`のlayout=1 canonical operationという確定済み設計原則）だけでは達成不可能なことを実装コード追跡により確認済みである。この限界を解消するには、実行時ユーザー選択に応じた動的operation切り替えという新しいruntime能力の導入が必要であり、それは本Bundleの scope・NG boundaryが単一Agentへ許可する範囲を超える、owner判断を要する設計拡張である。**この理由により、admin-enum subBundleを`implemented`と判断することはできない** — hardcoded routeが残っている限り、Bundle scope（「hardcoded route/island撤去」を含む共通工程の最終ステップ）は未達である。
 
+### admin-enum subBundle 実装記録（2026-07-27 round 4: diff_log実persistence証明 + round 3診断の訂正 + gapの todo 分離）
+
+owner再指摘（PR #600 review round 3）を受け、以下3点に対応した。
+
+**1. diff_log（`logs.diff`）の実persistence証明:** `backend/tests/Topolactor.Integration.Tests/HubRelationUiProjectionResolutionChainProof.cs` `BuildRealDispatcherAsync`が`AdminRuntime`へ`sqlAttentionLogsRepository`を一切渡していなかったため、`AdminMasterRosterAudit.AppendAsync`の`if (logsRepository is null) return;` fail-closeにより、round 2/3で証明したはずの「diff evidence」は実際には再読取り(re-list/re-read)状態のみを見ており、`logs.diff`への実書き込みは一度も検証されていなかった（round 2/3の主張の誤り）。`NpgsqlSqlAttentionLogsRepository`（既存、変更なし）を配線し、他2消費者（AdminDashboard/CredentialManagement向けproof）への影響が無いことをgrepで確認した上で、7 action個別に「dryRun/unconfirmed呼び出し後は対象record_idのlogs.diff行数が0のまま」「confirmed write後は行数が1で、before/afterのJSON内容が実際の値を反映している」ことを実DBで証明する`CountLogsDiffRowsAsync`/`ReadLatestLogsDiffAsync`アサーションを追加した（`create_group`/`update_group`/`delete_group`/`create_item`/`update_item`/`delete_item`/`set_group_items`の全7 action）。Test結果: `AdminEnumHubRelationUiProjectionLiveDbTests`21/21 pass。CI相当filter（12クラス）をフレッシュDB（`db/init.sql`と同一適用順で再構築）で実行し85/85 pass。`Topolactor.Runtime.Tests`1491/1491 pass。`check-structure.sh`/`check-enum-dictionary.sh`/`check-yaml-parse-completeness.sh`/`check-admin-normal-surface-projection-seed-ssot.sh`いずれもpass。
+
+**2. round 3の診断（「動的operation切り替えが必要」）を訂正:** round 3は「単一layout=1 canonical operationという設計により、複数operationを実行時に動的切り替えする機構が無いことがUX-parity達成の障壁」と結論づけていたが、これは誤りだった。`docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml` `remaining_write_payload_capture_gap`ノート自身が既に「a single-purpose write layout, exactly like the read layout above, is a safe and sufficient composition -- no per-node extension needed」と明記しており（review comment 1で確認済みの通り）、動的operation切り替えは元々不要と決着済みの論点だった。実装コードを再調査した結果、真のblockerは別の2点だと判明した：(a) `hubs.hub_relations`（`backend/repository/NpgsqlContentBundleRepository.cs`）はrelated_hub_id/topology_manifest_id/sequence_position/statusのみを持つ構造的リンクであり、選択中の行identity（例: 編集対象groupのgroup_id）をtarget manifestへ運ぶ列が無い（grep確認）。(b) `ui_state_update`の`localStateMutation`（`frontend/runtime/uiEventEffectRunner.ts` `UI_STATE_UPDATE_OPEN_ACTIONS`）は固定boolean（true/false/toggle）専用で、ユーザーが選択した行のidのようなtyped値をui-local stateへ書けない。さらに`docs/design/react-schema-topology-seed-translator-ssot.yaml`のcredential-management seed宣言は`internal_instance_wiring`レーンのtargetRefとして`ui-local:credential_management_mode_switch.value`を既に持つが、production `.ts`/`.tsx`/`.cs`全体をgrepしても参照0件——`wiring_schema_json`と同種のdeclared-but-orphaned targetRefだった。つまり、AdminEnumsRoster.tsx同等のUXには「一覧から既存行を選び、その現在値を読み込んでeditモードへ切り替える」ためのnavigation-context伝達・in-canvas mode composition機構が要るが、この2点のどちらも既存substrateに存在しない、というのが正しい診断である。
+
+**3. 範囲外gapのtodo分離:** 上記2.の gap は admin-enum固有ではなく、同型のhardcoded roster UI（`AdminUsersRoster.tsx`＝credential-management、`SchedulerJobSettingsPanel.tsx`＝scheduler-settings）を持つ他2 subBundleとも共有する compound gap であることを確認した（credential-managementは前述の通りseedへ`ui-local:credential_management_mode_switch.value`という自身の期待をorphaned targetRefとして既に残しており、scheduler-settings/team-dashboardはまだseed変換未着手だが現行hardcoded UIは同型）。review comment 3の指示に従い、単一subBundle向けのad-hoc実装やroute分岐は追加せず、独立Bundle `admin-write-surface-selection-context-and-mode-composition-gap`（本ファイル、上記索引テーブルおよび下記本文）として問題点/目的/改善方針/対応資料/対象ファイル名/対象関数名を構造化して記録した。
+
+**admin-enum subBundle 全体の状態（round 4時点）:** backend側mutation_confirmation_contract（7 action全て、validation parity・diff_log実persistence込み）・seed側single-purpose write manifest配線（7 action全て）・per-action live-DB round trip proof（7 action全て、diff_log証明込み）・navigation reachability（代表証明、機構自体はae200で確立済み）は実装・test証明済み。**残る唯一の未達は、hardcoded `/admin/enums` / `AdminEnumsRoster.tsx`のUX-parity production replacementおよびそれに伴う撤去であり、これは既存substrateのnavigation-context伝達・mode composition gap（`admin-write-surface-selection-context-and-mode-composition-gap` Bundle参照）により達成不可能であることを確認した。**この理由により、admin-enum subBundleを`implemented`と判断することはできない** — hardcoded routeが残っている限り、Bundle scope（「hardcoded route/island撤去」を含む共通工程の最終ステップ）は未達である。
+
 ---
 
 ## Bundle `admin-runtime-operation-dispatch-lane-determination`
@@ -1156,6 +1169,80 @@ owner decisionが必要な3方向（既存`runtime_interactions_lane`拡張／�
 - PR #597の未完了scopeをtodo status変更だけで処理済みとして扱う。
 - remaining_write_payload_capture_gap（`payloadFromNodeValues`が`ProjectionShell.tsx`で未配線、`localStateMutation`がboolean専用）を解消しないまま、canonical形状（`payloadFrom: {"name":"node:...value"}`等）だけをseedへ書き、runtime reachabilityが証明されたかのように扱う——canonical形状とruntime reachabilityは別軸であり、前者だけで後者を宣言してはならない。
 - `frontend/islands/ProjectionShell.tsx`のlive input値trackingを、検証なしに拙速に実装する（共有・本番稼働中のcomponentであり、影響範囲はadmin-enumに留まらない——既存の`dispatchExternalPort`/`dispatchInstanceOperation`のnode:参照全てに影響する）。
+
+---
+
+## Bundle `admin-write-surface-selection-context-and-mode-composition-gap`
+
+**Status:** `not_started`
+
+**Position:** PR #600（`admin-surface-topology-seed-conversion` admin-enum subBundle）review round 3の指示「既存substrate範囲内でhardcoded-route撤去が可能か調査し、不可能ならBundle単位todoへ分離する」に基づき、実装コード・SSOT追跡から切り出した、admin-enum/credential-management/scheduler-settingsの3 subBundleが共有するcompound gap。owner decisionが必要な設計拡張であり、本Bundleでは実装しない——3方向の改善方針比較をSSOTへ記録し、owner判断を待つためのtodoである。
+
+### 問題点
+
+`admin-surface-topology-seed-conversion` admin-enum subBundleは、7つのenum_dictionary write action（create_group/update_group/delete_group/create_item/update_item/delete_item/set_group_items）それぞれに専用のsingle-purpose write manifest（ae210/ae220/ae230/ae240/ae250/ae260/ae270）を持ち、hub_navigationでae200（読み取り専用一覧manifest）と相互連結した状態まで実装・live-DB証明済みである（`admin-surface-topology-seed-conversion` admin-enum subBundle実装記録参照）。しかし、これは`AdminEnumsRoster.tsx`（現行hardcoded route `/admin/enums`）が提供する「検索→一覧→既存行を選択→その現在値を読み込んで編集→確認→書き込み→再取得」という単一画面内で完結するUXと同等ではなく、実装コードの追跡により、既存の generic topology substrateだけではこのUX-parityを再現できないことが確定した。理由は以下の2点（round 3が誤って結論づけていた「動的operation切り替えの不在」ではない——`component_wiring_execution_lane`の「single-purpose write layoutが安全かつ十分な構成」という設計原則は既に確定済みであり、この論点ではない）。
+
+1. **選択中の行identityをtarget manifestへ運ぶ手段が無い**: `hubs.hub_relations`（`backend/repository/NpgsqlContentBundleRepository.cs`の全hub_relationsクエリで確認）は`related_hub_id`/`topology_manifest_id`/`sequence_position`/`status`のみを持つ、純粋に構造的なmanifest間リンクである。「ae200の一覧でユーザーが選んだgroup_idを、次のupdate_group write manifestのフォームへ引き継いで既存値をpre-fillする」ための、navigation実行時にcontext（record id等）を運ぶ列やmechanismは存在しない。
+2. **ui-local stateへtyped値を書く手段が無い**: `frontend/runtime/uiEventEffectRunner.ts`の`UI_STATE_UPDATE_OPEN_ACTIONS`（`localStateMutation`のhandler）は固定boolean（true/false/toggle）専用として設計されている（handler自身のinline commentで明記）。ユーザーがクリックした行のid等、event由来のtyped値をui-local stateへ書き込む、seed-authorableな既存actionTypeは無い。
+   - 傍証: `docs/design/react-schema-topology-seed-translator-ssot.yaml`のcredential-management (`auth.external.credential_management.projection`) seed宣言は、`internal_instance_wiring`レーンのtargetRefとして`ui-local:credential_management_mode_switch.value`を既に持つ——つまりcredential-management自身のseedは、まさにこの種の「mode switch」機構を前提として設計されていた。しかし production `.ts`/`.tsx`/`.cs`全体をgrepしても、`internal_instance_wiring`または`ui-local:`という文字列を消費するruntime実装は0件——`docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`が別途記録する`topology.ui_wiring_registry.wiring_schema_json`（宣言はあるが一切読まれない列）と同種の、declared-but-orphaned targetRefである。
+
+唯一の既存precedentは`inline_edit/inline_editable_field` + `inline_edit/confirmed_update_button` + `inline_edit/audit_diff_drawer`（`physical_details_inline_editor_md_generator` preset、`frontend/runtime/runtimeComponentFactory.ts`でruntime-connected済み）だが、これは「既に一意に特定された1つの物理recordの、その場のフィールド編集」専用であり、「多数の行から1つを選び、その現在値をフォームへ読み込む」というlist-backed selectionシナリオはカバーしない。
+
+`AdminUsersRoster.tsx`（credential-management、create/update/deleteが1画面）・`SchedulerJobSettingsPanel.tsx`（scheduler-settings、createSchedulerJob/editSchedulerJob/disableSchedulerJobが1画面）は、いずれもAdminEnumsRoster.tsxと同型の「単一画面でCRUD一式が完結するhardcoded roster UI」であることをコード確認済み——admin-enumだけの問題ではない。
+
+### 目的
+
+hardcoded roster風admin画面（admin-enum/credential-management/scheduler-settings、将来的にはteam-dashboardも同型UIへ収束する可能性あり）が、既存のgeneric topology substrateだけで「一覧からの選択→現在値の読み込み→編集→確認→再取得」という単一画面UXを再現できるようにし、各subBundle固有のhandler/route分岐を新設することなく、hardcoded routeを真のUX-parityで撤去できる状態にする。
+
+### 改善方針（提案のみ、実装しない——owner decisionを要する）
+
+- **案A: navigation-context伝達の拡張**: `hubs.hub_relations`によるnavigationに、選択record idのような軽量contextを運ぶ手段を追加する（例: 遷移先manifestのフォームnodeが、遷移元で選択された行のidを受け取れるようにする）。影響範囲: `db/topology_tables.sql`（`hubs.hub_relations`スキーマ）、`backend/repository/NpgsqlContentBundleRepository.cs`、`HubNavigationResolver`。
+- **案B: `localStateMutation`のtyped値対応**: 固定boolean専用の`UI_STATE_UPDATE_OPEN_ACTIONS`を拡張する（またはtriggerと役割分離した新規actionTypeを追加する）ことで、event由来のtyped値（選択された行のid等）をui-local stateへ書けるようにする——これは2026-07-24に解消済みの`remaining_write_payload_capture_gap`（typed値をdispatch payloadへ載せる側の解決）と対になる、selection-state側の未解決版である。
+- **案C: `inline_edit/*`プリミティブ族のlist-backed選択への一般化**: 既にruntime-connected済みの`inline_edit/inline_editable_field`等（`physical_details_inline_editor_md_generator`）を、単一物理recordの直接編集専用から、list選択に応じて対象recordが切り替わるシナリオへ拡張する。
+- いずれの方向性も、cross-cutting・高blast-radiusな設計拡張であり、単一Agentが`implementation_change` worktypeの範囲内で独断採用しない。3方向比較をSSOTへ記録した上でowner decisionを経ること——本Bundleの前身`admin-runtime-operation-dispatch-lane-determination`が辿った同じ手続きに従う。
+
+### 対応資料
+
+- `AGENTS.md`
+- `.agent/rules/rule.md`
+- `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`（`lane_storage_boundary`、`ui_event_settings.setting_category_taxonomy`、`remaining_write_payload_capture_gap`/`write_payload_capture_mechanism_implemented`の解決史）
+- `docs/design/react-schema-topology-seed-translator-ssot.yaml`（credential-managementの`internal_instance_wiring`/`ui-local:credential_management_mode_switch.value` declared-but-orphaned targetRef）
+- `docs/design/admin-normal-surface-projection-seed-ssot.yaml`（`subbundle_status`追跡）
+- `docs/design/enum-dictionary-ssot.yaml`（`admin_hub_relation_navigation`）
+- `docs/design/ui-ux-primitive-catalog-ssot.yaml`（`category_b_inline_edit_audit`）
+- `docs/design/ui-builder-preset-ecosystem-ssot.yaml`（`physical_details_inline_editor_md_generator_preset`）
+- `.agent/tasks/todo.md`（`admin-runtime-operation-dispatch-lane-determination` Bundle、`admin-surface-topology-seed-conversion` admin-enum subBundle実装記録）
+- PR #600（`tk-ud/topolactor`）review round 1-3コメント履歴
+
+### 対象ファイル名
+
+- `db/topology_tables.sql`（`hubs.hub_relations`スキーマ、案A採用時）
+- `backend/repository/NpgsqlContentBundleRepository.cs`、`backend/runtime/HubNavigationResolver.cs`
+- `frontend/runtime/uiEventEffectRunner.ts`（`UI_STATE_UPDATE_OPEN_ACTIONS`、案B採用時）
+- `frontend/runtime/runtimeComponentFactory.ts`（`inline_edit/*` factory、案C採用時）
+- `frontend/islands/ProjectionShell.tsx`
+- `frontend/islands/AdminEnumsRoster.tsx`、`frontend/islands/AdminUsersRoster.tsx`、`frontend/islands/SchedulerJobSettingsPanel.tsx`（gap解消後の撤去対象）
+- `db/seed_empty.sql`（admin-enum ae2xx行、credential-management manifest 092、scheduler-settings seed行——将来）
+
+### 対象関数名
+
+- `HubNavigationResolver`の解決メソッド群、`NpgsqlContentBundleRepository`の`hub_navigation:*`authoring関数群
+- `uiEventEffectRunner.ts`の`UI_STATE_UPDATE_OPEN_ACTIONS`ハンドラ
+- `runtimeComponentFactory.ts`の`inline_edit`系factory関数
+
+### 受入条件
+
+- 案A/B/Cの比較（再利用範囲・新規抽象化範囲・SSOT変更範囲・runtime変更範囲・seed変更範囲・test/proof範囲・authority/fail-close条件・他subBundleへの再利用性・migration境界・blast radius）がownerに提示され、1方向（または代替）が選択されている。
+- 選択された方向のSSOT改定が本Bundleまたは後続Bundleで完了している。
+- admin-enum/credential-management/scheduler-settingsそれぞれのhardcoded roster route撤去が、選択された単一の正規contractに従って進められる状態になっている（各subBundle自身のUX-parity実装・撤去は別途そちらのscope）。
+
+### Governance NG boundary
+
+- Agent判断で案A/B/Cのいずれかを検証なしに採用する。
+- 単一subBundle（admin-enumのみ等）向けのad-hoc実装として本gapを解消する——3 subBundle共有のcompound gapとして扱うこと。
+- 本Bundleの範囲外実装として、admin-enum専用のnavigation-context引き継ぎ処理やmode-switch分岐を`db/seed_empty.sql`のae2xx行やAdminRuntimeMasterRoster.csへ直接追加する。
+- `admin-surface-topology-seed-conversion`および傘下subBundleの既存記録・statusをこのBundle追加によって変更する（admin-enum subBundle実装記録は別途そちら側で更新する）。
+- 本gapを解消しないまま、7 write manifest + hub_navigationの構成を「hardcoded route撤去可能なUX-parity達成」として宣言する。
 
 ---
 

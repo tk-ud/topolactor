@@ -51,7 +51,16 @@ internal static class HubRelationUiProjectionResolutionChainProof
             // determination read-circuit proof) need this repository wired, or every
             // enum_dictionary:* case in AdminRuntime.ExecuteDataAsync fails closed with
             // ENUM_DICTIONARY_NOT_AVAILABLE regardless of manifest/wiring resolution.
-            enumDictionaryRepository: new NpgsqlEnumDictionaryRepository(connectionString));
+            enumDictionaryRepository: new NpgsqlEnumDictionaryRepository(connectionString),
+            // AdminMasterRosterAudit.AppendAsync (diff_log stage of mutation_confirmation_contract)
+            // silently no-ops when this is null (backend/runtime/AdminMasterRosterAudit.cs) --
+            // without it, no consumer of this manifest-agnostic helper (admin-enum, admin-dashboard,
+            // credential-management) can prove diff_log persistence, only that the write itself
+            // succeeded. Wiring the existing, unmodified NpgsqlSqlAttentionLogsRepository here does
+            // not change behavior for the other two consumers (grep-confirmed neither references
+            // sqlAttentionLogsRepository or a *_NOT_AVAILABLE code gated by its absence).
+            sqlAttentionLogsRepository: new NpgsqlSqlAttentionLogsRepository(
+                NullLogger<NpgsqlSqlAttentionLogsRepository>.Instance, connectionString));
         var adminAdapter = new AdminRuntimeDispatchAdapter(adminRuntime, new OperationVectorResolver());
 
         var targetOverride = new TargetDispatchOverride(NullLogger<TargetDispatchOverride>.Instance, adminRuntime);

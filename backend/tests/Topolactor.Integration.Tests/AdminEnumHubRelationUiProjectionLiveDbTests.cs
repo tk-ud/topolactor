@@ -689,7 +689,9 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
 
         try
         {
-            // preview_button's own resolved shape: dryRun:true, non-mutating.
+            var t0 = DateTimeOffset.UtcNow;
+
+            // preview_button's own resolved shape: dryRun:true, non-mutating, no diff_log.
             var previewResponse = await DispatchCreateAsync(new { dryRun = true });
             Assert.True(previewResponse.Success, string.Join(";", previewResponse.Errors.Select(e => e.Code + ":" + e.Message)));
             Assert.Contains("\"dryRun\":true", previewResponse.Emission!.Data!.Value.GetRawText());
@@ -707,7 +709,7 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             }
             Assert.DoesNotContain(groupName, await ListGroupsRawAsync());
 
-            // confirm_button's own resolved shape: confirmed:true, real write.
+            // confirm_button's own resolved shape: confirmed:true, real write, real diff_log.
             var writeResponse = await DispatchCreateAsync(new { confirmed = true });
             Assert.True(writeResponse.Success, string.Join(";", writeResponse.Errors.Select(e => e.Code + ":" + e.Message)));
             using (var doc = System.Text.Json.JsonDocument.Parse(writeResponse.Emission!.Data!.Value.GetRawText()))
@@ -715,6 +717,15 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             Assert.False(string.IsNullOrWhiteSpace(createdGroupId));
 
             Assert.Contains(groupName, await ListGroupsRawAsync());
+
+            // diff_log stage: the preview/dryRun call (before createdGroupId even exists) added
+            // zero rows for the real record; the confirmed write added exactly one, with
+            // before={} (no prior state) and after carrying the real created group.
+            Assert.Equal(1, await CountLogsDiffRowsAsync(cs, "enum.groups", createdGroupId!, "create", t0));
+            var write = await ReadLatestLogsDiffAsync(cs, "enum.groups", createdGroupId!, "create", t0);
+            Assert.Equal("{}", write.Before);
+            Assert.Contains(groupName, write.After);
+            Assert.Contains(createdGroupId!, write.After);
         }
         finally
         {
@@ -838,6 +849,64 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
     }
 
     /// <summary>
+    /// diff_log stage of mutation_confirmation_contract (AdminMasterRosterAudit.AppendAsync ->
+    /// logs.diff, source_set_id='admin_master_roster' per docs/design/admin-master-roster-
+    /// management-ssot.yaml logs_diff_admin_projection). Counts real logs.diff rows for the given
+    /// physical_table_name/record_id/operation_kind observed since a baseline timestamp --
+    /// HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync now wires a real
+    /// NpgsqlSqlAttentionLogsRepository, so AppendAsync's prior silent no-op (repository null) no
+    /// longer masks whether diff_log actually persists.
+    /// </summary>
+    private static async Task<int> CountLogsDiffRowsAsync(
+        string cs, string physicalTableName, string recordId, string operationKind, DateTimeOffset since)
+    {
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT COUNT(*)::int FROM logs.diff
+            WHERE source_set_id = 'admin_master_roster'
+              AND physical_table_name = @t
+              AND record_id = @r
+              AND operation_kind = @op
+              AND observed_at >= @since";
+        cmd.Parameters.AddWithValue("t", physicalTableName);
+        cmd.Parameters.AddWithValue("r", recordId);
+        cmd.Parameters.AddWithValue("op", operationKind);
+        cmd.Parameters.AddWithValue("since", since);
+        return (int)(await cmd.ExecuteScalarAsync() ?? 0);
+    }
+
+    /// <summary>
+    /// Fetches the single most recent matching logs.diff row's before/after JSON text, for
+    /// asserting actual diff content (not just row presence).
+    /// </summary>
+    private static async Task<(string Before, string After)> ReadLatestLogsDiffAsync(
+        string cs, string physicalTableName, string recordId, string operationKind, DateTimeOffset since)
+    {
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT before_state_or_diff_json::text, after_state_or_diff_json::text
+            FROM logs.diff
+            WHERE source_set_id = 'admin_master_roster'
+              AND physical_table_name = @t
+              AND record_id = @r
+              AND operation_kind = @op
+              AND observed_at >= @since
+            ORDER BY observed_at DESC
+            LIMIT 1";
+        cmd.Parameters.AddWithValue("t", physicalTableName);
+        cmd.Parameters.AddWithValue("r", recordId);
+        cmd.Parameters.AddWithValue("op", operationKind);
+        cmd.Parameters.AddWithValue("since", since);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync(), $"expected a logs.diff row for {physicalTableName}/{recordId}/{operationKind} since {since:o}");
+        return (reader.GetString(0), reader.GetString(1));
+    }
+
+    /// <summary>
     /// Full preview/confirm/write/re-read round trip through update_group's own dedicated write
     /// manifest (ae220) -- the remaining 6 write manifests' per-action proof requested in PR #600
     /// review (create_group's own round trip is proven above; this is the same pattern applied to
@@ -861,15 +930,19 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             using (var doc = System.Text.Json.JsonDocument.Parse(created.Emission!.Data!.Value.GetRawText()))
                 groupId = doc.RootElement.GetProperty("groupId").GetString();
 
+            var t0 = DateTimeOffset.UtcNow;
+
             var preview = await DispatchViaOwnWriteManifestAsync(dispatcher, "update_group",
                 new { groupId, groupName = renamedName, dryRun = true });
             Assert.True(preview.Success, string.Join(";", preview.Errors.Select(e => e.Code + ":" + e.Message)));
             Assert.Contains("\"dryRun\":true", preview.Emission!.Data!.Value.GetRawText());
+            Assert.Equal(0, await CountLogsDiffRowsAsync(cs, "enum.groups", groupId!, "update", t0));
 
             var unconfirmed = await DispatchViaOwnWriteManifestAsync(dispatcher, "update_group",
                 new { groupId, groupName = renamedName });
             Assert.False(unconfirmed.Success);
             Assert.Contains(unconfirmed.Errors, e => e.Code == "ENUM_GROUP_WRITE_NOT_CONFIRMED");
+            Assert.Equal(0, await CountLogsDiffRowsAsync(cs, "enum.groups", groupId!, "update", t0));
 
             var write = await DispatchViaOwnWriteManifestAsync(dispatcher, "update_group",
                 new { groupId, groupName = renamedName, confirmed = true });
@@ -884,6 +957,12 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             var relistText = relist.Emission!.Data!.Value.GetRawText();
             Assert.Contains(renamedName, relistText);
             Assert.DoesNotContain(originalName, relistText);
+
+            // diff_log stage: exactly one row, before carries the original name, after the renamed one.
+            Assert.Equal(1, await CountLogsDiffRowsAsync(cs, "enum.groups", groupId!, "update", t0));
+            var diff = await ReadLatestLogsDiffAsync(cs, "enum.groups", groupId!, "update", t0);
+            Assert.Contains(originalName, diff.Before);
+            Assert.Contains(renamedName, diff.After);
         }
         finally
         {
@@ -920,13 +999,18 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             using (var doc = System.Text.Json.JsonDocument.Parse(created.Emission!.Data!.Value.GetRawText()))
                 groupId = doc.RootElement.GetProperty("groupId").GetString();
 
+            var t0 = DateTimeOffset.UtcNow;
+            var deletedGroupId = groupId!;
+
             var preview = await DispatchViaOwnWriteManifestAsync(dispatcher, "delete_group", new { groupId, dryRun = true });
             Assert.True(preview.Success, string.Join(";", preview.Errors.Select(e => e.Code + ":" + e.Message)));
             Assert.Contains("\"dryRun\":true", preview.Emission!.Data!.Value.GetRawText());
+            Assert.Equal(0, await CountLogsDiffRowsAsync(cs, "enum.groups", deletedGroupId, "delete", t0));
 
             var unconfirmed = await DispatchViaOwnWriteManifestAsync(dispatcher, "delete_group", new { groupId });
             Assert.False(unconfirmed.Success);
             Assert.Contains(unconfirmed.Errors, e => e.Code == "ENUM_GROUP_WRITE_NOT_CONFIRMED");
+            Assert.Equal(0, await CountLogsDiffRowsAsync(cs, "enum.groups", deletedGroupId, "delete", t0));
 
             var write = await DispatchViaOwnWriteManifestAsync(dispatcher, "delete_group", new { groupId, confirmed = true });
             Assert.True(write.Success, string.Join(";", write.Errors.Select(e => e.Code + ":" + e.Message)));
@@ -939,6 +1023,12 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
                 Context: null, TriggerKind: "client", Role: "admin"));
             Assert.True(relist.Success);
             Assert.DoesNotContain(groupName, relist.Emission!.Data!.Value.GetRawText());
+
+            // diff_log stage: exactly one row, before carries the deleted group's name, after={}.
+            Assert.Equal(1, await CountLogsDiffRowsAsync(cs, "enum.groups", deletedGroupId, "delete", t0));
+            var diff = await ReadLatestLogsDiffAsync(cs, "enum.groups", deletedGroupId, "delete", t0);
+            Assert.Contains(groupName, diff.Before);
+            Assert.Equal("{}", diff.After);
         }
         finally
         {
@@ -982,6 +1072,7 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
 
         try
         {
+            var t0 = DateTimeOffset.UtcNow;
             Assert.Equal(0, await CountRowsAsync());
 
             var preview = await DispatchViaOwnWriteManifestAsync(dispatcher, "create_item",
@@ -989,16 +1080,24 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             Assert.True(preview.Success, string.Join(";", preview.Errors.Select(e => e.Code + ":" + e.Message)));
             Assert.Contains("\"dryRun\":true", preview.Emission!.Data!.Value.GetRawText());
             Assert.Equal(0, await CountRowsAsync());
+            Assert.Equal(0, await CountLogsDiffRowsAsync(cs, "enum.items", indexNum.ToString(), "create", t0));
 
             var unconfirmed = await DispatchViaOwnWriteManifestAsync(dispatcher, "create_item", new { name, indexNum });
             Assert.False(unconfirmed.Success);
             Assert.Contains(unconfirmed.Errors, e => e.Code == "ENUM_ITEM_WRITE_NOT_CONFIRMED");
             Assert.Equal(0, await CountRowsAsync());
+            Assert.Equal(0, await CountLogsDiffRowsAsync(cs, "enum.items", indexNum.ToString(), "create", t0));
 
             var write = await DispatchViaOwnWriteManifestAsync(dispatcher, "create_item",
                 new { name, indexNum, confirmed = true });
             Assert.True(write.Success, string.Join(";", write.Errors.Select(e => e.Code + ":" + e.Message)));
             Assert.Equal(1, await CountRowsAsync());
+
+            // diff_log stage: exactly one row, before={}, after carries the real created item.
+            Assert.Equal(1, await CountLogsDiffRowsAsync(cs, "enum.items", indexNum.ToString(), "create", t0));
+            var diff = await ReadLatestLogsDiffAsync(cs, "enum.items", indexNum.ToString(), "create", t0);
+            Assert.Equal("{}", diff.Before);
+            Assert.Contains(name, diff.After);
         }
         finally
         {
@@ -1042,21 +1141,31 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             Assert.True(created.Success, string.Join(";", created.Errors.Select(e => e.Code + ":" + e.Message)));
             Assert.Equal(originalName, await ReadNameAsync());
 
+            var t0 = DateTimeOffset.UtcNow;
+
             var preview = await DispatchViaOwnWriteManifestAsync(dispatcher, "update_item",
                 new { indexNum, name = renamedName, dryRun = true });
             Assert.True(preview.Success, string.Join(";", preview.Errors.Select(e => e.Code + ":" + e.Message)));
             Assert.Contains("\"dryRun\":true", preview.Emission!.Data!.Value.GetRawText());
             Assert.Equal(originalName, await ReadNameAsync());
+            Assert.Equal(0, await CountLogsDiffRowsAsync(cs, "enum.items", indexNum.ToString(), "update", t0));
 
             var unconfirmed = await DispatchViaOwnWriteManifestAsync(dispatcher, "update_item", new { indexNum, name = renamedName });
             Assert.False(unconfirmed.Success);
             Assert.Contains(unconfirmed.Errors, e => e.Code == "ENUM_ITEM_WRITE_NOT_CONFIRMED");
             Assert.Equal(originalName, await ReadNameAsync());
+            Assert.Equal(0, await CountLogsDiffRowsAsync(cs, "enum.items", indexNum.ToString(), "update", t0));
 
             var write = await DispatchViaOwnWriteManifestAsync(dispatcher, "update_item",
                 new { indexNum, name = renamedName, confirmed = true });
             Assert.True(write.Success, string.Join(";", write.Errors.Select(e => e.Code + ":" + e.Message)));
             Assert.Equal(renamedName, await ReadNameAsync());
+
+            // diff_log stage: exactly one row, before carries the original name, after the renamed one.
+            Assert.Equal(1, await CountLogsDiffRowsAsync(cs, "enum.items", indexNum.ToString(), "update", t0));
+            var diff = await ReadLatestLogsDiffAsync(cs, "enum.items", indexNum.ToString(), "update", t0);
+            Assert.Contains(originalName, diff.Before);
+            Assert.Contains(renamedName, diff.After);
         }
         finally
         {
@@ -1099,19 +1208,29 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             Assert.True(created.Success, string.Join(";", created.Errors.Select(e => e.Code + ":" + e.Message)));
             Assert.Equal(1, await CountRowsAsync());
 
+            var t0 = DateTimeOffset.UtcNow;
+
             var preview = await DispatchViaOwnWriteManifestAsync(dispatcher, "delete_item", new { indexNum, dryRun = true });
             Assert.True(preview.Success, string.Join(";", preview.Errors.Select(e => e.Code + ":" + e.Message)));
             Assert.Contains("\"dryRun\":true", preview.Emission!.Data!.Value.GetRawText());
             Assert.Equal(1, await CountRowsAsync());
+            Assert.Equal(0, await CountLogsDiffRowsAsync(cs, "enum.items", indexNum.ToString(), "delete", t0));
 
             var unconfirmed = await DispatchViaOwnWriteManifestAsync(dispatcher, "delete_item", new { indexNum });
             Assert.False(unconfirmed.Success);
             Assert.Contains(unconfirmed.Errors, e => e.Code == "ENUM_ITEM_WRITE_NOT_CONFIRMED");
             Assert.Equal(1, await CountRowsAsync());
+            Assert.Equal(0, await CountLogsDiffRowsAsync(cs, "enum.items", indexNum.ToString(), "delete", t0));
 
             var write = await DispatchViaOwnWriteManifestAsync(dispatcher, "delete_item", new { indexNum, confirmed = true });
             Assert.True(write.Success, string.Join(";", write.Errors.Select(e => e.Code + ":" + e.Message)));
             Assert.Equal(0, await CountRowsAsync());
+
+            // diff_log stage: exactly one row, before carries the deleted item's name, after={}.
+            Assert.Equal(1, await CountLogsDiffRowsAsync(cs, "enum.items", indexNum.ToString(), "delete", t0));
+            var diff = await ReadLatestLogsDiffAsync(cs, "enum.items", indexNum.ToString(), "delete", t0);
+            Assert.Contains(name, diff.Before);
+            Assert.Equal("{}", diff.After);
         }
         finally
         {
@@ -1179,22 +1298,35 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
                 groupId = doc.RootElement.GetProperty("groupId").GetString();
             Assert.Equal(0, await MembershipCountAsync());
 
+            var t0 = DateTimeOffset.UtcNow;
+
             var preview = await DispatchViaOwnWriteManifestAsync(dispatcher, "set_group_items",
                 new { groupId, enumIndexNums = "10, 11", dryRun = true });
             Assert.True(preview.Success, string.Join(";", preview.Errors.Select(e => e.Code + ":" + e.Message)));
             Assert.Contains("\"dryRun\":true", preview.Emission!.Data!.Value.GetRawText());
             Assert.Equal(0, await MembershipCountAsync());
+            Assert.Equal(0, await CountLogsDiffRowsAsync(cs, "enum.group_items", groupId!, "update", t0));
 
             var unconfirmed = await DispatchViaOwnWriteManifestAsync(dispatcher, "set_group_items",
                 new { groupId, enumIndexNums = "10, 11" });
             Assert.False(unconfirmed.Success);
             Assert.Contains(unconfirmed.Errors, e => e.Code == "ENUM_GROUP_WRITE_NOT_CONFIRMED");
             Assert.Equal(0, await MembershipCountAsync());
+            Assert.Equal(0, await CountLogsDiffRowsAsync(cs, "enum.group_items", groupId!, "update", t0));
 
             var write = await DispatchViaOwnWriteManifestAsync(dispatcher, "set_group_items",
                 new { groupId, enumIndexNums = "10, 11", confirmed = true });
             Assert.True(write.Success, string.Join(";", write.Errors.Select(e => e.Code + ":" + e.Message)));
             Assert.Contains("\"itemsIndexNums\":[10,11]", await GetGroupRawAsync());
+
+            Assert.Equal(1, await CountLogsDiffRowsAsync(cs, "enum.group_items", groupId!, "update", t0));
+            var diff = await ReadLatestLogsDiffAsync(cs, "enum.group_items", groupId!, "update", t0);
+            using (var beforeDoc = System.Text.Json.JsonDocument.Parse(diff.Before))
+                Assert.Empty(beforeDoc.RootElement.GetProperty("itemsIndexNums").EnumerateArray());
+            using (var afterDoc = System.Text.Json.JsonDocument.Parse(diff.After))
+                Assert.Equal(
+                    new[] { 10, 11 },
+                    afterDoc.RootElement.GetProperty("itemsIndexNums").EnumerateArray().Select(e => e.GetInt32()));
         }
         finally
         {
