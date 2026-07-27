@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using Topolactor.Repository;
+using Topolactor.Runtime;
 using Topolactor.Schema;
 using Xunit;
 
@@ -801,6 +802,409 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
                 await using var cmd = conn.CreateCommand();
                 cmd.CommandText = "DELETE FROM hubs.hub_relations WHERE hub_relation_id = @rid";
                 cmd.Parameters.AddWithValue("rid", createdHubRelationId.Value);
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+    }
+
+    private static readonly IReadOnlyDictionary<string, string> WriteManifestIdByAction = new Dictionary<string, string>
+    {
+        ["create_group"] = "00000000-0000-0000-0000-0000000ae210",
+        ["update_group"] = "00000000-0000-0000-0000-0000000ae220",
+        ["delete_group"] = "00000000-0000-0000-0000-0000000ae230",
+        ["create_item"] = "00000000-0000-0000-0000-0000000ae240",
+        ["update_item"] = "00000000-0000-0000-0000-0000000ae250",
+        ["delete_item"] = "00000000-0000-0000-0000-0000000ae260",
+        ["set_group_items"] = "00000000-0000-0000-0000-0000000ae270",
+    };
+
+    /// <summary>
+    /// Dispatches enum_dictionary:{action} through THAT action's own dedicated write manifest's
+    /// identity (target_ref = "manifest:{ae2X0}:enum_dictionary:{action}") -- proving manifest
+    /// resolution for that specific write manifest, not just the generic backend action.
+    /// </summary>
+    private static async Task<EndpointResponseDto> DispatchViaOwnWriteManifestAsync(
+        ManifestDispatcher dispatcher, string action, object payload)
+    {
+        var manifestId = WriteManifestIdByAction[action];
+        var node = System.Text.Json.Nodes.JsonNode.Parse(
+            System.Text.Json.JsonSerializer.SerializeToElement(payload).GetRawText())!.AsObject();
+        node["target_ref"] = $"manifest:{manifestId}:enum_dictionary:{action}";
+        return await dispatcher.DispatchAsync(new EndpointRequestDto(
+            action, "manifest", "enum_dictionary", action,
+            IdOrHubId: null,
+            Payload: System.Text.Json.JsonSerializer.SerializeToElement(node),
+            Context: null, TriggerKind: "client", Role: "admin"));
+    }
+
+    /// <summary>
+    /// Full preview/confirm/write/re-read round trip through update_group's own dedicated write
+    /// manifest (ae220) -- the remaining 6 write manifests' per-action proof requested in PR #600
+    /// review (create_group's own round trip is proven above; this is the same pattern applied to
+    /// the other 6, not a re-proof of the shared mechanism).
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_EnumDictionaryUpdateGroupWriteManifest_PreviewThenConfirmedWrite_PersistsAndReReadReflectsDiff()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var originalName = $"update-manifest-proof-original-{suffix}";
+        var renamedName = $"update-manifest-proof-renamed-{suffix}";
+        string? groupId = null;
+        try
+        {
+            var created = await DispatchViaOwnWriteManifestAsync(dispatcher, "create_group",
+                new { groupName = originalName, confirmed = true });
+            Assert.True(created.Success, string.Join(";", created.Errors.Select(e => e.Code + ":" + e.Message)));
+            using (var doc = System.Text.Json.JsonDocument.Parse(created.Emission!.Data!.Value.GetRawText()))
+                groupId = doc.RootElement.GetProperty("groupId").GetString();
+
+            var preview = await DispatchViaOwnWriteManifestAsync(dispatcher, "update_group",
+                new { groupId, groupName = renamedName, dryRun = true });
+            Assert.True(preview.Success, string.Join(";", preview.Errors.Select(e => e.Code + ":" + e.Message)));
+            Assert.Contains("\"dryRun\":true", preview.Emission!.Data!.Value.GetRawText());
+
+            var unconfirmed = await DispatchViaOwnWriteManifestAsync(dispatcher, "update_group",
+                new { groupId, groupName = renamedName });
+            Assert.False(unconfirmed.Success);
+            Assert.Contains(unconfirmed.Errors, e => e.Code == "ENUM_GROUP_WRITE_NOT_CONFIRMED");
+
+            var write = await DispatchViaOwnWriteManifestAsync(dispatcher, "update_group",
+                new { groupId, groupName = renamedName, confirmed = true });
+            Assert.True(write.Success, string.Join(";", write.Errors.Select(e => e.Code + ":" + e.Message)));
+
+            var relist = await dispatcher.DispatchAsync(new EndpointRequestDto(
+                "list_groups", "manifest", "enum_dictionary", "list_groups",
+                IdOrHubId: null,
+                Payload: System.Text.Json.JsonSerializer.SerializeToElement(new { target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups" }),
+                Context: null, TriggerKind: "client", Role: "admin"));
+            Assert.True(relist.Success);
+            var relistText = relist.Emission!.Data!.Value.GetRawText();
+            Assert.Contains(renamedName, relistText);
+            Assert.DoesNotContain(originalName, relistText);
+        }
+        finally
+        {
+            if (groupId is not null)
+            {
+                await using var conn = new NpgsqlConnection(cs);
+                await conn.OpenAsync();
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = "DELETE FROM enum.groups WHERE group_id = @id";
+                cmd.Parameters.AddWithValue("id", Guid.Parse(groupId));
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Full preview/confirm/write/re-read round trip through delete_group's own dedicated write
+    /// manifest (ae230).
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_EnumDictionaryDeleteGroupWriteManifest_PreviewThenConfirmedWrite_PersistsAndReReadReflectsDiff()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var groupName = $"delete-manifest-proof-{suffix}";
+        string? groupId = null;
+        try
+        {
+            var created = await DispatchViaOwnWriteManifestAsync(dispatcher, "create_group",
+                new { groupName, confirmed = true });
+            Assert.True(created.Success, string.Join(";", created.Errors.Select(e => e.Code + ":" + e.Message)));
+            using (var doc = System.Text.Json.JsonDocument.Parse(created.Emission!.Data!.Value.GetRawText()))
+                groupId = doc.RootElement.GetProperty("groupId").GetString();
+
+            var preview = await DispatchViaOwnWriteManifestAsync(dispatcher, "delete_group", new { groupId, dryRun = true });
+            Assert.True(preview.Success, string.Join(";", preview.Errors.Select(e => e.Code + ":" + e.Message)));
+            Assert.Contains("\"dryRun\":true", preview.Emission!.Data!.Value.GetRawText());
+
+            var unconfirmed = await DispatchViaOwnWriteManifestAsync(dispatcher, "delete_group", new { groupId });
+            Assert.False(unconfirmed.Success);
+            Assert.Contains(unconfirmed.Errors, e => e.Code == "ENUM_GROUP_WRITE_NOT_CONFIRMED");
+
+            var write = await DispatchViaOwnWriteManifestAsync(dispatcher, "delete_group", new { groupId, confirmed = true });
+            Assert.True(write.Success, string.Join(";", write.Errors.Select(e => e.Code + ":" + e.Message)));
+            groupId = null; // deleted -- no cleanup needed.
+
+            var relist = await dispatcher.DispatchAsync(new EndpointRequestDto(
+                "list_groups", "manifest", "enum_dictionary", "list_groups",
+                IdOrHubId: null,
+                Payload: System.Text.Json.JsonSerializer.SerializeToElement(new { target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups" }),
+                Context: null, TriggerKind: "client", Role: "admin"));
+            Assert.True(relist.Success);
+            Assert.DoesNotContain(groupName, relist.Emission!.Data!.Value.GetRawText());
+        }
+        finally
+        {
+            if (groupId is not null)
+            {
+                await using var conn = new NpgsqlConnection(cs);
+                await conn.OpenAsync();
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = "DELETE FROM enum.groups WHERE group_id = @id";
+                cmd.Parameters.AddWithValue("id", Guid.Parse(groupId));
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Full preview/confirm/write/re-read round trip through create_item's own dedicated write
+    /// manifest (ae240). No list_items admin_runtime action exists (enum_dictionary read actions
+    /// are list_groups/get_group only), so the diff/evidence check queries enum.items directly --
+    /// the same real-row-verification pattern the finally-cleanup blocks throughout this file
+    /// already use.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_EnumDictionaryCreateItemWriteManifest_PreviewThenConfirmedWrite_PersistsAndRowExists()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+        var indexNum = 900_000 + Random.Shared.Next(0, 90_000);
+        var name = $"create-item-manifest-proof-{Guid.NewGuid():N}"[..40];
+
+        async Task<int> CountRowsAsync()
+        {
+            await using var conn = new NpgsqlConnection(cs);
+            await conn.OpenAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT COUNT(*)::int FROM enum.items WHERE index_num = @i";
+            cmd.Parameters.AddWithValue("i", indexNum);
+            return (int)(await cmd.ExecuteScalarAsync() ?? 0);
+        }
+
+        try
+        {
+            Assert.Equal(0, await CountRowsAsync());
+
+            var preview = await DispatchViaOwnWriteManifestAsync(dispatcher, "create_item",
+                new { name, indexNum, dryRun = true });
+            Assert.True(preview.Success, string.Join(";", preview.Errors.Select(e => e.Code + ":" + e.Message)));
+            Assert.Contains("\"dryRun\":true", preview.Emission!.Data!.Value.GetRawText());
+            Assert.Equal(0, await CountRowsAsync());
+
+            var unconfirmed = await DispatchViaOwnWriteManifestAsync(dispatcher, "create_item", new { name, indexNum });
+            Assert.False(unconfirmed.Success);
+            Assert.Contains(unconfirmed.Errors, e => e.Code == "ENUM_ITEM_WRITE_NOT_CONFIRMED");
+            Assert.Equal(0, await CountRowsAsync());
+
+            var write = await DispatchViaOwnWriteManifestAsync(dispatcher, "create_item",
+                new { name, indexNum, confirmed = true });
+            Assert.True(write.Success, string.Join(";", write.Errors.Select(e => e.Code + ":" + e.Message)));
+            Assert.Equal(1, await CountRowsAsync());
+        }
+        finally
+        {
+            await using var conn = new NpgsqlConnection(cs);
+            await conn.OpenAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "DELETE FROM enum.items WHERE index_num = @i";
+            cmd.Parameters.AddWithValue("i", indexNum);
+            await cmd.ExecuteNonQueryAsync();
+        }
+    }
+
+    /// <summary>
+    /// Full preview/confirm/write/re-read round trip through update_item's own dedicated write
+    /// manifest (ae250).
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_EnumDictionaryUpdateItemWriteManifest_PreviewThenConfirmedWrite_PersistsAndRowReflectsDiff()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+        var indexNum = 900_000 + Random.Shared.Next(0, 90_000);
+        var originalName = $"update-item-original-{Guid.NewGuid():N}"[..30];
+        var renamedName = $"update-item-renamed-{Guid.NewGuid():N}"[..30];
+
+        async Task<string?> ReadNameAsync()
+        {
+            await using var conn = new NpgsqlConnection(cs);
+            await conn.OpenAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT name FROM enum.items WHERE index_num = @i";
+            cmd.Parameters.AddWithValue("i", indexNum);
+            return (string?)await cmd.ExecuteScalarAsync();
+        }
+
+        try
+        {
+            var created = await DispatchViaOwnWriteManifestAsync(dispatcher, "create_item",
+                new { name = originalName, indexNum, confirmed = true });
+            Assert.True(created.Success, string.Join(";", created.Errors.Select(e => e.Code + ":" + e.Message)));
+            Assert.Equal(originalName, await ReadNameAsync());
+
+            var preview = await DispatchViaOwnWriteManifestAsync(dispatcher, "update_item",
+                new { indexNum, name = renamedName, dryRun = true });
+            Assert.True(preview.Success, string.Join(";", preview.Errors.Select(e => e.Code + ":" + e.Message)));
+            Assert.Contains("\"dryRun\":true", preview.Emission!.Data!.Value.GetRawText());
+            Assert.Equal(originalName, await ReadNameAsync());
+
+            var unconfirmed = await DispatchViaOwnWriteManifestAsync(dispatcher, "update_item", new { indexNum, name = renamedName });
+            Assert.False(unconfirmed.Success);
+            Assert.Contains(unconfirmed.Errors, e => e.Code == "ENUM_ITEM_WRITE_NOT_CONFIRMED");
+            Assert.Equal(originalName, await ReadNameAsync());
+
+            var write = await DispatchViaOwnWriteManifestAsync(dispatcher, "update_item",
+                new { indexNum, name = renamedName, confirmed = true });
+            Assert.True(write.Success, string.Join(";", write.Errors.Select(e => e.Code + ":" + e.Message)));
+            Assert.Equal(renamedName, await ReadNameAsync());
+        }
+        finally
+        {
+            await using var conn = new NpgsqlConnection(cs);
+            await conn.OpenAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "DELETE FROM enum.items WHERE index_num = @i";
+            cmd.Parameters.AddWithValue("i", indexNum);
+            await cmd.ExecuteNonQueryAsync();
+        }
+    }
+
+    /// <summary>
+    /// Full preview/confirm/write/re-read round trip through delete_item's own dedicated write
+    /// manifest (ae260).
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_EnumDictionaryDeleteItemWriteManifest_PreviewThenConfirmedWrite_PersistsAndRowGone()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+        var indexNum = 900_000 + Random.Shared.Next(0, 90_000);
+        var name = $"delete-item-proof-{Guid.NewGuid():N}"[..30];
+
+        async Task<int> CountRowsAsync()
+        {
+            await using var conn = new NpgsqlConnection(cs);
+            await conn.OpenAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT COUNT(*)::int FROM enum.items WHERE index_num = @i";
+            cmd.Parameters.AddWithValue("i", indexNum);
+            return (int)(await cmd.ExecuteScalarAsync() ?? 0);
+        }
+
+        try
+        {
+            var created = await DispatchViaOwnWriteManifestAsync(dispatcher, "create_item",
+                new { name, indexNum, confirmed = true });
+            Assert.True(created.Success, string.Join(";", created.Errors.Select(e => e.Code + ":" + e.Message)));
+            Assert.Equal(1, await CountRowsAsync());
+
+            var preview = await DispatchViaOwnWriteManifestAsync(dispatcher, "delete_item", new { indexNum, dryRun = true });
+            Assert.True(preview.Success, string.Join(";", preview.Errors.Select(e => e.Code + ":" + e.Message)));
+            Assert.Contains("\"dryRun\":true", preview.Emission!.Data!.Value.GetRawText());
+            Assert.Equal(1, await CountRowsAsync());
+
+            var unconfirmed = await DispatchViaOwnWriteManifestAsync(dispatcher, "delete_item", new { indexNum });
+            Assert.False(unconfirmed.Success);
+            Assert.Contains(unconfirmed.Errors, e => e.Code == "ENUM_ITEM_WRITE_NOT_CONFIRMED");
+            Assert.Equal(1, await CountRowsAsync());
+
+            var write = await DispatchViaOwnWriteManifestAsync(dispatcher, "delete_item", new { indexNum, confirmed = true });
+            Assert.True(write.Success, string.Join(";", write.Errors.Select(e => e.Code + ":" + e.Message)));
+            Assert.Equal(0, await CountRowsAsync());
+        }
+        finally
+        {
+            await using var conn = new NpgsqlConnection(cs);
+            await conn.OpenAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "DELETE FROM enum.items WHERE index_num = @i";
+            cmd.Parameters.AddWithValue("i", indexNum);
+            await cmd.ExecuteNonQueryAsync();
+        }
+    }
+
+    /// <summary>
+    /// Full preview/confirm/write/re-read round trip through set_group_items's own dedicated
+    /// write manifest (ae270) -- covers update_group_members, the SSOT mutation intent this
+    /// action resolves. Uses the CSV-string enumIndexNums shape a single text field's tracked
+    /// node value produces (see backend/runtime/AdminRuntimeMasterRoster.cs
+    /// TryParseSetGroupItemsPayload), not a native JSON array.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_EnumDictionarySetGroupItemsWriteManifest_PreviewThenConfirmedWrite_PersistsAndGetGroupReflectsDiff()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var groupName = $"set-items-manifest-proof-{suffix}";
+        string? groupId = null;
+
+        async Task<string> GetGroupRawAsync()
+        {
+            var r = await dispatcher.DispatchAsync(new EndpointRequestDto(
+                "get_group", "manifest", "enum_dictionary", "get_group",
+                IdOrHubId: null,
+                Payload: System.Text.Json.JsonSerializer.SerializeToElement(new
+                {
+                    target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:get_group",
+                    groupId,
+                }),
+                Context: null, TriggerKind: "client", Role: "admin"));
+            Assert.True(r.Success, string.Join(";", r.Errors.Select(e => e.Code + ":" + e.Message)));
+            return r.Emission!.Data!.Value.GetRawText();
+        }
+
+        // get_group fails close on a zero-item group (ENUM_GROUP_ITEMS_EMPTY, existing behavior
+        // unrelated to this Bundle) -- so the pre-write "still empty" assertions below query
+        // enum.group_items directly, the same real-row-verification pattern this file's cleanup
+        // blocks already use; only the post-write (non-empty) state is verified via get_group.
+        async Task<int> MembershipCountAsync()
+        {
+            await using var conn = new NpgsqlConnection(cs);
+            await conn.OpenAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT COUNT(*)::int FROM enum.group_items WHERE group_id = @g";
+            cmd.Parameters.AddWithValue("g", Guid.Parse(groupId!));
+            return (int)(await cmd.ExecuteScalarAsync() ?? 0);
+        }
+
+        try
+        {
+            var created = await DispatchViaOwnWriteManifestAsync(dispatcher, "create_group",
+                new { groupName, confirmed = true });
+            Assert.True(created.Success, string.Join(";", created.Errors.Select(e => e.Code + ":" + e.Message)));
+            using (var doc = System.Text.Json.JsonDocument.Parse(created.Emission!.Data!.Value.GetRawText()))
+                groupId = doc.RootElement.GetProperty("groupId").GetString();
+            Assert.Equal(0, await MembershipCountAsync());
+
+            var preview = await DispatchViaOwnWriteManifestAsync(dispatcher, "set_group_items",
+                new { groupId, enumIndexNums = "10, 11", dryRun = true });
+            Assert.True(preview.Success, string.Join(";", preview.Errors.Select(e => e.Code + ":" + e.Message)));
+            Assert.Contains("\"dryRun\":true", preview.Emission!.Data!.Value.GetRawText());
+            Assert.Equal(0, await MembershipCountAsync());
+
+            var unconfirmed = await DispatchViaOwnWriteManifestAsync(dispatcher, "set_group_items",
+                new { groupId, enumIndexNums = "10, 11" });
+            Assert.False(unconfirmed.Success);
+            Assert.Contains(unconfirmed.Errors, e => e.Code == "ENUM_GROUP_WRITE_NOT_CONFIRMED");
+            Assert.Equal(0, await MembershipCountAsync());
+
+            var write = await DispatchViaOwnWriteManifestAsync(dispatcher, "set_group_items",
+                new { groupId, enumIndexNums = "10, 11", confirmed = true });
+            Assert.True(write.Success, string.Join(";", write.Errors.Select(e => e.Code + ":" + e.Message)));
+            Assert.Contains("\"itemsIndexNums\":[10,11]", await GetGroupRawAsync());
+        }
+        finally
+        {
+            if (groupId is not null)
+            {
+                await using var conn = new NpgsqlConnection(cs);
+                await conn.OpenAsync();
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = "DELETE FROM enum.groups WHERE group_id = @id";
+                cmd.Parameters.AddWithValue("id", Guid.Parse(groupId));
                 await cmd.ExecuteNonQueryAsync();
             }
         }
