@@ -55,7 +55,21 @@ enum_dictionary_ssot:
       - ENUM_GROUP_NOT_FOUND
       - ENUM_GROUP_ITEMS_EMPTY
       - ENUM_GROUP_ID_MALFORMED
+      - ENUM_GROUP_WRITE_NOT_CONFIRMED
+      - ENUM_ITEM_WRITE_NOT_CONFIRMED
     rule: unresolved_enum_group_reference_must_blocking_error_not_silent_fallback
+    mutation_confirmation_contract_gate: >-
+      admin_runtime_actions.enum_dictionary_write group ops (create_group/update_group/
+      delete_group/update_group_members->set_group_items) and item ops
+      (create_item/update_item/delete_item) require payload.confirmed=true before the actual
+      mutation runs -- mirrors the existing team_markdown:saved_view:update payload.dryRun/
+      payload.confirmed contract (backend/runtime/AdminRuntime.TeamMarkdown.cs), not a new
+      confirmation mechanism. payload.dryRun=true runs the identical validation gates and returns
+      a non-mutating preview (preview_dictionary_delta/validate_against_enum_authority); the write
+      step re-runs the same validation every time and never trusts a prior dryRun call. Both flags
+      accept either the JSON boolean literal or the JSON string "true" (own-property, ordinal
+      case-insensitive) because docs/design/ui-builder-preset-ecosystem-ssot.yaml
+      payloadFrom_resolver_contract's literal: source always resolves to a JS string.
 
   projection_read_model:
     initial_strategy: join_enum_groups_and_group_items_at_read_time

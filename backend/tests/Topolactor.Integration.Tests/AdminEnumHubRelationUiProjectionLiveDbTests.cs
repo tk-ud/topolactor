@@ -357,12 +357,45 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             // Baseline: the not-yet-created group name is absent from a real re-list.
             Assert.DoesNotContain(groupName, await ListGroupsRawAsync());
 
+            // NEGATIVE (mutation_confirmation_contract explicit_confirm gate): a write dispatched
+            // without payload.confirmed=true (the "cancel" path -- the frontend simply never sends
+            // it) fails close and never reaches the repository.
+            var unconfirmedCreatePayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:create_group",
+                groupName,
+            });
+            var unconfirmedCreateRequest = new EndpointRequestDto(
+                "create_group", "manifest", "enum_dictionary", "create_group",
+                IdOrHubId: null, Payload: unconfirmedCreatePayload, Context: null, TriggerKind: "client", Role: "admin");
+            var unconfirmedCreateResponse = await dispatcher.DispatchAsync(unconfirmedCreateRequest);
+            Assert.False(unconfirmedCreateResponse.Success);
+            Assert.Contains(unconfirmedCreateResponse.Errors, e => e.Code == "ENUM_GROUP_WRITE_NOT_CONFIRMED");
+            Assert.DoesNotContain(groupName, await ListGroupsRawAsync());
+
+            // NEGATIVE (preview_dictionary_delta / validate_against_enum_authority): dryRun=true
+            // validates without mutating -- the same payload shape, never persisted.
+            var dryRunCreatePayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:create_group",
+                groupName,
+                dryRun = true,
+            });
+            var dryRunCreateRequest = new EndpointRequestDto(
+                "create_group", "manifest", "enum_dictionary", "create_group",
+                IdOrHubId: null, Payload: dryRunCreatePayload, Context: null, TriggerKind: "client", Role: "admin");
+            var dryRunCreateResponse = await dispatcher.DispatchAsync(dryRunCreateRequest);
+            Assert.True(dryRunCreateResponse.Success, string.Join(";", dryRunCreateResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+            Assert.Contains("\"dryRun\":true", dryRunCreateResponse.Emission!.Data!.Value.GetRawText());
+            Assert.DoesNotContain(groupName, await ListGroupsRawAsync());
+
             // WRITE: enum_dictionary:create_group -- the payload shape a resolved
             // payloadFrom (node:<nameInputNodeId>.value) would produce.
             var createPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
             {
                 target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:create_group",
                 groupName,
+                confirmed = true,
             });
             var createRequest = new EndpointRequestDto(
                 "create_group", "manifest", "enum_dictionary", "create_group",
@@ -417,6 +450,7 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             {
                 target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:delete_group",
                 groupId = createdGroupId,
+                confirmed = true,
             });
             var deleteRequest = new EndpointRequestDto(
                 "delete_group", "manifest", "enum_dictionary", "delete_group",

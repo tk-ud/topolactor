@@ -35,7 +35,7 @@ public class AdminRuntimeMasterRosterTests
         var runtime = CreateRuntime();
         var createVector = new OperationVector(
             "admin", "enum_dictionary", "create_group", null, "admin",
-            JsonSerializer.SerializeToElement(new { groupName = "test_group_roster" }),
+            JsonSerializer.SerializeToElement(new { groupName = "test_group_roster", confirmed = true }),
             null);
 
         var (data, error) = await runtime.ExecuteDataAsync(createVector);
@@ -48,6 +48,93 @@ public class AdminRuntimeMasterRosterTests
         Assert.Null(listError);
         var json = listData!.Value.GetRawText();
         Assert.Contains("test_group_roster", json);
+    }
+
+    [Fact]
+    public async Task EnumDictionaryCreateGroup_WithoutConfirmed_FailsCloseAndDoesNotPersist()
+    {
+        var runtime = CreateRuntime();
+        var createVector = new OperationVector(
+            "admin", "enum_dictionary", "create_group", null, "admin",
+            JsonSerializer.SerializeToElement(new { groupName = "unconfirmed_group_roster" }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(createVector);
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("ENUM_GROUP_WRITE_NOT_CONFIRMED", error!.Code);
+
+        var listVector = new OperationVector(
+            "admin", "enum_dictionary", "list_groups", null, "admin", null, null);
+        var (listData, listError) = await runtime.ExecuteDataAsync(listVector);
+        Assert.Null(listError);
+        Assert.DoesNotContain("unconfirmed_group_roster", listData!.Value.GetRawText());
+    }
+
+    [Fact]
+    public async Task EnumDictionaryCreateGroup_WithDryRun_ReturnsPreviewAndDoesNotPersist()
+    {
+        var runtime = CreateRuntime();
+        var previewVector = new OperationVector(
+            "admin", "enum_dictionary", "create_group", null, "admin",
+            JsonSerializer.SerializeToElement(new { groupName = "dry_run_group_roster", dryRun = true }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(previewVector);
+        Assert.Null(error);
+        Assert.NotNull(data);
+        var previewJson = data!.Value.GetRawText();
+        Assert.Contains("\"dryRun\":true", previewJson);
+        Assert.Contains("dry_run_group_roster", previewJson);
+
+        var listVector = new OperationVector(
+            "admin", "enum_dictionary", "list_groups", null, "admin", null, null);
+        var (listData, listError) = await runtime.ExecuteDataAsync(listVector);
+        Assert.Null(listError);
+        Assert.DoesNotContain("dry_run_group_roster", listData!.Value.GetRawText());
+    }
+
+    [Fact]
+    public async Task EnumDictionaryDeleteItem_WithoutConfirmed_FailsCloseAndDoesNotPersist()
+    {
+        var runtime = CreateRuntime();
+        var deleteVector = new OperationVector(
+            "admin", "enum_dictionary", "delete_item", null, "admin",
+            JsonSerializer.SerializeToElement(new { indexNum = 10 }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(deleteVector);
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("ENUM_ITEM_WRITE_NOT_CONFIRMED", error!.Code);
+    }
+
+    [Fact]
+    public async Task EnumDictionarySetGroupItems_WithConfirmedLiteralString_Persists()
+    {
+        // literal:true payloadFrom sources (docs/design/ui-builder-preset-ecosystem-ssot.yaml
+        // payloadFrom_resolver_contract) always resolve to a JS string at the wire, never a JSON
+        // boolean -- this proves the backend confirmed/dryRun gate accepts that shape too.
+        var runtime = CreateRuntime();
+        var listVector = new OperationVector(
+            "admin", "enum_dictionary", "list_groups", null, "admin", null, null);
+        var (listData, listError) = await runtime.ExecuteDataAsync(listVector);
+        Assert.Null(listError);
+        using var listDoc = JsonDocument.Parse(listData!.Value.GetRawText());
+        var groupId = listDoc.RootElement[0].GetProperty("groupId").GetString();
+
+        var setVector = new OperationVector(
+            "admin", "enum_dictionary", "set_group_items", null, "admin",
+            JsonSerializer.SerializeToElement(new
+            {
+                groupId,
+                enumIndexNums = new[] { 10 },
+                confirmed = "true",
+            }),
+            null);
+        var (data, error) = await runtime.ExecuteDataAsync(setVector);
+        Assert.Null(error);
+        Assert.NotNull(data);
     }
 
     [Fact]
