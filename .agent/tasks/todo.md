@@ -1456,12 +1456,12 @@ round 9のowner指摘は、round 7までのA/B/C探索を「対応資料に指�
 
 ### 受入条件
 
-- ~~案A/B/Cの比較...がownerに提示され、1方向（または代替）が選択されている。~~ → round 9でA/B/Cは撤回。detail view相当はround 10で実装済み（下記参照）。pre-fill相当のみ、2択のowner decision待ち。
+- ~~案A/B/Cの比較...がownerに提示され、1方向（または代替）が選択されている。~~ → round 9時点でA/B/Cは撤回済み（当時の経緯は上記「round 9」節に時系列証跡として保持）。**現行状態（round 13時点）**: detail view相当はround 10で実装済み。pre-fill相当（groupId既知後の現在値取得・初期表示）はround 11で実装、round 12でproduction ProjectionShellマウント経由のLoad(A)→Load(B) testまで証明済み——「pre-fillが2択のowner decision待ち」という記述はround 11/12の実装により解消した、過去のround 9時点のみの状態であり、現行の未解決scopeではない。
 - 選択された方向のSSOT改定が本Bundleまたは後続Bundleで完了している。
 - admin-enum/credential-managementそれぞれのhardcoded roster route撤去が、選択された単一の正規contractに従って進められる状態になっている（各subBundle自身のUX-parity実装・撤去は別途そちらのscope）。scheduler-settings/team-dashboardは対象外（上記「compound対象の再判定」参照、それぞれ独自の理由でこのgapを要求しない/証明できないため）。
-- **round 10で部分的に充足**: `enum_dictionary:get_group`（既存action、未配線だった）を単一目的read-detail manifest（ae280）として配線・live-DB証明した——「一覧行を選択してdetailを見る」の後半（get→propBindings経由の表示）が実装済み。
-- **round 11で実装、round 12で「本番で実際に機能する」ことまで証明**: round 11はpre-fill機構（dryRun before-value fallback + propBindings.value + tracker播種）をunit test層で実装したが、round 12のowner指摘により「dispatch応答がProjectionShell側で一切採用されておらず、本番では機能しない」ことが判明——`onRuntimeDispatchResult`callback chainの追加とProjectionShell.tsxでの採用配線、およびrecord切替時のtracker強制上書きにより解消し、実ProjectionShellマウント経由のLoad(A)→Load(B) testで証明済み（詳細はround 12節参照）。
-- **依然未解決**: 「ae200の行選択からgroupIdを自動で引き継ぐ」こと自体は、round 10/11/12いずれでも対象外のまま——groupIdの手入力が現状の運用のまま残る。
+- **round 10で充足**: `enum_dictionary:get_group`（既存action、未配線だった）を単一目的read-detail manifest（ae280）として配線・live-DB証明した——「一覧行を選択してdetailを見る」の後半（get→propBindings経由の表示）が実装済み。
+- **round 11で実装、round 12で「本番で実際に機能する」ことまで証明——充足**: round 11はpre-fill機構（dryRun before-value fallback + propBindings.value + tracker播種）をunit test層で実装したが、round 12のowner指摘により「dispatch応答がProjectionShell側で一切採用されておらず、本番では機能しない」ことが判明——`onRuntimeDispatchResult`callback chainの追加とProjectionShell.tsxでの採用配線、およびrecord切替時のtracker強制上書きにより解消し、実ProjectionShellマウント経由のLoad(A)→Load(B) testで証明済み（詳細はround 12節参照）。
+- **唯一残る未解決scope（round 13時点）**: 「ae200の`event.row.group_id`を別のlayout/manifestへ運ぶ」cross-manifest carrier gapのみ。round 13で既存5候補機構（同一layout内target切替/linkHref補間/route_navigation/entry URL payload転送/hub_relations.relation_config）を実装まで確認し、いずれも動的な行単位の値を別layoutへ運ぶ用途を想定していないことを具体的証拠と共に報告済み（詳細はround 13節参照）——「pre-fillの2択」ではなく、この5候補のいずれかのauthority境界を拡張する許可を得るか、read/write layoutの再設計等、別compositionを取るかという、より根本的なowner決定が必要な唯一の残項目である。
 
 ### Governance NG boundary
 
