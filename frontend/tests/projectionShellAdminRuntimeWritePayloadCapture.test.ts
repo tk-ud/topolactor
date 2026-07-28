@@ -660,3 +660,204 @@ Deno.test(
     }
   },
 );
+
+// ─── PR #600 review round 12: a node's own admin_runtime dispatch result was
+// previously void-discarded (never adopted into production emission), so a
+// load_button's dryRun pre-fill could never actually render, and re-Loading a
+// DIFFERENT record risked leaving a STALE tracked value diverging from what
+// was just displayed. This proves the fix end-to-end through a real
+// ProjectionShell mount: Load(A) then Load(B) — B's value must appear in
+// BOTH the rendered display AND the confirm dispatch's payload. ───────────
+
+Deno.test(
+  "ProjectionShell (real mount): Load(A) then Load(B) — the second Load's own dispatch result is adopted into production emission, and B's value appears in BOTH the re-rendered search_input display AND the Confirm click's dispatch payload (no stale A leak)",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource =
+      FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    function loadAndConfirmLayoutNodes() {
+      return [
+        {
+          nodeId: "node-group-id-input",
+          nodeKind: "catalog_component",
+          componentId: "comp-group-id-input-001",
+          componentKind: "form_input/input",
+          componentKey: "text_input.primitive",
+          orderIndex: 0,
+          runtimeInteractions: inputChangeSetStateInteraction(
+            "node-confirm-button",
+          ),
+        },
+        {
+          nodeId: "node-load-button",
+          nodeKind: "catalog_component",
+          componentId: "comp-load-button-001",
+          componentKind: "action/button",
+          componentKey: "button.primitive",
+          orderIndex: 1,
+          wiringKind: "admin_runtime",
+          targetSurface: "manifest",
+          targetRef:
+            `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:update_group`,
+          dispatchPayloadFromByTrigger: {
+            click: {
+              groupId: "node:node-group-id-input.value",
+              dryRun: "literal:true",
+            },
+          },
+        },
+        {
+          nodeId: "node-group-name-search",
+          nodeKind: "catalog_component",
+          componentId: "comp-group-name-search-001",
+          componentKind: "form_input/search_input",
+          componentKey: "search_input.primitive",
+          orderIndex: 2,
+          runtimeInteractions: inputChangeSetStateInteraction(
+            "node-confirm-button",
+          ),
+          propBindings: {
+            value: { source: "emission.data.preview.groupName" },
+          },
+        },
+        {
+          nodeId: "node-confirm-button",
+          nodeKind: "catalog_component",
+          componentId: "comp-confirm-button-001",
+          componentKind: "action/button",
+          componentKey: "button.primitive",
+          orderIndex: 3,
+          wiringKind: "admin_runtime",
+          targetSurface: "manifest",
+          targetRef:
+            `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:update_group`,
+          dispatchPayloadFromByTrigger: {
+            click: {
+              groupId: "node:node-group-id-input.value",
+              groupName: "node:node-group-name-search.value",
+              dryRun: "literal:false",
+            },
+          },
+        },
+      ];
+    }
+
+    function emissionWithPreview(groupName: string | undefined) {
+      return {
+        manifestId: ADMIN_ENUM_MANIFEST_ID,
+        layoutId: "layout-projection-shell-load-then-load-scenario",
+        projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+        layoutNodes: loadAndConfirmLayoutNodes(),
+        data: groupName !== undefined ? { preview: { groupName } } : {},
+      };
+    }
+
+    const scenario = buildMockScenario((callIndex) => {
+      if (callIndex === 1) {
+        // Initial mount: no record loaded yet, no preview data.
+        return { success: true, emission: emissionWithPreview(undefined) };
+      }
+      if (callIndex === 2) {
+        // Load(A)'s own Lane 2 dryRun dispatch result.
+        return { success: true, emission: emissionWithPreview("record_a") };
+      }
+      if (callIndex === 4) {
+        // Load(B)'s own Lane 2 dryRun dispatch result — a DIFFERENT record.
+        return { success: true, emission: emissionWithPreview("record_b") };
+      }
+      // callIndex 3 and 5: Confirm clicks — succeed normally (no emission needed).
+      return { success: true, errors: [] };
+    });
+    globalThis.fetch = scenario.fetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+      render(h(ProjectionShell, {}), container);
+
+      const buttons = () =>
+        Array.from(
+          container.querySelectorAll("button"),
+        ) as HTMLButtonElement[];
+      await waitFor(() => buttons().length === 2);
+      const inputs = () =>
+        Array.from(container.querySelectorAll("input")) as HTMLInputElement[];
+      await waitFor(() => inputs().length === 2);
+      assertEquals(inputs().length, 2);
+
+      const [groupIdInput, groupNameSearchInput] = inputs();
+      const [loadButton, confirmButton] = buttons();
+
+      // ── Load(A) ──
+      simulateInput(groupIdInput, "group-a-id");
+      await flushUpdates();
+      simulateClick(loadButton);
+      await waitFor(() => scenario.capturedDispatchBodies.length >= 2);
+      assertEquals(scenario.capturedDispatchBodies.length, 2);
+
+      // The load_button's own dispatch result must have been ADOPTED into
+      // production emission — re-rendering the search_input with the
+      // resolved preview.groupName, WITHOUT the user ever typing into it.
+      await waitFor(() => inputs()[1].value === "record_a");
+      assertEquals(
+        inputs()[1].value,
+        "record_a",
+        "Load(A)'s dryRun preview must render into the search_input's displayed value (previously impossible — the dispatch response was void-discarded)",
+      );
+
+      simulateClick(confirmButton);
+      await waitFor(() => scenario.capturedDispatchBodies.length >= 3);
+      assertEquals(
+        (scenario.capturedDispatchBodies[2].payload as Record<
+          string,
+          unknown
+        >).groupName,
+        "record_a",
+        "Confirm after Load(A) must dispatch record_a's name — display and dispatch payload must agree",
+      );
+
+      // ── Load(B): a DIFFERENT record ──
+      simulateInput(groupIdInput, "group-b-id");
+      await flushUpdates();
+      simulateClick(loadButton);
+      await waitFor(() => scenario.capturedDispatchBodies.length >= 4);
+      assertEquals(scenario.capturedDispatchBodies.length, 4);
+
+      // The round-12-identified divergence bug: without forceOverwrite, the
+      // tracker would still hold "record_a" (untouched-only seeding), so the
+      // search_input would keep DISPLAYING "record_a" even though B was just
+      // loaded. This must now show "record_b".
+      await waitFor(() => inputs()[1].value === "record_b");
+      assertEquals(
+        inputs()[1].value,
+        "record_b",
+        "Load(B) must overwrite the stale record_a display with record_b — no display divergence on record switch",
+      );
+
+      simulateClick(confirmButton);
+      await waitFor(() => scenario.capturedDispatchBodies.length >= 5);
+      assertEquals(
+        (scenario.capturedDispatchBodies[4].payload as Record<
+          string,
+          unknown
+        >).groupName,
+        "record_b",
+        "Confirm after Load(B) must dispatch record_b's name, NOT the stale record_a — display and dispatch payload must agree after a record switch",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource =
+        originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
+      render(null, container);
+      cleanup();
+    }
+  },
+);

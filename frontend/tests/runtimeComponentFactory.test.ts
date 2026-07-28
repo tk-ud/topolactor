@@ -323,6 +323,117 @@ Deno.test("emitBoundEvent: admin_runtime Lane 2 resolves payloadFrom from live n
   }
 });
 
+Deno.test("emitBoundEvent: admin_runtime Lane 2 forwards the settled dispatch result to spec.onRuntimeDispatchResult (previously void-discarded, PR #600 review round 12)", async () => {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  const serverEmissionData = { ok: true, dryRun: true, preview: { groupName: "demo_status" } };
+  globalThis.fetch = ((_url: string) => {
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          emission: { data: serverEmissionData },
+        }),
+        { status: 200 },
+      ),
+    );
+  }) as typeof fetch;
+  try {
+    let forwardedResult: unknown = null;
+    const spec: RuntimeComponentSpec = {
+      componentId: "comp-load-button-001",
+      packageId: null,
+      layoutId: "layout-admin-runtime-dispatch-result-001",
+      wiringId: null,
+      componentType: "action/button",
+      props: { data: { label: "Load current values" } },
+      eventBinding: {
+        click: {
+          eventType: "click",
+          runtimeDispatch: {
+            operationType: "update_group",
+            target: "manifest",
+            layer: "enum_dictionary",
+            action: "update_group",
+            targetRef:
+              `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:update_group`,
+            payloadFrom: { groupId: "node:group-id-input.value" },
+          },
+        },
+      },
+      payloadFromNodeValues: { "group-id-input": "11111111-1111-1111-1111-111111111111" },
+      onRuntimeDispatchResult: (result) => {
+        forwardedResult = result;
+      },
+    };
+    const clickResult = __testOnly.emitBoundEvent(spec, "click", {});
+    assertEquals(clickResult.ok, true);
+    for (let i = 0; i < 20 && forwardedResult === null; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assertExists(forwardedResult, "onRuntimeDispatchResult must have been called");
+    const result = forwardedResult as {
+      success: boolean;
+      emission?: { data?: unknown };
+    };
+    assertEquals(result.success, true);
+    assertEquals(result.emission?.data, serverEmissionData);
+  } finally {
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
+});
+
+Deno.test("emitBoundEvent: admin_runtime Lane 2 never calls onRuntimeDispatchResult when the caller did not wire one in (today's fire-and-forget behavior unchanged)", async () => {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  let fetchCalled = false;
+  globalThis.fetch = ((_url: string) => {
+    fetchCalled = true;
+    return Promise.resolve(
+      new Response(JSON.stringify({ success: true, errors: [] }), { status: 200 }),
+    );
+  }) as typeof fetch;
+  try {
+    const spec: RuntimeComponentSpec = {
+      componentId: "comp-no-forward-001",
+      packageId: null,
+      layoutId: "layout-admin-runtime-dispatch-result-002",
+      wiringId: null,
+      componentType: "action/button",
+      props: { data: { label: "Preview" } },
+      eventBinding: {
+        click: {
+          eventType: "click",
+          runtimeDispatch: {
+            operationType: "create_group",
+            target: "manifest",
+            layer: "enum_dictionary",
+            action: "create_group",
+            targetRef:
+              `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:create_group`,
+            payloadFrom: { groupName: "node:node-name-input.value" },
+          },
+        },
+      },
+      payloadFromNodeValues: { "node-name-input": "Status" },
+      // onRuntimeDispatchResult intentionally absent.
+    };
+    const clickResult = __testOnly.emitBoundEvent(spec, "click", {});
+    assertEquals(clickResult.ok, true);
+    for (let i = 0; i < 20 && !fetchCalled; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assertEquals(fetchCalled, true, "the dispatch must still have fired");
+  } finally {
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
+});
+
 Deno.test("emitBoundEvent: admin_runtime Lane 2 fails close on unresolved node value (missing node) and never enqueues", async () => {
   ensureRuntimeComponentRegistryInitialized();
   schedulerTestOnly.resetCommandQueue();

@@ -47,7 +47,7 @@ import {
   resolveHubNavigationLinks,
   resolveProjectionEntryAxes,
 } from "../runtime/projectionEntry.ts";
-import type { Emission, LayoutNode } from "../api/dispatch.ts";
+import type { DispatchResponse, Emission, LayoutNode } from "../api/dispatch.ts";
 import { RecommendNavigationIsland } from "../components/RecommendNavigationIsland.tsx";
 import { LayoutProjectionTree } from "../components/LayoutProjectionTree.tsx";
 
@@ -287,12 +287,65 @@ export default function ProjectionShell(): JSX.Element {
       }
       const stateDispatcher = stateDispatcherRef.current;
 
+      // Adopts a node's own settled admin_runtime dispatch result into production
+      // emission — connects the EXISTING command lane response (previously
+      // void-discarded at emitBoundEvent's `void enqueueRuntimeComponentCommand(...)`,
+      // see runtimeComponentFactory.ts) to the SAME confirmProjectionEntryEmission +
+      // setEmission/setSpecs adoption boundary the SSE refresh path already uses
+      // (PR #600 review round 12). Without this, a load_button's dryRun preview data
+      // (e.g. update_group's preview.groupName) never reached emission.data, so
+      // propBindings.value pre-fill could never actually render.
+      // forceOverwrite:true on the tracker seed — unlike the passive-refresh seeding
+      // above, an explicit re-Load of a DIFFERENT record must not leave the
+      // PREVIOUS record's stale tracked value display/dispatch-divergent from the
+      // field just (re)loaded (see seedTrackerFromPropBindingsValue's doc comment).
+      const handleRuntimeDispatchResult = (
+        _nodeId: string,
+        result: DispatchResponse,
+      ) => {
+        if (!mounted) return;
+        if (!result.success || !result.emission) return;
+        const dispatched = result.emission;
+        const confirmation = confirmProjectionEntryEmission(
+          entrySelection,
+          dispatched,
+          { adoptedManifestId: adoptedManifestIdRef.current },
+        );
+        if (!confirmation.ok) {
+          console.error(
+            "[ProjectionShell] PROJECTION_ENTRY_MISMATCH_ON_RUNTIME_DISPATCH_RESULT:",
+            confirmation.error,
+          );
+          return;
+        }
+        setEmission(dispatched);
+        emissionRef.current = dispatched;
+        const dispatchedNodes = toRunnerWiringNodes(dispatched.layoutNodes);
+        nodeValueTrackerRef.current.reconcile(
+          dispatchedNodes.map((n) => n.nodeId),
+        );
+        seedTrackerFromPropBindingsValue(
+          nodeValueTrackerRef.current,
+          dispatched.layoutNodes ?? [],
+          dispatched.data ?? {},
+          resolveRuntimeDataPath,
+          { forceOverwrite: true },
+        );
+        setSpecs(renderEmission(dispatched, defaultComponentRegistry, {
+          localStateStore: stateDispatcherRef.current ?? undefined,
+          payloadFromNodeValues: nodeValueTrackerRef.current.snapshot(),
+          onNodeValueChange: nodeValueTrackerRef.current.set,
+          onRuntimeDispatchResult: handleRuntimeDispatchResult,
+        }));
+      };
+
       setEmission(nextEmission);
       emissionRef.current = nextEmission;
       setSpecs(renderEmission(nextEmission, defaultComponentRegistry, {
         localStateStore: stateDispatcher,
         payloadFromNodeValues: nodeValueTrackerRef.current.snapshot(),
         onNodeValueChange: nodeValueTrackerRef.current.set,
+        onRuntimeDispatchResult: handleRuntimeDispatchResult,
       }));
       setLoading(false);
 
@@ -313,6 +366,7 @@ export default function ProjectionShell(): JSX.Element {
               localStateStore: stateDispatcherRef.current ?? stateDispatcher,
               payloadFromNodeValues: nodeValueTrackerRef.current.snapshot(),
               onNodeValueChange: nodeValueTrackerRef.current.set,
+              onRuntimeDispatchResult: handleRuntimeDispatchResult,
             }));
           },
         );
@@ -482,6 +536,7 @@ export default function ProjectionShell(): JSX.Element {
               localStateStore: stateDispatcherRef.current ?? undefined,
               payloadFromNodeValues: nodeValueTrackerRef.current.snapshot(),
               onNodeValueChange: nodeValueTrackerRef.current.set,
+              onRuntimeDispatchResult: handleRuntimeDispatchResult,
             }));
           } catch (err) {
             if (gen !== refreshGenRef.current || !mounted) return;

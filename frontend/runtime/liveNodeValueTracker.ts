@@ -105,13 +105,23 @@ export function createLiveNodeValueTracker(): LiveNodeValueTracker {
  * accepts a pre-filled value without editing it would still fail dispatch with
  * PAYLOAD_FROM_NODE_NOT_FOUND on Preview/Confirm.
  *
- * Only seeds a nodeId that has NO existing tracked value — never overwrites a value the
- * user has already started editing (or a still-tracked pre-fill from an earlier emission
- * for the same nodeId; re-running "Load" for a different identity while an untouched
- * stale pre-fill is still tracked is a known, accepted rough edge, not a correctness bug —
- * the stale value stays visible in the field for the user to notice/retype before
- * confirming). Call once per fresh emission (alongside reconcile()), never on every
- * unrelated re-render, so it can't fight a keystroke that landed the same tick.
+ * By default, only seeds a nodeId that has NO existing tracked value — never overwrites
+ * a value the user has already started editing during a passive background refresh
+ * (initial mount / SSE refresh call sites, which pass no options and keep this
+ * untouched-only behavior).
+ *
+ * options.forceOverwrite (PR #600 review round 12): an explicit, user-triggered
+ * re-Load of a DIFFERENT record (adopting a node's own admin_runtime dispatch result,
+ * see ProjectionShell.tsx's onRuntimeDispatchResult handler) is NOT a passive refresh —
+ * it must overwrite a still-tracked stale value from an earlier Load, otherwise the
+ * displayed pre-fill and the tracker's dispatch-payload authority diverge (the field
+ * SHOWS the newly loaded record's value via propBindings, but Preview/Confirm would
+ * still dispatch the PREVIOUS record's stale tracked value). Pass true only from that
+ * explicit-adoption boundary; the passive-refresh call sites must keep the untouched-
+ * only default so an in-progress edit during a background SSE refresh is never clobbered.
+ *
+ * Call once per fresh emission (alongside reconcile()), never on every unrelated
+ * re-render, so it can't fight a keystroke that landed the same tick.
  */
 export function seedTrackerFromPropBindingsValue(
   tracker: LiveNodeValueTracker,
@@ -121,11 +131,16 @@ export function seedTrackerFromPropBindingsValue(
     data: Record<string, unknown>,
     source: string,
   ) => unknown,
+  options?: { forceOverwrite?: boolean },
 ): void {
+  const forceOverwrite = options?.forceOverwrite ?? false;
   const tracked = tracker.snapshot();
   for (const node of layoutNodes) {
     if (!node.nodeId || node.componentKind !== "form_input/search_input") continue;
-    if (Object.prototype.hasOwnProperty.call(tracked, node.nodeId)) continue;
+    if (
+      !forceOverwrite &&
+      Object.prototype.hasOwnProperty.call(tracked, node.nodeId)
+    ) continue;
     const binding = node.propBindings?.value;
     if (!binding || typeof binding.source !== "string") continue;
     const resolved = resolveRuntimeDataPath(emissionData, binding.source);

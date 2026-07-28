@@ -1,5 +1,6 @@
 import type { ComponentDataHub } from "./projectionConstructor.ts";
 import type { RuntimeTopologyComponentProps } from "../components/runtimeContract.ts";
+import type { DispatchResponse } from "../api/dispatch.ts";
 import {
   ensureRuntimeComponentRegistryInitialized,
   hasRuntimeComponentFactory,
@@ -52,6 +53,8 @@ export type RuntimeComponentSpec = {
   payloadFromNodeValues?: Record<string, unknown>;
   /** Fires with this node's own latest scalar value on a value-bearing trigger (change/input/select). */
   onNodeValueChange?: (value: unknown) => void;
+  /** Fires with the settled result of this node's own admin_runtime dispatch. See ComponentDataHub. */
+  onRuntimeDispatchResult?: (result: DispatchResponse) => void;
 };
 
 /** Raw projection-local state store (read/write, no guard). Wrapped by RuntimeGuardedStateStore. */
@@ -218,6 +221,7 @@ export function adaptComponentDataHub(hub: ComponentDataHub): AdaptResult {
       localStateStore: hub.localStateStore,
       payloadFromNodeValues: hub.payloadFromNodeValues,
       onNodeValueChange: hub.onNodeValueChange,
+      onRuntimeDispatchResult: hub.onRuntimeDispatchResult,
       className,
       design,
     },

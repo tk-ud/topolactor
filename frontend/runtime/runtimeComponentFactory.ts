@@ -405,6 +405,31 @@ function isPreviewMode(spec: RuntimeComponentSpec): boolean {
   return spec.previewMode === true;
 }
 
+/**
+ * Still fire-and-forget from emitBoundEvent's own synchronous caller's perspective
+ * (the FIFO queue in frontendScheduler still owns ordering/error propagation) --
+ * but the settled result is now forwarded to spec.onRuntimeDispatchResult when the
+ * caller wired one in, instead of being unconditionally discarded. See
+ * ComponentDataHub.onRuntimeDispatchResult (projectionConstructor.ts) for why: no
+ * admin_runtime dispatch's own response previously reached rendered state at all.
+ * A rejected promise (queue-level failure, not a normal {success:false} response)
+ * is logged, not re-thrown -- this call site has no synchronous caller left to
+ * propagate it to by the time the promise settles.
+ */
+function dispatchRuntimeComponentCommandAndForwardResult(
+  spec: RuntimeComponentSpec,
+  dispatchSpec: Parameters<typeof enqueueRuntimeComponentCommand>[0],
+): void {
+  enqueueRuntimeComponentCommand(dispatchSpec)
+    .then((result) => spec.onRuntimeDispatchResult?.(result))
+    .catch((err) => {
+      console.error(
+        "[runtimeComponentFactory] admin_runtime dispatch queue rejected:",
+        err,
+      );
+    });
+}
+
 function emitBoundEvent(
   spec: RuntimeComponentSpec,
   trigger: string,
@@ -487,12 +512,12 @@ function emitBoundEvent(
       if (!resolved.ok) {
         return { ok: false, error: resolved.errors.join("; ") };
       }
-      void enqueueRuntimeComponentCommand({
+      dispatchRuntimeComponentCommandAndForwardResult(spec, {
         ...binding.runtimeDispatch,
         payload: resolved.payload,
       });
     } else {
-      void enqueueRuntimeComponentCommand({
+      dispatchRuntimeComponentCommandAndForwardResult(spec, {
         ...binding.runtimeDispatch,
         payload: { ...binding.runtimeDispatch.payload, ...binding.payload, ...payload },
       });

@@ -1,4 +1,5 @@
 import type {
+  DispatchResponse,
   Emission,
   LayoutNode as EmissionLayoutNode,
 } from "../api/dispatch.ts";
@@ -62,6 +63,14 @@ export type RenderEmissionOptions = {
    * behavior unchanged.
    */
   onNodeValueChange?: (nodeId: string, value: unknown) => void;
+  /**
+   * Fires with a node's own settled admin_runtime dispatch result (this node's
+   * nodeId + the DispatchResponse). Absent by default (no-op) — callers that
+   * never wire this in keep today's fire-and-forget behavior unchanged. See
+   * ComponentDataHub.onRuntimeDispatchResult / emitBoundEvent
+   * (runtimeComponentFactory.ts) for where the result comes from.
+   */
+  onRuntimeDispatchResult?: (nodeId: string, result: DispatchResponse) => void;
 };
 
 export type ComponentSpec = {
@@ -1323,6 +1332,10 @@ export function renderEmission(
           onNodeValueChange: (options?.onNodeValueChange && node.nodeId)
             ? (value: unknown) =>
               options.onNodeValueChange!(node.nodeId!, value)
+            : undefined,
+          onRuntimeDispatchResult: (options?.onRuntimeDispatchResult && node.nodeId)
+            ? (result: DispatchResponse) =>
+              options.onRuntimeDispatchResult!(node.nodeId!, result)
             : undefined,
           design: hubDesign,
         };

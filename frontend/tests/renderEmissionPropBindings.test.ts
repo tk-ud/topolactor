@@ -19,7 +19,7 @@ import {
   buildVisualLayoutPatchJson,
   parseVisualLayoutPatchJson,
 } from "../runtime/visualLayoutUtils.ts";
-import type { Emission } from "../api/dispatch.ts";
+import type { DispatchResponse, Emission } from "../api/dispatch.ts";
 import type { RuntimeDispatchSpec } from "../runtime/frontendScheduler.ts";
 import { ensureRuntimeComponentRegistryInitialized } from "../runtime/runtimeComponentRegistry.ts";
 
@@ -441,6 +441,39 @@ Deno.test("renderEmission: onNodeValueChange option registers per-node closures 
   assertExists(specs[0].runtimeSpec);
   specs[0].runtimeSpec!.onNodeValueChange?.("hello");
   assertEquals(captured, [["node-nv-1", "hello"]]);
+});
+
+// ─── renderEmission: onRuntimeDispatchResult option wires per-node closures
+// carrying nodeId (PR #600 review round 12 — admin_runtime dispatch response
+// was previously void-discarded at emitBoundEvent; this is the boundary that
+// lets a caller adopt a node's own dispatch result into production emission) ─
+
+Deno.test("renderEmission: onRuntimeDispatchResult option registers per-node closures carrying nodeId", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const captured: Array<[string, DispatchResponse]> = [];
+  const emission: Emission = {
+    layoutId: "layout-rdr-001",
+    layoutNodes: [
+      {
+        nodeId: "node-rdr-1",
+        nodeKind: "catalog_component",
+        componentId: "comp-rdr-001",
+        componentKind: "form_input/input",
+        componentKey: "text_input.primitive",
+        orderIndex: 0,
+      },
+    ],
+  };
+  const specs = renderEmission(emission, {}, {
+    onRuntimeDispatchResult: (nodeId, result) => captured.push([nodeId, result]),
+  });
+  assertExists(specs[0].runtimeSpec);
+  const fakeResult: DispatchResponse = {
+    success: true,
+    emission: { layoutId: "layout-rdr-001", data: { ok: true } },
+  };
+  specs[0].runtimeSpec!.onRuntimeDispatchResult?.(fakeResult);
+  assertEquals(captured, [["node-rdr-1", fakeResult]]);
 });
 
 // ─── renderEmission: applyLiveNodeValueOverride — display authority unified
