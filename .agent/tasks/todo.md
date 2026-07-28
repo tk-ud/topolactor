@@ -1457,18 +1457,35 @@ round 9のowner指摘は、round 7までのA/B/C探索を「対応資料に指�
 
 ### 対象ファイル名
 
-- `backend/schema/ContentBundleContracts.cs`（`HubNavigationSequenceItemDto`、案A採用時）
-- `backend/repository/NpgsqlContentBundleRepository.cs`（`LoadHubNavigationSequenceAsync`）、`backend/runtime/HubNavigationResolver.cs`
-- `frontend/api/dispatch.ts`（`HubNavigationSequenceItem`、案A採用時）、`frontend/runtime/projectionEntry.ts`（`resolveHubNavigationLinks`/`parseProjectionEntrySelection`/`resolveProjectionEntryAxes`、案A採用時——round 8のtraceで確認した通り、`parseProjectionEntrySelection`がContextを一切構築しない箇所も含む）
-- `backend/schema/Contracts.cs`（`OperationVector.ContextRecordId`）、`backend/runtime/OperationVectorResolver.cs`（round 8で確認: 既存フィールドだが現在frontendのどのdispatchからも設定されていない、案A採用時の候補carrier）
-- `frontend/runtime/uiEventEffectRunner.ts`（`UI_STATE_UPDATE_OPEN_ACTIONS`、案B採用時）
-- `frontend/runtime/runtimeComponentFactory.ts`（`inline_edit/*` factory、案C採用時。search_input.aliasの`inputFactory`——round 8のtraceで確認したpre-fill binding欠落箇所、案A/B/Cいずれを選んでも追加で必要）
-- `frontend/islands/ProjectionShell.tsx`
-- `frontend/islands/AdminEnumsRoster.tsx`、`frontend/islands/AdminUsersRoster.tsx`（gap解消後の撤去対象）
-- `db/seed_empty.sql`（admin-enum ae2xx行、credential-management manifest 092）
+**実装済み（round 10-13、下記が実際に変更されたファイル——A/B/C採用時の候補ではなく実差分）:**
+- `db/seed_empty.sql`（ae280ブロック=round 10のdetail view manifest、ae220の`load_button`/`group_name_field`propBindings=round 11のpre-fill manifest）
+- `backend/runtime/AdminRuntimeMasterRoster.cs`（`DataEnumDictionaryUpdateGroupAsync`のdryRun before-value fallback活用、round 11）
+- `backend/runtime/StructureMapResolver.cs`（`ComponentArrayPropCapabilities`へ`form_input/search_input`追加、round 11）
+- `frontend/runtime/propBindingResolver.ts`（`COMPONENT_ARRAY_PROP_CAPABILITIES`/`acceptsNonArrayResolvedValue`、round 11）
+- `frontend/runtime/liveNodeValueTracker.ts`（`seedTrackerFromPropBindingsValue`新設=round 11、`forceOverwrite`オプション追加=round 12）
+- `frontend/runtime/projectionConstructor.ts`/`runtimeComponentAdapter.ts`/`renderEmission.ts`（`onRuntimeDispatchResult`callback chain、round 12）
+- `frontend/runtime/runtimeComponentFactory.ts`（`dispatchRuntimeComponentCommandAndForwardResult`新設、round 12）
+- `frontend/islands/ProjectionShell.tsx`（`handleRuntimeDispatchResult`、round 12）
+- `docs/design/admin-console-workflow-ssot.yaml`（`component_array_prop_capabilities.entries`同期、round 11）
+
+**未採用のまま残った候補（round 7のA/B/C比較時点のもの——round 9で撤回済み、実装には至っていない）:**
+- `backend/schema/ContentBundleContracts.cs`（`HubNavigationSequenceItemDto`、案A候補）
+- `backend/repository/NpgsqlContentBundleRepository.cs`（`LoadHubNavigationSequenceAsync`）、`backend/runtime/HubNavigationResolver.cs`（案A候補）
+- `frontend/api/dispatch.ts`（`HubNavigationSequenceItem`、案A候補）、`frontend/runtime/projectionEntry.ts`（`resolveHubNavigationLinks`/`parseProjectionEntrySelection`/`resolveProjectionEntryAxes`、案A候補——round 13でも改めて調査したが未採用のまま）
+- `backend/schema/Contracts.cs`（`OperationVector.ContextRecordId`）、`backend/runtime/OperationVectorResolver.cs`（案A候補、既存フィールドだが現在frontendのどのdispatchからも設定されていない）
+- `frontend/runtime/uiEventEffectRunner.ts`（`UI_STATE_UPDATE_OPEN_ACTIONS`、案B候補——2026-07-28の別調査で、`payloadFrom`がui_state_updateで解決されていない`not_started`状態であることを確認済み。cross-manifest carrier問題は解決しないため、この論点への採用可否は未決のまま）
+- `frontend/runtime/runtimeComponentFactory.ts`（`inline_edit/*` factory、案C候補。search_input.aliasの`inputFactory`）
+- `frontend/islands/AdminEnumsRoster.tsx`、`frontend/islands/AdminUsersRoster.tsx`（cross-manifest carrier解決後のhardcoded route撤去対象、未着手）
 
 ### 対象関数名
 
+**実装済み:**
+- `AdminRuntimeMasterRoster.DataEnumDictionaryUpdateGroupAsync`（dryRun前段でgroupName省略時に`before.GroupName`へfallbackする既存ロジックを、pre-fillの現在値取得に流用）
+- `seedTrackerFromPropBindingsValue`（`frontend/runtime/liveNodeValueTracker.ts`）
+- `dispatchRuntimeComponentCommandAndForwardResult`（`frontend/runtime/runtimeComponentFactory.ts`）
+- `ProjectionShell.tsx`内`handleRuntimeDispatchResult`
+
+**未採用のまま残った候補（案A/B/C、round 9で撤回）:**
 - `HubNavigationResolver`の解決メソッド群、`NpgsqlContentBundleRepository.LoadHubNavigationSequenceAsync`、`hub_navigation:*`authoring関数群
 - `resolveHubNavigationLinks`（`frontend/runtime/projectionEntry.ts`）
 - `uiEventEffectRunner.ts`の`UI_STATE_UPDATE_OPEN_ACTIONS`ハンドラ
@@ -1550,6 +1567,7 @@ round 9のowner指摘は、round 7までのA/B/C探索を「対応資料に指�
 ### 対象関数名
 
 - `AdminMasterRosterAudit.AppendAsync`
+- `AdminMasterRosterAudit.InferJsonType`（`AppendAsync`が呼ぶ内部helper、changedFieldsの各値からtypeを一意に推論する）
 - `NpgsqlSqlAttentionLogsRepository.AppendLogsDiffAsync`
 
 ### 受入条件（すべて充足 — round 9）
