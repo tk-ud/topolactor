@@ -3983,6 +3983,23 @@ ON CONFLICT (wiring_id) DO UPDATE
         wiring_schema_json = EXCLUDED.wiring_schema_json,
         status = EXCLUDED.status;
 
+-- Pre-fill (2026-07-28, PR #600 review round 10-11): load_button dispatches update_group's
+-- OWN canonical action (dryRun=true, groupId only -- groupName deliberately omitted so
+-- DataEnumDictionaryUpdateGroupAsync's request.GroupName?.Trim() ?? before.GroupName falls
+-- back to the real current value) purely to populate emission.data.preview.groupName --
+-- no separate read/get action, no new carrier, still exactly one canonical admin_runtime
+-- action for this layout. group_name_field's propBindings.value pre-fills its displayed
+-- value from that response (frontend/runtime/propBindingResolver.ts
+-- COMPONENT_ARRAY_PROP_CAPABILITIES["form_input/search_input"], a generic capability
+-- extension, not admin-enum-specific) -- ProjectionShell.tsx's
+-- seedTrackerFromPropBindingsValue additionally seeds liveNodeValueTracker with that same
+-- value so an unedited pre-filled value still resolves for preview_button/confirm_button's
+-- own node:group_name_field.value payloadFrom (without this, an untouched pre-fill would
+-- fail PAYLOAD_FROM_NODE_NOT_FOUND on Preview/Confirm). Carrying groupId itself from
+-- ae200's row selection remains the unresolved part of
+-- admin-write-surface-selection-context-and-mode-composition-gap (.agent/tasks/todo.md) --
+-- this pass only removes the NEED to already know the group's current name once its id is
+-- known, whether typed manually (today) or eventually auto-carried.
 INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
 VALUES (
     '00000000-0000-0000-0000-0000000ae226',
@@ -3992,7 +4009,7 @@ VALUES (
     '00000000-0000-0000-0000-0000000ae225',
     'default',
     0,
-    '{"nodes": [{"nodeId": "group_id_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 0}, {"nodeId": "group_name_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 1}, {"nodeId": "preview_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 2, "propsJson": "{\"label\": \"Preview\"}", "dispatchPayloadFromByTrigger": {"click": {"groupId": "node:group_id_field.value", "groupName": "node:group_name_field.value", "dryRun": "literal:true"}}}, {"nodeId": "confirm_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 3, "propsJson": "{\"label\": \"Confirm & write\"}", "dispatchPayloadFromByTrigger": {"click": {"groupId": "node:group_id_field.value", "groupName": "node:group_name_field.value", "confirmed": "literal:true"}}}]}'::jsonb
+    '{"nodes": [{"nodeId": "group_id_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 0}, {"nodeId": "load_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 1, "propsJson": "{\"label\": \"Load current values\"}", "dispatchPayloadFromByTrigger": {"click": {"groupId": "node:group_id_field.value", "dryRun": "literal:true"}}}, {"nodeId": "group_name_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 2, "propBindings": {"value": {"source": "emission.data.preview.groupName"}}}, {"nodeId": "preview_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 3, "propsJson": "{\"label\": \"Preview\"}", "dispatchPayloadFromByTrigger": {"click": {"groupId": "node:group_id_field.value", "groupName": "node:group_name_field.value", "dryRun": "literal:true"}}}, {"nodeId": "confirm_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 4, "propsJson": "{\"label\": \"Confirm & write\"}", "dispatchPayloadFromByTrigger": {"click": {"groupId": "node:group_id_field.value", "groupName": "node:group_name_field.value", "confirmed": "literal:true"}}}]}'::jsonb
 )
 ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
     SET layout_patch_json = EXCLUDED.layout_patch_json;

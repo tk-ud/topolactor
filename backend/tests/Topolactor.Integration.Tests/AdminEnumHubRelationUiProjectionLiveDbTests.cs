@@ -1091,6 +1091,60 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
     }
 
     /// <summary>
+    /// Live-DB proof for the ae220 pre-fill mechanism added in PR #600 review round 10-11
+    /// (see db/seed_empty.sql's ae226 tensor comment): update_group's own canonical action,
+    /// dispatched with dryRun=true and groupId only (groupName deliberately omitted), returns
+    /// preview.groupName carrying the group's real CURRENT name (before-value fallback) rather
+    /// than blank -- the exact response group_name_field's propBindings.value pre-fills from.
+    /// This proves the backend half (the response shape group_name_field's propBindings
+    /// depends on); the frontend half (propBindings resolving it into props.value, and
+    /// ProjectionShell.tsx's seedTrackerFromPropBindingsValue making that value dispatch-ready
+    /// without the user re-typing it) is proven separately by
+    /// frontend/tests/propBindingResolver.test.ts and
+    /// frontend/tests/liveNodeValueTracker.test.ts -- no single test spans both, so this is not
+    /// described as end-to-end.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_EnumDictionaryUpdateGroupWriteManifest_DryRunWithGroupIdOnly_PreviewCarriesCurrentGroupName()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+        var groupName = $"prefill-proof-{Guid.NewGuid():N}"[..30];
+        string? groupId = null;
+        try
+        {
+            var created = await DispatchViaOwnWriteManifestAsync(dispatcher, "create_group",
+                new { groupName, confirmed = true });
+            Assert.True(created.Success, string.Join(";", created.Errors.Select(e => e.Code + ":" + e.Message)));
+            using (var doc = System.Text.Json.JsonDocument.Parse(created.Emission!.Data!.Value.GetRawText()))
+                groupId = doc.RootElement.GetProperty("groupId").GetString();
+
+            // load_button's own dispatchPayloadFromByTrigger shape: {groupId, dryRun} only --
+            // groupName is NOT included, mirroring an untouched group_name_field.
+            var loadResult = await DispatchViaOwnWriteManifestAsync(dispatcher, "update_group",
+                new { groupId, dryRun = true });
+            Assert.True(loadResult.Success, string.Join(";", loadResult.Errors.Select(e => e.Code + ":" + e.Message)));
+            using var doc2 = System.Text.Json.JsonDocument.Parse(loadResult.Emission!.Data!.Value.GetRawText());
+            Assert.Equal(
+                groupName,
+                doc2.RootElement.GetProperty("preview").GetProperty("groupName").GetString());
+        }
+        finally
+        {
+            if (groupId is not null)
+            {
+                await using var conn = new NpgsqlConnection(cs);
+                await conn.OpenAsync();
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = "DELETE FROM enum.groups WHERE group_id = @id";
+                cmd.Parameters.AddWithValue("id", Guid.Parse(groupId));
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+    }
+
+    /// <summary>
     /// Full preview/confirm/write/re-read round trip through delete_group's own dedicated write
     /// manifest (ae230).
     /// </summary>

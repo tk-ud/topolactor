@@ -90,3 +90,52 @@ export function createLiveNodeValueTracker(): LiveNodeValueTracker {
     },
   };
 }
+
+/**
+ * form_input/search_input propBindings.value pre-fill (admin-write-surface-selection-
+ * context-and-mode-composition-gap Bundle, .agent/tasks/todo.md) resolves an initial
+ * displayed value from emission.data via the SAME generic resolvePropBindings path
+ * table/card_list/json_viewer already use (propBindingResolver.ts
+ * COMPONENT_ARRAY_PROP_CAPABILITIES / acceptsNonArrayResolvedValue). That resolution only
+ * affects what renderEmission() puts in a node's rendered `value` PROP; it does not, by
+ * itself, teach liveNodeValueTracker about that value — node:<nodeId>.value payloadFrom
+ * resolution (payloadFromResolver.ts, used by preview/confirm buttons) reads ONLY the
+ * tracker, which otherwise only gets values from actual onChange keystrokes
+ * (renderEmission.ts's onNodeValueChange wiring). Without this seeding step, a user who
+ * accepts a pre-filled value without editing it would still fail dispatch with
+ * PAYLOAD_FROM_NODE_NOT_FOUND on Preview/Confirm.
+ *
+ * Only seeds a nodeId that has NO existing tracked value — never overwrites a value the
+ * user has already started editing (or a still-tracked pre-fill from an earlier emission
+ * for the same nodeId; re-running "Load" for a different identity while an untouched
+ * stale pre-fill is still tracked is a known, accepted rough edge, not a correctness bug —
+ * the stale value stays visible in the field for the user to notice/retype before
+ * confirming). Call once per fresh emission (alongside reconcile()), never on every
+ * unrelated re-render, so it can't fight a keystroke that landed the same tick.
+ */
+export function seedTrackerFromPropBindingsValue(
+  tracker: LiveNodeValueTracker,
+  layoutNodes: readonly LayoutNodeForValueSeeding[],
+  emissionData: Record<string, unknown>,
+  resolveRuntimeDataPath: (
+    data: Record<string, unknown>,
+    source: string,
+  ) => unknown,
+): void {
+  const tracked = tracker.snapshot();
+  for (const node of layoutNodes) {
+    if (!node.nodeId || node.componentKind !== "form_input/search_input") continue;
+    if (Object.prototype.hasOwnProperty.call(tracked, node.nodeId)) continue;
+    const binding = node.propBindings?.value;
+    if (!binding || typeof binding.source !== "string") continue;
+    const resolved = resolveRuntimeDataPath(emissionData, binding.source);
+    if (typeof resolved === "string") tracker.set(node.nodeId, resolved);
+  }
+}
+
+/** Minimal shape seedTrackerFromPropBindingsValue needs from a LayoutNode (api/dispatch.ts). */
+export type LayoutNodeForValueSeeding = {
+  nodeId?: string;
+  componentKind?: string;
+  propBindings?: Record<string, { source?: string }> | null;
+};

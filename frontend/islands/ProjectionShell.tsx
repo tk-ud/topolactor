@@ -36,7 +36,9 @@ import {
 import {
   createLiveNodeValueTracker,
   type LiveNodeValueTracker,
+  seedTrackerFromPropBindingsValue,
 } from "../runtime/liveNodeValueTracker.ts";
+import { resolveRuntimeDataPath } from "../runtime/propBindingResolver.ts";
 import type { WiringNode } from "../lib/uiBuilderWiringProjection.ts";
 import {
   adoptResolvedManifestIdentity,
@@ -271,6 +273,12 @@ export default function ProjectionShell(): JSX.Element {
       nodeValueTrackerRef.current.reconcile(
         runnerNodes.map((n) => n.nodeId),
       );
+      seedTrackerFromPropBindingsValue(
+        nodeValueTrackerRef.current,
+        nextEmission.layoutNodes ?? [],
+        nextEmission.data ?? {},
+        resolveRuntimeDataPath,
+      );
       if (!stateDispatcherRef.current) {
         stateDispatcherRef.current = createProjectionStateDispatcher(
           runnerNodes,
@@ -440,6 +448,12 @@ export default function ProjectionShell(): JSX.Element {
             // value must not leak into a later dispatch on this same mount.
             nodeValueTrackerRef.current.reconcile(
               refreshedNodes.map((n) => n.nodeId),
+            );
+            seedTrackerFromPropBindingsValue(
+              nodeValueTrackerRef.current,
+              updated.layoutNodes ?? [],
+              updated.data ?? {},
+              resolveRuntimeDataPath,
             );
             if (effectRunnerRef.current) {
               effectRunnerRef.current.updateNodes(refreshedNodes);

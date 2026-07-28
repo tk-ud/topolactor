@@ -50,6 +50,14 @@ public class StructureMapResolver
             ["form_input/checkbox"]             = new HashSet<string>(StringComparer.Ordinal) { "options" },
             ["form_input/radio_group"]          = new HashSet<string>(StringComparer.Ordinal) { "options" },
             ["form_input/checkbox_group"]       = new HashSet<string>(StringComparer.Ordinal) { "options" },
+            // "value" is a scalar, not an array, despite this dict's name -- ComponentArrayPropCapabilities
+            // is the universal propBindings capability whitelist (see the validator below), not
+            // array-specific. Added so an existing read/get action's emission.data can pre-fill a
+            // search_input.alias field's displayed value (admin-write-surface-selection-context-and-
+            // mode-composition-gap Bundle, .agent/tasks/todo.md) -- the same generic propBindings
+            // mechanism already used for table/card_list/json_viewer, extended to one more component
+            // kind, not a new mechanism.
+            ["form_input/search_input"]         = new HashSet<string>(StringComparer.Ordinal) { "value" },
             ["table_op/faceted_filter_bar"]     = new HashSet<string>(StringComparer.Ordinal) { "filters" },
             ["table_op/column_filter"]          = new HashSet<string>(StringComparer.Ordinal) { "options" },
             ["table_op/column_visibility_editor"] = new HashSet<string>(StringComparer.Ordinal) { "columns" },

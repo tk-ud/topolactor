@@ -53,6 +53,11 @@ export const COMPONENT_ARRAY_PROP_CAPABILITIES: Record<string, string[]> = {
   "form_input/checkbox": ["options"],
   "form_input/radio_group": ["options"],
   "form_input/checkbox_group": ["options"],
+  // Scalar, not an array, despite this map's name -- see StructureMapResolver.cs
+  // ComponentArrayPropCapabilities' matching entry for why. Pre-fills a
+  // search_input.alias field's displayed value from an existing read/get action's
+  // emission.data.
+  "form_input/search_input": ["value"],
   "table_op/faceted_filter_bar": ["filters"],
   "table_op/column_filter": ["options"],
   "table_op/column_visibility_editor": ["columns"],
@@ -95,6 +100,7 @@ function isRecognizedPropBindingSource(source: string): boolean {
 }
 
 function acceptsNonArrayResolvedValue(componentKind: string, propName: string): boolean {
+  if (propName === "value" && componentKind === "form_input/search_input") return true;
   if (propName !== "data") return false;
   return componentKind === "data_display/json" ||
     componentKind === "calc_topology/aggregation_preview_table" ||
