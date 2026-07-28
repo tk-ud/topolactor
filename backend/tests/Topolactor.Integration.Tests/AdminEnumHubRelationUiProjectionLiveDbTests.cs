@@ -1484,5 +1484,93 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         }
     }
 
+    /// <summary>
+    /// Live-DB proof for the ae280 read-detail manifest (enum_dictionary:get_group, PR #600 review
+    /// round 9 -- "existing contract, unconnected in production" gap, see db/seed_empty.sql's ae280
+    /// block comment). Dispatches through ae280's OWN manifest identity
+    /// (target_ref = "manifest:{ae280}:enum_dictionary:get_group"), the same discipline
+    /// DispatchViaOwnWriteManifestAsync uses for the 7 write manifests -- proving manifest
+    /// resolution for THIS specific manifest, not just the generic backend action (which
+    /// AdminEnumHubRelationUiProjectionLiveDbTests.cs's read_circuit tests already cover for
+    /// list_groups). Asserts the real EnumDictionaryGroupDetailDto shape (groupName/indexNum/items)
+    /// reaches the caller, and that a nonexistent groupId fails close with ENUM_GROUP_NOT_FOUND
+    /// through this same manifest identity (not just the bare dispatcher).
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_EnumDictionaryGetGroupReadDetailManifest_ResolvesAndReturnsGroupDetail()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+        const string getGroupManifestId = "00000000-0000-0000-0000-0000000ae280";
+        var groupName = $"get-group-manifest-proof-{Guid.NewGuid():N}"[..30];
+        var itemName = $"get-group-manifest-item-{Guid.NewGuid():N}"[..30];
+        var indexNum = 910_000 + Random.Shared.Next(0, 90_000);
+        string? groupId = null;
+        try
+        {
+            var createdGroup = await DispatchViaOwnWriteManifestAsync(dispatcher, "create_group",
+                new { groupName, confirmed = true });
+            Assert.True(createdGroup.Success, string.Join(";", createdGroup.Errors.Select(e => e.Code + ":" + e.Message)));
+            using (var doc = System.Text.Json.JsonDocument.Parse(createdGroup.Emission!.Data!.Value.GetRawText()))
+                groupId = doc.RootElement.GetProperty("groupId").GetString();
+
+            var createdItem = await DispatchViaOwnWriteManifestAsync(dispatcher, "create_item",
+                new { name = itemName, indexNum, confirmed = true });
+            Assert.True(createdItem.Success, string.Join(";", createdItem.Errors.Select(e => e.Code + ":" + e.Message)));
+
+            var setItems = await DispatchViaOwnWriteManifestAsync(dispatcher, "set_group_items",
+                new { groupId, enumIndexNums = indexNum.ToString(), confirmed = true });
+            Assert.True(setItems.Success, string.Join(";", setItems.Errors.Select(e => e.Code + ":" + e.Message)));
+
+            var getResult = await dispatcher.DispatchAsync(new EndpointRequestDto(
+                "get_group", "manifest", "enum_dictionary", "get_group",
+                IdOrHubId: null,
+                Payload: System.Text.Json.JsonSerializer.SerializeToElement(new
+                {
+                    groupId,
+                    target_ref = $"manifest:{getGroupManifestId}:enum_dictionary:get_group",
+                }),
+                Context: null, TriggerKind: "client", Role: "admin"));
+            Assert.True(getResult.Success, string.Join(";", getResult.Errors.Select(e => e.Code + ":" + e.Message)));
+            var detailJson = getResult.Emission!.Data!.Value.GetRawText();
+            Assert.Contains(groupName, detailJson);
+            Assert.Contains(itemName, detailJson);
+            Assert.Contains(indexNum.ToString(), detailJson);
+
+            var notFound = await dispatcher.DispatchAsync(new EndpointRequestDto(
+                "get_group", "manifest", "enum_dictionary", "get_group",
+                IdOrHubId: null,
+                Payload: System.Text.Json.JsonSerializer.SerializeToElement(new
+                {
+                    groupId = Guid.NewGuid().ToString(),
+                    target_ref = $"manifest:{getGroupManifestId}:enum_dictionary:get_group",
+                }),
+                Context: null, TriggerKind: "client", Role: "admin"));
+            Assert.False(notFound.Success);
+            Assert.Contains(notFound.Errors, e => e.Code == "ENUM_GROUP_NOT_FOUND");
+        }
+        finally
+        {
+            if (groupId is not null)
+            {
+                await using var conn = new NpgsqlConnection(cs);
+                await conn.OpenAsync();
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = "DELETE FROM enum.groups WHERE group_id = @id";
+                cmd.Parameters.AddWithValue("id", Guid.Parse(groupId));
+                await cmd.ExecuteNonQueryAsync();
+            }
+            await using (var conn = new NpgsqlConnection(cs))
+            {
+                await conn.OpenAsync();
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = "DELETE FROM enum.items WHERE index_num = @i";
+                cmd.Parameters.AddWithValue("i", indexNum);
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+    }
+
     private static string? GetConnectionString() => AggregateTriggerRepositoryLiveDbTests.GetConnectionString();
 }

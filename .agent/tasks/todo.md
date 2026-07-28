@@ -1003,6 +1003,26 @@ ownerの指摘通り、round 1-7のA/B/C探索は`docs/design/ui-builder-preset-
 
 **admin-enum subBundle 全体の状態（round 9時点）:** `admin-master-roster-audit-envelope-contract-gap`は解消済み（`implemented`）。`admin-write-surface-selection-context-and-mode-composition-gap`は未解決のまま——ただしA/B/Cという抽象的3択から、「detail view（実装可能）」と「pre-fill（2択のowner decision待ち）」という具体的な2つの論点へ精緻化した。**hardcoded `/admin/enums` / `AdminEnumsRoster.tsx`のUX-parity production replacementは依然未達であり、admin-enum subBundleを`implemented`と判断することはできない。** PR #600はopenのまま維持し、partial mergeは要求しない。
 
+### admin-enum subBundle 実装記録（2026-07-28 round 10 — round 9の自己訂正）
+
+round 9の「detail view相当は既存機構ゼロで実装可能」という自らの結論を、実装せずtodo記録だけで止めていたことをownerに指摘された（「また読み飛ばして再発明しやがった」）。再点検した結果、round 9の`.agent/tasks/todo.md`記述には以下の具体的な問題があった:
+
+1. **round 9のNG axis自身が明示的に禁止していた論法を、まさに使っていた**: レビューコメントのNG軸は「既存presetがdraft artifactであることを理由にcomposition contractを無視する」ことを名指しで禁止していたが、round 9の「発見1」はpresetが「draft/intake artifact」である点を、conflictの中心的根拠として使っていた——最終的な技術的結論（detail viewは実装可能、pre-fillのみ真に阻害される）自体は誤りではなかったが、その提示の仕方が、owner が先回りして禁止していた論法をなぞっていた。
+2. **実装可能と自分で結論した部分を、実装せず「次round以降」として先送りした**: これがround 1以来繰り返されている本質的なパターン——調査・比較・todo記録は毎round行うが、「今すぐ実装できる」と自ら結論した範囲すら実装せずBundleへ記録するだけで終える。これがownerの「同じ事を繰り返す」という指摘の核心と判断した。
+
+**是正内容**: `enum_dictionary:get_group`は既存の、既にdispatcher登録・live-DB証明済みのadmin_runtime action（`AdminRuntime.cs` `DataEnumDictionaryGetGroupAsync`）だが、どのmanifest/layoutにも一度も配線されていなかった——「既存contract、production未接続」という、他の7 write actionと全く同じ形状のgapだった。`db/seed_empty.sql`へ8番目の単一目的read-detail manifest（`00000000-0000-0000-0000-0000000ae280`、hub/package/layout/wiring/tensor = ae281-ae286）を、ae210-ae270と全く同じsingle-purpose-manifestパターンで追加した——新しいcomponent kind/actionType/lane/per-node override は一切追加していない。`enum_dictionary:list_groups`の応答shapeは変更していない（`AdminEnumsRoster.tsx`/`adminApi.ts`という現行hardcoded routeの消費経路に影響を与えないため、応答shapeを壊すバージョンは採用しなかった）。groupIdは（ae210-ae270自身の識別子入力フィールドと同じパターンで）手入力——ae200の行選択からこのmanifestへ自動的にidを引き継ぐ経路（`admin-write-surface-selection-context-and-mode-composition-gap`が記録する、真に未解決のcarrier gap）はこのpassでは解決していない。get_group自体を実際にproduction到達可能にすることで、そのgapが解決した時に実際に着地できる先を用意した。
+
+Live-DB test（`AdminEnumHubRelationUiProjectionLiveDbTests.cs`、`DispatchAsync_EnumDictionaryGetGroupReadDetailManifest_ResolvesAndReturnsGroupDetail`）を追加し、ae280自身のmanifest identityを通したdispatch（create_group→create_item→set_group_items→get_group、全て各自の既存manifestを経由）で、実際のgroup detail（groupName/indexNum/items）が返ること、および存在しないgroupIdでENUM_GROUP_NOT_FOUNDへfail-closeすることを実PostgreSQLで証明した。
+
+**正直な既存の限界（このpassでは変更していない）**: `DataEnumDictionaryGetGroupAsync`は`detail.Items.Count == 0`のときENUM_GROUP_ITEMS_EMPTYで失敗する既存の（本PRとは無関係な）挙動を持つ——空グループのdetail表示はこのmanifestでは今も機能しない。この挙動自体を変更するかどうかは、このpassのスコープ外の別の判断であり、変更していない。
+
+**Test結果**: `Topolactor.Runtime.Tests` 1503/1503 pass（無変更）。`AdminEnumHubRelationUiProjectionLiveDbTests` 22/22 pass（新規1件込み）。CI相当12クラスfilterをフレッシュDBで86/86 pass。`check-structure`/`check-yaml-parse-completeness`/`check-enum-dictionary`すべてpass。`check-react-schema-topology-seed-translator`は既知のpre-existing flaky failure（7a、無変更でも再現、round 7-8から変化なし）以外全pass。
+
+**今後の同種の失敗を防ぐための恒久メモ（owner指摘を受けての追記）**:
+- 参照先資料（preset、SSOT、既存contract）が「draft」「intake」「未wiring」等の状態であることを、その資料が指示するdata-flowパターンの採用を見送る、または追加比較を要求する理由として使わない。資料の成熟度と、そこに書かれた指示を今すぐ実装できるかどうかは別の質問である。
+- 自分自身が「既存機構だけで実装可能」と結論した範囲は、同じroundのうちに実装する。「次roundで着手する」という先送りは、それ自体がownerの繰り返し指摘してきた失敗パターンである。
+- 構造的な対立（例: 1 layout = 1 canonical operationとpre-fill要件の非両立）を発見した場合でも、対立の範囲を最小化し、対立と無関係な部分（このケースではget_group manifestの新設）は対立の解決を待たずに前進させる。「対立がある」ことを、対立と無関係な作業まで止める理由にしない。
+
 ---
 
 ## Bundle `admin-runtime-operation-dispatch-lane-determination`
@@ -1335,7 +1355,7 @@ round 9のowner指摘は、round 7までのA/B/C探索を「対応資料に指�
 
 **発見4: しかし「選択した行の現在値で、"別の"single-purpose write manifest（ae230等）をpre-fillする」要件は、"新しいcarrierを追加しない"制約と両立しない。** ae200（読み取り専用、canonical action=list_groups系）とae230（update_group専用、canonical action=update_group）は、上記の「1 layout=1 action」制約により別layout/別manifestのままである。ae230側のフィールドへ選択されたgroupの現在値を初期表示させるには、(a) ae200からae230への遷移時に何らかの形で値そのものを運ぶ（navigation link自体の拡張、または新しいURL query paramへの実値埋め込み）か、(b) read action（get_group的なもの）とwrite action（update_group）を同一layoutへ統合する（"1 layout=1 action"の再設計）かのいずれかが必要で、両方とも「新しいselected-record state/navigation carrier/URL contextを追加しない」というround 9自身の指示に抵触する。round 8のtrace（`search_input.alias`の`inputFactory`にcontext由来の初期値bindingが無いこと含む）で既に特定した欠落そのものであり、round 9のpreset参照はこの欠落を解消する新しい経路を提供しない——presetの`layout_tree`自体、create/edit formの値をどう`content_bundle:create_entity_draft`のpayloadへ載せるかを`known_gaps.form_field_values_to_create_entity_draft_payload: status: seed_marks_as_pending`として未解決のまま残している（つまりpreset自身もこの一般的なmulti-field payload mapping問題を解いていない）。
 
-**この回への対応**: 発見3の「detail view」部分は新規機構ゼロで実装可能な具体案であり、次round以降で（ownerの明示的承認を得た上で）着手できる。発見4の「別write manifestへのpre-fill」部分は、「新規carrierを追加しない」という制約と「production pre-fillを証明する」という要件が両立しない、という具体的な対立をここに記録し、実装しない——A/B/Cという抽象的な3択の代わりに、次の2択をownerへ提示する: **(i)** pre-fillに限定した最小限のcarrier追加（navigation linkのquery paramに選択済みの値そのものを載せ、write manifestのフィールドの初期表示値として使う——新しいstate機構ではなく、既存`href`構築点への追加のみ）を許可する、**(ii)** 現時点でのpre-fill実装は諦め、発見3のdetail view相当のみをこのroundのUX-parity対象とし、write manifestへの遷移はidの手入力（現状のまま）で運用する。いずれかをownerが選ぶまで、本Bundleの実装（発見3含む）には着手しない——round 9の「Owner決定前に実装しない」手続きに従う。
+**この回への対応**: round 9時点では発見3の「detail view」部分を「次round以降で着手できる」として実装せずに終えたが、owner指摘（round 10、「また読み飛ばして再発明した」）を受けて再点検し、これ自体が繰り返されてきた失敗パターン（実装可能と自ら結論した範囲を実装せず記録だけで終える）だったと判断した。round 10で実装した内容は、当初round 9で書いた「`list_groups`自身の応答shapeを拡張する」案ではない——`AdminEnumsRoster.tsx`/`adminApi.ts`という現行hardcoded routeが`list_groups`の現行応答shape（配列そのもの）に直接依存しており、shapeを壊すと現行ページを壊すリスクがあったため、その案は採用しなかった。代わりに、既存の別read action `enum_dictionary:get_group`（dispatcher登録・live-DB証明済みだが一度もmanifestに配線されていなかった）を、ae210-ae270と同じ single-purpose-manifest パターンで新規manifest（`00000000-0000-0000-0000-0000000ae280`）として配線した——`list_groups`の応答shapeは無変更、新しいcomponent kind/actionType/laneも無し。詳細は「admin-enum subBundle 実装記録（2026-07-28 round 10）」参照。groupIdの手入力は現行ae210-ae270と同じ限界として残る（ae200からの自動引き継ぎは依然未解決）。発見4の「別write manifestへのpre-fill」部分は、「新規carrierを追加しない」という制約と「production pre-fillを証明する」という要件が両立しない、という具体的な対立のまま実装していない——A/B/Cという抽象的な3択の代わりに、次の2択をownerへ提示する: **(i)** pre-fillに限定した最小限のcarrier追加（navigation linkのquery paramに選択済みの値そのものを載せ、write manifestのフィールドの初期表示値として使う——新しいstate機構ではなく、既存`href`構築点への追加のみ）を許可する、**(ii)** 現時点でのpre-fill実装は諦め、detail view相当（round 10で実装済み）をこのroundのUX-parity対象とし、write manifestへの遷移はidの手入力（現状のまま）で運用する。いずれかをownerが選ぶまで、pre-fill部分の実装には着手しない。
 
 ### 対応資料
 
@@ -1349,9 +1369,11 @@ round 9のowner指摘は、round 7までのA/B/C探索を「対応資料に指�
 - `docs/design/ui-ux-primitive-catalog-ssot.yaml`（`category_b_inline_edit_audit`）
 - `docs/design/ui-builder-preset-ecosystem-ssot.yaml`（`physical_search_crud_aggregate_preset`/`physical_details_inline_editor_md_generator_preset`——round 9で両preset定義を実際に読み、`cross_preset_authoring_boundary.invariant`のdraft/intake artifact性、`known_gaps.form_field_values_to_create_entity_draft_payload`の未解決を確認）
 - `db/physical_search_crud_aggregate_preset_seed.sql`、`db/physical_details_inline_editor_md_generator_preset_seed.sql`（round 9で参照）
-- `frontend/runtime/runtimeComponentFactory.ts`（`tableFactory`の既存`onRowClick`/`emitBoundEvent(spec,"select",{row})`——round 9で発見した「detail view」実現候補の根拠）
+- `frontend/runtime/runtimeComponentFactory.ts`（`tableFactory`の既存`onRowClick`/`emitBoundEvent(spec,"select",{row})`——round 9で発見した「detail view」実現候補の根拠。table row selectのfrontend機構自体は今回未使用のまま——round 10はae280という別manifestとして`get_group`を配線したのみで、ae200のenum_table自体へのrow-click wiringはまだ追加していない）
+- `db/seed_empty.sql`（ae280ブロック、round 10で追加——`enum_dictionary:get_group`用のsingle-purpose read-detail manifest）
+- `backend/tests/Topolactor.Integration.Tests/AdminEnumHubRelationUiProjectionLiveDbTests.cs`（`DispatchAsync_EnumDictionaryGetGroupReadDetailManifest_ResolvesAndReturnsGroupDetail`、round 10）
 - `.agent/tasks/todo.md`（`admin-runtime-operation-dispatch-lane-determination` Bundle、`admin-surface-topology-seed-conversion` admin-enum subBundle実装記録）
-- PR #600（`tk-ud/topolactor`）review round 1-9コメント履歴
+- PR #600（`tk-ud/topolactor`）review round 1-10コメント履歴
 
 ### 対象ファイル名
 
@@ -1374,9 +1396,10 @@ round 9のowner指摘は、round 7までのA/B/C探索を「対応資料に指�
 
 ### 受入条件
 
-- 案A/B/Cの比較（再利用範囲・新規抽象化範囲・SSOT変更範囲・runtime変更範囲・seed変更範囲・test/proof範囲・authority/fail-close条件・他subBundleへの再利用性・migration境界・blast radius）がownerに提示され、1方向（または代替）が選択されている。
+- ~~案A/B/Cの比較...がownerに提示され、1方向（または代替）が選択されている。~~ → round 9でA/B/Cは撤回。detail view相当はround 10で実装済み（下記参照）。pre-fill相当のみ、2択のowner decision待ち。
 - 選択された方向のSSOT改定が本Bundleまたは後続Bundleで完了している。
 - admin-enum/credential-managementそれぞれのhardcoded roster route撤去が、選択された単一の正規contractに従って進められる状態になっている（各subBundle自身のUX-parity実装・撤去は別途そちらのscope）。scheduler-settings/team-dashboardは対象外（上記「compound対象の再判定」参照、それぞれ独自の理由でこのgapを要求しない/証明できないため）。
+- **round 10で部分的に充足**: `enum_dictionary:get_group`（既存action、未配線だった）を単一目的read-detail manifest（ae280）として配線・live-DB証明した——「一覧行を選択してdetailを見る」の後半（get→propBindings経由の表示）が実装済み。前半（ae200の行選択からae280へgroupIdを自動で引き継ぐ）とpre-fillは、上記2択のowner decision待ちのまま。
 
 ### Governance NG boundary
 

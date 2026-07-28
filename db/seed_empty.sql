@@ -4507,6 +4507,134 @@ VALUES (
 ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
     SET layout_patch_json = EXCLUDED.layout_patch_json;
 
+-- =============================================================================
+-- admin-surface-topology-seed-conversion: admin-enum subBundle -- single-purpose
+-- READ-DETAIL layout for enum_dictionary:get_group (2026-07-27, PR #600 review
+-- round 9 correction). enum_dictionary:get_group is an existing, already-
+-- dispatcher-registered, already-tested admin_runtime action (AdminRuntime.cs
+-- DataEnumDictionaryGetGroupAsync, live-DB-proven by
+-- AdminEnumHubRelationUiProjectionLiveDbTests.cs) that had never been wired into
+-- any manifest/layout -- an "existing contract, unconnected in production" gap,
+-- not a missing mechanism. Same single-purpose-manifest pattern as ae210-ae270
+-- (layout = 1 canonical admin_runtime action); no per-node target override, no
+-- new component kind/actionType/lane, no change to enum_dictionary:list_groups's
+-- response shape (so AdminEnumsRoster.tsx / adminApi.ts, which still consume that
+-- shape directly, are unaffected). groupId is entered directly (same pattern
+-- ae210-ae270's own identity fields already use) -- carrying the row's identity
+-- here automatically from ae200's enum_table selection remains the acknowledged,
+-- unresolved gap in admin-write-surface-selection-context-and-mode-composition-gap
+-- (.agent/tasks/todo.md); this manifest does not solve that, it makes get_group
+-- itself production-reachable so that gap has something real to eventually land
+-- on to. group_detail_json renders the full EnumDictionaryGroupDetailDto
+-- (groupName/indexNum/items) via the same json_viewer.template + propBindings
+-- pattern every other manifest in this file already uses for its own debug/detail
+-- panel. Honest limitation carried over unchanged from DataEnumDictionaryGetGroupAsync
+-- (pre-existing, not touched by this pass): a group with zero items returns
+-- ENUM_GROUP_ITEMS_EMPTY rather than an empty detail -- this manifest surfaces
+-- that behavior as-is, does not work around it.
+-- =============================================================================
+
+INSERT INTO hubs.hub (hub_id, relation)
+VALUES ('00000000-0000-0000-0000-0000000ae281', '{"description": "admin_enum_management_read_get_group", "system": true}'::jsonb)
+ON CONFLICT (hub_id) DO NOTHING;
+
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae280',
+    NULL,
+    ARRAY[
+        '{"type": "hub_grouping", "manifestKey": "admin.enum.management.read.get_group", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
+        '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae283"], "layoutId": "00000000-0000-0000-0000-0000000ae284", "wiringId": "00000000-0000-0000-0000-0000000ae285", "tensorId": "00000000-0000-0000-0000-0000000ae286"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO UPDATE
+    SET topology = EXCLUDED.topology,
+        status   = EXCLUDED.status;
+
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+SELECT
+    m.manifest_id,
+    '00000000-0000-0000-0000-0000000ae281'::uuid,
+    'admin.enum.management.read.get_group',
+    m.status,
+    to_jsonb(m.topology)
+FROM manifest m
+WHERE m.manifest_id = '00000000-0000-0000-0000-0000000ae280'
+ON CONFLICT (topology_manifest_id) DO UPDATE
+    SET hub_id         = EXCLUDED.hub_id,
+        manifest_key   = EXCLUDED.manifest_key,
+        status         = EXCLUDED.status,
+        topology_jsonb = EXCLUDED.topology_jsonb,
+        updated_at     = now();
+
+INSERT INTO topology.ui_component_package (package_id, package_key, package_kind, package_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae282',
+    'admin.enum.management.read.get_group.component_group_bundle',
+    'fixed_form_projection',
+    '{"seedKey": "admin.enum.management.read.get_group", "surface": "admin.enum.management.read.get_group", "categoryKeys": ["enum_dictionary"]}'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET package_schema_json = EXCLUDED.package_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.components_package_design (package_id, name, layout, state)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae283',
+    'admin.enum.management.read.get_group.package',
+    '[]'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET layout = EXCLUDED.layout,
+        state = EXCLUDED.state;
+
+INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind, layout_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae284',
+    'admin.enum.management.read.get_group.layout',
+    'ui_builder_canvas',
+    '{"records":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (layout_id) DO UPDATE
+    SET layout_schema_json = EXCLUDED.layout_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_wiring_registry (wiring_id, wiring_key, wiring_kind, target_surface, target_ref, wiring_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae285',
+    'admin.enum.management.read.get_group.wiring',
+    'admin_runtime',
+    'manifest',
+    'manifest:00000000-0000-0000-0000-0000000ae280:enum_dictionary:get_group',
+    '{"actions":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (wiring_id) DO UPDATE
+    SET wiring_kind = EXCLUDED.wiring_kind,
+        target_surface = EXCLUDED.target_surface,
+        target_ref = EXCLUDED.target_ref,
+        wiring_schema_json = EXCLUDED.wiring_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae286',
+    'admin#enum_management_read_get_group',
+    '00000000-0000-0000-0000-0000000ae282',
+    '00000000-0000-0000-0000-0000000ae284',
+    '00000000-0000-0000-0000-0000000ae285',
+    'default',
+    0,
+    '{"nodes": [{"nodeId": "group_id_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 0}, {"nodeId": "load_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 1, "propsJson": "{\"label\": \"Load group detail\"}", "dispatchPayloadFromByTrigger": {"click": {"groupId": "node:group_id_field.value"}}}, {"nodeId": "group_detail_json", "nodeKind": "catalog_component", "componentKey": "json_viewer.template", "parentNodeId": null, "slotKey": "default", "orderIndex": 2, "propBindings": {"data": {"source": "emission.data"}}}]}'::jsonb
+)
+ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
+    SET layout_patch_json = EXCLUDED.layout_patch_json;
+
 
 -- Representative existing cron absorption: log retention.
 -- The former RetentionScheduler BackgroundService is absorbed into the scheduler
