@@ -37,16 +37,6 @@ CREATE TABLE IF NOT EXISTS logs.diff (
     changed_fields_json        JSONB       NOT NULL DEFAULT '{}'::jsonb
 );
 
--- Additive migration for a pre-existing/already-deployed logs.diff table created
--- before changed_fields_json existed (the CREATE TABLE IF NOT EXISTS above is a
--- no-op against such a table, so it never adds the column on its own). Idempotent:
--- no-op when the column already exists, whether from a fresh CREATE TABLE above or
--- a previous run of this same file. db/init.sql retires db/migrations/ and
--- db/patches/ — additive schema changes to an existing table are applied inline
--- here, immediately after that table's CREATE TABLE IF NOT EXISTS block.
-ALTER TABLE logs.diff
-  ADD COLUMN IF NOT EXISTS changed_fields_json JSONB NOT NULL DEFAULT '{}'::jsonb;
-
 COMMENT ON TABLE logs.diff IS
   'Physical table lifecycle mutation pressure source. Canonical input for logs.current refresh/watch.';
 

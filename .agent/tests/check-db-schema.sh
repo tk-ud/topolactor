@@ -147,60 +147,6 @@ run_sql_file "db/context_route_tables.sql"
 run_sql_file "db/ui_topology_tables.sql"
 run_sql_file "db/manifest_tables.sql"
 run_sql_file "db/sql_attention_logs_tables.sql"
-
-echo "=== Simulating a pre-existing logs.diff schema (predating changed_fields_json) and re-applying db/sql_attention_logs_tables.sql (transaction rollback) ==="
-LOGS_DIFF_MIGRATION_SIM_SQL="$(mktemp)"
-cat > "$LOGS_DIFF_MIGRATION_SIM_SQL" <<EOF
-BEGIN;
-
--- Simulate an already-deployed logs.diff row from before changed_fields_json existed.
-INSERT INTO logs.diff (source_set_id, basis_window, physical_table_id, physical_table_name, record_id, operation_kind)
-VALUES ('sim_pre_migration', 'sim_window', 'sim_table_id', 'sim_table_name', 'sim_record_1', 'update');
-
-ALTER TABLE logs.diff DROP COLUMN changed_fields_json;
-
-DO \$\$
-BEGIN
-    IF EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'logs' AND table_name = 'diff' AND column_name = 'changed_fields_json'
-    ) THEN
-        RAISE EXCEPTION 'pre-migration simulation failed: changed_fields_json still present after DROP COLUMN';
-    END IF;
-END;
-\$\$;
-
-\\i $REPO_ROOT/db/sql_attention_logs_tables.sql
-
-DO \$\$
-DECLARE
-    v_existing_row_value JSONB;
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'logs' AND table_name = 'diff' AND column_name = 'changed_fields_json'
-    ) THEN
-        RAISE EXCEPTION 'upgrade-from-existing-schema failed: changed_fields_json missing after re-applying db/sql_attention_logs_tables.sql';
-    END IF;
-
-    SELECT changed_fields_json INTO v_existing_row_value
-      FROM logs.diff WHERE source_set_id = 'sim_pre_migration' AND record_id = 'sim_record_1';
-    IF v_existing_row_value IS DISTINCT FROM '{}'::jsonb THEN
-        RAISE EXCEPTION 'upgrade-from-existing-schema failed: pre-existing row did not backfill to the default empty envelope, got %', v_existing_row_value;
-    END IF;
-END;
-\$\$;
-
-ROLLBACK;
-EOF
-
-if "${PSQL_BASE[@]}" --file "$LOGS_DIFF_MIGRATION_SIM_SQL" ; then
-  PASS_COUNT=$((PASS_COUNT + 1)) # OK
-else
-  fail "logs.diff changed_fields_json upgrade-from-existing-schema simulation failed"
-fi
-rm -f "$LOGS_DIFF_MIGRATION_SIM_SQL"
-
 run_sql_file "db/seed_empty.sql"
 
 echo "=== Validating hub_relations legacy migration idempotency ==="
