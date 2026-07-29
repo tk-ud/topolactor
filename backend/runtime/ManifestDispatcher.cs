@@ -230,35 +230,58 @@ public class ManifestDispatcher
                             $"target_ref manifest {targetRefManifestId} has status '{manifest.Status}', not 'active'.")]);
                 }
 
-                // Layer/action authorization (round 17 hardening): AdminRuntime.ExecuteDataAsync
-                // dispatches purely on Request.Layer/Request.Action, independent of which manifest_id
-                // resolved the target_ref (see class remarks). Without this check, an authored
-                // dispatchTargetRefByTrigger override (or, identically, the uniform per-layout
-                // target_ref applied by NpgsqlTopologyRepository.LoadLayoutNodesAsync — both reach this
-                // exact branch, so this check covers both paths identically) could combine one
-                // manifest's identity (e.g. a create_group-only manifest) with an unrelated
-                // Layer/Action pair (e.g. delete_group) that manifest never declared authority over.
+                // Layer/action authorization (round 17, hardened round 18): AdminRuntime.
+                // ExecuteDataAsync dispatches purely on Request.Layer/Request.Action, independent of
+                // which manifest_id resolved the target_ref (see class remarks). Without this check,
+                // an authored dispatchTargetRefByTrigger override (or, identically, the uniform
+                // per-layout target_ref applied by NpgsqlTopologyRepository.LoadLayoutNodesAsync —
+                // both reach this exact branch, so this check covers both paths identically) could
+                // combine one manifest's identity (e.g. a create_group-only manifest) with an
+                // unrelated Layer/Action pair (e.g. delete_group) that manifest never declared
+                // authority over.
                 //
-                // Scoped STRICTLY to target_refs already in the "manifest:<uuid>:<layer>:<action>"
-                // shape (AdminRuntimeTargetRefRe) -- not to "any admin_runtime-destination manifest"
-                // as first implemented. A live-DB run caught the real, pre-existing, and still-valid
-                // production convention this originally missed: explicit manifest selection for a
-                // plain page load uses a GENERIC wiringKey target_ref (e.g.
-                // "manifest:<uuid>:projection_entry", "manifest:<uuid>:hub_relations_read") against
-                // Layer="screen_list"/Action="Search" axes, on manifests whose runtime_destination
-                // IS admin_runtime (e.g. admin-enum's own ae200, credential-management's manifest
-                // 92) -- this never encodes a specific admin_runtime operation at all; it hits the
-                // "structural read fallback" below (ADMIN_OPERATION_NOT_FOUND downgraded to an empty
-                // success) purely to resolve ui_projection/LayoutNodes for rendering. Gating on
-                // runtime_destination alone rejected this entire legitimate, already-proven
-                // navigation path. The generic screenReadQueryWiring target_ref shape
-                // (manifest:<uuid>:<wiringKey>) is likewise unaffected, for the same reason.
-                var adminRuntimeShapeMatch = AdminRuntimeTargetRefRe.Match(rawTargetRef!);
-                if (adminRuntimeShapeMatch.Success &&
-                    string.Equals(ExtractRuntimeDestination(manifest.Topology), "admin_runtime", StringComparison.Ordinal))
+                // Round 17's first cut gated this on "target_ref already matches the strict
+                // manifest:<uuid>:<layer>:<action> shape" -- a live-DB run caught that this
+                // legitimately exempted the generic wiringKey navigation convention (e.g.
+                // "manifest:<uuid>:projection_entry", "manifest:<uuid>:hub_relations_read" against
+                // Layer=screen_list/Action=Search), but ALSO, incorrectly, exempted a CONCRETE
+                // admin_runtime operation (e.g. Layer=enum_dictionary/Action=create_group) sent
+                // alongside a non-canonical or generic-shaped target_ref -- shape alone said nothing
+                // about which operation was actually being requested. Round 18 replaces the shape
+                // gate with a semantic one: IsGenericStructuralReadTargetRef below is the exact
+                // pre-condition of the "structural read fallback" further down in this same method
+                // (destination=admin_runtime, manifest has a ui_projection entry, and the request
+                // axes are a registered screen-read shape) -- the only combination under which
+                // AdminRuntime.ExecuteDataAsync is known, by exhaustive review of its layerAction
+                // switch, to never define a real case (it always yields ADMIN_OPERATION_NOT_FOUND,
+                // downgraded to an empty success purely to resolve ui_projection/LayoutNodes for
+                // rendering) -- so it is safe to skip strict authorization only for that exact
+                // shape. Any OTHER admin_runtime dispatch (a concrete operation) now REQUIRES the
+                // strict "manifest:<uuid>:<layer>:<action>" shape -- a non-canonical UUID (e.g. the
+                // 32-hex "N" form) or a bare/generic wiringKey used for a concrete Layer/Action fails
+                // closed here (TARGET_REF_ADMIN_RUNTIME_LAYER_ACTION_MISSING) rather than silently
+                // skipping authorization. The generic screenReadQueryWiring target_ref shape on
+                // NON-admin_runtime destinations is untouched either way.
+                if (string.Equals(ExtractRuntimeDestination(manifest.Topology), "admin_runtime", StringComparison.Ordinal) &&
+                    !IsGenericStructuralReadTargetRef(manifest.Topology, request.Layer, request.Action))
                 {
+                    var adminRuntimeShapeMatch = AdminRuntimeTargetRefRe.Match(rawTargetRef!);
+                    if (!adminRuntimeShapeMatch.Success)
+                    {
+                        _logger.LogWarning(
+                            "ManifestDispatcher: target_ref '{TargetRef}' resolves to an admin_runtime manifest for a concrete operation (Layer={Layer} Action={Action}) but is not in manifest:<uuid>:<layer>:<action> format.",
+                            rawTargetRef, request.Layer, request.Action);
+                        return new EndpointResponseDto(
+                            Success: false,
+                            Emission: null,
+                            Errors: [new ValidationError(
+                                "TARGET_REF_ADMIN_RUNTIME_LAYER_ACTION_MISSING",
+                                $"target_ref '{rawTargetRef}' resolves to an admin_runtime manifest for a concrete operation " +
+                                $"(Layer='{request.Layer}' Action='{request.Action}') but is not in \"manifest:<uuid>:<layer>:<action>\" format.")]);
+                    }
+
                     var layerActionError = ValidateAdminRuntimeTargetRefLayerAction(
-                        adminRuntimeShapeMatch, targetRefManifestId, manifest.Topology, request.Layer, request.Action);
+                        adminRuntimeShapeMatch, targetRefManifestId, manifest.Topology, request.Layer, request.Action, request.Role);
                     if (layerActionError is not null)
                     {
                         _logger.LogWarning(
@@ -550,22 +573,29 @@ public class ManifestDispatcher
         new(@"^manifest:([0-9a-fA-F-]{36}):([^:]+):([^:]+)$", RegexOptions.Compiled);
 
     /// <summary>
-    /// Round 17 hardening: validates that an admin_runtime-destined target_ref's embedded
-    /// layer:action suffix (1) matches what the request itself declares as Layer/Action, and
-    /// (2) is an operation the resolved manifest's own dispatcher_mapping actually authorizes.
-    /// Both checks are required — (1) alone would not stop a manifest whose dispatcher_mapping
-    /// never declared this action at all; (2) alone would not stop a client sending mismatched
-    /// target_ref/Layer/Action pairs that each independently look valid. Caller has already
-    /// confirmed the target_ref matches AdminRuntimeTargetRefRe (see class remarks on why a
-    /// non-matching shape, e.g. the generic "projection_entry"/"hub_relations_read" navigation
-    /// convention, must skip this validation entirely rather than being rejected here).
+    /// Round 17/18 hardening: validates that an admin_runtime-destined target_ref's embedded
+    /// layer:action suffix (1) matches what the request itself declares as Layer/Action, (2) is an
+    /// operation the resolved manifest's own dispatcher_mapping actually authorizes for that
+    /// layer/action, AND (3, round 18) that same dispatcher_mapping entry's role (when declared)
+    /// matches the request's role — a role="admin" manifest can no longer be invoked by a
+    /// non-admin/absent-role request via target_ref. All three are required — (1) alone would not
+    /// stop a manifest whose dispatcher_mapping never declared this action at all; (2) alone would
+    /// not stop a client sending mismatched target_ref/Layer/Action pairs; (3) alone would not stop
+    /// a request claiming an unrelated Layer/Action the manifest never declared. This is
+    /// complementary to, not a replacement for, ManifestDispatcher's own uniform
+    /// ValidateCapabilityRequirement gate (which runs after every manifest resolution path
+    /// regardless of target_ref) — dispatcher_mapping.role is a per-axis-combination authority
+    /// declared by the manifest author, capability_requirement is a manifest-wide declared-or-
+    /// inferred requirement; both apply. Caller has already confirmed the target_ref matches
+    /// AdminRuntimeTargetRefRe.
     /// </summary>
     private static ValidationError? ValidateAdminRuntimeTargetRefLayerAction(
         Match adminRuntimeShapeMatch,
         Guid manifestId,
         IReadOnlyList<JsonElement> topology,
         string? requestLayer,
-        string? requestAction)
+        string? requestAction,
+        string? requestRole)
     {
         var rawTargetRef = adminRuntimeShapeMatch.Value;
         var targetRefLayer = adminRuntimeShapeMatch.Groups[2].Value;
@@ -580,18 +610,35 @@ public class ManifestDispatcher
                 $"the request declares Layer='{requestLayer}' Action='{requestAction}'.");
         }
 
-        // Only layer/action are checked here (role/target are intentionally wildcarded via null):
-        // request.Target for these dispatches is the node's targetSurface ("manifest"), not the
-        // dispatcher_mapping "target" axis value used by the parallel axes-registered manifests for
-        // the same admin action (e.g. auth via /admin/enums' hardcoded route) — checking target here
-        // would either force a collision between the two registration styles (MANIFEST_AMBIGUOUS on
-        // axes resolution) or reject every legitimate target_ref dispatch. Layer/action is the
-        // narrow, sufficient authorization surface for the vulnerability this closes.
+        // target is intentionally wildcarded via null: request.Target for these dispatches is the
+        // node's targetSurface ("manifest"), not the dispatcher_mapping "target" axis value used by
+        // the parallel axes-registered manifests for the same admin action (e.g. auth via
+        // /admin/enums' hardcoded route) — checking target here would either force a collision
+        // between the two registration styles (MANIFEST_AMBIGUOUS on axes resolution) or reject
+        // every legitimate target_ref dispatch.
         if (!DispatcherMappingAxisAuthority.MatchesAxes(topology, role: null, target: null, targetRefLayer, targetRefAction))
         {
             return new ValidationError(
                 "TARGET_REF_LAYER_ACTION_UNAUTHORIZED",
                 $"manifest {manifestId} has no dispatcher_mapping entry authorizing layer='{targetRefLayer}' action='{targetRefAction}'.");
+        }
+
+        // Role is NOT wildcarded (round 18) -- a manifest's dispatcher_mapping.role for THIS
+        // layer/action is real declared authority and request.Role carries the same JWT-claim
+        // semantics axes resolution already trusts; there is no registration-collision reason to
+        // skip it the way there is for target. Deliberately NOT implemented as
+        // MatchesAxes(topology, requestRole, ...): that method's AxisMatches treats a null QUERY
+        // value as "match anything", which would let a request with NO role satisfy a manifest that
+        // never declares one there — the opposite of authorization semantics wanted here. Instead,
+        // FindDeclaredRole finds the entry's OWN role value once (null = that entry is role-
+        // wildcard) and compares it against the request's actual role directly.
+        var declaredRole = DispatcherMappingAxisAuthority.FindDeclaredRole(topology, targetRefLayer, targetRefAction);
+        if (declaredRole is not null && !string.Equals(declaredRole, requestRole, StringComparison.Ordinal))
+        {
+            return new ValidationError(
+                "TARGET_REF_ROLE_UNAUTHORIZED",
+                $"manifest {manifestId}'s dispatcher_mapping entry for layer='{targetRefLayer}' action='{targetRefAction}' " +
+                $"requires role='{declaredRole}'. Request role='{requestRole ?? "(missing)"}' is insufficient.");
         }
 
         return null;
@@ -718,6 +765,20 @@ public class ManifestDispatcher
 
     private static bool HasUiProjectionEntry(IReadOnlyList<JsonElement> topology) =>
         ExtractUiProjectionRefs(topology).LayoutId is not null;
+
+    /// <summary>
+    /// Round 18: the closed predicate under which a target_ref reaching an admin_runtime manifest
+    /// may skip strict layer:action authorization — deliberately the EXACT pre-condition of the
+    /// "structural read fallback" further below in DispatchAsync (manifest has a ui_projection
+    /// entry AND the request axes are a registered screen-read shape), not a shape-based guess
+    /// about the target_ref string itself. Caller must independently confirm
+    /// runtime_destination=="admin_runtime" — kept separate so callers that already resolved the
+    /// destination don't redundantly re-extract it here.
+    /// </summary>
+    private static bool IsGenericStructuralReadTargetRef(
+        IReadOnlyList<JsonElement> topology, string? requestLayer, string? requestAction) =>
+        HasUiProjectionEntry(topology) &&
+        ScreenDataShapeTopologyReader.IsScreenReadAction(requestLayer, requestAction);
 
     /// <summary>
     /// Extracts packageId/layoutId from the manifest.topology[ui_projection] refs-only entry

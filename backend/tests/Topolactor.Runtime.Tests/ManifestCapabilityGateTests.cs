@@ -197,7 +197,13 @@ public class ManifestCapabilityGateTests
         var response = await dispatcher.DispatchAsync(MakeRequest(role: "user", targetRef: targetRef));
 
         Assert.False(response.Success);
-        Assert.Contains(response.Errors, e => e.Code == "AUTH_CAPABILITY_DENIED");
+        // Round 18: the manifest's own dispatcher_mapping.role="admin" is now checked on the
+        // target_ref path too (TARGET_REF_ROLE_UNAUTHORIZED fires before ever reaching the
+        // downstream capability_requirement gate this test originally isolated) -- both gates deny
+        // a user-role request, this one earlier and more specifically; capability_requirement
+        // remains a complementary, not replaced, check (see the role/capability interplay tests
+        // below).
+        Assert.Contains(response.Errors, e => e.Code == "TARGET_REF_ROLE_UNAUTHORIZED");
     }
 
     [Fact]
@@ -210,6 +216,72 @@ public class ManifestCapabilityGateTests
         var response = await dispatcher.DispatchAsync(MakeRequest(role: "admin", targetRef: targetRef));
 
         Assert.True(response.Success);
+    }
+
+    // ─── round 18: dispatcher_mapping.role authority on the target_ref path ───
+
+    [Fact]
+    public async Task DispatchAsync_TargetRef_AdminRuntimeManifest_NullRole_ReturnsRoleUnauthorized()
+    {
+        // A request carrying no role at all must not be treated as a wildcard match against a
+        // dispatcher_mapping entry that declares role="admin".
+        var manifest = MakeAdminRuntimeManifest();
+        var dispatcher = BuildDispatcher(manifest, includeAdminRuntime: true);
+        var targetRef = $"manifest:{ManifestId}:screen_list:Search";
+
+        var response = await dispatcher.DispatchAsync(MakeRequest(role: null!, targetRef: targetRef));
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "TARGET_REF_ROLE_UNAUTHORIZED");
+    }
+
+    [Fact]
+    public async Task DispatchAsync_TargetRef_AdminRuntimeManifest_DispatcherMappingRoleWildcard_CapabilityRequirementStillDenies()
+    {
+        // dispatcher_mapping.role and capability_requirement are complementary, independent gates
+        // (round 18), never a replacement for one another: a dispatcher_mapping entry with NO role
+        // field (wildcard at that layer) must not let a request skip the manifest's OWN separate,
+        // explicit capability_requirement.
+        var manifest = new ManifestRecord(
+            ManifestId: ManifestId,
+            RelationRegistryId: null,
+            Topology: JsonSerializer.SerializeToElement(new object[]
+            {
+                new { type = "runtime_mapping", runtime_destination = "admin_runtime" },
+                new { type = "capability_requirement", required_role = "admin" },
+                new { type = "dispatcher_mapping", target = "manifest", layer = "screen_list", action = "Search" }, // no role field
+            }).EnumerateArray().ToArray(),
+            Status: "active");
+        var dispatcher = BuildDispatcher(manifest, includeAdminRuntime: true);
+        var targetRef = $"manifest:{ManifestId}:screen_list:Search";
+
+        var response = await dispatcher.DispatchAsync(MakeRequest(role: "user", targetRef: targetRef));
+
+        Assert.False(response.Success);
+        // dispatcher_mapping's own role axis is unset (wildcard) so TARGET_REF_ROLE_UNAUTHORIZED
+        // does not fire here -- the manifest-level capability_requirement is what catches it,
+        // proving it still applies independently of dispatcher_mapping.role.
+        Assert.Contains(response.Errors, e => e.Code == "AUTH_CAPABILITY_DENIED");
+    }
+
+    [Fact]
+    public async Task DispatchAsync_TargetRef_AdminRuntimeManifest_DispatcherMappingRoleWildcard_MatchingRoleSucceeds()
+    {
+        var manifest = new ManifestRecord(
+            ManifestId: ManifestId,
+            RelationRegistryId: null,
+            Topology: JsonSerializer.SerializeToElement(new object[]
+            {
+                new { type = "runtime_mapping", runtime_destination = "admin_runtime" },
+                new { type = "dispatcher_mapping", target = "manifest", layer = "screen_list", action = "Search" }, // no role field
+            }).EnumerateArray().ToArray(),
+            Status: "active");
+        var dispatcher = BuildDispatcher(manifest, includeAdminRuntime: true);
+        var targetRef = $"manifest:{ManifestId}:screen_list:Search";
+
+        var response = await dispatcher.DispatchAsync(MakeRequest(role: "admin", targetRef: targetRef));
+
+        Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
     }
 }
 

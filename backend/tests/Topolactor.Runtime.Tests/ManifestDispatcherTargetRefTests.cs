@@ -282,9 +282,15 @@ public class ManifestDispatcherTargetRefTests
         // "manifest:<uuid>:projection_entry", "manifest:<uuid>:hub_relations_read") against
         // Layer="screen_list"/Action="Search" axes, even when that manifest's runtime_destination
         // is admin_runtime -- this never encodes a specific admin_runtime operation and must not
-        // be rejected. The layer/action authorization added above applies ONLY when the target_ref
-        // itself is already in the "manifest:<uuid>:<layer>:<action>" shape.
-        var repo = new ConfigurableManifestRepository(KnownManifestId, status: "active", dispatcherMappingLayer: null, dispatcherMappingAction: null);
+        // be rejected. Round 18: the skip is scoped to the EXACT structural-read-fallback
+        // pre-condition (manifest has a ui_projection entry AND request axes are a registered
+        // screen-read shape) -- hasUiProjection:true here is what makes this fixture a genuine
+        // instance of that case, not merely "any non-matching shape" (see the sibling
+        // AdminRuntimeManifest_ConcreteOperation_NonLayerActionShape... test below, which proves
+        // the same non-matching shape is REJECTED when there is no ui_projection entry / the axes
+        // are not a screen-read shape).
+        var repo = new ConfigurableManifestRepository(
+            KnownManifestId, status: "active", dispatcherMappingLayer: null, dispatcherMappingAction: null, hasUiProjection: true);
         var dispatcher = BuildDispatcher(repo, new Dictionary<string, IDispatchableRuntime>
         {
             ["admin_runtime"] = new StubSuccessRuntime(),
@@ -294,6 +300,48 @@ public class ManifestDispatcherTargetRefTests
         var response = await dispatcher.DispatchAsync(MakeAdminRuntimeRequest("screen_list", "Search", targetRef));
 
         Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
+    }
+
+    [Fact]
+    public async Task DispatchAsync_TargetRef_AdminRuntimeManifest_ConcreteOperation_NonLayerActionShape_StillRejected()
+    {
+        // Round 18: proves the generic-suffix skip above is scoped to genuine structural reads,
+        // not to "any non-matching shape" -- the exact live-DB-caught vulnerability this round
+        // closes. A generic wiringKey combined with a CONCRETE operation's Layer/Action (not
+        // screen_list/Search) must still fail closed, even though the shape itself is identical to
+        // the legitimate navigation convention above.
+        var repo = new ConfigurableManifestRepository(
+            KnownManifestId, status: "active", dispatcherMappingLayer: null, dispatcherMappingAction: null, hasUiProjection: true);
+        var dispatcher = BuildDispatcher(repo, new Dictionary<string, IDispatchableRuntime>
+        {
+            ["admin_runtime"] = new StubSuccessRuntime(),
+        });
+        var targetRef = $"manifest:{KnownManifestId}:some_wiring_key"; // no layer:action suffix
+
+        var response = await dispatcher.DispatchAsync(MakeAdminRuntimeRequest("enum_dictionary", "create_group", targetRef));
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "TARGET_REF_ADMIN_RUNTIME_LAYER_ACTION_MISSING");
+    }
+
+    [Fact]
+    public async Task DispatchAsync_TargetRef_AdminRuntimeManifest_ConcreteOperation_NoUiProjection_NonLayerActionShape_StillRejected()
+    {
+        // Same negative proof without hasUiProjection at all, and with screen-read axes -- both
+        // conditions (ui_projection presence AND screen-read axes) are required for the skip;
+        // neither alone is sufficient.
+        var repo = new ConfigurableManifestRepository(
+            KnownManifestId, status: "active", dispatcherMappingLayer: null, dispatcherMappingAction: null, hasUiProjection: false);
+        var dispatcher = BuildDispatcher(repo, new Dictionary<string, IDispatchableRuntime>
+        {
+            ["admin_runtime"] = new StubSuccessRuntime(),
+        });
+        var targetRef = $"manifest:{KnownManifestId}:some_wiring_key";
+
+        var response = await dispatcher.DispatchAsync(MakeAdminRuntimeRequest("screen_list", "Search", targetRef));
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "TARGET_REF_ADMIN_RUNTIME_LAYER_ACTION_MISSING");
     }
 
     [Fact]
@@ -438,7 +486,8 @@ internal sealed class TrackingManifestRepository(Guid? knownManifestId, string r
 /// status and a single optional dispatcher_mapping entry, so tests can control the exact
 /// active/authorization scenario under test.</summary>
 internal sealed class ConfigurableManifestRepository(
-    Guid knownManifestId, string status, string? dispatcherMappingLayer, string? dispatcherMappingAction)
+    Guid knownManifestId, string status, string? dispatcherMappingLayer, string? dispatcherMappingAction,
+    bool hasUiProjection = false, string? dispatcherMappingRole = "admin")
     : ManifestRepository(NullLogger<ManifestRepository>.Instance)
 {
     public override Task<ManifestRecord?> LoadByIdAsync(Guid manifestId, CancellationToken ct = default)
@@ -451,10 +500,19 @@ internal sealed class ConfigurableManifestRepository(
             entries.Add(new
             {
                 type = "dispatcher_mapping",
-                role = "admin",
+                role = dispatcherMappingRole,
                 target = "manifest",
                 layer = dispatcherMappingLayer,
                 action = dispatcherMappingAction,
+            });
+        }
+        if (hasUiProjection)
+        {
+            entries.Add(new
+            {
+                type = "ui_projection",
+                packageIds = new[] { Guid.NewGuid().ToString() },
+                layoutId = Guid.NewGuid().ToString(),
             });
         }
 

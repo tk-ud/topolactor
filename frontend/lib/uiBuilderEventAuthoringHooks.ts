@@ -96,6 +96,43 @@ export function useInstanceOperationAuthoringCandidates(active: boolean): {
 }
 
 /**
+ * Round 18: the CURRENT layout's package-wiring wiringKind, re-fetched by packageId (the same
+ * ui_topology:get_package_wiring action PackageWiringEditor itself uses, so both surfaces read the
+ * SAME persisted authority — never a second, drifting source of truth). Used to gate the
+ * admin_runtime dispatch-override authoring section: it must only be shown/editable when the
+ * layout actually carries wiring_kind="admin_runtime", never as a frontend-only cosmetic guess
+ * (the backend save-time fail-close from round 16 already enforces this independently — this hook
+ * only prevents the UI from inviting an author to build an invalid draft in the first place).
+ * SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml admin_runtime_target_ref_override_contract
+ * applicability.
+ */
+export function useEffectivePackageWiringKind(packageId: string | undefined): {
+  wiringKind: string | null;
+  loading: boolean;
+} {
+  const [wiringKind, setWiringKind] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!packageId) {
+      setWiringKind(null);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      const body = await dispatchAdminOp("ui_topology", "get_package_wiring", { packageId });
+      if (cancelled) return;
+      const data = body?.emission?.data as { wiringKind?: string } | undefined;
+      setWiringKind(typeof data?.wiringKind === "string" ? data.wiringKind : null);
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [packageId]);
+  return { wiringKind, loading };
+}
+
+/**
  * Closed candidate list for dispatchTargetRefByTrigger authoring — every (active admin_runtime
  * manifest, dispatcher_mapping layer/action) pair, derived entirely from manifest/dispatcher
  * authority already in the DB (backend/repository/NpgsqlUiTopologyRepository.cs

@@ -113,6 +113,37 @@ public static class DispatcherMappingAxisAuthority
         if (!entry.TryGetProperty(propName, out var prop)) return false;
         return string.Equals(prop.GetString(), value, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// Round 18: finds the dispatcher_mapping entry for (layer, action) — role/target wildcarded,
+    /// mirroring MatchesAxes' own existence check — and returns ITS OWN declared role value (null
+    /// when the entry has no role field, i.e. that layer/action is role-wildcard by the manifest
+    /// author's own declaration). Deliberately separate from MatchesAxes: that method's AxisMatches
+    /// treats a null QUERY value as "don't care" (correct for ResolveActiveManifestAsync's optional
+    /// filter semantics), which is the wrong direction for authorization — comparing a REQUEST's
+    /// role against a declared requirement must never treat a missing/null request role as
+    /// automatically satisfying a declared role. Callers compare the returned declared role against
+    /// the request's own role with plain equality (null declared role = wildcard passes; non-null
+    /// declared role requires an exact, non-null request role match).
+    /// </summary>
+    public static string? FindDeclaredRole(
+        IReadOnlyList<JsonElement> topology, string layer, string action)
+    {
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind != JsonValueKind.Object) continue;
+            if (!entry.TryGetProperty("type", out var typeEl) ||
+                !string.Equals(typeEl.GetString(), "dispatcher_mapping", StringComparison.Ordinal))
+                continue;
+            if (!AxisMatches(entry, "layer", layer)) continue;
+            if (!AxisMatches(entry, "action", action)) continue;
+
+            return entry.TryGetProperty("role", out var roleEl) && roleEl.ValueKind == JsonValueKind.String
+                ? roleEl.GetString()
+                : null;
+        }
+        return null;
+    }
 }
 
 /// <summary>

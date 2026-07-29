@@ -509,6 +509,9 @@ export const UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_EMPTY_HINT =
   "active な admin_runtime 操作候補がありません。/admin/contents 等で対象 manifest が active かつ dispatcher_mapping 登録済みか確認してください。";
 export const UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_ADD = "+ 管理操作の上書き";
 export const UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_ADD_COMMIT = "管理操作の上書きを確定";
+/** round 18: このレイアウトの配線がadmin_runtimeでない場合の編集不可理由表示 */
+export const UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_NOT_ADMIN_RUNTIME_LAYOUT =
+  "このレイアウトの配線はadmin_runtimeではないため、管理操作の上書きは追加・編集できません。";
 /** @deprecated use UX_EXTERNAL_INTEGRATION_SECTION_TITLE */
 export const UX_RUNTIME_INTERACTION_EXTERNAL_API_SECTION_TITLE = UX_EXTERNAL_INTEGRATION_SECTION_TITLE;
 /** @deprecated use UX_EXTERNAL_INTEGRATION_SECTION_HINT */

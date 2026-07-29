@@ -213,6 +213,7 @@ import {
 
 import { queueAdminClientCommand, type ScheduledCommandResult } from "../runtime/frontendScheduler.ts";
 import type { ValidationError } from "../api/dispatch.ts";
+import { useEffectivePackageWiringKind } from "../lib/uiBuilderEventAuthoringHooks.ts";
 
 /** Canvas workspace contract marker (SSOT: admin-console-workflow-ssot.yaml §canvas_workspace_contract). */
 export const UI_BUILDER_WORKSPACE_MODE = "canvas_workspace_v2" as const;
@@ -1890,6 +1891,11 @@ function LayoutRightDock({
   /** Increment to open design inspector accordion after layout apply handoff. */
   designHandoffKey?: number;
 }): JSX.Element {
+  // Round 18: the admin_runtime operation-override authoring section (NodeEventAuthoringPanel)
+  // must only be offered when this layout's OWN package wiring is actually
+  // wiring_kind="admin_runtime" -- re-fetched from the same persisted authority
+  // PackageWiringEditor itself reads (ui_topology:get_package_wiring), not a frontend-only guess.
+  const { wiringKind: effectiveWiringKind } = useEffectivePackageWiringKind(packageId);
   return (
     <aside
       class="layout-right-dock flex w-full flex-col gap-2"
@@ -1971,6 +1977,7 @@ function LayoutRightDock({
                 onCommitNode?.({ stateJson: nextStateJson }, label)}
               sourceNodeId={selectedNode.nodeId}
               allNodes={draftNodes}
+              effectiveWiringKind={effectiveWiringKind}
               dispatchTargetRefByTrigger={selectedNode.dispatchTargetRefByTrigger}
               dispatchPayloadFromByTrigger={selectedNode.dispatchPayloadFromByTrigger}
               onCommitDispatchOverrides={(next, label) =>
