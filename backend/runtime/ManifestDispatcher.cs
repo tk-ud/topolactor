@@ -262,8 +262,20 @@ public class ManifestDispatcher
                 // closed here (TARGET_REF_ADMIN_RUNTIME_LAYER_ACTION_MISSING) rather than silently
                 // skipping authorization. The generic screenReadQueryWiring target_ref shape on
                 // NON-admin_runtime destinations is untouched either way.
+                //
+                // Second live-DB catch (round 18): a pre-existing, orthogonal convention
+                // (CredentialManagementHubRelationUiProjectionLiveDbTests) dispatches
+                // hub_navigation:get_hub_relations via target_ref against a manifest that
+                // deliberately declares NEITHER dispatcher_mapping NOR ui_projection — a bare
+                // "runtime_mapping only" manifest used purely to select which manifest's own
+                // navigation sequence to enrich (EnrichWithHubNavigationAsync runs for ANY
+                // successful admin_runtime response). See IsBareManifestNavigationReadTargetRefAsync
+                // for the full rationale and its deliberately narrow, closed action allowlist.
+                var isBareManifestNavigationRead = await IsBareManifestNavigationReadTargetRefAsync(
+                    manifest.Topology, request.Role, request.Layer, request.Action, ct);
                 if (string.Equals(ExtractRuntimeDestination(manifest.Topology), "admin_runtime", StringComparison.Ordinal) &&
-                    !IsGenericStructuralReadTargetRef(manifest.Topology, request.Layer, request.Action))
+                    !IsGenericStructuralReadTargetRef(manifest.Topology, request.Layer, request.Action) &&
+                    !isBareManifestNavigationRead)
                 {
                     var adminRuntimeShapeMatch = AdminRuntimeTargetRefRe.Match(rawTargetRef!);
                     if (!adminRuntimeShapeMatch.Success)
@@ -779,6 +791,38 @@ public class ManifestDispatcher
         IReadOnlyList<JsonElement> topology, string? requestLayer, string? requestAction) =>
         HasUiProjectionEntry(topology) &&
         ScreenDataShapeTopologyReader.IsScreenReadAction(requestLayer, requestAction);
+
+    /// <summary>
+    /// Round 18 (second live-DB catch): closed allowlist of read-only, manifest-identity-agnostic
+    /// navigation actions that a deliberately BARE admin_runtime manifest (no dispatcher_mapping, no
+    /// ui_projection — a pure identity/context selector, never an authored operation-scoped
+    /// manifest) may reach via target_ref, PROVIDED the same (role, layer, action) is independently,
+    /// actively registered under the pre-existing axes-based target="admin" system — the exact
+    /// registration ResolveActiveManifestAsync would have found had target_ref not short-circuited
+    /// resolution. Deliberately excludes hub_navigation:create/update/deprecate/reorder (real
+    /// mutations in the same layer) even though they too happen to be axes-registered under
+    /// target="admin" — this allowlist, not the axes lookup alone, is what keeps this exemption from
+    /// becoming a blanket target="admin"-registered-operation bypass. A manifest that declares ANY
+    /// dispatcher_mapping or ui_projection entry of its own never qualifies — this is not a general
+    /// escape hatch, only for manifests making no operation-scope claim whatsoever.
+    /// </summary>
+    private static readonly HashSet<(string Layer, string Action)> BareManifestNavigationReadActions =
+        new() { ("hub_navigation", "get_hub_relations"), ("hub_navigation", "list_manifests") };
+
+    private async Task<bool> IsBareManifestNavigationReadTargetRefAsync(
+        IReadOnlyList<JsonElement> topology, string? requestRole, string? requestLayer, string? requestAction,
+        CancellationToken ct)
+    {
+        if (requestLayer is null || requestAction is null) return false;
+        if (!BareManifestNavigationReadActions.Contains((requestLayer, requestAction))) return false;
+        if (DispatcherMappingAxisAuthority.HasAnyDispatcherMapping(topology)) return false;
+        if (HasUiProjectionEntry(topology)) return false;
+        if (_manifestRepository is null) return false;
+
+        var axesManifest = await _manifestRepository.ResolveActiveManifestAsync(
+            role: requestRole, target: "admin", layer: requestLayer, action: requestAction, ct: ct);
+        return axesManifest is not null;
+    }
 
     /// <summary>
     /// Extracts packageId/layoutId from the manifest.topology[ui_projection] refs-only entry

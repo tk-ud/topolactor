@@ -144,6 +144,26 @@ public static class DispatcherMappingAxisAuthority
         }
         return null;
     }
+
+    /// <summary>
+    /// Round 18: true when the topology declares AT LEAST ONE dispatcher_mapping entry, regardless
+    /// of its axis values. Distinguishes an authored, operation-scoped manifest (e.g. ae210,
+    /// scoped to create_group) — which always has one — from a deliberately bare
+    /// "runtime_mapping only" manifest that makes no operation-scope claim whatsoever (used purely
+    /// as an identity/context selector for target_ref, e.g. the hub_navigation:get_hub_relations
+    /// navigation-enrichment convention in ManifestDispatcher.IsBareManifestNavigationReadTargetRefAsync).
+    /// </summary>
+    public static bool HasAnyDispatcherMapping(IReadOnlyList<JsonElement> topology)
+    {
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind != JsonValueKind.Object) continue;
+            if (entry.TryGetProperty("type", out var typeEl) &&
+                string.Equals(typeEl.GetString(), "dispatcher_mapping", StringComparison.Ordinal))
+                return true;
+        }
+        return false;
+    }
 }
 
 /// <summary>

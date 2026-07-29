@@ -345,6 +345,98 @@ public class ManifestDispatcherTargetRefTests
     }
 
     [Fact]
+    public async Task DispatchAsync_TargetRef_BareManifest_HubNavigationGetHubRelations_AxesRegistered_Succeeds()
+    {
+        // Second live-DB catch (round 18): CredentialManagementHubRelationUiProjectionLiveDbTests
+        // dispatches hub_navigation:get_hub_relations via target_ref against a manifest that
+        // deliberately declares NEITHER dispatcher_mapping NOR ui_projection (a bare
+        // "runtime_mapping only" identity selector) -- reproduces that shape here with a generic
+        // (non layer:action) wiringKey, proving the bare-manifest navigation-read allowlist
+        // (IsBareManifestNavigationReadTargetRefAsync) admits it once the SAME (role, layer, action)
+        // is independently, actively registered under the axes-based target="admin" system.
+        var repo = new ConfigurableManifestRepository(
+            KnownManifestId, status: "active", dispatcherMappingLayer: null, dispatcherMappingAction: null,
+            hasUiProjection: false,
+            adminAxesRegisteredOperation: ("admin", "hub_navigation", "get_hub_relations"));
+        var dispatcher = BuildDispatcher(repo, new Dictionary<string, IDispatchableRuntime>
+        {
+            ["admin_runtime"] = new StubSuccessRuntime(),
+        });
+        var targetRef = $"manifest:{KnownManifestId}:hub_relations_read"; // bare wiringKey, no layer:action suffix
+
+        var response = await dispatcher.DispatchAsync(MakeAdminRuntimeRequest("hub_navigation", "get_hub_relations", targetRef));
+
+        Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
+    }
+
+    [Fact]
+    public async Task DispatchAsync_TargetRef_BareManifest_HubNavigationGetHubRelations_NoAdminAxesRegistration_StillRejected()
+    {
+        // Proves the axes-registration re-check is actually load-bearing, not just the allowlist
+        // membership alone: without an independently-registered target="admin" entry for this
+        // (role, layer, action), the bare manifest must still fail closed.
+        var repo = new ConfigurableManifestRepository(
+            KnownManifestId, status: "active", dispatcherMappingLayer: null, dispatcherMappingAction: null,
+            hasUiProjection: false, adminAxesRegisteredOperation: null);
+        var dispatcher = BuildDispatcher(repo, new Dictionary<string, IDispatchableRuntime>
+        {
+            ["admin_runtime"] = new StubSuccessRuntime(),
+        });
+        var targetRef = $"manifest:{KnownManifestId}:hub_relations_read";
+
+        var response = await dispatcher.DispatchAsync(MakeAdminRuntimeRequest("hub_navigation", "get_hub_relations", targetRef));
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "TARGET_REF_ADMIN_RUNTIME_LAYER_ACTION_MISSING");
+    }
+
+    [Fact]
+    public async Task DispatchAsync_TargetRef_BareManifest_HubNavigationCreate_NotInAllowlist_StillRejected()
+    {
+        // hub_navigation:create is a real mutation in the same layer as the allowlisted read
+        // actions, and (like them) happens to be axes-registered under target="admin" too -- proves
+        // the closed allowlist (not the axes lookup alone) is what keeps this exemption from
+        // becoming a blanket target="admin"-registered-operation bypass for bare manifests.
+        var repo = new ConfigurableManifestRepository(
+            KnownManifestId, status: "active", dispatcherMappingLayer: null, dispatcherMappingAction: null,
+            hasUiProjection: false,
+            adminAxesRegisteredOperation: ("admin", "hub_navigation", "create"));
+        var dispatcher = BuildDispatcher(repo, new Dictionary<string, IDispatchableRuntime>
+        {
+            ["admin_runtime"] = new StubSuccessRuntime(),
+        });
+        var targetRef = $"manifest:{KnownManifestId}:hub_relations_read";
+
+        var response = await dispatcher.DispatchAsync(MakeAdminRuntimeRequest("hub_navigation", "create", targetRef));
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "TARGET_REF_ADMIN_RUNTIME_LAYER_ACTION_MISSING");
+    }
+
+    [Fact]
+    public async Task DispatchAsync_TargetRef_BareManifest_ConcreteWriteAction_NotInAllowlist_StillRejected()
+    {
+        // A bare manifest must never become a generic skeleton key for arbitrary admin_runtime
+        // operations -- even though enum_dictionary:create_group is ALSO axes-registered under
+        // target="admin" (db/seed_empty.sql's pre-existing a7-ae series), it is not in the
+        // bare-manifest navigation-read allowlist, so it must still fail closed.
+        var repo = new ConfigurableManifestRepository(
+            KnownManifestId, status: "active", dispatcherMappingLayer: null, dispatcherMappingAction: null,
+            hasUiProjection: false,
+            adminAxesRegisteredOperation: ("admin", "enum_dictionary", "create_group"));
+        var dispatcher = BuildDispatcher(repo, new Dictionary<string, IDispatchableRuntime>
+        {
+            ["admin_runtime"] = new StubSuccessRuntime(),
+        });
+        var targetRef = $"manifest:{KnownManifestId}:some_wiring_key";
+
+        var response = await dispatcher.DispatchAsync(MakeAdminRuntimeRequest("enum_dictionary", "create_group", targetRef));
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "TARGET_REF_ADMIN_RUNTIME_LAYER_ACTION_MISSING");
+    }
+
+    [Fact]
     public async Task DispatchAsync_TargetRef_AdminRuntimeManifest_Authorized_Succeeds()
     {
         var repo = new ConfigurableManifestRepository(KnownManifestId, status: "active", dispatcherMappingLayer: "enum_dictionary", dispatcherMappingAction: "create_group");
@@ -487,7 +579,8 @@ internal sealed class TrackingManifestRepository(Guid? knownManifestId, string r
 /// active/authorization scenario under test.</summary>
 internal sealed class ConfigurableManifestRepository(
     Guid knownManifestId, string status, string? dispatcherMappingLayer, string? dispatcherMappingAction,
-    bool hasUiProjection = false, string? dispatcherMappingRole = "admin")
+    bool hasUiProjection = false, string? dispatcherMappingRole = "admin",
+    (string Role, string Layer, string Action)? adminAxesRegisteredOperation = null)
     : ManifestRepository(NullLogger<ManifestRepository>.Instance)
 {
     public override Task<ManifestRecord?> LoadByIdAsync(Guid manifestId, CancellationToken ct = default)
@@ -524,8 +617,25 @@ internal sealed class ConfigurableManifestRepository(
     }
 
     public override Task<ManifestRecord?> ResolveActiveManifestAsync(
-        string? role, string? target, string? layer, string? action, CancellationToken ct = default) =>
-        Task.FromResult<ManifestRecord?>(null);
+        string? role, string? target, string? layer, string? action, CancellationToken ct = default)
+    {
+        if (adminAxesRegisteredOperation is { } reg &&
+            string.Equals(target, "admin", StringComparison.Ordinal) &&
+            string.Equals(layer, reg.Layer, StringComparison.Ordinal) &&
+            string.Equals(action, reg.Action, StringComparison.Ordinal) &&
+            string.Equals(role, reg.Role, StringComparison.Ordinal))
+        {
+            return Task.FromResult<ManifestRecord?>(new ManifestRecord(
+                ManifestId: Guid.NewGuid(),
+                RelationRegistryId: null,
+                Topology: JsonSerializer.SerializeToElement(new object[]
+                {
+                    new { type = "dispatcher_mapping", role = reg.Role, target = "admin", layer = reg.Layer, action = reg.Action },
+                }).EnumerateArray().ToArray(),
+                Status: "active"));
+        }
+        return Task.FromResult<ManifestRecord?>(null);
+    }
 
     public override Task<IReadOnlyList<ManifestListItem>> ListManifestsAsync(
         string? statusFilter, CancellationToken ct = default) =>
