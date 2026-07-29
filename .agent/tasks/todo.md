@@ -1284,21 +1284,23 @@ PR #597（`admin-surface-topology-seed-conversion` admin-enum subBundle）のGat
 
 ### 目的
 
-（2026-07-22時点で3方向比較とowner decisionは完了済み。以下は決定確定までの目的記述として履歴保持し、現行の目的は「実装済み具体境界」節と「remaining_granularity_constraint」節を参照。）
+（2026-07-22時点で3方向比較とowner decisionは完了済み。以下2段落は決定確定までの目的記述として履歴保持する——「remaining_granularity_constraint」という節名は本ファイルにはもう存在しない。2026-07-23にこの診断自体が不正確と判明し`remaining_write_payload_capture_gap`へ置き換えられたためであり〔下記訂正段落参照〕、旧節名への参照は無効である。）
 
 owner decisionが必要な3方向（既存`runtime_interactions_lane`拡張／既存`wiring_kind`語彙拡張／abstract function substrate経由）を、それぞれの再利用範囲・新規抽象化範囲・SSOT変更範囲・runtime変更範囲・seed変更範囲・test/proof範囲・authority/fail-close条件・他Bundleへの再利用性・migration境界・blast radiusを明示した比較として確定し、owner判断後にBundle単位の実装作業へ進めるようにする。
 
-決定確定後の現行の目的: `wiring_kind="admin_runtime"`のper-layout scope制約（remaining_granularity_constraint）を解消する設計を確定し、`admin-enum`/`team-dashboard`/`scheduler-settings`の実write-dispatch配線を、選択済みの単一正規contract（component_wiring_execution_lane経由）に従って進められる状態にする。
+決定確定後の目的（履歴、2026-07-22時点の記述）: `wiring_kind="admin_runtime"`のper-layout scope制約（remaining_granularity_constraint）を解消する設計を確定し、`admin-enum`/`team-dashboard`/`scheduler-settings`の実write-dispatch配線を、選択済みの単一正規contract（component_wiring_execution_lane経由）に従って進められる状態にする。→ 2026-07-23の再調査でこの診断自体（per-layout scope制約という捉え方）が不正確だったと判明し、真のblocker`remaining_write_payload_capture_gap`（typed値をdispatch payloadへ載せるproduction-provenな既存mechanismの不在）へ置き換えられた（上記「2026-07-23 owner再指摘への対応」節）。
+
+**現行の目的（2026-07-25時点、Status: `implemented`）**: `remaining_write_payload_capture_gap`は2026-07-24に実装・test証明により解消済みで、以後round7/8で境界を精密化した——ProjectionShellでのlive node value tracking追加とLane 2の既存`resolvePayloadFrom`再利用によるpayloadFrom解決を、新規lane/actionType/handlerを追加せず単一正規contract（component_wiring_execution_lane）内で達成した。本Bundle自身の目的はこれで充足済みであり、残存する目的は無い。`admin-enum`/`team-dashboard`/`scheduler-settings`各subBundle自身の本番write UI実装（seed配線、各操作のconfirmation/diff証明）は本Bundleの目的の対象外——各subBundle自身のscope（`admin-surface-topology-seed-conversion`傘下）である。
 
 ### 改善方針
 
 - 3方向比較およびdirection選定はowner decisionにより完了済み（「2026-07-22 owner decision（確定）」節参照）。以後この選定自体をAgent判断で再選定しない。
-- remaining_granularity_constraintの解消方向（(a) write triggerの専用layout分離、(b) `wiring_kind`のper-node化拡張）についても、Agent判断で先行採用せず、比較をSSOTへ記録したうえでowner decisionを経ること——本Bundleが最初の3方向決定で辿ったのと同じ手続きを踏む。
-- 選択後の実装は、選択された方向のSSOT改定を経てから着手する——`SSOT -> wiring -> test/proof surface -> implementation`の順序を維持する。
-- `enum_dictionary:*`等の既存concrete admin_runtime actionをcompatibility fallbackとして使うか、abstract function manifestへ移行するかも、この決定に含める。
-- `runtimeInteractionId`はbackend persistence authority（`AssignRuntimeInteractionIds`、`ApplyConfirmedLayoutPatchAsync`からのみ呼ばれる）に限定したまま維持し、translator側に生成ロジックを追加しない。
-- `preview_dictionary_delta`/`validate_against_enum_authority`/`explicit_confirm`/`write`/`diff_log`の各段階について、単なるboolean flagではなく、preview candidateとconfirmed writeを接続するevidence identity・cancel・stale candidate拒否・diff log順序を、選択した方向の設計に含める。
-- `admin-enum`/`team-dashboard`/`scheduler-settings`の3 subBundleへの影響を横断的に扱う——単一subBundle向けのpatchとして再発明しない。
+- ~~remaining_granularity_constraintの解消方向（(a) write triggerの専用layout分離、(b) `wiring_kind`のper-node化拡張）についても、Agent判断で先行採用せず、比較をSSOTへ記録したうえでowner decisionを経ること——本Bundleが最初の3方向決定で辿ったのと同じ手続きを踏む。~~ → 2026-07-23の再調査でremaining_granularity_constraint自体の診断が不正確と判明し、(a)/(b)という選択肢自体が対象を失った。真のblocker（remaining_write_payload_capture_gap）は(a)/(b)いずれでもない第三の方式——node-level `dispatchPayloadFromByTrigger`field（round6）——で2026-07-24に解消済み。(a)/(b)間のowner decisionは実際には発生しなかった。この記録は当時の見込みとして履歴保持し、以後参照・適用しないこと。
+- 選択後の実装は、選択された方向のSSOT改定を経てから着手した——`SSOT -> wiring -> test/proof surface -> implementation`の順序を維持した（`admin_runtime_payload_binding_contract`のSSOT改定を先行させたround 6-8の実装がこれにあたる）。
+- `enum_dictionary:*`等の既存concrete admin_runtime actionをcompatibility fallbackとして使うか、abstract function manifestへ移行するかも検討したが、既存concrete admin_runtime actionをそのまま利用する形で決着した（`AbstractFunctionRuntime`への移行は行っていない、round5「backend側の重複調査」節参照）。
+- `runtimeInteractionId`はbackend persistence authority（`AssignRuntimeInteractionIds`、`ApplyConfirmedLayoutPatchAsync`からのみ呼ばれる）に限定したまま維持し、translator側に生成ロジックを追加しない——本方針は実装完了後も継続する恒久的な制約として維持する。
+- `preview_dictionary_delta`/`validate_against_enum_authority`/`explicit_confirm`/`write`/`diff_log`の各段階（単なるboolean flagではなく、preview candidateとconfirmed writeを接続するevidence identity・cancel・stale candidate拒否・diff log順序）は、本Bundle自身のscopeではなく`admin-surface-topology-seed-conversion` admin-enum subBundle側のmutation_confirmation_contract実装として証明されるものである——本Bundleの目的はdispatch経路自体の確立であり、各write actionのconfirmation/diff段階の証明は上位subBundleのscope。重複記載を避けるためここでは詳細を繰り返さない。
+- `admin-enum`/`team-dashboard`/`scheduler-settings`の3 subBundleへの影響を横断的に扱った——単一subBundle向けのpatchとして再発明していない（`admin-enum`が実際にこの汎用mechanismを利用したことは「2026-07-24 remaining_write_payload_capture_gap解消」節で証明済み。`team-dashboard`/`scheduler-settings`自身の利用は各subBundle自身のscopeで別途行われる）。
 
 ### 対応資料
 
@@ -1365,14 +1367,14 @@ PR #600（`admin-write-surface-selection-context-and-mode-composition-gap` Bundl
 
 ### Governance NG boundary
 
-- ~~Agent判断で3方向のいずれかを検証なしに採用する。~~ → 3方向決定はowner decisionにより確定済み。以後は remaining_granularity_constraint の解消方向（(a)/(b)）についてAgent判断で検証なしに採用しないこと、に読み替える。
+- ~~Agent判断で3方向のいずれかを検証なしに採用する。~~ → 3方向決定はowner decisionにより確定済み。~~以後は remaining_granularity_constraint の解消方向（(a)/(b)）についてAgent判断で検証なしに採用しないこと、に読み替える。~~ → 2026-07-23の再調査でremaining_granularity_constraint自体の診断が不正確と判明し、(a)/(b)という選択肢は対象を失った。真のblocker（remaining_write_payload_capture_gap）は(a)/(b)いずれでもない別方式（node-level `dispatchPayloadFromByTrigger`field、round6）で2026-07-24に解消済みであり、この(a)/(b)への読み替えは無効——以後参照・適用しないこと。
 - `enum_dictionary:*`等の既存concrete admin_runtime actionを`content_bundle:*`で無根拠に代替する。
 - 単一surface専用のactionType/handler/switch/table名/function名/API routeを追加する（`admin_runtime`のparse/dispatchは既にsurface非依存の汎用caseとして実装済み——これを維持し、admin-enum専用分岐を新設しないこと）。
 - `wiring_schema_json`のconsumerがない状態を実行配線の完成証拠として扱う。
 - `admin-surface-topology-seed-conversion`および傘下subBundleの既存記録・statusをこのBundle追加によって変更する。
 - PR #597の未完了scopeをtodo status変更だけで処理済みとして扱う。
-- remaining_write_payload_capture_gap（`payloadFromNodeValues`が`ProjectionShell.tsx`で未配線、`localStateMutation`がboolean専用）を解消しないまま、canonical形状（`payloadFrom: {"name":"node:...value"}`等）だけをseedへ書き、runtime reachabilityが証明されたかのように扱う——canonical形状とruntime reachabilityは別軸であり、前者だけで後者を宣言してはならない。
-- `frontend/islands/ProjectionShell.tsx`のlive input値trackingを、検証なしに拙速に実装する（共有・本番稼働中のcomponentであり、影響範囲はadmin-enumに留まらない——既存の`dispatchExternalPort`/`dispatchInstanceOperation`のnode:参照全てに影響する）。
+- canonical形状（`payloadFrom: {"name":"node:...value"}`等）をseedへ書いただけで、runtime reachability（実際にdispatchまで到達し、production componentが値を渡すこと）が証明されたかのように扱う——canonical形状とruntime reachabilityは別軸であり、前者だけで後者を宣言してはならない（本Bundleは2026-07-24にこの原則へ従って`remaining_write_payload_capture_gap`を解消済みだが、原則自体は今後のあらゆる拡張にも適用される恒久的な制約として維持する）。
+- `frontend/islands/ProjectionShell.tsx`（共有・本番稼働中のcomponentであり、影響範囲はadmin-enumに留まらない——既存の`dispatchExternalPort`/`dispatchInstanceOperation`のnode:参照全てに影響する）へ、検証・regression testなしに変更を加える（2026-07-24のlive node value tracking実装は、この原則に従いscenario test/regression確認込みで行った——「2026-07-24 remaining_write_payload_capture_gap解消」節参照。原則自体はProjectionShell.tsxへの今後のあらゆる変更に適用される）。
 
 ---
 
