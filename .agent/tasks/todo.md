@@ -909,6 +909,8 @@ owner再指摘（PR #600、2回目）を受け、以下3点に対応した。
 
 **admin-enum subBundle 全体の状態（round 3時点）:** backend側mutation_confirmation_contract（7 action全て、validation parity含む）・seed側single-purpose write manifest配線（7 action全て）・per-action live-DB round trip proof（7 action全て）・navigation reachability（代表証明、機構自体はae200で確立済み）は実装・test証明済み。SSOT語彙の既知の陳腐化（`blocked_pending_seed_catalog`）は本ラウンドで解消した。**残る唯一の未達は、hardcoded `/admin/enums` / `AdminEnumsRoster.tsx`のUX-parity production replacementおよびそれに伴う撤去であり、これは既存の generic topology substrate（`component_wiring_execution_lane`のlayout=1 canonical operationという確定済み設計原則）だけでは達成不可能なことを実装コード追跡により確認済みである。この限界を解消するには、実行時ユーザー選択に応じた動的operation切り替えという新しいruntime能力の導入が必要であり、それは本Bundleの scope・NG boundaryが単一Agentへ許可する範囲を超える、owner判断を要する設計拡張である。**この理由により、admin-enum subBundleを`implemented`と判断することはできない** — hardcoded routeが残っている限り、Bundle scope（「hardcoded route/island撤去」を含む共通工程の最終ステップ）は未達である。
 
+**2026-07-29追記（round14、`admin-write-surface-selection-context-and-mode-composition-gap` Bundle参照）**: この結論（動的operation切り替え機構が既存substrateに存在せず、hardcoded route撤去には新しいruntime能力の owner decision が必要）は、その後round 9-13で`admin-write-surface-selection-context-and-mode-composition-gap` Bundle側が追求した「cross-manifest carrier」（ae200の行選択identityをae210〜ae280の別manifestへ運ぶ）とは別の、より根本的な制約である。round 9-13はこのround 3の結論を再参照せずに進んでしまっていたため、round14で明示的に再確認・統合した——carrier機構をたとえ解決しても、per-action manifestが複数のままである限りこのround 3の結論（真のUX-parityには単一manifestでの動的operation切り替えが要る）は変わらない。owner決定を要する3方向の提示・詳細な経緯は同Bundleのround14節を正本とする（重複記載を避けるためここでは繰り返さない）。
+
 ### admin-enum subBundle 実装記録（2026-07-27 round 4: diff_log実persistence証明 + round 3診断の訂正 + gapの todo 分離）
 
 owner再指摘（PR #600 review round 3）を受け、以下3点に対応した。
@@ -1380,7 +1382,7 @@ PR #600（`admin-write-surface-selection-context-and-mode-composition-gap` Bundl
 
 ## Bundle `admin-write-surface-selection-context-and-mode-composition-gap`
 
-**Status:** `partial`（round 10-13で下記2項目を実装・production証明済み——detail view相当〔ae280〕、groupId既知後のpre-fill相当〔ae220、round 12でdispatch response adoption経由の本番動作まで証明〕。残る1項目「ae200の行選択からgroupIdそのものを自動で運ぶcarrier」は、既存機構では実現不能と確認済みで、owner決定を要する設計拡張として`not_started`のまま——単一Bundle内に「実装済み」と「設計決定待ちで未着手」が混在するため、Bundle全体のstatusは`partial`とする）
+**Status:** `partial`（round 10-13で下記2項目を実装・production証明済み——detail view相当〔ae280〕、groupId既知後のpre-fill相当〔ae220、round 12でdispatch response adoption経由の本番動作まで証明〕。残る1項目は、round 13時点では「ae200の行選択からgroupIdそのものを自動で運ぶcarrier」と表現していたが、round 14（2026-07-29、下記節参照）の再検証により、この表現自体がより根本的な未解決の症状に過ぎなかったことが判明した——真の残項目は「単一画面（1 layout）でlist/create/update/delete/set_group_itemsの複数admin_runtime actionを切り替えてdispatchする operation selector機構の不在」であり、これも既存機構では実現不能と確認済みで、owner決定を要する設計拡張として`not_started`のまま——単一Bundle内に「実装済み」と「設計決定待ちで未着手」が混在するため、Bundle全体のstatusは`partial`とする）
 
 **Position:** PR #600（`admin-surface-topology-seed-conversion` admin-enum subBundle）review round 3の指示「既存substrate範囲内でhardcoded-route撤去が可能か調査し、不可能ならBundle単位todoへ分離する」に基づき切り出した論点。round 4のowner再指摘（round 3の物理層記述の不正確さの指摘）を受け、下記「問題点」を訂正済み。admin-enum/credential-managementの2 subBundleが共有する複合論点である。当初「本Bundleでは実装しない（owner判断を待つためのtodoである）」としていたが、これは不正確になった——round 9-13を通じて、detail view（ae280）とpre-fill（ae220、production証明込み）は実際にこのBundle内で実装済みである。owner decisionを要する設計拡張として本Bundleに残っているのは「ae200の行選択からgroupIdを自動で運ぶcarrier」1点のみであり、これは「design自体は存在するが実装が未着手（`not_started`）」という通常の状態であって、コード上の欠陥や矛盾（=本来の意味での"gap"）ではない——本Bundle名自体に含まれる"gap"という語は、round 3-4時点でこの論点を切り出した際の命名であり、現時点でのstatusを正確に表す語ではないことに注意（Bundle IDは既存の相互参照を壊すため改名していないが、実態は「owner decision待ちのdesign未着手項目」である）。scheduler-settings/team-dashboardは、下記「compound対象の再判定（round 4）」節の理由により対象外とした。round 9でownerが「A/B/Cは既存CRUD presetを読まずに再発明したもの」として撤回・presetへの統合を指示——presetを実際に読んだ結果、両preset自体がSSOT自身の言う「draft/intake artifact」であり、その`layout_tree`が本PR自身の確定済み「1 layout=1 canonical operation」architectureと構造的に矛盾することを発見した（下記「round 9」節参照）。round 10で「detail view相当」（ae280）を実装。round 11で、owner指摘（「設計判断は既にしてるでしょ」）を受けてpre-fill部分を再点検した結果、round 9自身のレビュー指示が既に確定した設計判断であり、これ以上の2択提示は不要と判断——update_group自身のdryRun before-value fallbackと、`form_input/search_input`へのpropBindings.value機構拡張＋`liveNodeValueTracker`への播種を組み合わせ、「groupIdが分かっている前提でのpre-fill」を新規carrier無しで実装した（下記「round 11」節参照）。「ae200の行選択からgroupIdを自動で運ぶ」こと自体は依然未解決のまま残る。
 
@@ -1423,6 +1425,8 @@ owner指摘を受け、`docs/design/admin-normal-surface-projection-seed-ssot.ya
 
 hardcoded roster風admin画面（admin-enum/credential-management）が、既存のgeneric topology substrateだけで「一覧からの選択→現在値の読み込み→編集→確認→再取得」という単一画面UXを再現できるようにし、各subBundle固有のhandler/route分岐を新設することなく、hardcoded routeを真のUX-parityで撤去できる状態にする。scheduler-settings/team-dashboardは対象外（上記「compound対象の再判定」参照）。
 
+**round 14追記（2026-07-29）**: この目的自体は`docs/design/runtime-orchestration-ssot.yaml` `admin_route_retirement_matrix`の`/admin/enums`エントリ（`thin_projection_wrapper`、"a real per-screen ui_projection manifest"がprecondition）により正本SSOTから直接裏付けられることを確認した——目的自体は正しい。一方、「既存のgeneric topology substrateだけで」実現できるかどうかは、round 14の再検証により明確にNOと判明した（operation selector機構の不在、下記round14節参照）——目的の達成には新規capabilityの owner decision が前提となる。
+
 ### 改善方針（提案のみ、実装しない——owner decisionを要する）
 
 - **案A: navigation-context伝達の拡張**: 既存`relation_config`列自体は変更せず（現行の`canonical_default_entry`/`sql_attention_score`用途と衝突させない）、`HubNavigationSequenceItemDto`/`HubNavigationSequenceItem`/`resolveHubNavigationLinks`という production-consumed経路の側に、選択record idのような軽量contextを新たに運ぶ手段を追加する（例: 遷移先manifestのフォームnodeが、遷移元で選択された行のidを受け取れるようにする）。影響範囲: `backend/schema/ContentBundleContracts.cs`（`HubNavigationSequenceItemDto`）、`backend/repository/NpgsqlContentBundleRepository.cs`、`HubNavigationResolver`、`frontend/api/dispatch.ts`（`HubNavigationSequenceItem`）、`frontend/runtime/projectionEntry.ts`（`resolveHubNavigationLinks`）。
@@ -1457,6 +1461,49 @@ round 9のowner指摘は、round 7までのA/B/C探索を「対応資料に指�
 
 **この回への対応**: round 9時点では発見3の「detail view」部分を「次round以降で着手できる」として実装せずに終えたが、owner指摘（round 10、「また読み飛ばして再発明した」）を受けて再点検し、これ自体が繰り返されてきた失敗パターン（実装可能と自ら結論した範囲を実装せず記録だけで終える）だったと判断した。round 10で実装した内容は、当初round 9で書いた「`list_groups`自身の応答shapeを拡張する」案ではない——`AdminEnumsRoster.tsx`/`adminApi.ts`という現行hardcoded routeが`list_groups`の現行応答shape（配列そのもの）に直接依存しており、shapeを壊すと現行ページを壊すリスクがあったため、その案は採用しなかった。代わりに、既存の別read action `enum_dictionary:get_group`（dispatcher登録・live-DB証明済みだが一度もmanifestに配線されていなかった）を、ae210-ae270と同じ single-purpose-manifest パターンで新規manifest（`00000000-0000-0000-0000-0000000ae280`）として配線した——`list_groups`の応答shapeは無変更、新しいcomponent kind/actionType/laneも無し。詳細は「admin-enum subBundle 実装記録（2026-07-28 round 10）」参照。groupIdの手入力は現行ae210-ae270と同じ限界として残る（ae200からの自動引き継ぎは依然未解決）。発見4の「別write manifestへのpre-fill」部分は、「新規carrierを追加しない」という制約と「production pre-fillを証明する」という要件が両立しない、という具体的な対立のまま実装していない——A/B/Cという抽象的な3択の代わりに、次の2択をownerへ提示する: **(i)** pre-fillに限定した最小限のcarrier追加（navigation linkのquery paramに選択済みの値そのものを載せ、write manifestのフィールドの初期表示値として使う——新しいstate機構ではなく、既存`href`構築点への追加のみ）を許可する、**(ii)** 現時点でのpre-fill実装は諦め、detail view相当（round 10で実装済み）をこのroundのUX-parity対象とし、write manifestへの遷移はidの手入力（現状のまま）で運用する。いずれかをownerが選ぶまで、pre-fill部分の実装には着手しない。
 
+#### round 14（2026-07-29）: owner指摘「cross-manifest carrier前提を撤回可能な仮説へ戻し、単一CRUD surfaceとして正本SSOTから再導出せよ」への対応——真のblockerはcarrierではなく operation selector の不在
+
+owner指摘は、ae200＋ae210〜ae280という現行のaction別manifest構成自体が、正本SSOTが要求する単一CRUD surfaceから逸脱して生成された可能性を疑い、`docs/reference/seed-data-authoring-guide.md`のCRUD Semantic Reference・`AdminEnumsRoster.tsx`・既存preset・production runtime consumerを改めて突き合わせて、既存設計から実装構成を導出し直すことを求めた。以下、実際にコードとSSOTを読んだ結果を報告する（推測実装はしていない）。
+
+**1. `AdminEnumsRoster.tsx`（`frontend/islands/AdminEnumsRoster.tsx`）を全文再読——単一Preact componentが`adminApi.ts`の関数を直接呼び出す構成であり、topology/runtime dispatchを一切経由しない。search→table→row click→inline update panel（同一画面内のセクション表示切替のみ、別画面遷移なし）→保存/削除→再取得、という一連が全て1つのcomponent state（`selectedId`/`detail`/`draftName`等のuseState）で完結している。**
+
+**2. `docs/reference/seed-data-authoring-guide.md` Section 9「CRUD Semantic Reference」を再読——同guide自身の`unresolvedBackendOperationContracts.unresolvedFields`（507-512行）が、次の5項目を明示的にunresolvedと記載している: 「canonical backend dispatch actionType」「manifest-authorized operation target reference」「operation selector carrier」「canonical response projection contract」「preview / validate / explicit-confirm / write evidence contract」。同guideの`list`/`create`/`update`/`delete`各operationは、`crud-root`という1つの`nodeId`配下に共存する別々の`triggerNodeId`（`search-button`/`create-confirm-button`/`inline-edit-input`/`delete-confirm-button`）として書かれている——つまりguide自身が「1画面から複数backend operationへどう振り分けるか」を、既存機構で解決済みとは一度も主張していない。**
+
+**3. 正本SSOT側の該当箇所を再確認——admin-console-workflow-ssot.yamlの`authority.canonical_admin_route_registry`が指す`docs/design/runtime-orchestration-ssot.yaml` `frontend_routes.admin_route_retirement_matrix`（唯一の正本admin route registry）を精読した結果、`/admin/enums`のエントリは次の通り:**
+```
+retirement_kind: thin_projection_wrapper
+replacement: same_url_seed_backed
+status: pending
+precondition: requires a real per-screen ui_projection manifest for enum_dictionary
+  (React-like Schema -> translator -> topology UI seed -> seed registration), which
+  does not exist yet — only per-action dispatcher_mapping-only manifests exist today.
+  Not retired by this change.
+```
+これは、ae210〜ae270（7つのper-action single-purpose write manifest）を指して「today」の状態と明示的に呼び、それらが precondition を満たさないと明言している——precondition が要求するのは、single per-screen manifest（複数ではなく1つ）である。同じ結論は`docs/design/react-schema-topology-seed-translator-ssot.yaml`（1622-1627行）にも独立に記録済み：「the 7 new write manifests are each a separate bare single-purpose screen ... not a UX replacement for AdminEnumsRoster's single polished roster page」。`docs/design/admin-normal-surface-projection-seed-ssot.yaml` `crud_preset_physical_reference_assessment.insufficiency_rule`（1046行）は「target surfaceが既存generic CRUD preset shapeで表現できない場合、新しいcomponent/action wiring/payload resolver/runtime lane/routeを発明せず、不足substrateをowner決定のため報告すること」と明記している——これが本節の従うべき手続きである。
+
+**4. 「1つのmanifest（1 layout）でlist/create/update/delete/set_group_itemsを切り替えて扱う」ことが、既存機構で可能かを実装コードで検証した結果、不可能と確認した——round 13までの「carrier」ではなく、これがより根本的な、真のblockerである:**
+- `backend/repository/NpgsqlTopologyRepository.cs` `LoadLayoutNodesAsync`（round6-8実装後の現行コードを再確認）: 1つの`layout_id`につき`topology.ui_topology_tensor`は必ず1行（`LIMIT 2`+ambiguity throw）。その行から得た`WiringKind`/`TargetSurface`/`TargetRef`は、`n with { ... }`により、そのlayoutの非structural nodeすべてへ無条件・一律に上書き適用される（342-353行、383-397行）。round6-8で追加された node-level `dispatchPayloadFromByTrigger`は、この上書きの対象ではなく、**PAYLOAD内容**をtrigger別に変えるだけであり、**dispatch先（WiringKind/TargetRef）自体**は一切変えられない。
+- `backend/runtime/ManifestDispatcher.cs` `DispatchAsync`（181-220行）: `target_ref`（`"manifest:{uuid}:{layer}:{action}"`）をparseしてmanifestとlayer/actionを確定させる——これは持続化されたwiring行から一意に決まる値であり、dispatch時のpayload内容によって変化しない。
+- `backend/runtime/AdminRuntime.cs` `ExecuteDataAsync`（229-294行以降）: `layerAction`（`"{layer}:{action}"`文字列）による静的switch式で、1つの`layerAction`文字列は常に1つのhandlerメソッドへ1:1で対応する。既存の数十のadmin_runtime actionのうち、payload内容によって内部で別々のrepository操作へ分岐する「meta action」の前例は1件も無い（全件確認）。
+
+以上3点は、「dispatch先の選択（=どのbackend operationを呼ぶか）」が、layout単位で静的に固定される既存アーキテクチャの根幹であることを示す。単一画面でCRUD全体を提供するには、この固定を崩す「operation selector」——1つのlayout・1つのwiring行を保ったまま、trigger別に異なるbackend operationへ分岐する新しい機構——が必要であり、これは既存のどの機構の組み合わせでも表現できない。CRUD Semantic Reference自身の`unresolvedFields`（上記2.）が「operation selector carrier」「manifest-authorized operation target reference」を明示的にunresolvedとしているのは、この同じ欠落を指している。
+
+**5a. 重要な発見: この結論は実は新しくない——`admin-surface-topology-seed-conversion` Bundle自身の「admin-enum subBundle 実装記録（2026-07-27 round 3）」が、既にこれと全く同じ結論に達していた。** 同記録906-910行は「単一layout = 1 canonical operationという既存designを前提にする限り、AdminEnumsRoster.tsx同等のUXを既存のgeneric topology substrateのみで単一manifestとして再現することはできない」「hardcoded `/admin/enums` / `AdminEnumsRoster.tsx`は撤去しない」と明記済みだった。ところが、その後のround 9-13（本Bundle側）は、この round 3 の結論を再確認・参照することなく、「7つの独立したsingle-purpose write manifest + hub navigationによるcross-manifest carrier」という、round 3自身が既に「real UX-parityにはならない」と明言していた次善構成の方を、あたかも独立して追求可能な別の目標であるかのように扱ってしまっていた——round 13の5候補調査自体の個々の結論（linkHref補間・route_navigation等がcarrierとして使えないこと）は正確だったが、そもそも「carrierさえ解決すればhardcoded route撤去に近づく」という前提そのものが、round 3の結論と整合していなかった。今回のround 14は、round 3の結論を、より明示的な正本citation（`runtime-orchestration-ssot.yaml`のprecondition文言、CRUD Semantic Referenceの`unresolvedFields`、credential-managementの先例）で再確認・補強したものであり、真に新しい発見ではなく、Bundle間で見失われていた既存の結論の回復である。
+
+**5b. 結論——round 13の「cross-manifest carrier」調査は無駄ではなかったが、より根本的な問題の下位症状だったと判明した。** ae200の行選択から得たgroupIdを、たとえ完璧なcarrierでae220/ae280へ運べたとしても、それは依然として「別々のmanifest（別々の画面）」のままであり、`runtime-orchestration-ssot.yaml`の precondition が要求する「1つのper-screen manifest」にはならない——precondition はper-action manifestの数がいくつであっても、それらが分かれている限り満たされない。したがって、round 13までの5候補（同一layout内target切替/linkHref補間/route_navigation/entry URL payload転送/hub_relations.relation_config）の比較は、「carrierを解決すればhardcoded route撤去に近づく」という前提の下では意味があったが、その前提自体が不正確だったことが今回判明した。真に必要なのは、上記4.の「operation selector」であり、これは以下の理由でAgent判断による先行実装をしない:
+- 既存の「1 layout = 1 canonical operation」という、2026-07-22 owner decisionでSSOT確定済みの原則（`admin-runtime-operation-dispatch-lane-determination` Bundle参照）を変更・拡張する、cross-cutting・高blast-radiusな設計変更である。
+- `crud_preset_physical_reference_assessment.insufficiency_rule`が明示的に「不足substrateを報告し、新しいcomponent/action wiring/payload resolver/runtime lane/routeを発明しない」ことを要求している。
+- admin-enum専用の解決にせず、team-dashboard/scheduler-settings/credential-managementが将来同じ形のCRUD画面を必要とする場合に備え、汎用的なsubstrate設計として決定される必要がある（単一surface専用の分岐を禁止する本Bundle・PR共通のNG boundaryに合致）。
+
+**6. 傍証: credential-managementで、ほぼ同型の設計（既存hardcoded route `/admin/users`を新規topology-driven route `/admin/credentials`で置き換える）が過去に試みられ、owner Gate0監査（PR #584、2026-07-12）により明示的に撤回された。** `AdminCredentialsShell.tsx`・`/admin/credentials`route・関連SSOT記述（`canonical_projection_entry`・`retiring_pending_proof`等）は完全に削除され、`/admin/users`は通常のcanonical routeへ復元された（本Bundle冒頭より上の`admin-surface-topology-seed-conversion` Bundle「Gate0 remediation記録」節参照）。これは今回のadmin-enumの状況に直接類似する先例であり、owner決定の選択肢の1つ（下記(b)）に実際の前例があることを示す。
+
+**owner決定を要する3方向（発明せず、そのまま提示する）:**
+- **(a) operation selector機構を新規設計・実装する**: 1 layout・1 wiring行を維持したまま、node-level triggerごとに異なるbackend operation（layer:action）へ分岐する新しいdispatch機構を設計する。cross-cutting（team-dashboard/scheduler-settings/credential-managementの将来の同型画面にも影響）。SSOT改定（`admin-uibuilder-ui-structure-wiring-ssot.yaml`の`component_wiring_execution_lane`原則自体の見直し）が前提。
+- **(b) `/admin/enums`のretirement前提を見直す**: `docs/design/runtime-orchestration-ssot.yaml` `admin_route_retirement_matrix`の`/admin/enums`エントリ（`thin_projection_wrapper`、precondition未充足）を、credential-managementの先例（上記6.）に倣い撤回または延期する。この場合`AdminEnumsRoster.tsx`は`docs/design/admin-console-workflow-ssot.yaml` `other_admin_routes.master_roster_routes`・`docs/design/admin-master-roster-management-ssot.yaml` `canonical_routes.admin_enums`が現に記述する通り、恒久的なpipeline-external canonical routeとして維持される。この場合、admin-enum subBundleの残scopeは「cross-manifest carrier」ではなく消滅し、既に完了済みのbackend/audit/confirmation実装（round1-13）のみでadmin-enum自身の残scopeが充足しうる（ただし本Bundle・親Bundleの status 判定自体はownerが行うべきものであり、ここでは実装・宣言していない）。
+- **(c) 別の再設計**: 上記以外の方式。
+
+いずれも本round では実装していない。既存のround 1-13実装（generic dispatch payload capture/response forwarding/mutation confirmation/audit envelope、7 write actionのlive-DB proof）は維持し、撤回していない。
+
 ### 対応資料
 
 **必読（全文精読必須——「到達可能」であることと「実際に読んだ」ことは別である。2026-07-28の直接指摘により再指定）:**
@@ -1478,6 +1525,18 @@ round 9のowner指摘は、round 7までのA/B/C探索を「対応資料に指�
 - `.agent/tasks/todo.md`（`admin-runtime-operation-dispatch-lane-determination` Bundle、`admin-surface-topology-seed-conversion` admin-enum subBundle実装記録）
 - PR #600（`tk-ud/topolactor`）review round 1-10コメント履歴
 
+**round 14（2026-07-29）で新規に読んだ資料:**
+- `docs/design/runtime-orchestration-ssot.yaml` `frontend_routes.admin_route_retirement_matrix`（唯一の正本admin route registry——`admin-console-workflow-ssot.yaml` `authority.canonical_admin_route_registry`が指す先。`/admin/enums`の`retirement_kind: thin_projection_wrapper`・precondition記述）
+- `docs/design/admin-console-workflow-ssot.yaml` `other_admin_routes.master_roster_routes`（`/admin/enums`/`/admin/users`を"post-contents"かつ既存hardcoded islandとして記述するセクション——本Bundleでは round13までに一度も引用していなかった）
+- `docs/design/admin-master-roster-management-ssot.yaml` `canonical_routes.admin_enums`（`ux_contract`）
+- `docs/design/admin-normal-surface-projection-seed-ssot.yaml` `crud_preset_physical_reference_assessment.insufficiency_rule`（1046行）
+- `docs/design/enum-dictionary-ssot.yaml` `admin_hub_relation_navigation`（ae200が"per-screen ui_projection manifest"としてhub relation navigationのtargetになれる、という別の充足済み要件との違いを確認）
+- `docs/design/react-schema-topology-seed-translator-ssot.yaml`（1590-1639行、7 write manifestsが"not a UX replacement"であることの既存記録の再確認）
+- `frontend/islands/AdminEnumsRoster.tsx`（全文再読）
+- `backend/repository/NpgsqlTopologyRepository.cs` `LoadLayoutNodesAsync`（round6-8実装後の現行コード）
+- `backend/runtime/ManifestDispatcher.cs` `DispatchAsync`/`TryParseManifestTargetRef`
+- `backend/runtime/AdminRuntime.cs` `ExecuteDataAsync`（`layerAction`静的switch全件）
+
 ### 対象ファイル名
 
 **実装済み（round 10-13、下記が実際に変更されたファイル——A/B/C採用時の候補ではなく実差分）:**
@@ -1498,7 +1557,13 @@ round 9のowner指摘は、round 7までのA/B/C探索を「対応資料に指�
 - `backend/schema/Contracts.cs`（`OperationVector.ContextRecordId`）、`backend/runtime/OperationVectorResolver.cs`（案A候補、既存フィールドだが現在frontendのどのdispatchからも設定されていない）
 - `frontend/runtime/uiEventEffectRunner.ts`（`UI_STATE_UPDATE_OPEN_ACTIONS`、案B候補——2026-07-28の別調査で、`payloadFrom`がui_state_updateで解決されていない`not_started`状態であることを確認済み。cross-manifest carrier問題は解決しないため、この論点への採用可否は未決のまま）
 - `frontend/runtime/runtimeComponentFactory.ts`（`inline_edit/*` factory、案C候補。search_input.aliasの`inputFactory`）
-- `frontend/islands/AdminEnumsRoster.tsx`、`frontend/islands/AdminUsersRoster.tsx`（cross-manifest carrier解決後のhardcoded route撤去対象、未着手）
+- `frontend/islands/AdminEnumsRoster.tsx`、`frontend/islands/AdminUsersRoster.tsx`（cross-manifest carrier解決後のhardcoded route撤去対象、未着手——round14でcarrier前提自体を再検証したが、結論は変わらず未着手のまま）
+
+**調査のみ（round 14、2026-07-29——単一per-screen manifestが既存機構で表現可能かを実装コードで検証し、operation selector機構が不在であることを確認した対象。コード変更は無し）:**
+- `frontend/islands/AdminEnumsRoster.tsx`（全文再読——単一component・adminApi.ts直接呼び出し構成の確認）
+- `backend/repository/NpgsqlTopologyRepository.cs`の`LoadLayoutNodesAsync`（round6-8後の現行コードで「1 layout=1 wiring行、全nodeへ一律適用」を再確認——round13の再確認だが今回はround6-8のdispatchPayloadFromByTrigger追加後もこの制約自体は不変であることを明示的に確認）
+- `backend/runtime/ManifestDispatcher.cs`の`DispatchAsync`/`TryParseManifestTargetRef`（target_refがpersisted wiring行から一意に決まり、payload内容非依存であることの確認）
+- `backend/runtime/AdminRuntime.cs`の`ExecuteDataAsync`（`layerAction`静的switchに、payload内容で分岐するmeta actionの前例が0件であることの全件確認）
 
 ### 対象関数名
 
@@ -1523,6 +1588,11 @@ round 9のowner指摘は、round 7までのA/B/C探索を「対応資料に指�
 - `buildRouteNavigationEventBinding`（`frontend/runtime/renderEmission.ts`）、`emitBoundEvent`の`routeNavigation`分岐（`frontend/runtime/runtimeComponentFactory.ts`）
 - `parseProjectionEntrySelection`/`resolveProjectionEntryAxes`（`frontend/runtime/projectionEntry.ts`）
 
+**調査のみ（round 14、2026-07-29——単一per-screen manifestに必要なoperation selector機構の不在を確認した対象。コード変更は無し）:**
+- `NpgsqlTopologyRepository.LoadLayoutNodesAsync`（`n with {...}`によるWiringKind/TargetRefの全node一律上書きを再確認）
+- `ManifestDispatcher.DispatchAsync`/`TryParseManifestTargetRef`（target_refのpersisted-wiring行依存・payload非依存を確認）
+- `AdminRuntime.ExecuteDataAsync`（`layerAction`静的switchの全件確認、payload駆動のmeta action前例が0件であることを確認）
+
 ### 受入条件
 
 - ~~案A/B/Cの比較...がownerに提示され、1方向（または代替）が選択されている。~~ → round 9時点でA/B/Cは撤回済み（当時の経緯は上記「round 9」節に時系列証跡として保持）。**現行状態（round 13時点）**: detail view相当はround 10で実装済み。pre-fill相当（groupId既知後の現在値取得・初期表示）はround 11で実装、round 12でproduction ProjectionShellマウント経由のLoad(A)→Load(B) testまで証明済み——「pre-fillが2択のowner decision待ち」という記述はround 11/12の実装により解消した、過去のround 9時点のみの状態であり、現行の未解決scopeではない。
@@ -1530,7 +1600,8 @@ round 9のowner指摘は、round 7までのA/B/C探索を「対応資料に指�
 - admin-enum/credential-managementそれぞれのhardcoded roster route撤去が、選択された単一の正規contractに従って進められる状態になっている（各subBundle自身のUX-parity実装・撤去は別途そちらのscope）。scheduler-settings/team-dashboardは対象外（上記「compound対象の再判定」参照、それぞれ独自の理由でこのgapを要求しない/証明できないため）。
 - **round 10で充足**: `enum_dictionary:get_group`（既存action、未配線だった）を単一目的read-detail manifest（ae280）として配線・live-DB証明した——「一覧行を選択してdetailを見る」の後半（get→propBindings経由の表示）が実装済み。
 - **round 11で実装、round 12で「本番で実際に機能する」ことまで証明——充足**: round 11はpre-fill機構（dryRun before-value fallback + propBindings.value + tracker播種）をunit test層で実装したが、round 12のowner指摘により「dispatch応答がProjectionShell側で一切採用されておらず、本番では機能しない」ことが判明——`onRuntimeDispatchResult`callback chainの追加とProjectionShell.tsxでの採用配線、およびrecord切替時のtracker強制上書きにより解消し、実ProjectionShellマウント経由のLoad(A)→Load(B) testで証明済み（詳細はround 12節参照）。
-- **唯一残る未解決scope（round 13時点）**: 「ae200の`event.row.group_id`を別のlayout/manifestへ運ぶ」cross-manifest carrier gapのみ。round 13で既存5候補機構（同一layout内target切替/linkHref補間/route_navigation/entry URL payload転送/hub_relations.relation_config）を実装まで確認し、いずれも動的な行単位の値を別layoutへ運ぶ用途を想定していないことを具体的証拠と共に報告済み（詳細はround 13節参照）——「pre-fillの2択」ではなく、この5候補のいずれかのauthority境界を拡張する許可を得るか、read/write layoutの再設計等、別compositionを取るかという、より根本的なowner決定が必要な唯一の残項目である。
+- ~~**唯一残る未解決scope（round 13時点）**: 「ae200の`event.row.group_id`を別のlayout/manifestへ運ぶ」cross-manifest carrier gapのみ。round 13で既存5候補機構（同一layout内target切替/linkHref補間/route_navigation/entry URL payload転送/hub_relations.relation_config）を実装まで確認し、いずれも動的な行単位の値を別layoutへ運ぶ用途を想定していないことを具体的証拠と共に報告済み（詳細はround 13節参照）——「pre-fillの2択」ではなく、この5候補のいずれかのauthority境界を拡張する許可を得るか、read/write layoutの再設計等、別compositionを取るかという、より根本的なowner決定が必要な唯一の残項目である。~~ → round 14（2026-07-29）で訂正。cross-manifest carrierはこの残項目の正確な表現ではなかった——`docs/design/runtime-orchestration-ssot.yaml` `admin_route_retirement_matrix`の`/admin/enums` precondition（「a real per-screen ui_projection manifest ... which does not exist yet — only per-action dispatcher_mapping-only manifests exist today」）は、per-action manifestが何個あろうと（carrierで繋がれていようと）満たされない——要求されているのは1つのmanifestである。
+- **唯一残る未解決scope（round 14時点）**: 単一画面（1 layout・1 wiring行）でlist/create/update/delete/set_group_itemsの複数admin_runtime actionを、triggerに応じて切り替えてdispatchする「operation selector」機構が既存のどの機構にも存在しない（`LoadLayoutNodesAsync`/`ManifestDispatcher.DispatchAsync`/`AdminRuntime.ExecuteDataAsync`を実装コードで確認、詳細はround 14節参照）。これは`docs/reference/seed-data-authoring-guide.md` Section 9の`unresolvedBackendOperationContracts.unresolvedFields`が独立に確認する未解決契約でもある。owner決定を要する3方向（(a) operation selector機構の新規設計、(b) `/admin/enums`のretirement前提見直し——credential-managementの先例あり、(c) 別再設計）をround 14節にそのまま提示し、いずれも実装していない。
 
 ### Governance NG boundary
 
@@ -1540,6 +1611,9 @@ round 9のowner指摘は、round 7までのA/B/C探索を「対応資料に指�
 - `admin-surface-topology-seed-conversion`および傘下subBundleの既存記録・statusをこのBundle追加によって変更する（admin-enum subBundle実装記録は別途そちら側で更新する）。
 - 本gapを解消しないまま、7 write manifest + hub_navigationの構成を「hardcoded route撤去可能なUX-parity達成」として宣言する。
 - 正本SSOTで責務が証明されていないsubBundle（scheduler-settingsのcreate/edit、team-dashboardの現行hardcoded UI形状）を、将来利用の推測だけで複合対象へ戻す。
+- （round 14追加）cross-manifest carrier（round 13の5候補のいずれか）を解決すれば`/admin/enums`のretirement precondition（`runtime-orchestration-ssot.yaml` `admin_route_retirement_matrix`の"a real per-screen ui_projection manifest"）を満たせる、という誤った前提へ回帰する——per-action manifestが何個あろうと、carrierで繋がれていようと、precondition が要求する「1つのmanifest」にはならない。
+- （round 14追加）owner決定なしに、operation selector機構（1 layout・1 wiring行を保ったまま複数admin_runtime actionへtrigger別に分岐する新機構）を実装する——`admin-uibuilder-ui-structure-wiring-ssot.yaml`の`component_wiring_execution_lane`が2026-07-22 owner decisionで確定した「1 layout = 1 canonical operation」原則を変更する、cross-cutting・高blast-radiusな設計変更である。
+- （round 14追加）owner決定なしに、`docs/design/runtime-orchestration-ssot.yaml` `admin_route_retirement_matrix`の`/admin/enums`エントリ（`thin_projection_wrapper`、precondition未充足）を撤回・変更する、または`AdminEnumsRoster.tsx`/`/admin/enums`route自体を削除・書き換える。
 
 ---
 
