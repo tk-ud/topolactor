@@ -868,6 +868,56 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         return null;
     }
 
+    /// <summary>
+    /// Mirrors frontend/runtime/renderEmission.ts's ADMIN_RUNTIME_TARGET_REF_RE exactly — a
+    /// dispatchTargetRefByTrigger value must be the SAME ManifestDispatcher-resolvable
+    /// "manifest:&lt;uuid&gt;:&lt;layer&gt;:&lt;action&gt;" shape node.targetRef itself uses (never a
+    /// bare "&lt;layer&gt;:&lt;action&gt;").
+    /// </summary>
+    private static readonly System.Text.RegularExpressions.Regex AdminRuntimeTargetRefRe =
+        new(@"^manifest:([0-9a-fA-F-]{36}):([^:]+):([^:]+)$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// Validates the node-level dispatchTargetRefByTrigger field —
+    /// { trigger: "manifest:&lt;uuid&gt;:&lt;layer&gt;:&lt;action&gt;" } — a per-node, per-trigger
+    /// admin_runtime dispatch TARGET override, independent of the layout's own uniform
+    /// WiringKind="admin_runtime"/TargetRef (see LayoutNodeRecord.DispatchTargetRefByTriggerJson).
+    /// Trigger key normalization/collision/support rules mirror ValidateDispatchPayloadFromByTrigger
+    /// exactly (same error-code vocabulary, same AuthoredEventTypeAliasMap/
+    /// ComponentWiringExecutionLaneTriggers authority) so both node-level admin_runtime fields agree
+    /// on the same accept/reject decisions for the same trigger inputs. A present-but-malformed
+    /// value fails the WHOLE layout patch closed, mirroring ValidateDispatchPayloadFromByTrigger's
+    /// own contract for the same JSON boundary.
+    /// </summary>
+    private static string? ValidateDispatchTargetRefByTrigger(JsonElement nodes)
+    {
+        foreach (var node in nodes.EnumerateArray())
+        {
+            if (node.ValueKind != JsonValueKind.Object) continue;
+            if (!node.TryGetProperty("dispatchTargetRefByTrigger", out var byTriggerEl)) continue;
+            if (byTriggerEl.ValueKind != JsonValueKind.Object)
+                return "RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_MUST_BE_OBJECT";
+            var seenCanonicalTriggers = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var triggerEntry in byTriggerEl.EnumerateObject())
+            {
+                if (string.IsNullOrWhiteSpace(triggerEntry.Name))
+                    return "RUNTIME_INTERACTION_TRIGGER_REQUIRED";
+                if (!AuthoredEventTypeAliasMap.TryGetValue(triggerEntry.Name.Trim(), out var canonicalTrigger))
+                    return "RUNTIME_INTERACTION_TRIGGER_REQUIRED";
+                if (!ComponentWiringExecutionLaneTriggers.Contains(canonicalTrigger))
+                    return "RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED";
+                if (!seenCanonicalTriggers.Add(canonicalTrigger))
+                    return "RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION";
+                if (triggerEntry.Value.ValueKind != JsonValueKind.String)
+                    return "RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_VALUE_MUST_BE_STRING";
+                var targetRef = triggerEntry.Value.GetString()?.Trim();
+                if (string.IsNullOrEmpty(targetRef) || !AdminRuntimeTargetRefRe.IsMatch(targetRef))
+                    return "RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_TARGET_REF_INVALID";
+            }
+        }
+        return null;
+    }
+
     private static string? ValidateRuntimeInteractions(
         JsonElement nodes,
         IReadOnlySet<string>? approvedInstanceTargetRefs = null,
@@ -1300,6 +1350,9 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                     var dispatchPayloadFromByTriggerError = ValidateDispatchPayloadFromByTrigger(runtimeNodes);
                     if (dispatchPayloadFromByTriggerError is not null)
                         return normalized with { Ok = false, Valid = false, Message = dispatchPayloadFromByTriggerError };
+                    var dispatchTargetRefByTriggerError = ValidateDispatchTargetRefByTrigger(runtimeNodes);
+                    if (dispatchTargetRefByTriggerError is not null)
+                        return normalized with { Ok = false, Valid = false, Message = dispatchTargetRefByTriggerError };
                 }
             }
 

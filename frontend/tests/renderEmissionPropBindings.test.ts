@@ -914,3 +914,217 @@ Deno.test("renderEmission: absent dispatchPayloadFromByTrigger renders normally 
   const clickRd = clickBinding.runtimeDispatch as Record<string, unknown>;
   assertEquals(clickRd.payloadFrom, undefined);
 });
+
+// ─── node.dispatchTargetRefByTrigger (per-trigger admin_runtime dispatch TARGET
+// override — mirrors the existing dispatchExternalPort/dispatchInstanceOperation
+// per-trigger portTargetRef/instanceTargetRef precedent, extended to admin_runtime.
+// Lets a single per-screen layout host nodes for MULTIPLE admin_runtime operations
+// without a new component/actionType/lane/payload resolver) ──────────────────
+
+const ADMIN_ENUM_CREATE_GROUP_TARGET_REF =
+  `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:create_group`;
+const ADMIN_ENUM_LIST_GROUPS_TARGET_REF =
+  `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:list_groups`;
+
+Deno.test("buildCatalogComponentEventBinding: dispatchTargetRefByTrigger override REPLACES the trigger's spec, unrelated triggers keep the base spec", () => {
+  const baseSpec: RuntimeDispatchSpec = {
+    operationType: "list_groups",
+    target: "manifest",
+    layer: "enum_dictionary",
+    action: "list_groups",
+    targetRef: ADMIN_ENUM_LIST_GROUPS_TARGET_REF,
+  };
+  const overrideSpec: RuntimeDispatchSpec = {
+    operationType: "create_group",
+    target: "manifest",
+    layer: "enum_dictionary",
+    action: "create_group",
+    targetRef: ADMIN_ENUM_CREATE_GROUP_TARGET_REF,
+  };
+  const binding = buildCatalogComponentEventBinding(baseSpec, {}, {
+    click: overrideSpec,
+  });
+  const clickRd = (binding.click as Record<string, unknown>)
+    .runtimeDispatch as Record<string, unknown>;
+  assertEquals(clickRd.targetRef, ADMIN_ENUM_CREATE_GROUP_TARGET_REF);
+  assertEquals(clickRd.action, "create_group");
+
+  const submitRd = (binding.submit as Record<string, unknown>)
+    .runtimeDispatch as Record<string, unknown>;
+  assertEquals(submitRd.targetRef, ADMIN_ENUM_LIST_GROUPS_TARGET_REF);
+  assertEquals(submitRd.action, "list_groups");
+});
+
+Deno.test("buildCatalogComponentEventBinding: dispatchTargetRefByTrigger override still merges the trigger's OWN payloadFrom", () => {
+  const baseSpec: RuntimeDispatchSpec = {
+    operationType: "list_groups",
+    target: "manifest",
+    layer: "enum_dictionary",
+    action: "list_groups",
+    targetRef: ADMIN_ENUM_LIST_GROUPS_TARGET_REF,
+  };
+  const overrideSpec: RuntimeDispatchSpec = {
+    operationType: "create_group",
+    target: "manifest",
+    layer: "enum_dictionary",
+    action: "create_group",
+    targetRef: ADMIN_ENUM_CREATE_GROUP_TARGET_REF,
+  };
+  const binding = buildCatalogComponentEventBinding(
+    baseSpec,
+    { click: { groupName: "node:name_input.value" } },
+    { click: overrideSpec },
+  );
+  const clickRd = (binding.click as Record<string, unknown>)
+    .runtimeDispatch as Record<string, unknown>;
+  assertEquals(clickRd.targetRef, ADMIN_ENUM_CREATE_GROUP_TARGET_REF);
+  assertEquals(clickRd.payloadFrom, { groupName: "node:name_input.value" });
+});
+
+function adminRuntimeNodeEmissionWithTargetRefOverride(
+  dispatchTargetRefByTrigger: unknown,
+): Emission {
+  return {
+    layoutId: "layout-admin-runtime-targetref-override-failclose",
+    layoutNodes: [
+      {
+        nodeId: "node-create-submit-button",
+        nodeKind: "catalog_component",
+        componentId: "comp-create-submit-button-001",
+        componentKind: "action/button",
+        componentKey: "button.primitive",
+        orderIndex: 0,
+        wiringKind: "admin_runtime",
+        targetSurface: "manifest",
+        targetRef: ADMIN_ENUM_LIST_GROUPS_TARGET_REF,
+        // deno-lint-ignore no-explicit-any
+        dispatchTargetRefByTrigger: dispatchTargetRefByTrigger as any,
+      },
+    ],
+  };
+}
+
+Deno.test("renderEmission: dispatchTargetRefByTrigger with an unrecognized trigger key fails the node closed (RUNTIME_INTERACTION_TRIGGER_REQUIRED)", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const specs = renderEmission(
+    adminRuntimeNodeEmissionWithTargetRefOverride({
+      not_a_real_trigger: ADMIN_ENUM_CREATE_GROUP_TARGET_REF,
+    }),
+    {},
+  );
+  assertEquals(specs[0].componentType, "error");
+  assertEquals(
+    JSON.stringify(specs[0].def).includes("RUNTIME_INTERACTION_TRIGGER_REQUIRED"),
+    true,
+  );
+});
+
+for (const badTrigger of ["input", "focus", "blur"] as const) {
+  Deno.test(`renderEmission: dispatchTargetRefByTrigger with trigger "${badTrigger}" (recognized by normalizeAuthoredEventType but not bound by component_wiring_execution_lane) fails the node closed (RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED)`, () => {
+    ensureRuntimeComponentRegistryInitialized();
+    const specs = renderEmission(
+      adminRuntimeNodeEmissionWithTargetRefOverride({
+        [badTrigger]: ADMIN_ENUM_CREATE_GROUP_TARGET_REF,
+      }),
+      {},
+    );
+    assertEquals(specs[0].componentType, "error");
+    assertEquals(
+      JSON.stringify(specs[0].def).includes(
+        "RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED",
+      ),
+      true,
+    );
+  });
+}
+
+Deno.test('renderEmission: dispatchTargetRefByTrigger — "click" + "onClick" normalize to the SAME canonical trigger and fail the node closed (RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION)', () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const specs = renderEmission(
+    adminRuntimeNodeEmissionWithTargetRefOverride({
+      click: ADMIN_ENUM_CREATE_GROUP_TARGET_REF,
+      onClick: ADMIN_ENUM_CREATE_GROUP_TARGET_REF,
+    }),
+    {},
+  );
+  assertEquals(specs[0].componentType, "error");
+  assertEquals(
+    JSON.stringify(specs[0].def).includes(
+      "RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION",
+    ),
+    true,
+  );
+});
+
+Deno.test("renderEmission: dispatchTargetRefByTrigger with a non-string value fails the node closed (RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_VALUE_MUST_BE_STRING)", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const specs = renderEmission(
+    adminRuntimeNodeEmissionWithTargetRefOverride({ click: 12345 }),
+    {},
+  );
+  assertEquals(specs[0].componentType, "error");
+  assertEquals(
+    JSON.stringify(specs[0].def).includes(
+      "RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_VALUE_MUST_BE_STRING",
+    ),
+    true,
+  );
+});
+
+Deno.test("renderEmission: dispatchTargetRefByTrigger with a bare \"<layer>:<action>\" (not a manifest:<uuid>:<layer>:<action> reference) fails the node closed (RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_TARGET_REF_INVALID)", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const specs = renderEmission(
+    adminRuntimeNodeEmissionWithTargetRefOverride({
+      click: "enum_dictionary:create_group",
+    }),
+    {},
+  );
+  assertEquals(specs[0].componentType, "error");
+  assertEquals(
+    JSON.stringify(specs[0].def).includes(
+      "RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_TARGET_REF_INVALID",
+    ),
+    true,
+  );
+});
+
+Deno.test("renderEmission: dispatchTargetRefByTrigger — the SAME node's OTHER triggers keep dispatching to the layout's own uniform target unchanged", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const specs = renderEmission(
+    adminRuntimeNodeEmissionWithTargetRefOverride({
+      click: ADMIN_ENUM_CREATE_GROUP_TARGET_REF,
+    }),
+    {},
+  );
+  assertExists(specs[0].runtimeSpec);
+  const clickBinding = specs[0].runtimeSpec!.eventBinding["click"] as Record<
+    string,
+    unknown
+  >;
+  const clickRd = clickBinding.runtimeDispatch as Record<string, unknown>;
+  assertEquals(clickRd.targetRef, ADMIN_ENUM_CREATE_GROUP_TARGET_REF);
+  assertEquals(clickRd.action, "create_group");
+
+  const submitBinding = specs[0].runtimeSpec!.eventBinding["submit"] as Record<
+    string,
+    unknown
+  >;
+  const submitRd = submitBinding.runtimeDispatch as Record<string, unknown>;
+  assertEquals(submitRd.targetRef, ADMIN_ENUM_LIST_GROUPS_TARGET_REF);
+  assertEquals(submitRd.action, "list_groups");
+});
+
+Deno.test("renderEmission: absent dispatchTargetRefByTrigger renders normally (every trigger keeps the layout's own uniform target)", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const specs = renderEmission(
+    adminRuntimeNodeEmissionWithTargetRefOverride(undefined),
+    {},
+  );
+  assertExists(specs[0].runtimeSpec);
+  const clickBinding = specs[0].runtimeSpec!.eventBinding["click"] as Record<
+    string,
+    unknown
+  >;
+  const clickRd = clickBinding.runtimeDispatch as Record<string, unknown>;
+  assertEquals(clickRd.targetRef, ADMIN_ENUM_LIST_GROUPS_TARGET_REF);
+});

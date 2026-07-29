@@ -993,4 +993,68 @@ public class LayoutSchemaStructuralCompositionTests
         var section = Assert.Single(composed, n => n.NodeId == "sec1");
         Assert.Null(section.DispatchPayloadFromByTriggerJson);
     }
+
+    // ─── dispatchTargetRefByTrigger: a node-level admin_runtime dispatch TARGET override
+    // field, merged by exact tensor NodeId through the SAME NodeLocalData mechanism as
+    // propsJson/stateJson/propBindings/dispatchPayloadFromByTrigger ──────────────────
+
+    [Fact]
+    public void BuildNodeLocalDataByNodeId_TensorNodeWithDispatchTargetRefByTrigger_IsKeptByExactNodeId()
+    {
+        var tensorNodes = new List<LayoutNodeRecord>
+        {
+            new(NodeId: "create_submit_button", NodeKind: "catalog_component", HtmlTag: null,
+                ComponentKey: null, ComponentId: null, ParentNodeId: null,
+                SlotKey: null, OrderIndex: 0, X: 0, Y: 0, Width: null, Height: null,
+                LayoutClassRefs: null,
+                DispatchTargetRefByTriggerJson: """{"click":"manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:create_group"}"""),
+        };
+        var result = LayoutSchemaTensorComposer.BuildNodeLocalDataByNodeId(tensorNodes);
+        Assert.True(result.TryGetValue("create_submit_button", out var data));
+        Assert.Contains("create_group", data.DispatchTargetRefByTriggerJson);
+        Assert.Null(data.PropsJson);
+        Assert.Null(data.DispatchPayloadFromByTriggerJson);
+    }
+
+    [Fact]
+    public void ComposeLayoutSchemaWithTensor_CatalogLeafMatchingTensorNodeId_MergesDispatchTargetRefByTrigger()
+    {
+        var records = ParseValidRows(CategoryRecordsJson);
+        var componentKeyToId = new Dictionary<string, string>
+        {
+            ["select.template"] = "00000000-0000-0000-0001-000000000012",
+            ["button.primitive"] = "00000000-0000-0000-0001-000000000010",
+        };
+        var componentIdToKind = new Dictionary<string, string>
+        {
+            ["00000000-0000-0000-0001-000000000012"] = "form_input/select",
+            ["00000000-0000-0000-0001-000000000010"] = "action/button",
+        };
+        var nodeLocalDataByNodeId = new Dictionary<string, LayoutSchemaTensorComposer.NodeLocalData>
+        {
+            ["action1"] = new(
+                PropsJson: null,
+                StateJson: null,
+                PropBindingsJson: null,
+                DispatchPayloadFromByTriggerJson: null,
+                DispatchTargetRefByTriggerJson: """{"click":"manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:create_group"}"""),
+        };
+
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records,
+            interactionsBySourceActionKey: new Dictionary<string, string>(),
+            componentKeyToId,
+            componentIdToKind,
+            nodeLocalDataByNodeId);
+
+        var action = Assert.Single(composed, n => n.NodeId == "action1");
+        Assert.Equal(
+            """{"click":"manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:create_group"}""",
+            action.DispatchTargetRefByTriggerJson);
+
+        // A structural_node never receives node-local data even when a tensor entry happens to
+        // share its NodeId — only catalog_component leaves are eligible.
+        var section = Assert.Single(composed, n => n.NodeId == "sec1");
+        Assert.Null(section.DispatchTargetRefByTriggerJson);
+    }
 }

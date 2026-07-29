@@ -121,6 +121,16 @@ public record LayoutNode(
     /// </summary>
     JsonElement? DispatchPayloadFromByTrigger = null,
     /// <summary>
+    /// Node-local admin_runtime dispatch TARGET override from
+    /// layout_patch_json.nodes[].dispatchTargetRefByTrigger — { trigger: "manifest:&lt;uuid&gt;:&lt;layer&gt;:&lt;action&gt;" }.
+    /// Lets this SAME node's own trigger dispatch to a DIFFERENT admin_runtime layer:action than
+    /// the layout's own uniform WiringKind="admin_runtime"/TargetRef. Mirrors the existing
+    /// per-trigger authored target override precedent already used by dispatchExternalPort/
+    /// dispatchInstanceOperation (portTargetRef/instanceTargetRef in RuntimeInteractions). Null
+    /// when not authored.
+    /// </summary>
+    JsonElement? DispatchTargetRefByTrigger = null,
+    /// <summary>
     /// Structural-node semantic type (topology_ui_category/topology_ui_section/topology_ui_form/
     /// topology_ui_workflow/topology_ui_validation) when NodeKind is "structural_node" — sourced
     /// from components_layout_design.layout_schema_json.records[], the structural authority tree.

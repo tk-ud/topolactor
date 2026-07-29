@@ -909,7 +909,7 @@ owner再指摘（PR #600、2回目）を受け、以下3点に対応した。
 
 **admin-enum subBundle 全体の状態（round 3時点）:** backend側mutation_confirmation_contract（7 action全て、validation parity含む）・seed側single-purpose write manifest配線（7 action全て）・per-action live-DB round trip proof（7 action全て）・navigation reachability（代表証明、機構自体はae200で確立済み）は実装・test証明済み。SSOT語彙の既知の陳腐化（`blocked_pending_seed_catalog`）は本ラウンドで解消した。**残る唯一の未達は、hardcoded `/admin/enums` / `AdminEnumsRoster.tsx`のUX-parity production replacementおよびそれに伴う撤去であり、これは既存の generic topology substrate（`component_wiring_execution_lane`のlayout=1 canonical operationという確定済み設計原則）だけでは達成不可能なことを実装コード追跡により確認済みである。この限界を解消するには、実行時ユーザー選択に応じた動的operation切り替えという新しいruntime能力の導入が必要であり、それは本Bundleの scope・NG boundaryが単一Agentへ許可する範囲を超える、owner判断を要する設計拡張である。**この理由により、admin-enum subBundleを`implemented`と判断することはできない** — hardcoded routeが残っている限り、Bundle scope（「hardcoded route/island撤去」を含む共通工程の最終ステップ）は未達である。
 
-**2026-07-29追記（round14、`admin-write-surface-selection-context-and-mode-composition-gap` Bundle参照）**: この結論（動的operation切り替え機構が既存substrateに存在せず、hardcoded route撤去には新しいruntime能力の owner decision が必要）は、その後round 9-13で`admin-write-surface-selection-context-and-mode-composition-gap` Bundle側が追求した「cross-manifest carrier」（ae200の行選択identityをae210〜ae280の別manifestへ運ぶ）とは別の、より根本的な制約である。round 9-13はこのround 3の結論を再参照せずに進んでしまっていたため、round14で明示的に再確認・統合した——carrier機構をたとえ解決しても、per-action manifestが複数のままである限りこのround 3の結論（真のUX-parityには単一manifestでの動的operation切り替えが要る）は変わらない。owner決定を要する3方向の提示・詳細な経緯は同Bundleのround14節を正本とする（重複記載を避けるためここでは繰り返さない）。
+**2026-07-29追記（round14、`admin-write-surface-selection-context-and-mode-composition-gap` Bundle参照）**: この結論（動的operation切り替え機構が既存substrateに存在せず、hardcoded route撤去には新しいruntime能力の owner decision が必要）は、その後round 9-13で`admin-write-surface-selection-context-and-mode-composition-gap` Bundle側が追求した「cross-manifest carrier」（ae200の行選択identityをae210〜ae280の別manifestへ運ぶ）とは別の、より根本的な制約である。round 9-13はこのround 3の結論を再参照せずに進んでしまっていたため、round14で明示的に再確認・統合した——carrier機構をたとえ解決しても、per-action manifestが複数のままである限りこのround 3の結論（真のUX-parityには単一manifestでの動的operation切り替えが要る）は変わらない。owner決定を要する3方向の提示・詳細な経緯は同Bundleのround14節を正本とする（重複記載を避けるためここでは繰り返さない）。**2026-07-29追記2（round15）**: 上記round14の3方向提示はowner指示により撤回され、(a)のoperation selector機構（`dispatchTargetRefByTrigger`）が実装・test証明された——`admin-write-surface-selection-context-and-mode-composition-gap` Bundleのround15節を正本とする。ただしae200等への実配線・live-DB proof・`AdminEnumsRoster.tsx`撤去は未着手であり、本Bundle・admin-enum subBundleを`implemented`と判断することはまだできない。
 
 ### admin-enum subBundle 実装記録（2026-07-27 round 4: diff_log実persistence証明 + round 3診断の訂正 + gapの todo 分離）
 
@@ -1382,7 +1382,7 @@ PR #600（`admin-write-surface-selection-context-and-mode-composition-gap` Bundl
 
 ## Bundle `admin-write-surface-selection-context-and-mode-composition-gap`
 
-**Status:** `partial`（round 10-13で下記2項目を実装・production証明済み——detail view相当〔ae280〕、groupId既知後のpre-fill相当〔ae220、round 12でdispatch response adoption経由の本番動作まで証明〕。残る1項目は、round 13時点では「ae200の行選択からgroupIdそのものを自動で運ぶcarrier」と表現していたが、round 14（2026-07-29、下記節参照）の再検証により、この表現自体がより根本的な未解決の症状に過ぎなかったことが判明した——真の残項目は「単一画面（1 layout）でlist/create/update/delete/set_group_itemsの複数admin_runtime actionを切り替えてdispatchする operation selector機構の不在」であり、これも既存機構では実現不能と確認済みで、owner決定を要する設計拡張として`not_started`のまま——単一Bundle内に「実装済み」と「設計決定待ちで未着手」が混在するため、Bundle全体のstatusは`partial`とする）
+**Status:** `partial`（round 10-13で下記2項目を実装・production証明済み——detail view相当〔ae280〕、groupId既知後のpre-fill相当〔ae220、round 12でdispatch response adoption経由の本番動作まで証明〕。残る1項目は、round 13時点では「ae200の行選択からgroupIdそのものを自動で運ぶcarrier」と表現していたが、round 14（2026-07-29）の再検証により、この表現自体がより根本的な未解決の症状——「単一画面（1 layout）でlist/create/update/delete/set_group_itemsの複数admin_runtime actionを切り替えてdispatchする operation selector機構の不在」——に過ぎなかったことが判明した。round 15（2026-07-29）でこのoperation selector機構自体（`dispatchTargetRefByTrigger`、既存の`dispatchExternalPort`/`dispatchInstanceOperation`のper-trigger authored target override precedentをadmin_runtimeへ適用したもの）を実装・test証明済み——ただしae200等への実配線・live-DB proof・`AdminEnumsRoster.tsx`撤去はまだ未着手であり、Bundle全体としては引き続き`partial`とする）
 
 **Position:** PR #600（`admin-surface-topology-seed-conversion` admin-enum subBundle）review round 3の指示「既存substrate範囲内でhardcoded-route撤去が可能か調査し、不可能ならBundle単位todoへ分離する」に基づき切り出した論点。round 4のowner再指摘（round 3の物理層記述の不正確さの指摘）を受け、下記「問題点」を訂正済み。admin-enum/credential-managementの2 subBundleが共有する複合論点である。当初「本Bundleでは実装しない（owner判断を待つためのtodoである）」としていたが、これは不正確になった——round 9-13を通じて、detail view（ae280）とpre-fill（ae220、production証明込み）は実際にこのBundle内で実装済みである。owner decisionを要する設計拡張として本Bundleに残っているのは「ae200の行選択からgroupIdを自動で運ぶcarrier」1点のみであり、これは「design自体は存在するが実装が未着手（`not_started`）」という通常の状態であって、コード上の欠陥や矛盾（=本来の意味での"gap"）ではない——本Bundle名自体に含まれる"gap"という語は、round 3-4時点でこの論点を切り出した際の命名であり、現時点でのstatusを正確に表す語ではないことに注意（Bundle IDは既存の相互参照を壊すため改名していないが、実態は「owner decision待ちのdesign未着手項目」である）。scheduler-settings/team-dashboardは、下記「compound対象の再判定（round 4）」節の理由により対象外とした。round 9でownerが「A/B/Cは既存CRUD presetを読まずに再発明したもの」として撤回・presetへの統合を指示——presetを実際に読んだ結果、両preset自体がSSOT自身の言う「draft/intake artifact」であり、その`layout_tree`が本PR自身の確定済み「1 layout=1 canonical operation」architectureと構造的に矛盾することを発見した（下記「round 9」節参照）。round 10で「detail view相当」（ae280）を実装。round 11で、owner指摘（「設計判断は既にしてるでしょ」）を受けてpre-fill部分を再点検した結果、round 9自身のレビュー指示が既に確定した設計判断であり、これ以上の2択提示は不要と判断——update_group自身のdryRun before-value fallbackと、`form_input/search_input`へのpropBindings.value機構拡張＋`liveNodeValueTracker`への播種を組み合わせ、「groupIdが分かっている前提でのpre-fill」を新規carrier無しで実装した（下記「round 11」節参照）。「ae200の行選択からgroupIdを自動で運ぶ」こと自体は依然未解決のまま残る。
 
@@ -1497,12 +1497,28 @@ precondition: requires a real per-screen ui_projection manifest for enum_diction
 
 **6. 傍証: credential-managementで、ほぼ同型の設計（既存hardcoded route `/admin/users`を新規topology-driven route `/admin/credentials`で置き換える）が過去に試みられ、owner Gate0監査（PR #584、2026-07-12）により明示的に撤回された。** `AdminCredentialsShell.tsx`・`/admin/credentials`route・関連SSOT記述（`canonical_projection_entry`・`retiring_pending_proof`等）は完全に削除され、`/admin/users`は通常のcanonical routeへ復元された（本Bundle冒頭より上の`admin-surface-topology-seed-conversion` Bundle「Gate0 remediation記録」節参照）。これは今回のadmin-enumの状況に直接類似する先例であり、owner決定の選択肢の1つ（下記(b)）に実際の前例があることを示す。
 
-**owner決定を要する3方向（発明せず、そのまま提示する）:**
-- **(a) operation selector機構を新規設計・実装する**: 1 layout・1 wiring行を維持したまま、node-level triggerごとに異なるbackend operation（layer:action）へ分岐する新しいdispatch機構を設計する。cross-cutting（team-dashboard/scheduler-settings/credential-managementの将来の同型画面にも影響）。SSOT改定（`admin-uibuilder-ui-structure-wiring-ssot.yaml`の`component_wiring_execution_lane`原則自体の見直し）が前提。
-- **(b) `/admin/enums`のretirement前提を見直す**: `docs/design/runtime-orchestration-ssot.yaml` `admin_route_retirement_matrix`の`/admin/enums`エントリ（`thin_projection_wrapper`、precondition未充足）を、credential-managementの先例（上記6.）に倣い撤回または延期する。この場合`AdminEnumsRoster.tsx`は`docs/design/admin-console-workflow-ssot.yaml` `other_admin_routes.master_roster_routes`・`docs/design/admin-master-roster-management-ssot.yaml` `canonical_routes.admin_enums`が現に記述する通り、恒久的なpipeline-external canonical routeとして維持される。この場合、admin-enum subBundleの残scopeは「cross-manifest carrier」ではなく消滅し、既に完了済みのbackend/audit/confirmation実装（round1-13）のみでadmin-enum自身の残scopeが充足しうる（ただし本Bundle・親Bundleの status 判定自体はownerが行うべきものであり、ここでは実装・宣言していない）。
-- **(c) 別の再設計**: 上記以外の方式。
+~~**owner決定を要する3方向（発明せず、そのまま提示する）:**~~
+~~- **(a) operation selector機構を新規設計・実装する**: 1 layout・1 wiring行を維持したまま、node-level triggerごとに異なるbackend operation（layer:action）へ分岐する新しいdispatch機構を設計する。cross-cutting（team-dashboard/scheduler-settings/credential-managementの将来の同型画面にも影響）。SSOT改定（`admin-uibuilder-ui-structure-wiring-ssot.yaml`の`component_wiring_execution_lane`原則自体の見直し）が前提。~~
+~~- **(b) `/admin/enums`のretirement前提を見直す**: ...~~
+~~- **(c) 別の再設計**: 上記以外の方式。~~
+~~いずれも本round では実装していない。~~
+→ **round 15（2026-07-29）で無効化。** owner指摘により、この3択提示自体を撤回する——「owner判断はPR #600へ含めるかというscope境界のみであり、本指示によりPR #600内で継続する」との明示に基づき、(a)のoperation selector機構を実装した（下記round15節参照）。既存のround 1-13実装（generic dispatch payload capture/response forwarding/mutation confirmation/audit envelope、7 write actionのlive-DB proof）は維持し撤回していない。
 
-いずれも本round では実装していない。既存のround 1-13実装（generic dispatch payload capture/response forwarding/mutation confirmation/audit envelope、7 write actionのlive-DB proof）は維持し、撤回していない。
+#### round 15（2026-07-29）: operation selector機構の実装——既存の per-trigger authored target override precedent（dispatchExternalPort/dispatchInstanceOperation）を admin_runtime へ適用
+
+owner指摘は、round14の3択提示を撤回し、「per-screen manifest」「operation単位のsingle-purpose layout」「既存generic component_wiring_execution_lane」は競合ではなくmanifest/package/layout/wiringの責務階層として同時充足可能であるとして、PR #600内での実装継続を明示した。指示に従い、既存コードをさらに深く追跡した結果、round14が「新規発明が必要」と判断した"operation selector"は、実は**既存の別レーンに全く同じ形で既に実装済みの前例（precedent）がある**ことを発見した——round14はこの前例を見落としていた。
+
+**発見: `dispatchExternalPort`/`dispatchInstanceOperation`は、既にnode自身の`runtimeInteractions[]`エントリに"per-trigger authored target"（`portTargetRef`/`instanceTargetRef`）を持たせており、layoutの共有wiring行から完全に独立している。** `frontend/runtime/renderEmission.ts`の`buildExternalPortEventBinding`（692-789行）を精読した結果、`wiring.portTargetRef`/`wiring.instanceTargetRef`は`node.targetRef`（tensor由来、layout全体で一律）ではなく、そのnode自身の`runtimeInteractions[]`エントリの生JSONから直接読まれていることを確認した——つまり「layoutの共有wiring行とは独立に、nodeが自分自身のtargetを持てる」という機構は、admin_runtimeレーン以外では既に実装済みだった。round14はこの前例を確認せずに「新規機構が必要」と結論しており、これはround14自身の見落としだった。
+
+**実装: `dispatchTargetRefByTrigger`（node-level, per-trigger admin_runtime dispatch TARGET override）を新設した。** `dispatchPayloadFromByTrigger`（round6-8、PAYLOAD内容をtrigger別に変える）と対になる、TARGETをtrigger別に変えるための兄弟field——`{ trigger: "manifest:<uuid>:<layer>:<action>" }`。layoutの共有wiring行（`NpgsqlTopologyRepository.LoadLayoutNodesAsync`が全nodeへ一律適用する`WiringKind`/`TargetRef`）はそのままfallback/defaultとして維持し、このfieldを持たないnodeの挙動は完全に無変更——admin-enum専用や新しいcomponentKind/actionType/runtime laneの追加は一切ない。
+
+- **frontend** (`frontend/runtime/renderEmission.ts`): `buildAdminRuntimeTargetRefOverrideByTrigger()`新設——`dispatchPayloadFromByTrigger`と同じtrigger正規化/衝突検出/fail-close規律で、値を`manifest:<uuid>:<layer>:<action>`として`parseAdminRuntimeLayerAction`で検証する。`buildCatalogComponentEventBinding()`を拡張し、trigger単位でoverride specがあればそれを使用、無ければ既存のlayout一律specを使用（後方互換）。
+- **backend**: `LayoutNodeRecord.DispatchTargetRefByTriggerJson`（`TopologyRepository.cs`）、`ParseNodesFromLayoutPatchJson`でのparse（`NpgsqlTopologyRepository.cs`）、`NodeLocalData`/`Compose`への統合（`LayoutSchemaTensorComposer.cs`、schema-composed pathでも同じexact-nodeId mergeが機能）、`Contracts.cs` `LayoutNode.DispatchTargetRefByTrigger`、`StructureMapResolver.ToLayoutNode`、`NpgsqlUiTopologyRepository.ValidateDispatchTargetRefByTrigger`（永続化境界validation、`ValidateDispatchPayloadFromByTrigger`と同じtrigger正規化authorityを再利用）。バックエンドのdispatch routing自体（`AdminRuntime.ExecuteDataAsync`の`layerAction`静的switch）は無変更——このfieldは「nodeがどのtarget_refを名乗るか」をauthoring時に選べるようにするだけで、target_refが指すmanifest/layer/actionの実行方法自体は既存のまま。
+- **SSOT**: `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`に`admin_runtime_target_ref_override_contract`を新設（`admin_runtime_payload_binding_contract`の兄弟契約として、role/authority/applicability/authored_surface/required_fields/proofを明文化）。
+
+**Test**: frontend `deno test frontend/tests/renderEmissionPropBindings.test.ts` 60/60 pass（新規15件——override単体test 2件、fail-close 6件、trigger分離2件、absent-fallback 2件等）。frontend全体`deno test`は変更前後で1698 passed/268 failed同数（変更前後で完全一致をgit stashで確認済み、regressionなし——このbaseline自体は本round対象外の既存drift）。`deno check`clean。backend `dotnet build`成功、`Topolactor.Runtime.Tests`1518/1518 pass（新規15件——validation 8件、NodeLocalData/Compose merge 2件、他既存回帰確認込み）。
+
+**本roundで実装していないこと（正直な記載）**: 上記はgeneric mechanism自体の実装・testのみ。ae200（またはいずれかの既存manifest）へ実際に`dispatchTargetRefByTrigger`を使ったcreate/update/delete等のin-page modal/dialogノードを配線すること、その配線をlive-DB（実PostgreSQL）で証明すること、および`AdminEnumsRoster.tsx`の撤去は、いずれも本round未着手である——`db/seed_empty.sql`・`AdminEnumsRoster.tsx`・`frontend/routes/admin/enums.tsx`はいずれも無変更。次のroundでの作業は、この新設mechanismを使ってae200（またはae200を核とした単一per-screen manifestとしての再構成）へ実際にcreate_group等を1操作ずつ配線し、live-DB round tripで証明することである——`crud_preset_physical_reference_assessment`の既存reusable_shape（search/filter/result/form/confirm composition）とCRUD Semantic Referenceのnode構成パターン（create-open-button→openModal→create-modal→create-name-input→create-submit-button、既存`openModal`/`openDialog`のLane3機構で実現可能、新規機構は不要）を土台に、`dispatchTargetRefByTrigger`と既存`dispatchPayloadFromByTrigger`/`onRuntimeDispatchResult`を組み合わせて配線する。
 
 ### 対応資料
 
@@ -1537,6 +1553,17 @@ precondition: requires a real per-screen ui_projection manifest for enum_diction
 - `backend/runtime/ManifestDispatcher.cs` `DispatchAsync`/`TryParseManifestTargetRef`
 - `backend/runtime/AdminRuntime.cs` `ExecuteDataAsync`（`layerAction`静的switch全件）
 
+**round 15（2026-07-29）で新規に読んだ資料（マニフェスト/パッケージ/レイアウト/ワイヤリングの責務階層を再検証）:**
+- `db/manifest_tables.sql`（`manifest.topology` JSONB[]、`ui_projection.packageIds`複数参照可能性の確認）
+- `db/ui_topology_tables.sql`（`ui_topology_tensor`の`(route_key, package_id, layout_id, wiring_id, slot_key, order_index)` unique制約——複数wiring行が同一layout_idを共有できるかの確認）
+- `db/topology_tables.sql` `structure_maps`テーブル（`attractor_key`単位のpackage/schema/layout_id束縛）
+- `backend/runtime/ManifestDispatcher.cs` `ExtractUiProjectionRefs`（"Only the first packageIds entry is used"——manifestのui_projectionはaction非依存の単一render surfaceであることの確認）、`ResolveActiveManifestAsync`相当の`MatchesAxes`（`NpgsqlManifestRepository.cs`、target_ref明示時は経由しないaxes解決経路であることの確認）
+- `backend/runtime/AdminRuntime.cs` `ExecuteDataAsync`の`layerAction`スイッチ再確認（backendは`manifest_id`非依存でlayer:actionを実行することの確認——「同一manifestから別actionへのdispatch」がbackend側では既に無条件で成立することの根拠）
+- `frontend/islands/ProjectionShell.tsx`全文（`adoptedManifestIdRef`/`confirmProjectionEntryEmission`——mount中の意図しないmanifest driftを防ぐガードであり、意図的なmanifest切替は現状サポートされていないことの確認）
+- `frontend/runtime/projectionEntry.ts`全文（`ContextRecordId`が推奨navigation/transition統計専用であり、write payload pre-fillの運搬用途には意味的に転用できないことを`ContextRouteRecommendationResolver.cs`で確認）
+- `frontend/runtime/linkPlaceholderInterpolation.ts`全文、production呼び出し箇所全件（`route.`/`data.`のみ対応、per-row動的値には非対応であることの確認——round13の結論を再確認）
+- `frontend/runtime/renderEmission.ts` `buildExternalPortEventBinding`（**決定的な発見**——`dispatchExternalPort`/`dispatchInstanceOperation`が既にnode自身の`runtimeInteractions[]`エントリから`portTargetRef`/`instanceTargetRef`という per-trigger authored target を読んでおり、layoutの共有wiring行から独立していることの確認。round14はこの前例を見落としていた）
+
 ### 対象ファイル名
 
 **実装済み（round 10-13、下記が実際に変更されたファイル——A/B/C採用時の候補ではなく実差分）:**
@@ -1565,6 +1592,18 @@ precondition: requires a real per-screen ui_projection manifest for enum_diction
 - `backend/runtime/ManifestDispatcher.cs`の`DispatchAsync`/`TryParseManifestTargetRef`（target_refがpersisted wiring行から一意に決まり、payload内容非依存であることの確認）
 - `backend/runtime/AdminRuntime.cs`の`ExecuteDataAsync`（`layerAction`静的switchに、payload内容で分岐するmeta actionの前例が0件であることの全件確認）
 
+**実装済み（round 15、2026-07-29——operation selector機構`dispatchTargetRefByTrigger`の新設。ae200等への実配線・live-DB proof・route撤去は含まない、generic mechanism自体のみ）:**
+- `frontend/runtime/renderEmission.ts`（`buildAdminRuntimeTargetRefOverrideByTrigger`新設、`buildCatalogComponentEventBinding`拡張、caller側でのfail-close分岐追加）
+- `frontend/api/dispatch.ts`（`LayoutNode.dispatchTargetRefByTrigger`フィールド追加）
+- `backend/repository/TopologyRepository.cs`（`LayoutNodeRecord.DispatchTargetRefByTriggerJson`追加）
+- `backend/repository/NpgsqlTopologyRepository.cs`（`ParseNodesFromLayoutPatchJson`での`dispatchTargetRefByTrigger`パース追加）
+- `backend/repository/LayoutSchemaTensorComposer.cs`（`NodeLocalData.DispatchTargetRefByTriggerJson`、`BuildNodeLocalDataByNodeId`/`Compose`への統合）
+- `backend/schema/Contracts.cs`（`LayoutNode.DispatchTargetRefByTrigger`追加）
+- `backend/runtime/StructureMapResolver.cs`（`ToLayoutNode`への配線追加）
+- `backend/repository/NpgsqlUiTopologyRepository.cs`（`ValidateDispatchTargetRefByTrigger`新設、`AdminRuntimeTargetRefRe`定数追加、`ValidateLayoutPatchAsync`本体からの呼び出し追加）
+- `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`（`admin_runtime_target_ref_override_contract`新設）
+- test: `frontend/tests/renderEmissionPropBindings.test.ts`（新規15件）、`backend/tests/Topolactor.Runtime.Tests/NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs`（新規8件）、`LayoutSchemaStructuralCompositionTests.cs`（新規2件）
+
 ### 対象関数名
 
 **実装済み:**
@@ -1575,6 +1614,9 @@ precondition: requires a real per-screen ui_projection manifest for enum_diction
 - `renderEmission`（`frontend/runtime/renderEmission.ts`、round 12——hub構築箇所へ`onRuntimeDispatchResult`オプションの配線を追加）
 - `dispatchRuntimeComponentCommandAndForwardResult`（`frontend/runtime/runtimeComponentFactory.ts`、round 12で新設）
 - `ProjectionShell.tsx`内`handleRuntimeDispatchResult`（round 12で新設）
+- `buildAdminRuntimeTargetRefOverrideByTrigger`（`frontend/runtime/renderEmission.ts`、round 15で新設——node-level per-trigger admin_runtime dispatch target override）
+- `buildCatalogComponentEventBinding`（`frontend/runtime/renderEmission.ts`、round 15——第3引数`targetRefOverrideByTrigger`を追加、trigger単位でspecを置き換え）
+- `ValidateDispatchTargetRefByTrigger`（`backend/repository/NpgsqlUiTopologyRepository.cs`、round 15で新設）
 
 **未採用のまま残った候補（案A/B/C、round 9で撤回——コードは書かれていない、机上比較のみ）:**
 - `HubNavigationResolver`の解決メソッド群、`NpgsqlContentBundleRepository.LoadHubNavigationSequenceAsync`、`hub_navigation:*`authoring関数群
@@ -1601,7 +1643,8 @@ precondition: requires a real per-screen ui_projection manifest for enum_diction
 - **round 10で充足**: `enum_dictionary:get_group`（既存action、未配線だった）を単一目的read-detail manifest（ae280）として配線・live-DB証明した——「一覧行を選択してdetailを見る」の後半（get→propBindings経由の表示）が実装済み。
 - **round 11で実装、round 12で「本番で実際に機能する」ことまで証明——充足**: round 11はpre-fill機構（dryRun before-value fallback + propBindings.value + tracker播種）をunit test層で実装したが、round 12のowner指摘により「dispatch応答がProjectionShell側で一切採用されておらず、本番では機能しない」ことが判明——`onRuntimeDispatchResult`callback chainの追加とProjectionShell.tsxでの採用配線、およびrecord切替時のtracker強制上書きにより解消し、実ProjectionShellマウント経由のLoad(A)→Load(B) testで証明済み（詳細はround 12節参照）。
 - ~~**唯一残る未解決scope（round 13時点）**: 「ae200の`event.row.group_id`を別のlayout/manifestへ運ぶ」cross-manifest carrier gapのみ。round 13で既存5候補機構（同一layout内target切替/linkHref補間/route_navigation/entry URL payload転送/hub_relations.relation_config）を実装まで確認し、いずれも動的な行単位の値を別layoutへ運ぶ用途を想定していないことを具体的証拠と共に報告済み（詳細はround 13節参照）——「pre-fillの2択」ではなく、この5候補のいずれかのauthority境界を拡張する許可を得るか、read/write layoutの再設計等、別compositionを取るかという、より根本的なowner決定が必要な唯一の残項目である。~~ → round 14（2026-07-29）で訂正。cross-manifest carrierはこの残項目の正確な表現ではなかった——`docs/design/runtime-orchestration-ssot.yaml` `admin_route_retirement_matrix`の`/admin/enums` precondition（「a real per-screen ui_projection manifest ... which does not exist yet — only per-action dispatcher_mapping-only manifests exist today」）は、per-action manifestが何個あろうと（carrierで繋がれていようと）満たされない——要求されているのは1つのmanifestである。
-- **唯一残る未解決scope（round 14時点）**: 単一画面（1 layout・1 wiring行）でlist/create/update/delete/set_group_itemsの複数admin_runtime actionを、triggerに応じて切り替えてdispatchする「operation selector」機構が既存のどの機構にも存在しない（`LoadLayoutNodesAsync`/`ManifestDispatcher.DispatchAsync`/`AdminRuntime.ExecuteDataAsync`を実装コードで確認、詳細はround 14節参照）。これは`docs/reference/seed-data-authoring-guide.md` Section 9の`unresolvedBackendOperationContracts.unresolvedFields`が独立に確認する未解決契約でもある。owner決定を要する3方向（(a) operation selector機構の新規設計、(b) `/admin/enums`のretirement前提見直し——credential-managementの先例あり、(c) 別再設計）をround 14節にそのまま提示し、いずれも実装していない。
+- ~~**唯一残る未解決scope（round 14時点）**: 単一画面（1 layout・1 wiring行）でlist/create/update/delete/set_group_itemsの複数admin_runtime actionを、triggerに応じて切り替えてdispatchする「operation selector」機構が既存のどの機構にも存在しない...owner決定を要する3方向...をround 14節にそのまま提示し、いずれも実装していない。~~ → round 15で(a)方向（operation selector機構の新規設計）を実装し充足。既存の`dispatchExternalPort`/`dispatchInstanceOperation`のper-trigger authored target override（`portTargetRef`/`instanceTargetRef`）と同じ既存precedentをadmin_runtimeへ適用した`dispatchTargetRefByTrigger`——frontend/backend双方に実装、unit test 25件（frontend15+backend10）で証明済み。詳細はround15節参照。
+- **唯一残る未解決scope（round 15時点）**: 上記generic mechanism自体は実装・test済みだが、(1) 実際にae200（または単一per-screen manifestとして再構成した何らか）へ`dispatchTargetRefByTrigger`を使ったcreate/update/delete/set_group_items等のin-page modal/dialogノードを配線すること、(2) その配線をlive-DB（実PostgreSQL）で証明すること、(3) `AdminEnumsRoster.tsx`/`frontend/routes/admin/enums.tsx`の撤去、の3点はいずれも未着手である。これらはowner決定待ちではなく、round15で確立したgeneric mechanismを使った通常の実装作業として次round以降で進める。
 
 ### Governance NG boundary
 
@@ -1611,9 +1654,9 @@ precondition: requires a real per-screen ui_projection manifest for enum_diction
 - `admin-surface-topology-seed-conversion`および傘下subBundleの既存記録・statusをこのBundle追加によって変更する（admin-enum subBundle実装記録は別途そちら側で更新する）。
 - 本gapを解消しないまま、7 write manifest + hub_navigationの構成を「hardcoded route撤去可能なUX-parity達成」として宣言する。
 - 正本SSOTで責務が証明されていないsubBundle（scheduler-settingsのcreate/edit、team-dashboardの現行hardcoded UI形状）を、将来利用の推測だけで複合対象へ戻す。
-- （round 14追加）cross-manifest carrier（round 13の5候補のいずれか）を解決すれば`/admin/enums`のretirement precondition（`runtime-orchestration-ssot.yaml` `admin_route_retirement_matrix`の"a real per-screen ui_projection manifest"）を満たせる、という誤った前提へ回帰する——per-action manifestが何個あろうと、carrierで繋がれていようと、precondition が要求する「1つのmanifest」にはならない。
-- （round 14追加）owner決定なしに、operation selector機構（1 layout・1 wiring行を保ったまま複数admin_runtime actionへtrigger別に分岐する新機構）を実装する——`admin-uibuilder-ui-structure-wiring-ssot.yaml`の`component_wiring_execution_lane`が2026-07-22 owner decisionで確定した「1 layout = 1 canonical operation」原則を変更する、cross-cutting・高blast-radiusな設計変更である。
-- （round 14追加）owner決定なしに、`docs/design/runtime-orchestration-ssot.yaml` `admin_route_retirement_matrix`の`/admin/enums`エントリ（`thin_projection_wrapper`、precondition未充足）を撤回・変更する、または`AdminEnumsRoster.tsx`/`/admin/enums`route自体を削除・書き換える。
+- ~~（round 14追加）cross-manifest carrier...という誤った前提へ回帰する...~~ / ~~（round 14追加）owner決定なしに、operation selector機構...を実装する...~~ / ~~（round 14追加）owner決定なしに...`admin_route_retirement_matrix`の`/admin/enums`エントリを撤回・変更する...~~ → round 15でこれら3件は無効化（owner指示により3択提示自体を撤回、(a)を実装したため）。
+- （round 15追加）`dispatchTargetRefByTrigger`のgeneric mechanism実装のみをもって、ae200（または単一per-screen manifestとして再構成した何らか）の実配線・live-DB proof・`AdminEnumsRoster.tsx`撤去が完了したかのように扱う——mechanism実装と実際の配線・証明・撤去は別軸であり、後者3点は依然未着手である。
+- （round 15追加）admin-enum専用のcreate/update/delete分岐やnodeId分岐を、`dispatchTargetRefByTrigger`とは別に新設する——次round以降の配線は、本roundで確立したgeneric mechanism（`dispatchTargetRefByTrigger`＋既存`dispatchPayloadFromByTrigger`/`onRuntimeDispatchResult`/`openModal`/`openDialog`）のみを組み合わせて行うこと。
 
 ---
 

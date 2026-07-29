@@ -742,6 +742,80 @@ admin_uibuilder_ui_structure_wiring_ssot:
         persisting across refresh and matching the value the following dispatch actually
         sends, and a fresh unmount/remount starting with no inherited values -- kept as a
         focused dedicated scenario file, ProjectionShell-specific proof only).
+    admin_runtime_target_ref_override_contract:
+      role: >-
+        2026-07-29 (PR #600, admin-write-surface-selection-context-and-mode-composition-gap
+        Bundle round 14/15). Resolves the "operation selector" gap round 14 identified:
+        NpgsqlTopologyRepository.LoadLayoutNodesAsync applies ONE layout's ONE
+        ui_wiring_registry row's WiringKind/TargetRef uniformly to every non-structural node
+        in that layout (confirmed unchanged after 2026-07-22/24/25's admin_runtime work), and
+        AdminRuntime.ExecuteDataAsync/ManifestDispatcher resolve layer:action statically per
+        request with zero precedent of payload-driven branching -- so, before this contract,
+        no admin_runtime node could dispatch to any layer:action other than its own layout's
+        single canonical one. This is NOT a new mechanism category: dispatchExternalPort and
+        dispatchInstanceOperation already let a node's OWN runtimeInteractions[] entry carry
+        its OWN target (portTargetRef / instanceTargetRef respectively), independent of the
+        layout's shared wiring row -- this contract applies that SAME existing "per-trigger
+        authored target, independent of the shared layout wiring row" precedent to
+        admin_runtime, as a sibling of admin_runtime_payload_binding_contract above (payload
+        override) rather than a new lane.
+      authority: >-
+        Frontend build-time authoring (frontend/runtime/renderEmission.ts
+        buildAdminRuntimeTargetRefOverrideByTrigger), backend persistence-boundary validation
+        (NpgsqlUiTopologyRepository.cs ValidateDispatchTargetRefByTrigger) and node-local
+        plumbing (LayoutNodeRecord.DispatchTargetRefByTriggerJson /
+        LayoutSchemaTensorComposer.NodeLocalData / StructureMapResolver.ToLayoutNode /
+        Contracts.cs LayoutNode.DispatchTargetRefByTrigger) -- the SAME per-node authoring
+        column family and plumbing chain dispatchPayloadFromByTrigger already uses, its own
+        top-level key. Backend routing itself is unchanged: AdminRuntime.ExecuteDataAsync
+        still executes whichever layer:action the resolved target_ref names, exactly as it
+        already does for the layout's own uniform target_ref -- this contract only lets a
+        node choose ITS OWN target_ref value at authoring time, per trigger, instead of
+        always inheriting the layout's one.
+      applicability: >-
+        Any wiring_kind="admin_runtime" node, any layer:action, any manifest_id (including the
+        SAME manifest_id the node's own layout already belongs to) -- reuses the SAME field,
+        no per-operation/per-subBundle case. Lets a single per-screen manifest host nodes for
+        MULTIPLE admin_runtime operations (e.g. a create-modal's own submit button
+        dispatching enum_dictionary:create_group while the rest of the SAME layout keeps
+        dispatching enum_dictionary:list_groups) without a per-node wiringKind/target_ref
+        extension at the ui_topology_tensor/ui_wiring_registry row level -- the layout's own
+        tensor row and its uniform WiringKind/TargetRef are unchanged and remain every other
+        node's default/fallback.
+      authored_surface: >-
+        A per-node topology.ui_topology_tensor.layout_patch_json.nodes[].dispatchTargetRefByTrigger
+        field -- { trigger: "manifest:<uuid>:<layer>:<action>" } -- the SAME
+        ManifestDispatcher-resolvable target_ref shape node.targetRef itself already requires
+        (parseAdminRuntimeLayerAction / ADMIN_RUNTIME_TARGET_REF_RE), never a bare
+        "<layer>:<action>".
+      required_fields:
+        trigger: >-
+          Same two-stage trigger validation as admin_runtime_payload_binding_contract's own
+          trigger field (normalizeAuthoredEventType, then COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS
+          membership, then alias-collision-after-normalization) -- same error-code vocabulary
+          (RUNTIME_INTERACTION_TRIGGER_REQUIRED / _UNSUPPORTED / _CONFLICT_AFTER_NORMALIZATION),
+          shared trigger-normalization authority, not a second vocabulary.
+        targetRef: >-
+          Each trigger's value: a non-empty string matching
+          "manifest:<uuid>:<layer>:<action>" (RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_VALUE_MUST_BE_STRING
+          / _TARGET_REF_INVALID on violation) -- fails the whole node closed, never silently
+          skipped. Backend mirrors the same regex (NpgsqlUiTopologyRepository.cs
+          AdminRuntimeTargetRefRe) so both boundaries agree on the same accept/reject decisions.
+      proof: >-
+        frontend/tests/renderEmissionPropBindings.test.ts (buildCatalogComponentEventBinding
+        override-replaces-only-the-matching-trigger, override-still-merges-payloadFrom;
+        renderEmission fail-close cases -- unrecognized trigger, lane-unsupported trigger,
+        alias collision, non-string value, malformed target_ref shape; unrelated triggers on
+        the SAME node keep the layout's own uniform target; absent field renders unchanged),
+        backend/tests/Topolactor.Runtime.Tests/NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs
+        (persistence-boundary validation, same case set) and
+        LayoutSchemaStructuralCompositionTests.cs (NodeLocalData/Compose merge-by-exact-nodeId
+        for the dispatchTargetRefByTriggerJson field). Not yet proven: a live-DB round trip
+        actually wiring this override into an admin-enum manifest's seed (see
+        docs/design/react-schema-topology-seed-translator-ssot.yaml
+        declared_seed_surface_catalog admin.enum.management.projection known_gaps for the
+        current honestly-open state) -- this contract establishes the generic mechanism only,
+        it does not by itself constitute a single per-screen manifest.
     manifest_topology_boundary:
       rule: >-
         manifest.topology entries for this surface (ui_projection type per

@@ -292,6 +292,18 @@ public record LayoutNodeRecord(
     /// independent of runtimeInteractions/actionType. Null when not authored.
     /// </summary>
     string? DispatchPayloadFromByTriggerJson = null,
+    /// <summary>
+    /// Node-local admin_runtime dispatch TARGET override JSON object from
+    /// layout_patch_json.nodes[].dispatchTargetRefByTrigger — { trigger: "manifest:&lt;uuid&gt;:&lt;layer&gt;:&lt;action&gt;" }.
+    /// Lets this SAME node's own trigger dispatch to a DIFFERENT admin_runtime layer:action than the
+    /// layout's own uniform WiringKind="admin_runtime"/TargetRef (which every non-structural node in
+    /// the layout inherits unconditionally from its single ui_wiring_registry row). Mirrors the
+    /// existing per-trigger authored target override precedent already used by
+    /// dispatchExternalPort/dispatchInstanceOperation (portTargetRef/instanceTargetRef in
+    /// runtimeInteractions[]). Null when not authored — the node then keeps dispatching to the
+    /// layout's own uniform target, unchanged.
+    /// </summary>
+    string? DispatchTargetRefByTriggerJson = null,
     /// <summary>Sizing mode from layout_patch_json: auto | preset | custom.</summary>
     string? WidthMode = null,
     string? HeightMode = null,

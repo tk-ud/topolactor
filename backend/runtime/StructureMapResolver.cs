@@ -256,6 +256,9 @@ public class StructureMapResolver
         DispatchPayloadFromByTrigger: row.DispatchPayloadFromByTriggerJson != null
             ? JsonSerializer.Deserialize<JsonElement>(row.DispatchPayloadFromByTriggerJson)
             : null,
+        DispatchTargetRefByTrigger: row.DispatchTargetRefByTriggerJson != null
+            ? JsonSerializer.Deserialize<JsonElement>(row.DispatchTargetRefByTriggerJson)
+            : null,
         RecordType: row.RecordType,
         Label: row.Label,
         KnownGapRefs: row.KnownGapRefs

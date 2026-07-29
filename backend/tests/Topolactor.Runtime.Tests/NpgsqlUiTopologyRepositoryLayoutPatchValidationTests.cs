@@ -836,4 +836,161 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
         Assert.True(result.Valid);
     }
 
+    // ─── dispatchTargetRefByTrigger: per-node, per-trigger admin_runtime dispatch TARGET
+    // override — independent of the layout's own uniform WiringKind="admin_runtime"/TargetRef.
+    // Mirrors dispatchPayloadFromByTrigger's trigger validation exactly (same error-code
+    // vocabulary), validating each value as a ManifestDispatcher-resolvable
+    // "manifest:<uuid>:<layer>:<action>" target_ref instead of a payloadFrom object ──────
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_ValidShape_Passes()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "wiringKind": "admin_runtime", "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+            "dispatchTargetRefByTrigger": { "click": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:create_group" } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_NonObjectValue_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchTargetRefByTrigger": ["bad"] }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_MUST_BE_OBJECT", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_NonStringValue_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchTargetRefByTrigger": { "click": 42 } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_VALUE_MUST_BE_STRING", result.Message);
+    }
+
+    [Theory]
+    [InlineData("enum_dictionary:create_group")]
+    [InlineData("manifest:not-a-uuid:enum_dictionary:create_group")]
+    [InlineData("manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary")]
+    [InlineData("")]
+    public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_MalformedTargetRef_FailsClose(string targetRef)
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchTargetRefByTrigger": { "click": "{{targetRef}}" } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_TARGET_REF_INVALID", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_UnknownTrigger_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchTargetRefByTrigger": { "bogusTrigger": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:create_group" } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_TRIGGER_REQUIRED", result.Message);
+    }
+
+    [Theory]
+    [InlineData("input")]
+    [InlineData("focus")]
+    [InlineData("blur")]
+    public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_RecognizedButUnsupportedTrigger_FailsClose(string trigger)
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchTargetRefByTrigger": { "{{trigger}}": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:create_group" } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_AliasCollisionAfterNormalization_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchTargetRefByTrigger": {
+              "click": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:create_group",
+              "onClick": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:delete_group"
+            } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_Absent_Passes()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button" }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
 }

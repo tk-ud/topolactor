@@ -177,6 +177,19 @@ export type LayoutNode = {
    * contract. Absent when not authored.
    */
   dispatchPayloadFromByTrigger?: Record<string, Record<string, string>> | null;
+  /**
+   * Node-local admin_runtime dispatch TARGET override — { trigger: "manifest:<uuid>:<layer>:<action>" }.
+   * Lets this SAME node's own trigger dispatch to a DIFFERENT admin_runtime layer:action than the
+   * layout's own uniform wiringKind="admin_runtime"/targetRef (which every non-structural node in
+   * the layout inherits unconditionally from its single ui_wiring_registry row — see
+   * NpgsqlTopologyRepository.LoadLayoutNodesAsync). Mirrors the existing per-trigger authored
+   * target override precedent already used by dispatchExternalPort/dispatchInstanceOperation
+   * (wiring.portTargetRef / wiring.instanceTargetRef in runtimeInteractions[]) — this field applies
+   * the same "per-trigger authored target, independent of the shared layout wiring row" pattern to
+   * admin_runtime. Absent when not authored — the node then keeps dispatching to the layout's own
+   * uniform target, unchanged. See renderEmission.ts's admin_runtime target-ref override contract.
+   */
+  dispatchTargetRefByTrigger?: Record<string, string> | null;
   widthMode?: "auto" | "preset" | "custom";
   heightMode?: "auto" | "preset" | "custom";
   /**

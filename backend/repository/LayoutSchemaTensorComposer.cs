@@ -359,7 +359,8 @@ public static class LayoutSchemaTensorComposer
         string? PropsJson,
         string? StateJson,
         string? PropBindingsJson,
-        string? DispatchPayloadFromByTriggerJson = null);
+        string? DispatchPayloadFromByTriggerJson = null,
+        string? DispatchTargetRefByTriggerJson = null);
 
     /// <summary>
     /// Builds a NodeId -> NodeLocalData map from the tensor's own layout_patch_json.nodes[]
@@ -377,10 +378,11 @@ public static class LayoutSchemaTensorComposer
         foreach (var node in tensorNodes)
         {
             if (node.PropsJson is null && node.StateJson is null && node.PropBindingsJson is null &&
-                node.DispatchPayloadFromByTriggerJson is null)
+                node.DispatchPayloadFromByTriggerJson is null && node.DispatchTargetRefByTriggerJson is null)
                 continue;
             result[node.NodeId] = new NodeLocalData(
-                node.PropsJson, node.StateJson, node.PropBindingsJson, node.DispatchPayloadFromByTriggerJson);
+                node.PropsJson, node.StateJson, node.PropBindingsJson, node.DispatchPayloadFromByTriggerJson,
+                node.DispatchTargetRefByTriggerJson);
         }
         return result;
     }
@@ -509,6 +511,7 @@ public static class LayoutSchemaTensorComposer
                 StateJson: localData?.StateJson,
                 PropBindingsJson: localData?.PropBindingsJson,
                 DispatchPayloadFromByTriggerJson: localData?.DispatchPayloadFromByTriggerJson,
+                DispatchTargetRefByTriggerJson: localData?.DispatchTargetRefByTriggerJson,
                 RecordType: (isStructural || isUnresolved) ? row.RecordType : null,
                 // Every schema record carries an authored label (record_common_required_fields)
                 // — a catalog_component leaf's own label must survive composition the same way a
