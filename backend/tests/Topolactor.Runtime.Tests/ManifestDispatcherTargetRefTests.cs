@@ -345,19 +345,51 @@ public class ManifestDispatcherTargetRefTests
     }
 
     [Fact]
+    public async Task DispatchAsync_TargetRef_OperationShapeTargetRef_ScreenReadRequestAxes_StillMismatchRejected()
+    {
+        // Round 19 audit catch: a target_ref that ITSELF parses as the strict operation shape
+        // (manifest:<uuid>:<layer>:<action>) must always be validated against the request's own
+        // Layer/Action, even when the REQUEST's axes happen to look like a generic screen-read
+        // (Layer=screen_list/Action=Search) and the manifest has a ui_projection entry -- i.e. even
+        // when the request axes alone would otherwise qualify for the generic-structural-read
+        // exemption. Before this fix, IsGenericStructuralReadTargetRef's request-axes-only check
+        // was consulted BEFORE the target_ref string's own shape was ever inspected, so this exact
+        // scenario (target_ref honestly claims enum_dictionary:create_group, but request axes are
+        // screen_list:Search) would have silently taken the generic exemption and skipped
+        // authorization entirely -- never even noticing the target_ref named a totally different
+        // concrete operation.
+        var repo = new ConfigurableManifestRepository(
+            KnownManifestId, status: "active", dispatcherMappingLayer: "enum_dictionary", dispatcherMappingAction: "create_group",
+            hasUiProjection: true);
+        var dispatcher = BuildDispatcher(repo, new Dictionary<string, IDispatchableRuntime>
+        {
+            ["admin_runtime"] = new StubSuccessRuntime(),
+        });
+        var targetRef = $"manifest:{KnownManifestId}:enum_dictionary:create_group";
+
+        var response = await dispatcher.DispatchAsync(MakeAdminRuntimeRequest("screen_list", "Search", targetRef));
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "TARGET_REF_LAYER_ACTION_MISMATCH");
+    }
+
+    [Fact]
     public async Task DispatchAsync_TargetRef_BareManifest_HubNavigationGetHubRelations_AxesRegistered_Succeeds()
     {
         // Second live-DB catch (round 18): CredentialManagementHubRelationUiProjectionLiveDbTests
         // dispatches hub_navigation:get_hub_relations via target_ref against a manifest that
         // deliberately declares NEITHER dispatcher_mapping NOR ui_projection (a bare
         // "runtime_mapping only" identity selector) -- reproduces that shape here with a generic
-        // (non layer:action) wiringKey, proving the bare-manifest navigation-read allowlist
+        // (non layer:action) wiringKey, proving the bare-manifest navigation-read exemption
         // (IsBareManifestNavigationReadTargetRefAsync) admits it once the SAME (role, layer, action)
-        // is independently, actively registered under the axes-based target="admin" system.
+        // is independently, actively registered under the axes-based target="admin" system AND that
+        // axes-registered manifest's OWN dispatcher_mapping entry declares
+        // "identity_selector_read": true (round 19: SSOT-owned seed data classification, not a
+        // hardcoded action-name allowlist in this test double or in ManifestDispatcher itself).
         var repo = new ConfigurableManifestRepository(
             KnownManifestId, status: "active", dispatcherMappingLayer: null, dispatcherMappingAction: null,
             hasUiProjection: false,
-            adminAxesRegisteredOperation: ("admin", "hub_navigation", "get_hub_relations"));
+            adminAxesRegisteredOperation: ("admin", "hub_navigation", "get_hub_relations", true));
         var dispatcher = BuildDispatcher(repo, new Dictionary<string, IDispatchableRuntime>
         {
             ["admin_runtime"] = new StubSuccessRuntime(),
@@ -391,16 +423,19 @@ public class ManifestDispatcherTargetRefTests
     }
 
     [Fact]
-    public async Task DispatchAsync_TargetRef_BareManifest_HubNavigationCreate_NotInAllowlist_StillRejected()
+    public async Task DispatchAsync_TargetRef_BareManifest_HubNavigationCreate_NotDeclaredIdentitySelectorRead_StillRejected()
     {
-        // hub_navigation:create is a real mutation in the same layer as the allowlisted read
-        // actions, and (like them) happens to be axes-registered under target="admin" too -- proves
-        // the closed allowlist (not the axes lookup alone) is what keeps this exemption from
-        // becoming a blanket target="admin"-registered-operation bypass for bare manifests.
+        // hub_navigation:create is a real mutation in the same layer as the identity-selector-read
+        // actions, and (like them) happens to be axes-registered under target="admin" too -- but its
+        // own dispatcher_mapping entry does not declare "identity_selector_read": true (mirroring
+        // db/seed_empty.sql, where only list_manifests/get_hub_relations carry that field). Proves
+        // the axes-registered manifest's OWN declared classification (not the axes lookup alone) is
+        // what keeps this exemption from becoming a blanket target="admin"-registered-operation
+        // bypass for bare manifests.
         var repo = new ConfigurableManifestRepository(
             KnownManifestId, status: "active", dispatcherMappingLayer: null, dispatcherMappingAction: null,
             hasUiProjection: false,
-            adminAxesRegisteredOperation: ("admin", "hub_navigation", "create"));
+            adminAxesRegisteredOperation: ("admin", "hub_navigation", "create", false));
         var dispatcher = BuildDispatcher(repo, new Dictionary<string, IDispatchableRuntime>
         {
             ["admin_runtime"] = new StubSuccessRuntime(),
@@ -414,16 +449,16 @@ public class ManifestDispatcherTargetRefTests
     }
 
     [Fact]
-    public async Task DispatchAsync_TargetRef_BareManifest_ConcreteWriteAction_NotInAllowlist_StillRejected()
+    public async Task DispatchAsync_TargetRef_BareManifest_ConcreteWriteAction_NotDeclaredIdentitySelectorRead_StillRejected()
     {
         // A bare manifest must never become a generic skeleton key for arbitrary admin_runtime
         // operations -- even though enum_dictionary:create_group is ALSO axes-registered under
-        // target="admin" (db/seed_empty.sql's pre-existing a7-ae series), it is not in the
-        // bare-manifest navigation-read allowlist, so it must still fail closed.
+        // target="admin" (db/seed_empty.sql's pre-existing a7-ae series), that entry does not
+        // declare "identity_selector_read": true, so it must still fail closed.
         var repo = new ConfigurableManifestRepository(
             KnownManifestId, status: "active", dispatcherMappingLayer: null, dispatcherMappingAction: null,
             hasUiProjection: false,
-            adminAxesRegisteredOperation: ("admin", "enum_dictionary", "create_group"));
+            adminAxesRegisteredOperation: ("admin", "enum_dictionary", "create_group", false));
         var dispatcher = BuildDispatcher(repo, new Dictionary<string, IDispatchableRuntime>
         {
             ["admin_runtime"] = new StubSuccessRuntime(),
@@ -434,6 +469,90 @@ public class ManifestDispatcherTargetRefTests
 
         Assert.False(response.Success);
         Assert.Contains(response.Errors, e => e.Code == "TARGET_REF_ADMIN_RUNTIME_LAYER_ACTION_MISSING");
+    }
+
+    [Fact]
+    public async Task DispatchAsync_TargetRef_BareManifest_ArbitraryLayerAction_DeclaredIdentitySelectorRead_Succeeds()
+    {
+        // Round 19: proves genericity -- the exemption is keyed on the axes-registered manifest's
+        // OWN "identity_selector_read": true declaration, not on a hardcoded "hub_navigation:
+        // get_hub_relations"/"list_manifests" literal in ManifestDispatcher. An entirely different,
+        // made-up (layer, action) pair with the SAME declared field is admitted identically.
+        var repo = new ConfigurableManifestRepository(
+            KnownManifestId, status: "active", dispatcherMappingLayer: null, dispatcherMappingAction: null,
+            hasUiProjection: false,
+            adminAxesRegisteredOperation: ("admin", "some_other_layer", "some_other_read_action", true));
+        var dispatcher = BuildDispatcher(repo, new Dictionary<string, IDispatchableRuntime>
+        {
+            ["admin_runtime"] = new StubSuccessRuntime(),
+        });
+        var targetRef = $"manifest:{KnownManifestId}:some_bare_wiring_key";
+
+        var response = await dispatcher.DispatchAsync(MakeAdminRuntimeRequest("some_other_layer", "some_other_read_action", targetRef));
+
+        Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
+    }
+
+    [Fact]
+    public async Task DispatchAsync_TargetRef_AdminRuntimeManifest_DuplicateDispatcherMappingEntries_DisagreeingRole_FailsClosed()
+    {
+        // Round 19: two dispatcher_mapping entries for the SAME (layer, action) with DIFFERENT
+        // declared roles must fail closed rather than silently using whichever one JSONB array
+        // order/FindDeclaredRole happens to see first.
+        var repo = new ConfigurableManifestRepository(
+            KnownManifestId, status: "active", dispatcherMappingLayer: "enum_dictionary", dispatcherMappingAction: "create_group",
+            dispatcherMappingRole: "admin", secondDispatcherMappingRole: "user");
+        var dispatcher = BuildDispatcher(repo, new Dictionary<string, IDispatchableRuntime>
+        {
+            ["admin_runtime"] = new StubSuccessRuntime(),
+        });
+        var targetRef = $"manifest:{KnownManifestId}:enum_dictionary:create_group";
+
+        var response = await dispatcher.DispatchAsync(MakeAdminRuntimeRequest("enum_dictionary", "create_group", targetRef, role: "admin"));
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "TARGET_REF_DUPLICATE_AXIS_DECLARATION");
+    }
+
+    [Fact]
+    public async Task DispatchAsync_TargetRef_AdminRuntimeManifest_DuplicateDispatcherMappingEntries_AgreeingRole_Succeeds()
+    {
+        // Two entries for the same (layer, action) that fully agree are not ambiguous -- no
+        // authorization decision actually depends on which one is seen first.
+        var repo = new ConfigurableManifestRepository(
+            KnownManifestId, status: "active", dispatcherMappingLayer: "enum_dictionary", dispatcherMappingAction: "create_group",
+            dispatcherMappingRole: "admin", secondDispatcherMappingRole: "admin");
+        var dispatcher = BuildDispatcher(repo, new Dictionary<string, IDispatchableRuntime>
+        {
+            ["admin_runtime"] = new StubSuccessRuntime(),
+        });
+        var targetRef = $"manifest:{KnownManifestId}:enum_dictionary:create_group";
+
+        var response = await dispatcher.DispatchAsync(MakeAdminRuntimeRequest("enum_dictionary", "create_group", targetRef, role: "admin"));
+
+        Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
+    }
+
+    [Fact]
+    public async Task DispatchAsync_TargetRef_AdminRuntimeManifest_RoleComparisonIsCaseInsensitive_Succeeds()
+    {
+        // Round 19: aligns FindDeclaredRole's comparison with AxisMatches's pre-existing
+        // case-insensitive role-axis convention (used throughout axes resolution) -- a request role
+        // that differs only in case from the declared role must still be authorized. Explicit
+        // capability_requirement="ADMIN" neutralizes that OTHER, independently Ordinal gate so this
+        // test isolates the dispatcher_mapping.role comparison specifically.
+        var repo = new ConfigurableManifestRepository(
+            KnownManifestId, status: "active", dispatcherMappingLayer: "enum_dictionary", dispatcherMappingAction: "create_group",
+            dispatcherMappingRole: "admin", capabilityRequirementRole: "ADMIN");
+        var dispatcher = BuildDispatcher(repo, new Dictionary<string, IDispatchableRuntime>
+        {
+            ["admin_runtime"] = new StubSuccessRuntime(),
+        });
+        var targetRef = $"manifest:{KnownManifestId}:enum_dictionary:create_group";
+
+        var response = await dispatcher.DispatchAsync(MakeAdminRuntimeRequest("enum_dictionary", "create_group", targetRef, role: "ADMIN"));
+
+        Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
     }
 
     [Fact]
@@ -580,7 +699,8 @@ internal sealed class TrackingManifestRepository(Guid? knownManifestId, string r
 internal sealed class ConfigurableManifestRepository(
     Guid knownManifestId, string status, string? dispatcherMappingLayer, string? dispatcherMappingAction,
     bool hasUiProjection = false, string? dispatcherMappingRole = "admin",
-    (string Role, string Layer, string Action)? adminAxesRegisteredOperation = null)
+    (string Role, string Layer, string Action, bool IdentitySelectorRead)? adminAxesRegisteredOperation = null,
+    string? secondDispatcherMappingRole = null, string? capabilityRequirementRole = null)
     : ManifestRepository(NullLogger<ManifestRepository>.Instance)
 {
     public override Task<ManifestRecord?> LoadByIdAsync(Guid manifestId, CancellationToken ct = default)
@@ -588,6 +708,14 @@ internal sealed class ConfigurableManifestRepository(
         if (manifestId != knownManifestId) return Task.FromResult<ManifestRecord?>(null);
 
         var entries = new List<object> { new { type = "runtime_mapping", runtime_destination = "admin_runtime" } };
+        // Round 19: explicit capability_requirement, when set, overrides the admin_runtime-inferred
+        // "admin" requirement (capability_requirement's own role check is independently Ordinal
+        // case-sensitive, unaffected by this class's dispatcher_mapping-role case-insensitivity
+        // fix) -- lets a test isolate ONLY the dispatcher_mapping.role comparison under test.
+        if (capabilityRequirementRole is not null)
+        {
+            entries.Add(new { type = "capability_requirement", required_role = capabilityRequirementRole });
+        }
         if (dispatcherMappingLayer is not null && dispatcherMappingAction is not null)
         {
             entries.Add(new
@@ -598,6 +726,19 @@ internal sealed class ConfigurableManifestRepository(
                 layer = dispatcherMappingLayer,
                 action = dispatcherMappingAction,
             });
+            // Round 19: a SECOND dispatcher_mapping entry for the SAME (layer, action), to test
+            // HasConflictingDispatcherMappingEntries's disagreeing/agreeing-role fail-close.
+            if (secondDispatcherMappingRole is not null)
+            {
+                entries.Add(new
+                {
+                    type = "dispatcher_mapping",
+                    role = secondDispatcherMappingRole,
+                    target = "manifest",
+                    layer = dispatcherMappingLayer,
+                    action = dispatcherMappingAction,
+                });
+            }
         }
         if (hasUiProjection)
         {
@@ -630,7 +771,11 @@ internal sealed class ConfigurableManifestRepository(
                 RelationRegistryId: null,
                 Topology: JsonSerializer.SerializeToElement(new object[]
                 {
-                    new { type = "dispatcher_mapping", role = reg.Role, target = "admin", layer = reg.Layer, action = reg.Action },
+                    new
+                    {
+                        type = "dispatcher_mapping", role = reg.Role, target = "admin", layer = reg.Layer, action = reg.Action,
+                        identity_selector_read = reg.IdentitySelectorRead,
+                    },
                 }).EnumerateArray().ToArray(),
                 Status: "active"));
         }

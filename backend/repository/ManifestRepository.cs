@@ -146,6 +146,87 @@ public static class DispatcherMappingAxisAuthority
     }
 
     /// <summary>
+    /// Round 19: true when the topology's dispatcher_mapping entry for (layer, action) declares
+    /// itself, via its OWN "identity_selector_read": true field, as a read-only,
+    /// manifest-identity-agnostic operation safe to reach via a bare "runtime_mapping only"
+    /// manifest's target_ref (see ManifestDispatcher.IsBareManifestNavigationReadTargetRefAsync).
+    /// This is the SSOT-owned classification authority: the seed/manifest author declares it
+    /// per-entry (db/seed_empty.sql), not a closed action-name allowlist hardcoded in runtime code
+    /// -- adding a new identity-selector-compatible read action means authoring this field on its
+    /// own dispatcher_mapping entry, never editing ManifestDispatcher.cs. False when no matching
+    /// entry exists or the field is absent/not literally true (default-closed, never inferred).
+    /// </summary>
+    public static bool IsDeclaredIdentitySelectorRead(
+        IReadOnlyList<JsonElement> topology, string layer, string action)
+    {
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind != JsonValueKind.Object) continue;
+            if (!entry.TryGetProperty("type", out var typeEl) ||
+                !string.Equals(typeEl.GetString(), "dispatcher_mapping", StringComparison.Ordinal))
+                continue;
+            if (!AxisMatches(entry, "layer", layer)) continue;
+            if (!AxisMatches(entry, "action", action)) continue;
+
+            return entry.TryGetProperty("identity_selector_read", out var flagEl) &&
+                flagEl.ValueKind == JsonValueKind.True;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Round 19: true when the topology contains 2+ dispatcher_mapping entries for the SAME
+    /// (layer, action) whose declared role and/or identity_selector_read values disagree -- i.e.
+    /// authorization for this exact operation would otherwise depend on JSONB array order (which
+    /// entry FindDeclaredRole/IsDeclaredIdentitySelectorRead happens to see first), an undefined,
+    /// unauditable authority. Save-time validation (ManifestTopologyValidator.Validate) rejects ANY
+    /// duplicate dispatcher_mapping entry in a manifest topology outright, agreeing or not -- this
+    /// runtime check is defense-in-depth against topology that reached the DB outside that boundary
+    /// (hand-authored seed SQL, a future write path). Two entries that fully agree are not flagged
+    /// here (no ambiguity to fail closed on), even though save-time validation still rejects them as
+    /// redundant.
+    /// </summary>
+    public static bool HasConflictingDispatcherMappingEntries(
+        IReadOnlyList<JsonElement> topology, string layer, string action)
+    {
+        string? firstRole = null;
+        bool? firstIdentitySelectorRead = null;
+        var matchCount = 0;
+
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind != JsonValueKind.Object) continue;
+            if (!entry.TryGetProperty("type", out var typeEl) ||
+                !string.Equals(typeEl.GetString(), "dispatcher_mapping", StringComparison.Ordinal))
+                continue;
+            if (!AxisMatches(entry, "layer", layer)) continue;
+            if (!AxisMatches(entry, "action", action)) continue;
+
+            var role = entry.TryGetProperty("role", out var roleEl) && roleEl.ValueKind == JsonValueKind.String
+                ? roleEl.GetString()
+                : null;
+            var identitySelectorRead = entry.TryGetProperty("identity_selector_read", out var flagEl) &&
+                flagEl.ValueKind == JsonValueKind.True;
+
+            matchCount++;
+            if (matchCount == 1)
+            {
+                firstRole = role;
+                firstIdentitySelectorRead = identitySelectorRead;
+                continue;
+            }
+
+            if (!string.Equals(firstRole, role, StringComparison.OrdinalIgnoreCase) ||
+                firstIdentitySelectorRead != identitySelectorRead)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Round 18: true when the topology declares AT LEAST ONE dispatcher_mapping entry, regardless
     /// of its axis values. Distinguishes an authored, operation-scoped manifest (e.g. ae210,
     /// scoped to create_group) — which always has one — from a deliberately bare

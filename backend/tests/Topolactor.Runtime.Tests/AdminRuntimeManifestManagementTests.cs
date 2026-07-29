@@ -63,6 +63,48 @@ public class AdminRuntimeManifestManagementTests
     }
 
     [Fact]
+    public async Task Validate_DuplicateDispatcherMappingEntries_ReturnsBlockingError()
+    {
+        // Round 19: a topology with 2+ dispatcher_mapping entries must be rejected outright at
+        // save/validate time -- without this, the LAST entry silently wins (no duplicate guard in
+        // ManifestTopologyValidator.Validate's foreach), discarding the first entry's declared
+        // axes/role with no signal to the author, and leaving dispatch-time authorization
+        // (DispatcherMappingAxisAuthority.FindDeclaredRole etc.) dependent on JSONB array order for
+        // any (layer, action) the duplicates happen to share.
+        var repo = new InMemoryManifestAdminRepository();
+        var manifestId = Guid.NewGuid();
+        var topology = new List<JsonElement>
+        {
+            JsonSerializer.SerializeToElement(new
+            {
+                type = "dispatcher_mapping", role = "admin", target = "admin", layer = "enum_dictionary", action = "create_group",
+            }),
+            JsonSerializer.SerializeToElement(new
+            {
+                type = "dispatcher_mapping", role = "user", target = "admin", layer = "enum_dictionary", action = "create_group",
+            }),
+            JsonSerializer.SerializeToElement(new
+            {
+                type = "runtime_mapping",
+                runtime_destination = "admin_runtime",
+            }),
+        };
+        repo.Seed(new ManifestDetailRecord(manifestId, null, topology, "draft", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+
+        var runtime = CreateRuntime(repo);
+        var payload = JsonSerializer.SerializeToElement(new { manifestId = manifestId.ToString() });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "manifest", "validate", null, "admin", payload, null), default);
+
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+        Assert.False(data.Value.GetProperty("valid").GetBoolean());
+        Assert.Contains(
+            data.Value.GetProperty("issues").EnumerateArray(),
+            i => i.GetProperty("code").GetString() == "MANIFEST_TOPOLOGY_DUPLICATE_DISPATCHER_MAPPING");
+    }
+
+    [Fact]
     public async Task Validate_UnknownRuntimeDestination_ReturnsBlockingError()
     {
         var repo = new InMemoryManifestAdminRepository();

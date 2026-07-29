@@ -952,6 +952,100 @@ admin_uibuilder_ui_structure_wiring_ssot:
         target_ref path after these new checks, both roles). Not yet proven against a real
         database (this is unit/in-memory proof only) and not yet consumed by an actual
         create_group live dispatch -- see declared_seed_surface_catalog known_gaps.
+      round_18_hardening: >-
+        2026-07-29. Two live-DB catches, both fixed with a semantic (not shape-based) predicate
+        rather than reverting round 17's protection. (1) Round 17's layer/action authorization was
+        gated on "target_ref already matches the strict manifest:<uuid>:<layer>:<action> shape" --
+        this wrongly rejected the pre-existing generic wiringKey navigation convention (explicit
+        manifest selection for a plain page load, e.g. manifest:<uuid>:projection_entry, against
+        Layer=screen_list/Action=Search, even when destination is admin_runtime). Fixed with
+        ManifestDispatcher.IsGenericStructuralReadTargetRef(topology, layer, action) =
+        HasUiProjectionEntry(topology) && ScreenDataShapeTopologyReader.IsScreenReadAction(layer,
+        action) -- deliberately the EXACT pre-condition of the pre-existing "structural read
+        fallback" elsewhere in DispatchAsync, the only combination under which
+        AdminRuntime.ExecuteDataAsync's layerAction switch is known, by exhaustive review, to never
+        define a real case. (2) A SEPARATE, orthogonal, pre-existing convention
+        (CredentialManagementHubRelationUiProjectionLiveDbTests) dispatches
+        hub_navigation:get_hub_relations via target_ref against a manifest deliberately declaring
+        NEITHER dispatcher_mapping NOR ui_projection -- a bare "runtime_mapping only" manifest used
+        purely to select which manifest's navigation sequence EnrichWithHubNavigationAsync enriches
+        (the actual action reads its real target from payload.topologyManifestId, never from the
+        resolved manifest's identity). Fixed with ManifestDispatcher.
+        IsBareManifestNavigationReadTargetRefAsync: admits it only when the manifest declares zero
+        dispatcher_mapping entries of its own AND the same (role, layer, action) is independently,
+        actively registered under the pre-existing axes-based target="admin" system -- see
+        round_19_hardening below for how this method's action-name classification was itself
+        promoted out of runtime-hardcoded form. Also added (3) dispatcher_mapping.role authority on
+        the target_ref path (DispatcherMappingAxisAuthority.FindDeclaredRole,
+        TARGET_REF_ROLE_UNAUTHORIZED) -- even when target_ref resolves to one exact manifest, its
+        OWN declared role must match request.Role; capability_requirement remains an independent,
+        complementary gate, proven via 3 new role/capability interplay tests. And (4) UI Builder's
+        admin_runtime override authoring section (NodeEventAuthoringPanel) gated on the layout's
+        actual wiring_kind via useEffectivePackageWiringKind (re-fetches the SAME
+        ui_topology:get_package_wiring PackageWiringEditor itself reads) -- edit affordances
+        disabled/hidden with a reason banner on non-admin_runtime layouts, persisted overrides still
+        rendered read-only. Proof: backend/tests/Topolactor.Runtime.Tests/
+        ManifestDispatcherTargetRefTests.cs and ManifestCapabilityGateTests.cs (new cases for both
+        catches and the role/capability gates), frontend/tests/
+        nodeEventAuthoringPanelAdminRuntimeOverride.test.tsx (8 production-component DOM tests for
+        the wiring_kind gate).
+      round_19_hardening: >-
+        2026-07-29. Owner audit of round 18 found the two live-DB fixes were each real but
+        incomplete, plus a genuine role-comparison and duplicate-declaration gap -- none required
+        retracting the "generic mechanism authoring/authority boundary is complete" declaration,
+        each was fixed as a semantic correction. (1) IsGenericStructuralReadTargetRef's request-axes
+        based check was consulted BEFORE the target_ref STRING's own shape was ever inspected --
+        meaning a target_ref that itself parses as the strict operation shape (e.g.
+        manifest:<uuid>:enum_dictionary:create_group) sent alongside screen-read request axes
+        (Layer=screen_list/Action=Search) on a ui_projection-bearing manifest would silently take
+        the generic exemption, never noticing the target_ref string named a totally different
+        concrete operation. Restructured ManifestDispatcher.DispatchAsync's admin_runtime branch so
+        the AdminRuntimeTargetRefRe shape match is now evaluated UNCONDITIONALLY first: when the
+        target_ref itself parses as the operation shape, its embedded layer:action is ALWAYS
+        validated against the request (TARGET_REF_LAYER_ACTION_MISMATCH/_UNAUTHORIZED/
+        _ROLE_UNAUTHORIZED) regardless of the request's own axes; only a target_ref that does NOT
+        parse as that shape is eligible for either narrow exemption
+        (IsGenericStructuralReadTargetRef / IsBareManifestNavigationReadTargetRefAsync). (2)
+        IsBareManifestNavigationReadTargetRefAsync's action-name allowlist (a HashSet literal of
+        "hub_navigation:get_hub_relations"/"list_manifests" hardcoded in ManifestDispatcher.cs) was
+        replaced with an SSOT-owned classification: DispatcherMappingAxisAuthority.
+        IsDeclaredIdentitySelectorRead reads a NEW "identity_selector_read": true field on the
+        axes-registered manifest's OWN dispatcher_mapping entry (db/seed_empty.sql ids 77/78 --
+        list_manifests/get_hub_relations only; create/update/deprecate/reorder deliberately have no
+        such field). Adding a new identity-selector-compatible read action now means authoring this
+        field on that action's own seed entry, never editing ManifestDispatcher.cs. (3)
+        FindDeclaredRole's final role comparison used StringComparison.Ordinal (case-sensitive),
+        inconsistent with AxisMatches's pre-existing OrdinalIgnoreCase role-axis convention used
+        throughout axes resolution (ResolveActiveManifestAsync, CountActiveAxisConflictsAsync) --
+        aligned to OrdinalIgnoreCase; capability_requirement's OWN, older, independent role check
+        remains Ordinal as it always has been, untouched by this alignment. (4) A manifest topology
+        containing 2+ dispatcher_mapping entries for the SAME (layer, action) had no defined
+        behavior -- ManifestTopologyValidator.Validate's single-dispatcherEntry model silently took
+        whichever the JSONB array put last, with no signal to the author; save-time validation
+        (create_draft/update_draft/promote, all funnel through this validator) now rejects ANY
+        duplicate dispatcher_mapping entry outright (MANIFEST_TOPOLOGY_DUPLICATE_DISPATCHER_MAPPING),
+        agreeing or not, and DispatcherMappingAxisAuthority.HasConflictingDispatcherMappingEntries
+        adds dispatch-time defense-in-depth (TARGET_REF_DUPLICATE_AXIS_DECLARATION) against topology
+        that reached the DB outside that boundary. (5) useEffectivePackageWiringKind only re-fetched
+        on packageId CHANGE -- a save inside the SAME package's PackageWiringEditor (a sibling panel
+        under LayoutRightDock, via PackageConnectionPanel) left NodeEventAuthoringPanel's override
+        gate showing the stale pre-save wiringKind until an unrelated packageId change/remount
+        happened to re-fetch it. LayoutRightDock now threads PackageWiringEditor's own
+        onWiringSaved callback (which already carried the fresh AdminPackageWiringRow) through
+        PackageConnectionPanel, merging it into effectiveWiringKind scoped to the current packageId
+        so a live sibling save updates the gate immediately, still fully re-fetched (not just
+        locally guessed) on an actual packageId change. Proof:
+        backend/tests/Topolactor.Runtime.Tests/ManifestDispatcherTargetRefTests.cs (operation-shape-
+        vs-screen-read-axes mismatch, bare-manifest identity_selector_read declared/undeclared/
+        arbitrary-layer-action genericity proof, duplicate-entry agreeing/disagreeing, role
+        case-insensitivity), AdminRuntimeManifestManagementTests.cs (save-time duplicate rejection),
+        frontend/tests/layoutRightDockWiringKindSync.test.tsx (production LayoutRightDock mount --
+        real PackageWiringEditor save flow, including its own ConfirmDialog, driving
+        NodeEventAuthoringPanel's gate live without remount). Not yet done: the admin-enum single
+        per-screen CRUD surface, canonical translator generation replacing hand-authored seed,
+        production DOM proof and live-DB proof of that specific wiring, the full negative-boundary
+        suite for it, and AdminEnumsRoster.tsx/hardcoded route retirement -- unchanged from round 18,
+        still this Bundle's largest remaining scope (see .agent/tasks/todo.md).
     manifest_topology_boundary:
       rule: >-
         manifest.topology entries for this surface (ui_projection type per

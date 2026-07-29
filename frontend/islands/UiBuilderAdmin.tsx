@@ -1831,7 +1831,12 @@ function AuthoringSuggestAssistPanel({
   );
 }
 
-function LayoutRightDock({
+/**
+ * Round 19: exported (was module-private) so nodeEventAuthoringPanelWiringKindSync.test.tsx can
+ * mount the PRODUCTION component directly -- real PackageWiringEditor save flow driving real
+ * NodeEventAuthoringPanel gating -- rather than re-testing the gate through a hand-rolled stand-in.
+ */
+export function LayoutRightDock({
   draftNodes,
   selectedNodeId,
   selectedNodeIds,
@@ -1895,7 +1900,23 @@ function LayoutRightDock({
   // must only be offered when this layout's OWN package wiring is actually
   // wiring_kind="admin_runtime" -- re-fetched from the same persisted authority
   // PackageWiringEditor itself reads (ui_topology:get_package_wiring), not a frontend-only guess.
-  const { wiringKind: effectiveWiringKind } = useEffectivePackageWiringKind(packageId);
+  const { wiringKind: fetchedWiringKind } = useEffectivePackageWiringKind(packageId);
+  // Round 19: useEffectivePackageWiringKind only re-fetches on packageId CHANGE -- a save inside
+  // the SAME package's PackageWiringEditor (rendered as a sibling panel below, via
+  // PackageConnectionPanel) previously left this gate showing the stale pre-save wiringKind until
+  // an unrelated packageId change/remount happened to re-fetch it. onSiblingWiringSaved captures
+  // the fresh AdminPackageWiringRow PackageWiringEditor's own save handler already produces
+  // (handleSaveWiring's `refreshed`), scoped to the CURRENT packageId so switching packages doesn't
+  // carry a stale override forward.
+  const [wiringSaveOverride, setWiringSaveOverride] = useState<
+    { packageId: string; wiringKind: string } | null
+  >(null);
+  const onSiblingWiringSaved = (wiring: AdminPackageWiringRow) => {
+    setWiringSaveOverride({ packageId, wiringKind: wiring.wiringKind });
+  };
+  const effectiveWiringKind = wiringSaveOverride?.packageId === packageId
+    ? wiringSaveOverride.wiringKind
+    : fetchedWiringKind;
   return (
     <aside
       class="layout-right-dock flex w-full flex-col gap-2"
@@ -1922,6 +1943,7 @@ function LayoutRightDock({
           selectedPackageId={packageId}
           routeCandidates={routeCandidates}
           topologyRouteKey={topologyRouteKey}
+          onWiringSaved={onSiblingWiringSaved}
         />
       </Accordion>
 
@@ -7809,10 +7831,15 @@ function PackageConnectionPanel({
   selectedPackageId,
   routeCandidates,
   topologyRouteKey,
+  onWiringSaved,
 }: {
   selectedPackageId: string;
   routeCandidates?: string[];
   topologyRouteKey?: string;
+  /** Round 19: forwarded to PackageWiringEditor so a save is visible to sibling panels
+   * (NodeEventAuthoringPanel's admin_runtime override gate) without waiting for a packageId
+   * change / remount to re-fetch the same persisted wiring authority. */
+  onWiringSaved?: (wiring: AdminPackageWiringRow) => void;
 }): JSX.Element {
   const [packageComponents, setPackageComponents] = useState<
     AdminPackageComponentRow[]
@@ -7876,6 +7903,7 @@ function PackageConnectionPanel({
               packageComponents={packageComponents}
               routeCandidates={routeCandidates}
               topologyRouteKey={topologyRouteKey}
+              onWiringSaved={onWiringSaved}
             />
           </div>
         </details>

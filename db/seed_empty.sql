@@ -649,11 +649,24 @@ ON CONFLICT (manifest_id) DO NOTHING;
 
 
 -- ---------------------------------------------------------------------------
--- hub_navigation dispatch manifests (IDs 77-7b)
+-- hub_navigation dispatch manifests (IDs 77-7c)
 -- Registered for hub_navigation layer: list_manifests / get_hub_relations /
--- create / update / deprecate.
+-- create / update / deprecate / reorder.
 -- Required by AdminRuntime hub_navigation:* switch cases.
 -- Silent MANIFEST_NOT_FOUND failure occurs at runtime without these records.
+--
+-- identity_selector_read (round 19): declared ONLY on list_manifests/get_hub_relations's
+-- own dispatcher_mapping entry -- the SSOT-owned classification
+-- ManifestDispatcher.IsBareManifestNavigationReadTargetRefAsync reads (via
+-- DispatcherMappingAxisAuthority.IsDeclaredIdentitySelectorRead) instead of a
+-- hardcoded action-name allowlist in runtime code. Marks these two actions as
+-- read-only and manifest-identity-agnostic (both read their real target from
+-- payload.topologyManifestId, never from which manifest resolved a target_ref),
+-- safe to reach via a bare "runtime_mapping only" manifest used purely as a
+-- navigation-context selector. create/update/deprecate/reorder deliberately have
+-- no such field -- they mutate hubs.hub_relations and must never be reachable
+-- through a bare manifest's target_ref, only through their own authored
+-- dispatcher_mapping/capability_requirement.
 -- ---------------------------------------------------------------------------
 INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
 VALUES
@@ -661,7 +674,7 @@ VALUES
         '00000000-0000-0000-0000-000000000077',
         NULL,
         ARRAY[
-            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"hub_navigation","action":"list_manifests"}'::jsonb,
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"hub_navigation","action":"list_manifests","identity_selector_read":true}'::jsonb,
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
         ]::jsonb[],
@@ -671,7 +684,7 @@ VALUES
         '00000000-0000-0000-0000-000000000078',
         NULL,
         ARRAY[
-            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"hub_navigation","action":"get_hub_relations"}'::jsonb,
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"hub_navigation","action":"get_hub_relations","identity_selector_read":true}'::jsonb,
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
         ]::jsonb[],
