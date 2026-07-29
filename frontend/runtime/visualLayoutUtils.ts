@@ -255,6 +255,18 @@ export interface VisualNodePayload {
      */
     runtimeInteractionId?: string;
   }>;
+  /**
+   * Node-local admin_runtime dispatch payload binding — { trigger: { field: source } }.
+   * Data-only, independent of runtimeInteractions/actionType. wiring_kind="admin_runtime"
+   * nodes only — see renderEmission.ts admin_runtime_payload_binding_contract.
+   */
+  dispatchPayloadFromByTrigger?: Record<string, Record<string, string>>;
+  /**
+   * Node-local admin_runtime dispatch TARGET override — { trigger: "manifest:<uuid>:<layer>:<action>" }.
+   * wiring_kind="admin_runtime" nodes only — see renderEmission.ts
+   * admin_runtime_target_ref_override_contract (docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml).
+   */
+  dispatchTargetRefByTrigger?: Record<string, string>;
 }
 
 export function isStructuralHtmlNode(node: Pick<VisualNodePayload, "nodeKind">): boolean {
@@ -455,6 +467,14 @@ function readPatchNode(
     heightMode: (raw.heightMode === "auto" || raw.heightMode === "preset" || raw.heightMode === "custom")
       ? raw.heightMode as SizingMode
       : undefined,
+    dispatchPayloadFromByTrigger: (typeof raw.dispatchPayloadFromByTrigger === "object" &&
+        raw.dispatchPayloadFromByTrigger !== null && !Array.isArray(raw.dispatchPayloadFromByTrigger))
+      ? raw.dispatchPayloadFromByTrigger as Record<string, Record<string, string>>
+      : undefined,
+    dispatchTargetRefByTrigger: (typeof raw.dispatchTargetRefByTrigger === "object" &&
+        raw.dispatchTargetRefByTrigger !== null && !Array.isArray(raw.dispatchTargetRefByTrigger))
+      ? raw.dispatchTargetRefByTrigger as Record<string, string>
+      : undefined,
   };
 }
 
@@ -601,6 +621,12 @@ export function buildVisualLayoutPatchJson(
         ...(n.stateJson ? { stateJson: n.stateJson } : {}),
         ...(n.propBindings && Object.keys(n.propBindings).length > 0 ? { propBindings: n.propBindings } : {}),
         ...(n.runtimeInteractions && n.runtimeInteractions.length > 0 ? { runtimeInteractions: n.runtimeInteractions } : {}),
+        ...(n.dispatchPayloadFromByTrigger && Object.keys(n.dispatchPayloadFromByTrigger).length > 0
+          ? { dispatchPayloadFromByTrigger: n.dispatchPayloadFromByTrigger }
+          : {}),
+        ...(n.dispatchTargetRefByTrigger && Object.keys(n.dispatchTargetRefByTrigger).length > 0
+          ? { dispatchTargetRefByTrigger: n.dispatchTargetRefByTrigger }
+          : {}),
         slotKey: n.slotKey || null,
         orderIndex: n.orderIndex,
         parentNodeId: n.parentNodeId || null,

@@ -915,6 +915,22 @@ Deno.test("renderEmission: absent dispatchPayloadFromByTrigger renders normally 
   assertEquals(clickRd.payloadFrom, undefined);
 });
 
+Deno.test("renderEmission: dispatchPayloadFromByTrigger on a non-admin_runtime node fails closed (RUNTIME_INTERACTION_DISPATCH_PAYLOAD_FROM_BY_TRIGGER_REQUIRES_ADMIN_RUNTIME_WIRING)", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const emission = adminRuntimeNodeEmission({
+    click: { groupName: "node:name_input.value" },
+  });
+  emission.layoutNodes![0].wiringKind = "search";
+  const specs = renderEmission(emission, {});
+  assertEquals(specs[0].componentType, "error");
+  assertEquals(
+    JSON.stringify(specs[0].def).includes(
+      "RUNTIME_INTERACTION_DISPATCH_PAYLOAD_FROM_BY_TRIGGER_REQUIRES_ADMIN_RUNTIME_WIRING",
+    ),
+    true,
+  );
+});
+
 // ─── node.dispatchTargetRefByTrigger (per-trigger admin_runtime dispatch TARGET
 // override — mirrors the existing dispatchExternalPort/dispatchInstanceOperation
 // per-trigger portTargetRef/instanceTargetRef precedent, extended to admin_runtime.
@@ -1127,4 +1143,28 @@ Deno.test("renderEmission: absent dispatchTargetRefByTrigger renders normally (e
   >;
   const clickRd = clickBinding.runtimeDispatch as Record<string, unknown>;
   assertEquals(clickRd.targetRef, ADMIN_ENUM_LIST_GROUPS_TARGET_REF);
+});
+
+Deno.test("renderEmission: dispatchTargetRefByTrigger override intentionally OMITS wiringKey/wiringId (they identify the layout's OWN wiring row, not this override's different target) — the non-overridden trigger keeps them unchanged", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const emission = adminRuntimeNodeEmissionWithTargetRefOverride({
+    click: ADMIN_ENUM_CREATE_GROUP_TARGET_REF,
+  });
+  // deno-lint-ignore no-explicit-any
+  (emission.layoutNodes![0] as any).wiringKey = "admin.enum.management.projection.read.wiring";
+  // deno-lint-ignore no-explicit-any
+  (emission.layoutNodes![0] as any).wiringId = "11111111-1111-1111-1111-111111111111";
+  const specs = renderEmission(emission, {});
+  assertExists(specs[0].runtimeSpec);
+
+  const clickRd = (specs[0].runtimeSpec!.eventBinding["click"] as Record<string, unknown>)
+    .runtimeDispatch as Record<string, unknown>;
+  assertEquals(clickRd.targetRef, ADMIN_ENUM_CREATE_GROUP_TARGET_REF);
+  assertEquals("wiringKey" in clickRd, false);
+  assertEquals("wiringId" in clickRd, false);
+
+  const submitRd = (specs[0].runtimeSpec!.eventBinding["submit"] as Record<string, unknown>)
+    .runtimeDispatch as Record<string, unknown>;
+  assertEquals(submitRd.wiringKey, "admin.enum.management.projection.read.wiring");
+  assertEquals(submitRd.wiringId, "11111111-1111-1111-1111-111111111111");
 });

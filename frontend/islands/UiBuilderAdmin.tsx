@@ -315,6 +315,18 @@ type DraftNode = {
   propBindings?: Record<string, PropBindingDraft>;
   /** Canonical runtime UI interaction contract. Legacy propsJson.eventWirings is fallback only. */
   runtimeInteractions?: ComponentEventWiring[];
+  /**
+   * Node-local admin_runtime dispatch payload binding — { trigger: { field: source } }.
+   * wiring_kind="admin_runtime" nodes only. SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
+   * admin_runtime_payload_binding_contract.
+   */
+  dispatchPayloadFromByTrigger?: Record<string, Record<string, string>>;
+  /**
+   * Node-local admin_runtime dispatch TARGET override — { trigger: "manifest:<uuid>:<layer>:<action>" }.
+   * wiring_kind="admin_runtime" nodes only. SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
+   * admin_runtime_target_ref_override_contract.
+   */
+  dispatchTargetRefByTrigger?: Record<string, string>;
 };
 
 /** Draft-time prop binding descriptor stored in DraftNode. */

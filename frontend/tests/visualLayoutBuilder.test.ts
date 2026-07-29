@@ -2206,6 +2206,74 @@ Deno.test("ComponentEventWiring: portTargetRef from port binding coexists with e
   assertEquals(parsed.value.nodes[0].runtimeInteractions?.[1].outputProp, undefined);
 });
 
+// ─── dispatchPayloadFromByTrigger / dispatchTargetRefByTrigger UI Builder round-trip
+// (round 16, 2026-07-29 — previously dropped silently by readPatchNode/buildVisualLayoutPatchJson;
+// a layout opened and re-saved in UI Builder without touching the affected node would have
+// lost these fields even though renderEmission.ts/backend persistence already carried them) ──
+
+Deno.test("VisualNodePayload: dispatchPayloadFromByTrigger round-trips through UI Builder load/save unchanged", () => {
+  const node: VisualNodePayload = {
+    ...sampleNode,
+    wiringKind: "admin_runtime",
+    dispatchPayloadFromByTrigger: { click: { groupName: "node:name_input.value" } },
+  } as VisualNodePayload;
+  const patchJson = buildVisualLayoutPatchJson([node]);
+  const parsed = parseVisualLayoutPatchJson(patchJson);
+  assert(parsed.ok);
+  assertEquals(parsed.value.nodes[0].dispatchPayloadFromByTrigger, {
+    click: { groupName: "node:name_input.value" },
+  });
+  // Re-saving the already-parsed node (simulating "open in UI Builder, touch nothing, save")
+  // must reproduce byte-identical JSON for this field — no semantic loss on an untouched node.
+  const resaved = buildVisualLayoutPatchJson(parsed.value.nodes);
+  const reparsed = parseVisualLayoutPatchJson(resaved);
+  assert(reparsed.ok);
+  assertEquals(
+    reparsed.value.nodes[0].dispatchPayloadFromByTrigger,
+    parsed.value.nodes[0].dispatchPayloadFromByTrigger,
+  );
+});
+
+Deno.test("VisualNodePayload: dispatchTargetRefByTrigger round-trips through UI Builder load/save unchanged", () => {
+  const targetRef = "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:create_group";
+  const node: VisualNodePayload = {
+    ...sampleNode,
+    wiringKind: "admin_runtime",
+    dispatchTargetRefByTrigger: { click: targetRef },
+  } as VisualNodePayload;
+  const patchJson = buildVisualLayoutPatchJson([node]);
+  const parsed = parseVisualLayoutPatchJson(patchJson);
+  assert(parsed.ok);
+  assertEquals(parsed.value.nodes[0].dispatchTargetRefByTrigger, { click: targetRef });
+  const resaved = buildVisualLayoutPatchJson(parsed.value.nodes);
+  const reparsed = parseVisualLayoutPatchJson(resaved);
+  assert(reparsed.ok);
+  assertEquals(
+    reparsed.value.nodes[0].dispatchTargetRefByTrigger,
+    parsed.value.nodes[0].dispatchTargetRefByTrigger,
+  );
+});
+
+Deno.test("VisualNodePayload: a node with NEITHER field omits both keys from the built patch JSON (no invented empty objects)", () => {
+  const patchJson = buildVisualLayoutPatchJson([sampleNode]);
+  const parsedRaw = JSON.parse(patchJson);
+  assertEquals("dispatchPayloadFromByTrigger" in parsedRaw.nodes[0], false);
+  assertEquals("dispatchTargetRefByTrigger" in parsedRaw.nodes[0], false);
+});
+
+Deno.test("cloneVisualNode: preserves dispatchPayloadFromByTrigger and dispatchTargetRefByTrigger (data-only fields, no backend-assigned identity to strip)", () => {
+  const targetRef = "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:create_group";
+  const source: VisualNodePayload = {
+    ...sampleNode,
+    wiringKind: "admin_runtime",
+    dispatchPayloadFromByTrigger: { click: { groupName: "node:name_input.value" } },
+    dispatchTargetRefByTrigger: { click: targetRef },
+  } as VisualNodePayload;
+  const cloned = cloneVisualNode(source, "node_copy_dtr");
+  assertEquals(cloned.dispatchPayloadFromByTrigger, { click: { groupName: "node:name_input.value" } });
+  assertEquals(cloned.dispatchTargetRefByTrigger, { click: targetRef });
+});
+
 Deno.test("ComponentEventWiring: legacy propsJson.eventWirings remains fallback-compatible", () => {
   const wiring: ComponentEventWiring = { trigger: "submit", eventType: "onSubmit", actionType: "setState" };
   assertEquals(wiring.targetStateKey, undefined);

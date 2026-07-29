@@ -526,6 +526,26 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
             => Task.FromResult(candidates);
     }
 
+    /// <summary>
+    /// Stubs LoadWiringKindForLayoutAsync (the DB-backed admin_runtime-only gate for
+    /// dispatchPayloadFromByTrigger/dispatchTargetRefByTrigger) without a live database — mirrors
+    /// InstanceCandidateTestRepository's own test-doubling pattern for the analogous
+    /// ListInstanceOperationAuthoringCandidatesAsync DB-backed check.
+    /// </summary>
+    private sealed class AdminRuntimeWiringKindTestRepository(
+        string? wiringKind,
+        AdminRuntimeManifestAuthorizationResult? manifestAuthorization = null)
+        : NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none")
+    {
+        public override Task<string?> LoadWiringKindForLayoutAsync(Guid layoutId, CancellationToken ct = default)
+            => Task.FromResult(wiringKind);
+
+        public override Task<AdminRuntimeManifestAuthorizationResult> LoadAdminRuntimeManifestAuthorizationAsync(
+            Guid manifestId, CancellationToken ct = default)
+            => Task.FromResult(manifestAuthorization ??
+                new AdminRuntimeManifestAuthorizationResult(Exists: true, IsActive: true, IsAdminRuntimeDestination: true));
+    }
+
     private sealed class InstanceCandidateSourceFailureRepository()
         : NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none")
     {
@@ -542,7 +562,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [Fact]
     public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_ValidShape_Passes()
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime");
         var tensorPatchJson = """
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "wiringKind": "admin_runtime", "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:create_group",
@@ -559,7 +579,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [Fact]
     public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_NonObjectValue_FailsClose()
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime");
         var tensorPatchJson = """
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
@@ -577,7 +597,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [Fact]
     public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_NonObjectTriggerEntry_FailsClose()
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime");
         var tensorPatchJson = """
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
@@ -595,7 +615,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [Fact]
     public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_NonStringFieldValue_FailsClose()
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime");
         var tensorPatchJson = """
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
@@ -613,6 +633,10 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [Fact]
     public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_Absent_Passes()
     {
+        // Plain repository (real DB connection string, no stub) — proves
+        // LoadWiringKindForLayoutAsync is never called when the patch doesn't author
+        // dispatchPayloadFromByTrigger/dispatchTargetRefByTrigger at all (it would throw/fail
+        // against "Host=localhost;Database=none" if it were).
         var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
         var tensorPatchJson = """
         { "nodes": [
@@ -622,7 +646,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
 
         var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
 
-        Assert.True(result.Ok);
+        Assert.True(result.Ok, result.Message);
         Assert.True(result.Valid);
     }
 
@@ -638,7 +662,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [InlineData("toggle")]
     public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_CanonicalTrigger_Passes(string trigger)
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime");
         var tensorPatchJson = $$"""
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
@@ -655,7 +679,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [Fact]
     public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_AliasKeyOnClick_NormalizesAndPasses()
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime");
         var tensorPatchJson = """
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
@@ -676,7 +700,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [InlineData("blur")]
     public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_RecognizedButUnsupportedTrigger_FailsClose(string trigger)
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime");
         var tensorPatchJson = $$"""
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
@@ -694,7 +718,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [Fact]
     public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_UnknownTrigger_FailsClose()
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime");
         var tensorPatchJson = """
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
@@ -719,7 +743,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [InlineData("onOpen", "onClose")]
     public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_AliasCollisionAfterNormalization_FailsClose(string a, string b)
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime");
         var tensorPatchJson = $$"""
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
@@ -744,7 +768,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [InlineData(" onClick ")]
     public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_WhitespacePaddedTrigger_TrimsAndPasses(string trigger)
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime");
         var tensorPatchJson = $$"""
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
@@ -761,7 +785,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [Fact]
     public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_WhitespaceOnlyTrigger_FailsClose()
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime");
         var tensorPatchJson = """
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
@@ -781,7 +805,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [InlineData("onClick", " onClick ")]
     public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_WhitespaceOnlyCollisionAfterTrim_FailsClose(string a, string b)
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime");
         var tensorPatchJson = $$"""
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
@@ -799,7 +823,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [Fact]
     public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_EmptyPayloadFrom_FailsClose()
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime");
         var tensorPatchJson = """
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
@@ -845,7 +869,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [Fact]
     public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_ValidShape_Passes()
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime");
         var tensorPatchJson = """
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "wiringKind": "admin_runtime", "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
@@ -862,7 +886,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [Fact]
     public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_NonObjectValue_FailsClose()
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime");
         var tensorPatchJson = """
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
@@ -880,7 +904,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [Fact]
     public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_NonStringValue_FailsClose()
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime");
         var tensorPatchJson = """
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
@@ -902,7 +926,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [InlineData("")]
     public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_MalformedTargetRef_FailsClose(string targetRef)
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime");
         var tensorPatchJson = $$"""
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
@@ -920,7 +944,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [Fact]
     public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_UnknownTrigger_FailsClose()
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime");
         var tensorPatchJson = """
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
@@ -941,7 +965,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [InlineData("blur")]
     public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_RecognizedButUnsupportedTrigger_FailsClose(string trigger)
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime");
         var tensorPatchJson = $$"""
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
@@ -959,7 +983,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [Fact]
     public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_AliasCollisionAfterNormalization_FailsClose()
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime");
         var tensorPatchJson = """
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
@@ -980,10 +1004,172 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [Fact]
     public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_Absent_Passes()
     {
+        // Plain repository — proves LoadWiringKindForLayoutAsync is never called for a patch
+        // that doesn't author either node-level admin_runtime dispatch field.
         var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
         var tensorPatchJson = """
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button" }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
+    // ─── admin_runtime-only gate: dispatchPayloadFromByTrigger/dispatchTargetRefByTrigger are
+    // rejected when the layout's OWN wiring_kind (topology.ui_topology_tensor ->
+    // topology.ui_wiring_registry, uniform for every node in the layout) is not "admin_runtime" —
+    // round 16, 2026-07-29 ────────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("search")]
+    [InlineData("create")]
+    [InlineData(null)]
+    public async Task ValidateLayoutPatchAsync_DispatchPayloadFromByTrigger_NonAdminRuntimeLayoutWiringKind_FailsClose(string? wiringKind)
+    {
+        var repo = new AdminRuntimeWiringKindTestRepository(wiringKind);
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchPayloadFromByTrigger": { "click": { "groupName": "node:name-input.value" } } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_DISPATCH_PAYLOAD_FROM_BY_TRIGGER_REQUIRES_ADMIN_RUNTIME_WIRING", result.Message);
+    }
+
+    [Theory]
+    [InlineData("search")]
+    [InlineData("create")]
+    [InlineData(null)]
+    public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_NonAdminRuntimeLayoutWiringKind_FailsClose(string? wiringKind)
+    {
+        var repo = new AdminRuntimeWiringKindTestRepository(wiringKind);
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchTargetRefByTrigger": { "click": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:create_group" } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_REQUIRES_ADMIN_RUNTIME_WIRING", result.Message);
+    }
+
+    private sealed class AmbiguousWiringKindLookupRepository()
+        : NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none")
+    {
+        public override Task<string?> LoadWiringKindForLayoutAsync(Guid layoutId, CancellationToken ct = default)
+            => throw new InvalidOperationException($"LAYOUT_NODES_AMBIGUOUS_SELECTOR: multiple tensor rows for layout_id='{layoutId}'.");
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_AmbiguousLayoutWiringLookup_FailsCloseExplicitly()
+    {
+        var repo = new AmbiguousWiringKindLookupRepository();
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchTargetRefByTrigger": { "click": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:create_group" } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.StartsWith("LAYOUT_NODES_AMBIGUOUS_SELECTOR", result.Message);
+    }
+
+    // ─── target manifest authorization: the manifest_id a dispatchTargetRefByTrigger entry
+    // references must exist, be status=active, and declare runtime_destination=admin_runtime —
+    // the SAME facts ManifestDispatcher would otherwise only discover at dispatch time, checked
+    // here at layout_patch save time instead (round 16, 2026-07-29) ─────────────────────
+
+    private const string TargetManifestId = "00000000-0000-0000-0000-0000000ae200";
+    private static readonly string TargetRefForManifestAuthorizationTests =
+        $"manifest:{TargetManifestId}:enum_dictionary:create_group";
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_ReferencedManifestNotFound_FailsClose()
+    {
+        var repo = new AdminRuntimeWiringKindTestRepository(
+            "admin_runtime",
+            new AdminRuntimeManifestAuthorizationResult(Exists: false, IsActive: false, IsAdminRuntimeDestination: false));
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchTargetRefByTrigger": { "click": "{{TargetRefForManifestAuthorizationTests}}" } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal($"RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_MANIFEST_NOT_FOUND:{TargetManifestId}", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_ReferencedManifestNotActive_FailsClose()
+    {
+        var repo = new AdminRuntimeWiringKindTestRepository(
+            "admin_runtime",
+            new AdminRuntimeManifestAuthorizationResult(Exists: true, IsActive: false, IsAdminRuntimeDestination: true));
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchTargetRefByTrigger": { "click": "{{TargetRefForManifestAuthorizationTests}}" } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal($"RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_MANIFEST_NOT_ACTIVE:{TargetManifestId}", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_ReferencedManifestNotAdminRuntimeDestination_FailsClose()
+    {
+        var repo = new AdminRuntimeWiringKindTestRepository(
+            "admin_runtime",
+            new AdminRuntimeManifestAuthorizationResult(Exists: true, IsActive: true, IsAdminRuntimeDestination: false));
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchTargetRefByTrigger": { "click": "{{TargetRefForManifestAuthorizationTests}}" } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal($"RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_MANIFEST_NOT_ADMIN_RUNTIME:{TargetManifestId}", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_ReferencedManifestFullyAuthorized_Passes()
+    {
+        var repo = new AdminRuntimeWiringKindTestRepository(
+            "admin_runtime",
+            new AdminRuntimeManifestAuthorizationResult(Exists: true, IsActive: true, IsAdminRuntimeDestination: true));
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchTargetRefByTrigger": { "click": "{{TargetRefForManifestAuthorizationTests}}" } }
         ] }
         """;
 

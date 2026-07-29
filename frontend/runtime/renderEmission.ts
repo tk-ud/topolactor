@@ -655,6 +655,17 @@ function buildAdminRuntimeTargetRefOverrideByTrigger(
           `RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_TARGET_SURFACE_MISSING: dispatchTargetRefByTrigger entry for trigger "${trigger}" requires the node's own targetSurface`,
       };
     }
+    // wiringKey/wiringId are intentionally OMITTED here (unlike buildRuntimeDispatchSpec's base
+    // spec, which carries the layout's own uniform ui_wiring_registry row identity). Carrying the
+    // layout's wiringKey/wiringId over into an override dispatch would be actively misleading —
+    // they identify the layout's OWN wiring row, not the different manifest/layer/action this
+    // override actually targets, and no backend consumer reads request.wiring_key/wiring_id at the
+    // top request level today (confirmed via full grep of ManifestDispatcher/OperationVectorResolver/
+    // AdminRuntimeDispatchAdapter — they are forwarded but never read there; the persisted audit
+    // trail, AdminMasterRosterAudit's actor/target_table/target_id/operation/before/after/
+    // changed_fields, is populated server-side keyed by layer:action and is entirely independent of
+    // whatever wiring_key/wiring_id the frontend happens to send). No override-specific identity is
+    // fabricated in their place.
     byTrigger[trigger] = {
       operationType: parsed.action,
       target: surface,
@@ -1318,10 +1329,24 @@ export function renderEmission(
         );
         // dispatchPayloadFromByTrigger validation is fail-closed for the whole node —
         // never silently skipped/filtered (SSOT remaining_write_payload_capture_gap
-        // negative-case contract).
+        // negative-case contract). Additionally fail-closed (not silently ignored) when
+        // authored on a non-admin_runtime node — same reasoning as dispatchTargetRefByTrigger
+        // below (a node's own wiringKind is uniformly inherited from the layout's single
+        // ui_wiring_registry row, never authored per-node, so this is the only point where
+        // "this binding belongs to an admin_runtime layout" can be checked).
+        const hasDispatchPayloadFromByTrigger = node.dispatchPayloadFromByTrigger !== undefined &&
+          node.dispatchPayloadFromByTrigger !== null;
         const adminRuntimePayloadFrom = previewMode ||
             isNavigationWiringKind(nodeWiringKind)
           ? { ok: true as const, byTrigger: {} }
+          : hasDispatchPayloadFromByTrigger && nodeWiringKind !== "admin_runtime"
+          ? {
+            ok: false as const,
+            error:
+              `RUNTIME_INTERACTION_DISPATCH_PAYLOAD_FROM_BY_TRIGGER_REQUIRES_ADMIN_RUNTIME_WIRING: dispatchPayloadFromByTrigger is only valid on a wiringKind="admin_runtime" node (this node's wiringKind is "${
+                nodeWiringKind || "(absent)"
+              }")`,
+          }
           : buildAdminRuntimePayloadFromByTrigger(
             node.dispatchPayloadFromByTrigger,
           );
@@ -1337,10 +1362,26 @@ export function renderEmission(
           };
         }
         // dispatchTargetRefByTrigger validation is fail-closed for the whole node —
-        // same discipline as dispatchPayloadFromByTrigger above.
+        // same discipline as dispatchPayloadFromByTrigger above. Additionally fail-closed
+        // (not silently ignored) when authored on a non-admin_runtime node: a node's own
+        // wiringKind is uniformly inherited from the layout's single ui_wiring_registry row
+        // (NpgsqlTopologyRepository.LoadLayoutNodesAsync), never authored per-node, so this is
+        // the only point where "this override belongs to an admin_runtime layout" can be
+        // checked — silently no-op'ing it here would let an author believe an authored
+        // override is active when it never took effect.
+        const hasDispatchTargetRefByTrigger = node.dispatchTargetRefByTrigger !== undefined &&
+          node.dispatchTargetRefByTrigger !== null;
         const adminRuntimeTargetRefOverride = previewMode ||
             isNavigationWiringKind(nodeWiringKind)
           ? { ok: true as const, byTrigger: {} }
+          : hasDispatchTargetRefByTrigger && nodeWiringKind !== "admin_runtime"
+          ? {
+            ok: false as const,
+            error:
+              `RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_REQUIRES_ADMIN_RUNTIME_WIRING: dispatchTargetRefByTrigger is only valid on a wiringKind="admin_runtime" node (this node's wiringKind is "${
+                nodeWiringKind || "(absent)"
+              }")`,
+          }
           : buildAdminRuntimeTargetRefOverrideByTrigger(
             node.dispatchTargetRefByTrigger,
             node.targetSurface,
