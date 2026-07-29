@@ -1661,33 +1661,49 @@ react_schema_topology_seed_translator_ssot:
               admin_runtime_actions) already dispatch correctly on the backend
               (AdminRuntimeDispatchAdapter -> AdminRuntime.ExecuteDataAsync, resolved by
               target/layer/action via OperationVectorResolver -- ManifestDispatcher.cs is already
-              fully generic across runtime_destination=admin_runtime). What is missing is a
-              frontend runtimeInteractions actionType/wiring lane that lets a seed-authored
-              Action node dispatch an arbitrary admin_runtime layer:action vector -- today
-              frontend/runtime/uiEventEffectRunner.ts and renderEmission.ts recognize only
-              dispatchExternalPort (external_integration_wiring/external_instance_wiring) and
-              dispatchInstanceOperation (external_instance_wiring), plus localStateMutation
-              (internal_instance_wiring); none of wiring_lane_contract.lanes' five lanes'
-              targetRef_shape covers admin_runtime layer:action dispatch, and content_bundle:*
-              (contents_api_wiring) is a different backend authority (NpgsqlContentBundleRepository
-              entity CRUD) that this Bundle's NG boundary explicitly forbids substituting in.
-              This is the same gap previously recorded as gap-01
-              ("response-binding architecture 未実装") in .agent/tasks/todo.md's migrated
-              admin-surface-topology-seed-conversion-design-resolution.json content:
-              cross-cutting, high-blast-radius, owner_decision_required architecture choice
-              (a new dedicated runtime lane), which this Bundle's own NG boundary
-              ("新規専用...runtime lane...を追加する" is prohibited) explicitly keeps out of scope
-              for any single subBundle to add unilaterally. Until resolved, admin-enum's
-              enum_confirm_button (button.primitive) and the create/update/delete/set_group_items
-              mutation actions are seeded as structural leaves only (componentId/componentKind
-              resolve; no functioning eventBinding/runtimeInteractions) -- this is why they are
+              fully generic across runtime_destination=admin_runtime).
+
+              SUPERSEDED 2026-07-29 (round 15-19, admin-write-surface-selection-context-and-mode-
+              composition-gap Bundle): the paragraph below (kept for history) called the missing
+              "seed-authored Action node dispatches an arbitrary admin_runtime layer:action vector"
+              capability a cross-cutting, owner_decision_required NEW runtime lane, out of scope for
+              any single subBundle. That blocker no longer applies -- rounds 15-18 built exactly
+              this capability WITHOUT a new lane, reusing the SAME existing "per-trigger authored
+              target, independent of the shared layout wiring row" precedent
+              dispatchExternalPort/dispatchInstanceOperation already established:
+              dispatchTargetRefByTrigger (node-local admin_runtime target_ref override, round 15,
+              hardened rounds 17-19 -- docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
+              admin_runtime_target_ref_override_contract) and dispatchPayloadFromByTrigger
+              (node-local payload binding, pre-existing since round 6-8) together let a node in
+              ANY admin_runtime layout dispatch to a DIFFERENT manifest's layer:action than the
+              layout's own uniform one -- e.g. a "create group" button embedded in ae200's OWN
+              layout, authored with dispatchTargetRefByTrigger={click:
+              "manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group"} and
+              dispatchPayloadFromByTrigger={click:{...}}, dispatches enum_dictionary:create_group
+              against ae210's own dispatcher_mapping/capability_requirement exactly as if that
+              button lived on ae210's own layout. What remains is authoring-only, not architecture:
+              (1) the 7 write manifests (ae210-270) are still each their OWN separate hub-navigable
+              screen rather than nodes wired into ae200's layout via this mechanism, and (2)
+              ae200's own layout has not been authored with the search/table/create-modal/
+              inline-update/delete-confirm/membership-editing/dryRun-preview/confirm/write/reread
+              composition this single-surface goal requires -- see
+              admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.enum for
+              the target UX shape and .agent/tasks/todo.md's admin-enum subBundle section for the
+              concrete per-operation wiring plan. Read/list rendering (enum_dictionary:list_groups)
+              already flows real enum row data (not the ADMIN_OPERATION_NOT_FOUND structural-render
+              fallback) -- see AdminEnumHubRelationUiProjectionLiveDbTests.cs.
+
+              Historical note (pre-round-15, kept for context, no longer the live blocker): admin-
+              enum's enum_confirm_button (button.primitive) and the create/update/delete/
+              set_group_items mutation actions were originally seeded as structural leaves only
+              (componentId/componentKind resolve; no functioning eventBinding/runtimeInteractions),
               authored directly on topology.ui_topology_tensor rather than as React-like Schema
-              Action nodes (input_text_markup_grammar_contract prohibits an action/step tag with
-              no wiringLane attribute, and wiring_lane_contract has no lane whose meaning is
-              admin_runtime layer:action dispatch). Read/list rendering (enum_dictionary:list_groups
-              etc.) is likewise limited to the ADMIN_OPERATION_NOT_FOUND structural-render fallback
-              (ManifestDispatcher.cs, the same fallback admin-dashboard's manifest ad200 uses) --
-              no real enum row data flows into the UI yet.
+              Action nodes, because at that time none of wiring_lane_contract.lanes' five lanes
+              covered admin_runtime layer:action dispatch and adding a sixth was judged
+              owner-decision-required. dispatchTargetRefByTrigger resolved this without adding a
+              sixth lane (it is node-local tensor data, not a new wiring_lane_contract entry) --
+              this historical constraint is why the 7 write manifests still predate that mechanism
+              and have not yet been re-wired to use it.
       - seed_surface_key: ui_component_registry.preset_catalog_bootstrap.v1
         declared_by_yaml_ref: docs/design/component-catalog-classification-ssot.yaml catalog_vocabulary_contract
         seed_role: fixed_uuid_components_bucket_and_ui_component_registry_bootstrap_rows
