@@ -1333,7 +1333,7 @@ owner decisionが必要な3方向（既存`runtime_interactions_lane`拡張／�
 - `backend/runtime/AbstractFunctionRuntime.cs`（`SchedulerExecutionContext`、abstract function primitive実行境界）
 - `backend/runtime/ManifestDispatcher.cs`、`backend/runtime/AdminRuntimeDispatchAdapter.cs`、`backend/runtime/OperationVectorResolver.cs`（既に汎用的なtarget/layer/action dispatch transport、変更不要——ただし`ManifestDispatcher.TryParseManifestTargetRef`のtarget_ref形式要求は`admin_runtime`のtargetRef設計と直接関係するため、次にこのBundleを触るAgentは変更前に必ず読むこと）
 - `backend/repository/LayoutSchemaTensorComposer.cs`（`BuildNodeLocalDataByNodeId`/`Compose`——read circuit実描画に必要だったschema-composed leaf向けpropsJson/propBindings mergeを2026-07-23に追加済み）
-- `frontend/islands/ProjectionShell.tsx`（remaining_write_payload_capture_gap本体——live input値trackingが未実装、`renderEmission()`呼び出し3箇所全てで`payloadFromNodeValues`が渡されていない。2026-07-28（PR #600 round 12）: `handleRuntimeDispatchResult`新設——詳細は`admin-write-surface-selection-context-and-mode-composition-gap` Bundle参照。本Bundleの管轄はdispatch responseをforwardする汎用機構自体であり、ProjectionShell側の採用実装そのものはselection-context Bundleのscope）
+- `frontend/islands/ProjectionShell.tsx`（remaining_write_payload_capture_gap本体——当初はlive input値trackingが未実装で`renderEmission()`呼び出し3箇所全てで`payloadFromNodeValues`が渡されていなかったが、2026-07-24にlive node value tracking追加＋3箇所全てへの`payloadFromNodeValues`/`onNodeValueChange`配線を解消済み（下記「2026-07-24 remaining_write_payload_capture_gap解消」節参照）。2026-07-28（PR #600 round 12）: `handleRuntimeDispatchResult`新設——詳細は`admin-write-surface-selection-context-and-mode-composition-gap` Bundle参照。本Bundleの管轄はdispatch responseをforwardする汎用機構自体であり、ProjectionShell側の採用実装そのものはselection-context Bundleのscope）
 - `db/seed_empty.sql`（`admin-enum` ae2xx行、影響範囲確認）
 
 ### 対象関数名
@@ -1347,8 +1347,6 @@ owner decisionが必要な3方向（既存`runtime_interactions_lane`拡張／�
 - `adaptComponentDataHub`（`frontend/runtime/runtimeComponentAdapter.ts`、2026-07-28——`onRuntimeDispatchResult`のplumbing追加）
 
 **未採用のまま残った候補:** なし（2026-07-22 owner decisionで`component_wiring_execution_lane`へ単一収束済み、A/B/C比較自体が発生しなかった）
-
-- future: 選択された方向に応じた新規dispatch関数（本Bundleのdesign_change決定前は追加しない——上記「未採用候補なし」とは別の、将来の拡張余地の記録）
 
 ### 2026-07-28 (PR #600 review round 12): admin_runtime Lane 2 dispatch応答のfire-and-forget discardを解消（本Bundle管轄の汎用機構）
 
