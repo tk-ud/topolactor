@@ -346,6 +346,8 @@ admin hardcoded surface を意味要素ごとの topology UI seed conversion sco
 - canonical projection/admin render surfaces that consume seed-backed CRUD
 - frontend tests for admin route registry, seed renderability, projection render, backend action wiring, and old route-presence replacement
 
+（2026-07-28追記: 上記はseed変換pipeline共通の対象範囲。subBundle固有の具体ファイルは重複記載せず、各専用Bundleの対象ファイル名を正本とする——下記「対象関数名」節の同趣旨の注記を参照）
+
 ### 対象関数名
 
 - `build_topology_ui_seed_candidate`
@@ -358,6 +360,8 @@ admin hardcoded surface を意味要素ごとの topology UI seed conversion sco
 - future hardcoded route retirement proof helpers discovered by Agent
 - future credential management mode/category mapping functions discovered by Agent
 - future scheduler create/edit/disable action wiring functions discovered by Agent
+
+**scope委譲の明文化（2026-07-28追記）**: 本Bundleの対象ファイル名/対象関数名は、seed変換pipeline自体（translator/seed登録/projection render/backend action wiringの共通工程）に限定する。各subBundleが実際に実装した具体的な関数・ファイル（例: admin-enumの`AdminMasterRosterAudit.AppendAsync`、`DataEnumDictionaryUpdateGroupAsync`、`seedTrackerFromPropBindingsValue`、`onRuntimeDispatchResult`chain等）は、ここへ重複記載せず、各専用Bundle（`admin-master-roster-audit-envelope-contract-gap`、`admin-write-surface-selection-context-and-mode-composition-gap`、`admin-runtime-operation-dispatch-lane-determination`）自身の対象ファイル名/対象関数名を正本とする——重複記載すると、片方だけ更新されて食い違う（本ファイルで実際に発生した不整合）リスクがあるため、意図的にここでは繰り返さない。本Bundleの「admin-enum subBundle 実装記録」節はあくまで時系列narrativeであり、function-level scopeの正本ではない。
 
 ### 受入条件
 
@@ -1313,27 +1317,46 @@ owner decisionが必要な3方向（既存`runtime_interactions_lane`拡張／�
 
 ### 対象ファイル名
 
+**実装済み:**
 - `frontend/runtime/frontendScheduler.ts`（`RuntimeDispatchSpec`、`enqueueRuntimeComponentCommand`、`ExternalPortDispatchSpec`/`InstanceOperationDispatchSpec`の既存precedent）
-- `frontend/runtime/renderEmission.ts`（`buildRuntimeDispatchSpec`、`mapWiringKindToLayer`、`mapWiringKindToAction`）
+- `frontend/runtime/renderEmission.ts`（`buildRuntimeDispatchSpec`、`mapWiringKindToLayer`、`mapWiringKindToAction`。2026-07-28（PR #600 round 12）: `onRuntimeDispatchResult`オプションのhub構築箇所への配線を追加——下記「2026-07-28」節参照）
 - `frontend/runtime/uiEventEffectRunner.ts`（既存actionType taxonomy: `dispatchExternalPort`/`dispatchInstanceOperation`/`localStateMutation`）
-- `frontend/runtime/runtimeComponentFactory.ts`（`emitBoundEvent`のLane 2: component_wiring_execution_lane呼び出し）
+- `frontend/runtime/runtimeComponentFactory.ts`（`emitBoundEvent`のLane 2: component_wiring_execution_lane呼び出し。2026-07-28（PR #600 round 12）: `dispatchRuntimeComponentCommandAndForwardResult`新設——下記「2026-07-28」節参照）
+- `frontend/runtime/liveNodeValueTracker.ts`（2026-07-24新設——`createLiveNodeValueTracker()`、remaining_write_payload_capture_gap解消の本体。2026-07-28（PR #600 round 11/12）: `seedTrackerFromPropBindingsValue`/`forceOverwrite`オプション追加——詳細は`admin-write-surface-selection-context-and-mode-composition-gap` Bundle参照）
+- `frontend/runtime/payloadFromResolver.ts`（2026-07-24、own-property identity対応）
+- `frontend/runtime/projectionConstructor.ts`（2026-07-28（PR #600 round 12）新規対象——`ComponentDataHub`型へ`onRuntimeDispatchResult`フィールド追加）
+- `frontend/runtime/runtimeComponentAdapter.ts`（2026-07-28（PR #600 round 12）新規対象——`RuntimeComponentSpec`型へ`onRuntimeDispatchResult`フィールド追加、`adaptComponentDataHub`の戻り値へ配線）
 - `frontend/lib/runtimeInteractionAuthoring.ts`（`runtimeInteractionCategory`の既存category taxonomy）
-- `backend/repository/NpgsqlTopologyRepository.cs`（`MapWiringKindToDispatchAction`）
+- `backend/repository/NpgsqlTopologyRepository.cs`（`MapWiringKindToDispatchAction`、`LoadLayoutNodesAsync`）
 - `backend/repository/NpgsqlUiTopologyRepository.cs`（`AssignRuntimeInteractionIds`、`ApplyConfirmedLayoutPatchAsync`、`UpdatePackageWiringAsync`）
 - `backend/runtime/AdminRuntime.cs`、`backend/runtime/AdminRuntimeMasterRoster.cs`（既存`enum_dictionary:*`/`content_bundle:*`等のconcrete admin_runtime action実装）
 - `backend/runtime/AbstractFunctionRuntime.cs`（`SchedulerExecutionContext`、abstract function primitive実行境界）
 - `backend/runtime/ManifestDispatcher.cs`、`backend/runtime/AdminRuntimeDispatchAdapter.cs`、`backend/runtime/OperationVectorResolver.cs`（既に汎用的なtarget/layer/action dispatch transport、変更不要——ただし`ManifestDispatcher.TryParseManifestTargetRef`のtarget_ref形式要求は`admin_runtime`のtargetRef設計と直接関係するため、次にこのBundleを触るAgentは変更前に必ず読むこと）
 - `backend/repository/LayoutSchemaTensorComposer.cs`（`BuildNodeLocalDataByNodeId`/`Compose`——read circuit実描画に必要だったschema-composed leaf向けpropsJson/propBindings mergeを2026-07-23に追加済み）
-- `frontend/islands/ProjectionShell.tsx`（remaining_write_payload_capture_gap本体——live input値trackingが未実装、`renderEmission()`呼び出し3箇所全てで`payloadFromNodeValues`が渡されていない）
+- `frontend/islands/ProjectionShell.tsx`（remaining_write_payload_capture_gap本体——live input値trackingが未実装、`renderEmission()`呼び出し3箇所全てで`payloadFromNodeValues`が渡されていない。2026-07-28（PR #600 round 12）: `handleRuntimeDispatchResult`新設——詳細は`admin-write-surface-selection-context-and-mode-composition-gap` Bundle参照。本Bundleの管轄はdispatch responseをforwardする汎用機構自体であり、ProjectionShell側の採用実装そのものはselection-context Bundleのscope）
 - `db/seed_empty.sql`（`admin-enum` ae2xx行、影響範囲確認）
 
 ### 対象関数名
 
+**実装済み:**
 - `enqueueRuntimeComponentCommand`、`buildRuntimeDispatchSpec`、`mapWiringKindToLayer`、`mapWiringKindToAction`
 - `MapWiringKindToDispatchAction`、`AssignRuntimeInteractionIds`、`ApplyConfirmedLayoutPatchAsync`、`UpdatePackageWiringAsync`
 - `emitBoundEvent`、`enqueueExternalPortDispatchCommand`、`enqueueInstanceOperationDispatchCommand`（既存precedentパターン）
 - `AdminRuntime.ExecuteDataAsync`、`AdminRuntimeDispatchAdapter.ExecuteAsync`、`OperationVectorResolver.Resolve`
-- future: 選択された方向に応じた新規dispatch関数（本Bundleのdesign_change決定前は追加しない）
+- `dispatchRuntimeComponentCommandAndForwardResult`（`frontend/runtime/runtimeComponentFactory.ts`、2026-07-28新設——`emitBoundEvent`のLane 2 dispatchが以前`void`で discardしていた応答を、opt-inの`onRuntimeDispatchResult`callbackへforwardする）
+- `adaptComponentDataHub`（`frontend/runtime/runtimeComponentAdapter.ts`、2026-07-28——`onRuntimeDispatchResult`のplumbing追加）
+
+**未採用のまま残った候補:** なし（2026-07-22 owner decisionで`component_wiring_execution_lane`へ単一収束済み、A/B/C比較自体が発生しなかった）
+
+- future: 選択された方向に応じた新規dispatch関数（本Bundleのdesign_change決定前は追加しない——上記「未採用候補なし」とは別の、将来の拡張余地の記録）
+
+### 2026-07-28 (PR #600 review round 12): admin_runtime Lane 2 dispatch応答のfire-and-forget discardを解消（本Bundle管轄の汎用機構）
+
+PR #600（`admin-write-surface-selection-context-and-mode-composition-gap` Bundle傘下のadmin-enum作業）のround 12で、`emitBoundEvent`のadmin_runtime Lane 2 dispatch（本Bundleが2026-07-22に確定した`component_wiring_execution_lane`の具体境界そのもの）が、`void enqueueRuntimeComponentCommand(...)`という形でdispatch応答（`DispatchResponse`、`emission`込み）を無条件に破棄していたことが判明した。この応答破棄はadmin-enum固有ではなく、`component_wiring_execution_lane`を使う**全てのadmin_runtime dispatch**に共通する、本Bundle自身が実装したLane 2 mechanism自体の性質——admin-enumの実装中に発見されたが、本Bundleの管轄である。
+
+既存`onNodeValueChange`（本Bundleが2026-07-24に実装した`ComponentDataHub`→`RuntimeComponentSpec`→`RenderEmissionOptions`のcallback plumbing）と全く同型の`onRuntimeDispatchResult`callbackを同じ3層へ延長し、`dispatchRuntimeComponentCommandAndForwardResult`（新規helper）が`enqueueRuntimeComponentCommand`の解決結果をこのcallbackへforwardするよう変更した。opt-in（`onRuntimeDispatchResult`を配線しない既存呼び出し元は従来のfire-and-forgetのまま無変更）であり、新しいlane/actionType/dispatch経路は追加していない。
+
+この応答を実際に**採用**する側（`ProjectionShell.tsx`の`handleRuntimeDispatchResult`、SSE refreshが既に使う`confirmProjectionEntryEmission`+`setEmission`境界への接続）はadmin-enum固有のUX要件（record切替時の整合等）を含むため、`admin-write-surface-selection-context-and-mode-composition-gap` Bundle側で実装・記録した。本Bundleの管轄は「応答を握り潰さず呼び出し元へ返す」という汎用部分のみであり、両Bundleの記録に分割されている点に注意。
 
 ### 受入条件
 
@@ -1481,15 +1504,24 @@ round 9のowner指摘は、round 7までのA/B/C探索を「対応資料に指�
 
 **実装済み:**
 - `AdminRuntimeMasterRoster.DataEnumDictionaryUpdateGroupAsync`（dryRun前段でgroupName省略時に`before.GroupName`へfallbackする既存ロジックを、pre-fillの現在値取得に流用）
-- `seedTrackerFromPropBindingsValue`（`frontend/runtime/liveNodeValueTracker.ts`）
-- `dispatchRuntimeComponentCommandAndForwardResult`（`frontend/runtime/runtimeComponentFactory.ts`）
-- `ProjectionShell.tsx`内`handleRuntimeDispatchResult`
+- `seedTrackerFromPropBindingsValue`（`frontend/runtime/liveNodeValueTracker.ts`、round 11で新設・round 12で`forceOverwrite`オプション追加）
+- `acceptsNonArrayResolvedValue`（`frontend/runtime/propBindingResolver.ts`、round 11——`form_input/search_input`+`value`のscalar例外を追加）
+- `adaptComponentDataHub`（`frontend/runtime/runtimeComponentAdapter.ts`、round 12——戻り値へ`onRuntimeDispatchResult: hub.onRuntimeDispatchResult`を追加）
+- `renderEmission`（`frontend/runtime/renderEmission.ts`、round 12——hub構築箇所へ`onRuntimeDispatchResult`オプションの配線を追加）
+- `dispatchRuntimeComponentCommandAndForwardResult`（`frontend/runtime/runtimeComponentFactory.ts`、round 12で新設）
+- `ProjectionShell.tsx`内`handleRuntimeDispatchResult`（round 12で新設）
 
-**未採用のまま残った候補（案A/B/C、round 9で撤回）:**
+**未採用のまま残った候補（案A/B/C、round 9で撤回——コードは書かれていない、机上比較のみ）:**
 - `HubNavigationResolver`の解決メソッド群、`NpgsqlContentBundleRepository.LoadHubNavigationSequenceAsync`、`hub_navigation:*`authoring関数群
 - `resolveHubNavigationLinks`（`frontend/runtime/projectionEntry.ts`）
 - `uiEventEffectRunner.ts`の`UI_STATE_UPDATE_OPEN_ACTIONS`ハンドラ
 - `runtimeComponentFactory.ts`の`inline_edit`系factory関数
+
+**調査のみ（round 13——既存実装を実際に読み、cross-manifest carrierとして使えないことを確認した対象。コード変更は無し）:**
+- `NpgsqlTopologyRepository.LoadLayoutNodesAsync`（1 layout=1 wiring制約の再確認）
+- `interpolateLinkHrefReadOnly`/`findLinkHrefPlaceholders`（`frontend/runtime/linkPlaceholderInterpolation.ts`）
+- `buildRouteNavigationEventBinding`（`frontend/runtime/renderEmission.ts`）、`emitBoundEvent`の`routeNavigation`分岐（`frontend/runtime/runtimeComponentFactory.ts`）
+- `parseProjectionEntrySelection`/`resolveProjectionEntryAxes`（`frontend/runtime/projectionEntry.ts`）
 
 ### 受入条件
 
@@ -1554,18 +1586,24 @@ round 9のowner指摘は、round 7までのA/B/C探索を「対応資料に指�
 - `backend/tests/Topolactor.Runtime.Tests/AdminRuntimeMasterRosterTests.cs`（round 9追加分——auth_users:create/update/delete 3 actionのchanged_fields_json unit proof）
 - `backend/tests/Topolactor.Integration.Tests/AdminEnumHubRelationUiProjectionLiveDbTests.cs`（round 9追加分——enum_dictionary 7 action全ての実Postgres persistence proof）
 
-### 対象ファイル名（実装済み — round 9）
+### 対象ファイル名
 
+**実装済み（round 9）:**
 - `docs/design/sql-attention-logs-ssot.yaml`（`optional_extension_fields`として`changed_fields_json`を追記。`required_identity_fields`自体は無変更）
 - `docs/design/admin-master-roster-management-ssot.yaml`（`logs_diff_admin_projection.physical_mapping.changed_fields`を実装内容に一致させて更新）
-- `db/sql_attention_logs_tables.sql`（`logs.diff`へ`changed_fields_json JSONB NOT NULL DEFAULT '{}'::jsonb`列を追加）
+- `db/sql_attention_logs_tables.sql`（`logs.diff`へ`changed_fields_json JSONB NOT NULL DEFAULT '{}'::jsonb`列を追加。round 12で`ALTER TABLE`によるmigration経路を追加したが、round 13で誤診断と判明し撤回済み——現行は`CREATE TABLE IF NOT EXISTS`内定義のみ）
 - `backend/schema/SqlAttentionContracts.cs`（`LogsDiffAppendRequest`へ`ChangedFieldsJson`を末尾optional追加）
 - `backend/repository/NpgsqlSqlAttentionLogsRepository.cs`（INSERT文へ配線）
 - `backend/runtime/AdminMasterRosterAudit.cs`（`AuditChangedField`型追加、`AppendAsync`のenvelope構築・永続化）
 - `backend/runtime/AdminRuntimeMasterRoster.cs`（既存10呼び出し元すべてを`AuditChangedField`配列へ更新）
 
+**調査のみ（round 12/13——実装まで読み込んだが、意味論の統一はowner決定待ちのため未実装）:**
+- `AdminRuntimeMasterRoster.DataAuthUsersUpdateAsync`（request-presence-conditionalなchangedFields構築パターン）
+- `AdminRuntimeMasterRoster.DataEnumDictionaryUpdateGroupAsync`（fixed-field-listなchangedFields構築パターン——上記と異なる規約が既に共存していることの確認に使用）
+
 ### 対象関数名
 
+**実装済み:**
 - `AdminMasterRosterAudit.AppendAsync`
 - `AdminMasterRosterAudit.InferJsonType`（`AppendAsync`が呼ぶ内部helper、changedFieldsの各値からtypeを一意に推論する）
 - `NpgsqlSqlAttentionLogsRepository.AppendLogsDiffAsync`
