@@ -740,6 +740,32 @@ def build_runtime_interaction_candidate(node):
             candidate[field] = node[field]
     return candidate
 
+def build_admin_runtime_dispatch_override_candidate(node):
+    """Build a dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger candidate entry from an
+    Action/Step eventBinding whose wiringLane is admin_runtime_dispatch_override_wiring.
+
+    Round 17 (2026-07-29): synced to backend/repository/NpgsqlUiTopologyRepository.cs
+    ValidateDispatchTargetRefByTrigger / frontend/runtime/renderEmission.ts
+    buildAdminRuntimeTargetRefOverrideByTrigger -- targetRef must already be in
+    "manifest:<uuid>:<layer>:<action>" shape (validated separately by validate_wiring_node's
+    lane-shape check, same as every other lane). Distinct from build_runtime_interaction_candidate:
+    this lane overrides a node's OWN admin_runtime dispatch target/payload for one trigger,
+    independent of runtimeInteractions[] entirely (round 6/15/16 design: action-authority-vs-
+    effect-data separation) -- never folded into a runtimeInteractions[] entry.
+    """
+    event_binding = node.get("eventBinding") or {}
+    if not isinstance(event_binding, dict):
+        return None
+    if event_binding.get("wiringLane") != "admin_runtime_dispatch_override_wiring":
+        return None
+    return {
+        "trigger": event_binding.get("trigger"),
+        "targetRef": event_binding.get("targetRef") or "",
+        "payloadFrom": event_binding.get("payloadFrom") or {},
+        "sourceActionKey": node.get("key"),
+    }
+
+
 def validate_ui_catalog_node(node, declared_surface, errors, path):
     allowed_kinds = set()
     if declared_surface:
@@ -888,6 +914,9 @@ def convert_node_to_seed_record(node, schema_to_seed_map, target_surface, loss_e
         runtime_interaction = build_runtime_interaction_candidate(node)
         if runtime_interaction is not None:
             record["runtimeInteractions"] = [runtime_interaction]
+        admin_runtime_override = build_admin_runtime_dispatch_override_candidate(node)
+        if admin_runtime_override is not None:
+            record["adminRuntimeDispatchOverride"] = admin_runtime_override
     elif react_kind == "Action":
         record["actionKey"] = record["key"]
         record["actionRef"] = node.get("actionRef", "")
@@ -895,6 +924,9 @@ def convert_node_to_seed_record(node, schema_to_seed_map, target_surface, loss_e
         runtime_interaction = build_runtime_interaction_candidate(node)
         if runtime_interaction is not None:
             record["runtimeInteractions"] = [runtime_interaction]
+        admin_runtime_override = build_admin_runtime_dispatch_override_candidate(node)
+        if admin_runtime_override is not None:
+            record["adminRuntimeDispatchOverride"] = admin_runtime_override
     elif react_kind == "Validation":
         record["validationKey"] = record["key"]
         record["rule"] = node.get("rule", "")
@@ -1267,9 +1299,11 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
             # Reuse the runtimeInteractions candidate convert_node_to_seed_record
             # already built via build_runtime_interaction_candidate at the
             # react-schema -> seed conversion step (single source of truth --
-            # never rebuilt here) rather than deriving a second one.
+            # never rebuilt here) rather than deriving a second one. Same reuse
+            # discipline for adminRuntimeDispatchOverride (round 17).
             interactions = record.get("runtimeInteractions") or []
-            if interactions:
+            admin_runtime_override = record.get("adminRuntimeDispatchOverride")
+            if interactions or admin_runtime_override:
                 parent_key = wrapper.get("parentKey")
                 # Resolve against the OWNING Form's disambiguated identity (the running map
                 # built above), never the raw parentKey string alone -- two different Form
@@ -1284,6 +1318,7 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                     "nodeId": owning_form_key,
                     "nodeKind": "catalog_component",
                     "runtimeInteractions": list(interactions),
+                    "adminRuntimeDispatchOverride": admin_runtime_override,
                 })
 
     layout_candidates = []
@@ -1314,12 +1349,43 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
     if tensor_nodes:
         merged = {}
         order = []
+        # Round 17: dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger are trigger-keyed
+        # maps (not a list like runtimeInteractions), each entry a full override for that
+        # trigger -- so per-nodeId source-action-key tracking for the completeness check below
+        # is kept in a SIBLING dict, never inside the maps themselves (which must match the
+        # exact Record<string,string> / Record<string,Record<string,string>> shape
+        # frontend/backend both validate, with no room for extra metadata fields).
+        override_source_action_keys_by_node = {}
         for node in tensor_nodes:
             nid = node["nodeId"]
             if nid not in merged:
-                merged[nid] = {"nodeId": nid, "nodeKind": node["nodeKind"], "runtimeInteractions": []}
+                merged[nid] = {
+                    "nodeId": nid,
+                    "nodeKind": node["nodeKind"],
+                    "runtimeInteractions": [],
+                    "dispatchTargetRefByTrigger": {},
+                    "dispatchPayloadFromByTrigger": {},
+                }
                 order.append(nid)
+                override_source_action_keys_by_node[nid] = []
             merged[nid]["runtimeInteractions"].extend(node["runtimeInteractions"])
+            override = node.get("adminRuntimeDispatchOverride")
+            if override:
+                trigger = override.get("trigger")
+                if trigger:
+                    merged[nid]["dispatchTargetRefByTrigger"][trigger] = override.get("targetRef", "")
+                    if override.get("payloadFrom"):
+                        merged[nid]["dispatchPayloadFromByTrigger"][trigger] = override["payloadFrom"]
+                    override_source_action_keys_by_node[nid].append(override.get("sourceActionKey"))
+
+        def _clean_tensor_node(n):
+            out = {"nodeId": n["nodeId"], "nodeKind": n["nodeKind"], "runtimeInteractions": n["runtimeInteractions"]}
+            if n["dispatchTargetRefByTrigger"]:
+                out["dispatchTargetRefByTrigger"] = n["dispatchTargetRefByTrigger"]
+            if n["dispatchPayloadFromByTrigger"]:
+                out["dispatchPayloadFromByTrigger"] = n["dispatchPayloadFromByTrigger"]
+            return out
+
         tensor_candidates.append({
             "tensorKey": f"{seed_key}.tensor",
             # The persisted tensor row's package_id FK needs a real
@@ -1327,7 +1393,13 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
             # componentGroupBundleAdoptionCandidates key, NEVER the
             # packageAdoptionCandidates key (package_authority_boundary).
             "packageIdRef": f"<{component_group_bundle_candidates[0]['componentGroupBundleKey']}>" if component_group_bundle_candidates else None,
-            "layoutPatchJson": {"nodes": [merged[nid] for nid in order]},
+            "layoutPatchJson": {"nodes": [_clean_tensor_node(merged[nid]) for nid in order]},
+            # Completeness-check-only sibling (never adopted into the DB row itself, same
+            # convention as wiring_action_entries' sourceRecordKey above): which Action/Step
+            # sourceActionKeys contributed an adminRuntimeDispatchOverride to each nodeId.
+            "adminRuntimeDispatchOverrideSourceActionKeysByNodeId": {
+                nid: keys for nid, keys in override_source_action_keys_by_node.items() if keys
+            },
         })
 
     manifest_refs_candidate = None
@@ -1510,11 +1582,14 @@ def validate_adoption_candidates(candidates, flat_records):
         ))
 
     tensor_interaction_action_keys = set()
+    admin_runtime_override_action_keys = set()
     for tensor in candidates.get("tensorAdoptionCandidates") or []:
         for node in dig(tensor, "layoutPatchJson", "nodes") or []:
             for interaction in node.get("runtimeInteractions") or []:
                 if interaction.get("sourceActionKey"):
                     tensor_interaction_action_keys.add(interaction["sourceActionKey"])
+        for keys in (tensor.get("adminRuntimeDispatchOverrideSourceActionKeysByNodeId") or {}).values():
+            admin_runtime_override_action_keys.update(k for k in keys if k)
 
     for wrapper in flat_records:
         record = wrapper.get("record") or {}
@@ -1531,6 +1606,15 @@ def validate_adoption_candidates(candidates, flat_records):
                 path,
                 "blocking",
                 f"Action/Step '{key}' has a {event_binding.get('wiringLane')} eventBinding but no corresponding tensorAdoptionCandidates runtimeInteractions[] entry",
+            ))
+
+        if event_binding.get("wiringLane") == "admin_runtime_dispatch_override_wiring" and key not in admin_runtime_override_action_keys:
+            errors.append(err(
+                "ADMIN_RUNTIME_DISPATCH_OVERRIDE_NOT_PERSISTED_LAYOUT_PATH",
+                path,
+                "blocking",
+                f"Action/Step '{key}' has an admin_runtime_dispatch_override_wiring eventBinding but no "
+                "corresponding tensorAdoptionCandidates dispatchTargetRefByTrigger entry",
             ))
 
         for interaction in record.get("runtimeInteractions") or []:

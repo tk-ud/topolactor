@@ -942,6 +942,34 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     }
 
     [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_NonHyphenatedUuid_FailsClose()
+    {
+        // Round 17 (f): pins the UUID accept-set relationship. AdminRuntimeTargetRefRe (this
+        // save-time boundary) requires the canonical 36-char hyphenated UUID form -- a strict
+        // SUBSET of what ManifestDispatcher.TryParseManifestTargetRef's Guid.TryParse would
+        // accept (Guid.TryParse also accepts the 32-hex-digit "N" form with no hyphens, among
+        // others). This "N"-form manifest id is deliberately valid per Guid.TryParse but must
+        // still fail closed HERE -- see ManifestDispatcherTargetRefTests.
+        // DispatchAsync_TargetRef_NFormUuid_GuidTryParseAcceptsButAdminRuntimeTargetRefReRejects_
+        // ProvingStrictSubsetRelationship for the dispatch-time half of this same relationship.
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime");
+        const string nFormUuid = "000000000000000000000000000ae210"; // 32 hex digits, no hyphens
+        Assert.True(Guid.TryParse(nFormUuid, out _), "test fixture precondition: nFormUuid must itself be Guid.TryParse-valid");
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button",
+            "dispatchTargetRefByTrigger": { "click": "manifest:{{nFormUuid}}:enum_dictionary:create_group" } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_TARGET_REF_INVALID", result.Message);
+    }
+
+    [Fact]
     public async Task ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_UnknownTrigger_FailsClose()
     {
         var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime");

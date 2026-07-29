@@ -1135,6 +1135,25 @@ react_schema_topology_seed_translator_ssot:
         authority_ref: docs/design/ui-builder-preset-ecosystem-ssot.yaml cross_preset_authoring_boundary.author_resolution_map.route_navigation_targetRef
         allowed_authority_mapping_values: [draft_or_projection_only, draft_apply_not_execution_authority]
         allowed_payload_from_sources: [literal]
+      admin_runtime_dispatch_override_wiring:
+        meaning: >-
+          per-trigger override of a node's admin_runtime dispatch target (dispatchTargetRefByTrigger)
+          and/or payload (dispatchPayloadFromByTrigger), independent of the owning layout's own
+          uniform wiring_kind=admin_runtime target_ref. Round 17 (2026-07-29) addition, closing the
+          known_gaps entry below: none of the other five lanes maps to this shape, so an
+          Action/Step authoring this override previously had no wiringLane it could legally declare.
+        examples: [enum_group_create_preview, enum_group_create_confirm, admin_write_operation_selector_override]
+        targetRef_shape: 'manifest:<manifestId>:<layer>:<action>'
+        authority_ref: docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml admin_runtime_target_ref_override_contract
+        allowed_authority_mapping_values: [validation_only, preview_only, draft_apply_not_execution_authority]
+        allowed_payload_from_sources: [node_value, event_path, literal]
+        record_carrier: >-
+          Distinct from every other lane above: this lane's Action/Step candidate is NEVER folded
+          into tensorAdoptionCandidates[].layoutPatchJson.nodes[].runtimeInteractions[] (round 6/15/16
+          design: action-authority-vs-effect-data separation). It is carried as its own
+          adminRuntimeDispatchOverride candidate (build_admin_runtime_dispatch_override_candidate in
+          .agent/scripts/react_schema_topology_seed_translator.py) and merged into that SAME tensor
+          node's own dispatchTargetRefByTrigger / dispatchPayloadFromByTrigger maps, keyed by trigger.
     event_binding_shape:
       required: [trigger, wiringLane, targetRef, authority]
       optional: [payloadFrom, outputProp, stateTarget]
@@ -1176,7 +1195,18 @@ react_schema_topology_seed_translator_ssot:
           2026-07-24: the same entry's write_payload_capture_mechanism_implemented sibling
           field additionally resolves the write-side sub-gap (node value tracking +
           Lane 2 payloadFrom resolution, live-DB write+reread proof) this cross-reference
-          also covers.
+          also covers. 2026-07-29 (round 17): the translator-side sub-gap this note used to
+          describe ("none of the five lanes... from a seed-authored Action node") is now closed
+          by the new admin_runtime_dispatch_override_wiring lane above (6th lane) plus
+          build_admin_runtime_dispatch_override_candidate in
+          .agent/scripts/react_schema_topology_seed_translator.py -- a seed-authored Action/Step
+          CAN now declare this lane and have it reach
+          tensorAdoptionCandidates[].layoutPatchJson.nodes[].dispatchTargetRefByTrigger /
+          dispatchPayloadFromByTrigger via the generation pipeline, not only via hand-authored
+          seed SQL. Not yet exercised by any real fixture (db/seed_empty.sql's ae210-ae280
+          manifests, which already use this exact node shape, remain hand-authored, predating
+          this lane) -- see .agent/tasks/todo.md for the remaining absorption-into-generation
+          item.
         note: >-
           Cross-reference: docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
           lane_storage_boundary.known_gaps carries the full determination (confirmed via

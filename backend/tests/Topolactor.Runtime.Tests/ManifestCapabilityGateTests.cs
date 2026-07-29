@@ -121,7 +121,7 @@ public class ManifestCapabilityGateTests
     {
         var manifest = MakeManifest(requiredRole: "admin");
         var dispatcher = BuildDispatcher(manifest);
-        var targetRef = $"manifest:{ManifestId}:wiring_key";
+        var targetRef = $"manifest:{ManifestId}:screen_list:Search";
 
         var response = await dispatcher.DispatchAsync(MakeRequest(role: "user", targetRef: targetRef));
 
@@ -136,7 +136,7 @@ public class ManifestCapabilityGateTests
     {
         var manifest = MakeManifest(requiredRole: "admin");
         var dispatcher = BuildDispatcher(manifest);
-        var targetRef = $"manifest:{ManifestId}:wiring_key";
+        var targetRef = $"manifest:{ManifestId}:screen_list:Search";
 
         var response = await dispatcher.DispatchAsync(MakeRequest(role: "admin", targetRef: targetRef));
 
@@ -155,6 +155,12 @@ public class ManifestCapabilityGateTests
         Topology: JsonSerializer.SerializeToElement(new object[]
         {
             new { type = "runtime_mapping", runtime_destination = "admin_runtime" },
+            // Round 17 hardening: an admin_runtime target_ref dispatch also requires the
+            // manifest's own dispatcher_mapping to authorize the request's layer/action — this
+            // entry matches MakeRequest's Layer="screen_list"/Action="Search" so these capability
+            // gate tests keep isolating capability_requirement behavior, not the (separately
+            // tested) layer/action authorization gate.
+            new { type = "dispatcher_mapping", role = "admin", target = "manifest", layer = "screen_list", action = "Search" },
         }).EnumerateArray().ToArray(),
         Status: "active");
 
@@ -186,7 +192,7 @@ public class ManifestCapabilityGateTests
     {
         var manifest = MakeAdminRuntimeManifest();
         var dispatcher = BuildDispatcher(manifest, includeAdminRuntime: true);
-        var targetRef = $"manifest:{ManifestId}:wiring_key";
+        var targetRef = $"manifest:{ManifestId}:screen_list:Search";
 
         var response = await dispatcher.DispatchAsync(MakeRequest(role: "user", targetRef: targetRef));
 
@@ -199,7 +205,7 @@ public class ManifestCapabilityGateTests
     {
         var manifest = MakeAdminRuntimeManifest();
         var dispatcher = BuildDispatcher(manifest, includeAdminRuntime: true);
-        var targetRef = $"manifest:{ManifestId}:wiring_key";
+        var targetRef = $"manifest:{ManifestId}:screen_list:Search";
 
         var response = await dispatcher.DispatchAsync(MakeRequest(role: "admin", targetRef: targetRef));
 

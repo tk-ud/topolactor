@@ -69,6 +69,53 @@ public record CloneReplacementMergeResult(
 );
 
 /// <summary>
+/// Shared dispatcher_mapping axis-matching authority. Extracted from
+/// NpgsqlManifestRepository so that both the axes-based resolution path
+/// (ResolveActiveManifestAsync, CountActiveAxisConflictsAsync) and any other
+/// caller that needs to verify a SPECIFIC already-resolved manifest's own
+/// dispatcher_mapping entries against a set of axes (e.g. ManifestDispatcher's
+/// target_ref admin_runtime layer/action authorization — round 17 hardening)
+/// use the exact same matching semantics. A null axis value is a wildcard
+/// (matches any); a non-null axis value requires an exact case-insensitive
+/// match against a dispatcher_mapping entry's own field.
+/// </summary>
+public static class DispatcherMappingAxisAuthority
+{
+    public static bool MatchesAxes(
+        IReadOnlyList<JsonElement> topology,
+        string? role,
+        string? target,
+        string? layer,
+        string? action)
+    {
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind != JsonValueKind.Object)
+                continue;
+
+            if (!entry.TryGetProperty("type", out var typeEl) ||
+                !string.Equals(typeEl.GetString(), "dispatcher_mapping", StringComparison.Ordinal))
+                continue;
+
+            if (!AxisMatches(entry, "role", role)) continue;
+            if (!AxisMatches(entry, "target", target)) continue;
+            if (!AxisMatches(entry, "layer", layer)) continue;
+            if (!AxisMatches(entry, "action", action)) continue;
+
+            return true;
+        }
+        return false;
+    }
+
+    private static bool AxisMatches(JsonElement entry, string propName, string? value)
+    {
+        if (value is null) return true;
+        if (!entry.TryGetProperty(propName, out var prop)) return false;
+        return string.Equals(prop.GetString(), value, StringComparison.OrdinalIgnoreCase);
+    }
+}
+
+/// <summary>
 /// Abstract manifest repository. Resolves active manifests by dispatcher axes
 /// (role, target, layer, action) from the manifest table.
 ///

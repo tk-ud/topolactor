@@ -3587,6 +3587,7 @@ VALUES (
     NULL,
     ARRAY[
         '{"type":"hub_grouping","manifestKey":"admin.enum.management.projection","bundle":"admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type":"dispatcher_mapping","role":"admin","target":"manifest","layer":"enum_dictionary","action":"list_groups"}'::jsonb,
         '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
         '{"type":"ui_projection","packageIds":["00000000-0000-0000-0000-0000000ae203"],"layoutId":"00000000-0000-0000-0000-0000000ae204","wiringId":"00000000-0000-0000-0000-0000000ae205","tensorId":"00000000-0000-0000-0000-0000000ae206"}'::jsonb
     ]::jsonb[],
@@ -3804,6 +3805,7 @@ VALUES (
     NULL,
     ARRAY[
         '{"type": "hub_grouping", "manifestKey": "admin.enum.management.write.create_group", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "dispatcher_mapping", "role": "admin", "target": "manifest", "layer": "enum_dictionary", "action": "create_group"}'::jsonb,
         '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
         '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae213"], "layoutId": "00000000-0000-0000-0000-0000000ae214", "wiringId": "00000000-0000-0000-0000-0000000ae215", "tensorId": "00000000-0000-0000-0000-0000000ae216"}'::jsonb
     ]::jsonb[],
@@ -3906,6 +3908,7 @@ VALUES (
     NULL,
     ARRAY[
         '{"type": "hub_grouping", "manifestKey": "admin.enum.management.write.update_group", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "dispatcher_mapping", "role": "admin", "target": "manifest", "layer": "enum_dictionary", "action": "update_group"}'::jsonb,
         '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
         '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae223"], "layoutId": "00000000-0000-0000-0000-0000000ae224", "wiringId": "00000000-0000-0000-0000-0000000ae225", "tensorId": "00000000-0000-0000-0000-0000000ae226"}'::jsonb
     ]::jsonb[],
@@ -4025,6 +4028,7 @@ VALUES (
     NULL,
     ARRAY[
         '{"type": "hub_grouping", "manifestKey": "admin.enum.management.write.delete_group", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "dispatcher_mapping", "role": "admin", "target": "manifest", "layer": "enum_dictionary", "action": "delete_group"}'::jsonb,
         '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
         '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae233"], "layoutId": "00000000-0000-0000-0000-0000000ae234", "wiringId": "00000000-0000-0000-0000-0000000ae235", "tensorId": "00000000-0000-0000-0000-0000000ae236"}'::jsonb
     ]::jsonb[],
@@ -4127,6 +4131,7 @@ VALUES (
     NULL,
     ARRAY[
         '{"type": "hub_grouping", "manifestKey": "admin.enum.management.write.create_item", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "dispatcher_mapping", "role": "admin", "target": "manifest", "layer": "enum_dictionary", "action": "create_item"}'::jsonb,
         '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
         '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae243"], "layoutId": "00000000-0000-0000-0000-0000000ae244", "wiringId": "00000000-0000-0000-0000-0000000ae245", "tensorId": "00000000-0000-0000-0000-0000000ae246"}'::jsonb
     ]::jsonb[],
@@ -4229,6 +4234,7 @@ VALUES (
     NULL,
     ARRAY[
         '{"type": "hub_grouping", "manifestKey": "admin.enum.management.write.update_item", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "dispatcher_mapping", "role": "admin", "target": "manifest", "layer": "enum_dictionary", "action": "update_item"}'::jsonb,
         '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
         '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae253"], "layoutId": "00000000-0000-0000-0000-0000000ae254", "wiringId": "00000000-0000-0000-0000-0000000ae255", "tensorId": "00000000-0000-0000-0000-0000000ae256"}'::jsonb
     ]::jsonb[],
@@ -4331,6 +4337,7 @@ VALUES (
     NULL,
     ARRAY[
         '{"type": "hub_grouping", "manifestKey": "admin.enum.management.write.delete_item", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "dispatcher_mapping", "role": "admin", "target": "manifest", "layer": "enum_dictionary", "action": "delete_item"}'::jsonb,
         '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
         '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae263"], "layoutId": "00000000-0000-0000-0000-0000000ae264", "wiringId": "00000000-0000-0000-0000-0000000ae265", "tensorId": "00000000-0000-0000-0000-0000000ae266"}'::jsonb
     ]::jsonb[],
@@ -4433,6 +4440,7 @@ VALUES (
     NULL,
     ARRAY[
         '{"type": "hub_grouping", "manifestKey": "admin.enum.management.write.set_group_items", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "dispatcher_mapping", "role": "admin", "target": "manifest", "layer": "enum_dictionary", "action": "set_group_items"}'::jsonb,
         '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
         '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae273"], "layoutId": "00000000-0000-0000-0000-0000000ae274", "wiringId": "00000000-0000-0000-0000-0000000ae275", "tensorId": "00000000-0000-0000-0000-0000000ae276"}'::jsonb
     ]::jsonb[],
@@ -4561,6 +4569,7 @@ VALUES (
     NULL,
     ARRAY[
         '{"type": "hub_grouping", "manifestKey": "admin.enum.management.read.get_group", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "dispatcher_mapping", "role": "admin", "target": "manifest", "layer": "enum_dictionary", "action": "get_group"}'::jsonb,
         '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
         '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae283"], "layoutId": "00000000-0000-0000-0000-0000000ae284", "wiringId": "00000000-0000-0000-0000-0000000ae285", "tensorId": "00000000-0000-0000-0000-0000000ae286"}'::jsonb
     ]::jsonb[],

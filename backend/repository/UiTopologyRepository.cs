@@ -285,6 +285,20 @@ public class UiTopologyRepository
     }
 
     /// <summary>
+    /// Lists every (active admin_runtime manifest, dispatcher_mapping layer/action) pair as an
+    /// authorable dispatchTargetRefByTrigger candidate — the UI Builder authoring-side counterpart
+    /// to ListExternalPortAuthoringCandidatesAsync/ListInstanceOperationAuthoringCandidatesAsync.
+    /// A manifest with N dispatcher_mapping entries yields N candidates (one targetRef per
+    /// layer/action pair it declares). Derived purely from manifest/dispatcher_mapping DB state —
+    /// no per-surface (e.g. enum_dictionary) hardcoding.
+    /// </summary>
+    public virtual Task<IReadOnlyList<AdminRuntimeTargetRefAuthoringCandidateDto>> ListAdminRuntimeTargetRefAuthoringCandidatesAsync(
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException("UiTopologyRepository.ListAdminRuntimeTargetRefAuthoringCandidatesAsync must be overridden.");
+    }
+
+    /// <summary>
     /// Loads the wiring_kind currently bound to layoutId (topology.ui_topology_tensor ->
     /// topology.ui_wiring_registry). Null when no tensor row exists yet or wiring_kind is null.
     /// Used by ValidateLayoutPatchAsync to gate the admin_runtime-only

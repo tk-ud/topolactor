@@ -368,6 +368,22 @@ public record InstanceOperationAuthoringCandidateDto(
     [property: JsonPropertyName("targetRef")] string TargetRef
 );
 
+/// <summary>
+/// One authorable admin_runtime dispatch target: an (active manifest, dispatcher_mapping
+/// layer/action) pair, expanded into the exact "manifest:&lt;uuid&gt;:&lt;layer&gt;:&lt;action&gt;"
+/// targetRef shape dispatchTargetRefByTrigger/the layout's own uniform targetRef both require
+/// (parseAdminRuntimeLayerAction / ADMIN_RUNTIME_TARGET_REF_RE). Derived entirely from manifest/
+/// dispatcher_mapping authority already in the DB — never a frontend-hardcoded per-surface action
+/// list, so this candidate source is reusable by any admin_runtime action across any subBundle.
+/// </summary>
+public record AdminRuntimeTargetRefAuthoringCandidateDto(
+    [property: JsonPropertyName("manifestId")] string ManifestId,
+    [property: JsonPropertyName("manifestKey")] string? ManifestKey,
+    [property: JsonPropertyName("layer")] string Layer,
+    [property: JsonPropertyName("action")] string Action,
+    [property: JsonPropertyName("targetRef")] string TargetRef
+);
+
 public record PackageWiringUpdateRequestDto(
     [property: JsonPropertyName("packageId")] string PackageId,
     [property: JsonPropertyName("wiringId")] string WiringId,

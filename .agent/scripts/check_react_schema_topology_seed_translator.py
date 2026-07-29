@@ -1153,6 +1153,102 @@ def main():
         _, doc42 = run_generate_topology_seed(tmp42)
         expect("42. a supplied schema with a null label deep in the tree becomes blocking SEED_RECORD_MISSING_REQUIRED_FIELD", "SEED_RECORD_MISSING_REQUIRED_FIELD" in rule_ids(doc42))
 
+        # --- round 17: admin_runtime_dispatch_override_wiring lane (6th wiring_lane_contract
+        # lane) -- an Action authoring a dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger
+        # override must reach tensorAdoptionCandidates via generation, not only hand-authored
+        # seed SQL (translator/fixture sync gap flagged by the round 17 review). ---
+        admin_runtime_override_schema = {
+            "schema": "topolactor.react_schema.v1",
+            "presetKey": "admin.enum.management.write.create_group",
+            "surface": "admin.enum.management.write.create_group",
+            "sourceYamlRefs": ["docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml#admin_runtime_target_ref_override_contract"],
+            "root": {
+                "kind": "Projection", "key": "p", "label": "p", "sourceYamlRefs": ["a"],
+                "children": [{
+                    "kind": "Category", "key": "c1", "label": "c1", "sourceYamlRefs": ["a"],
+                    "children": [{
+                        "kind": "Section", "key": "s1", "label": "s1", "sourceYamlRefs": ["a"], "sectionKind": "readonly_boundary",
+                        "children": [{
+                            "kind": "Form", "key": "create_group_form", "label": "Create group", "sourceYamlRefs": ["a"],
+                            "target": "enum.groups", "mode": "create",
+                            "authorityMarker": "draft_apply_not_execution_authority",
+                            "fields": ["group_name_field"], "actions": ["confirm_button"],
+                            "children": [
+                                {
+                                    "kind": "Field", "key": "group_name_field", "label": "Group name", "sourceYamlRefs": ["a"],
+                                    "control": "form_input/form_field", "required": True,
+                                },
+                                {
+                                    "kind": "Action", "key": "confirm_button", "label": "Confirm & write", "sourceYamlRefs": ["a"],
+                                    "authorityMarker": "draft_apply_not_execution_authority",
+                                    "actionRef": "ui-local:confirm_button.write",
+                                    "eventBinding": {
+                                        "trigger": "click",
+                                        "wiringLane": "admin_runtime_dispatch_override_wiring",
+                                        "targetRef": "manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group",
+                                        "authority": "draft_apply_not_execution_authority",
+                                        "payloadFrom": {"groupName": "node:group_name_field.value"},
+                                    },
+                                },
+                            ],
+                        }],
+                    }],
+                }],
+            },
+        }
+        tmp_aro = write_topology_seed_tmp_fixture(json.dumps(admin_runtime_override_schema), tmpdir=tmpdir)
+        proc_aro, doc_aro = run_generate_topology_seed(tmp_aro)
+        expect(
+            "42a. admin_runtime_dispatch_override_wiring Action translates with zero validationErrors",
+            proc_aro.returncode == 0 and not (doc_aro or {}).get("validationErrors"),
+        )
+        aro_adoption = (doc_aro or {}).get("adoptionCandidates") or {}
+        aro_tensor_nodes = []
+        for tensor in aro_adoption.get("tensorAdoptionCandidates") or []:
+            aro_tensor_nodes.extend(dig(tensor, "layoutPatchJson", "nodes") or [])
+        aro_node = next((n for n in aro_tensor_nodes if n.get("dispatchTargetRefByTrigger")), None)
+        expect(
+            "42b. the Action's override reaches tensorAdoptionCandidates[].layoutPatchJson.nodes[].dispatchTargetRefByTrigger keyed by trigger",
+            aro_node is not None
+            and aro_node["dispatchTargetRefByTrigger"].get("click")
+            == "manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group",
+        )
+        expect(
+            "42c. the same node's dispatchPayloadFromByTrigger carries the eventBinding's payloadFrom for that trigger",
+            aro_node is not None
+            and aro_node.get("dispatchPayloadFromByTrigger", {}).get("click") == {"groupName": "node:group_name_field.value"},
+        )
+        expect(
+            "42d. the override is NEVER folded into runtimeInteractions[] (action-authority-vs-effect-data separation, round 6/15/16 design)",
+            aro_node is not None and aro_node.get("runtimeInteractions") == [],
+        )
+
+        # Negative: an Action declaring this lane but never reaching a tensor node (simulated by
+        # validating adoption candidates directly with an empty tensorAdoptionCandidates bucket)
+        # must fail closed, mirroring the pre-existing RUNTIME_INTERACTIONS_NOT_PERSISTED_LAYOUT_PATH
+        # completeness check for the other dispatch lanes.
+        orphan_admin_runtime_override_action = {
+            "record": {
+                "recordType": "topology_ui_action",
+                "key": "orphan_override_action",
+                "sourceReactPath": "$.root.children[0]",
+                "eventBinding": {
+                    "trigger": "click",
+                    "wiringLane": "admin_runtime_dispatch_override_wiring",
+                    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group",
+                    "authority": "draft_apply_not_execution_authority",
+                },
+            },
+        }
+        orphan_aro_errors = translator_impl.validate_adoption_candidates(
+            {"tensorAdoptionCandidates": []}, [orphan_admin_runtime_override_action],
+        )
+        orphan_aro_rule_ids = [e.get("ruleId") for e in orphan_aro_errors]
+        expect(
+            "42e. ADMIN_RUNTIME_DISPATCH_OVERRIDE_NOT_PERSISTED_LAYOUT_PATH fires when an admin_runtime_dispatch_override_wiring Action has no tensorAdoptionCandidates dispatchTargetRefByTrigger entry",
+            "ADMIN_RUNTIME_DISPATCH_OVERRIDE_NOT_PERSISTED_LAYOUT_PATH" in orphan_aro_rule_ids,
+        )
+
         # --- physical_search_crud_aggregate.v1 canonical SPA CRUD schema fixture ---
         # Independent, standalone fixture (not just JSON embedded in the topology-seed
         # envelope's inputText) plus a sync check that the envelope's inputText really

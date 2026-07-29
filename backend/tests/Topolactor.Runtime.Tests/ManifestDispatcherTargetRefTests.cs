@@ -18,7 +18,7 @@ public class ManifestDispatcherTargetRefTests
 {
     private static readonly Guid KnownManifestId = new("aaaaaaaa-bbbb-cccc-dddd-000000000001");
 
-    private static ManifestDispatcher BuildDispatcher(TrackingManifestRepository repo, IReadOnlyDictionary<string, IDispatchableRuntime>? extraHandlers = null)
+    private static ManifestDispatcher BuildDispatcher(ManifestRepository repo, IReadOnlyDictionary<string, IDispatchableRuntime>? extraHandlers = null)
     {
         var targetOverride = RuntimeExecutorTests.CreateTargetDispatchOverride();
         var handlers = new Dictionary<string, IDispatchableRuntime>
@@ -212,6 +212,136 @@ public class ManifestDispatcherTargetRefTests
         Assert.Contains(response.Errors, e => e.Code == "MANIFEST_NOT_FOUND");
         Assert.True(repo.LoadByIdCalled);
     }
+
+    // ─── round 17 hardening: admin_runtime target_ref TOCTOU + layer/action authorization ────
+    // These checks apply identically whether the target_ref reaching this branch came from the
+    // uniform per-layout tensor row (NpgsqlTopologyRepository.LoadLayoutNodesAsync) or a per-node
+    // dispatchTargetRefByTrigger override (renderEmission.ts buildAdminRuntimeTargetRefOverrideByTrigger)
+    // -- both produce the exact same payload.target_ref/Request.Layer/Request.Action shape by the
+    // time they reach ManifestDispatcher, so there is no separate "override path" to special-case.
+
+    private static EndpointRequestDto MakeAdminRuntimeRequest(string layer, string action, string targetRef, string role = "admin") =>
+        new("Search", "manifest", layer, action,
+            IdOrHubId: null,
+            Payload: BuildPayload(targetRef: targetRef),
+            Context: null,
+            TriggerKind: "client",
+            Role: role);
+
+    [Fact]
+    public async Task DispatchAsync_TargetRef_AdminRuntimeManifest_NotActive_ReturnsNotActiveError()
+    {
+        var repo = new ConfigurableManifestRepository(KnownManifestId, status: "draft", dispatcherMappingLayer: "enum_dictionary", dispatcherMappingAction: "create_group");
+        var dispatcher = BuildDispatcher(repo);
+        var targetRef = $"manifest:{KnownManifestId}:enum_dictionary:create_group";
+
+        var response = await dispatcher.DispatchAsync(MakeAdminRuntimeRequest("enum_dictionary", "create_group", targetRef));
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "TARGET_REF_MANIFEST_NOT_ACTIVE");
+    }
+
+    [Fact]
+    public async Task DispatchAsync_TargetRef_AdminRuntimeManifest_LayerActionMismatch_ReturnsMismatchError()
+    {
+        // target_ref's own embedded suffix says create_group, but the request separately declares
+        // Layer/Action=enum_dictionary/delete_group -- these must be self-consistent.
+        var repo = new ConfigurableManifestRepository(KnownManifestId, status: "active", dispatcherMappingLayer: "enum_dictionary", dispatcherMappingAction: "create_group");
+        var dispatcher = BuildDispatcher(repo);
+        var targetRef = $"manifest:{KnownManifestId}:enum_dictionary:create_group";
+
+        var response = await dispatcher.DispatchAsync(MakeAdminRuntimeRequest("enum_dictionary", "delete_group", targetRef));
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "TARGET_REF_LAYER_ACTION_MISMATCH");
+    }
+
+    [Fact]
+    public async Task DispatchAsync_TargetRef_AdminRuntimeManifest_ActionNotInDispatcherMapping_ReturnsUnauthorizedError()
+    {
+        // The exact scenario the owner flagged: a create_group-only manifest's UUID combined with
+        // a delete_group action. Both target_ref suffix and request axes agree on delete_group, so
+        // the mismatch check above passes -- but this manifest's own dispatcher_mapping never
+        // declared delete_group, only create_group, so it must still fail closed.
+        var repo = new ConfigurableManifestRepository(KnownManifestId, status: "active", dispatcherMappingLayer: "enum_dictionary", dispatcherMappingAction: "create_group");
+        var dispatcher = BuildDispatcher(repo);
+        var targetRef = $"manifest:{KnownManifestId}:enum_dictionary:delete_group";
+
+        var response = await dispatcher.DispatchAsync(MakeAdminRuntimeRequest("enum_dictionary", "delete_group", targetRef));
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "TARGET_REF_LAYER_ACTION_UNAUTHORIZED");
+    }
+
+    [Fact]
+    public async Task DispatchAsync_TargetRef_AdminRuntimeManifest_NonLayerActionShape_ReturnsMissingError()
+    {
+        var repo = new ConfigurableManifestRepository(KnownManifestId, status: "active", dispatcherMappingLayer: null, dispatcherMappingAction: null);
+        var dispatcher = BuildDispatcher(repo);
+        var targetRef = $"manifest:{KnownManifestId}:some_wiring_key"; // no layer:action suffix
+
+        var response = await dispatcher.DispatchAsync(MakeAdminRuntimeRequest("enum_dictionary", "create_group", targetRef));
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "TARGET_REF_ADMIN_RUNTIME_LAYER_ACTION_MISSING");
+    }
+
+    [Fact]
+    public async Task DispatchAsync_TargetRef_AdminRuntimeManifest_Authorized_Succeeds()
+    {
+        var repo = new ConfigurableManifestRepository(KnownManifestId, status: "active", dispatcherMappingLayer: "enum_dictionary", dispatcherMappingAction: "create_group");
+        var dispatcher = BuildDispatcher(repo, new Dictionary<string, IDispatchableRuntime>
+        {
+            ["admin_runtime"] = new StubSuccessRuntime(),
+        });
+        var targetRef = $"manifest:{KnownManifestId}:enum_dictionary:create_group";
+
+        var response = await dispatcher.DispatchAsync(MakeAdminRuntimeRequest("enum_dictionary", "create_group", targetRef));
+
+        Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
+    }
+
+    [Fact]
+    public async Task DispatchAsync_TargetRef_NFormUuid_GuidTryParseAcceptsButAdminRuntimeTargetRefReRejects_ProvingStrictSubsetRelationship()
+    {
+        // Round 17 (f): pins the UUID accept-set relationship from the dispatch-time half.
+        // ManifestDispatcher.TryParseManifestTargetRef uses Guid.TryParse, which accepts the
+        // 32-hex-digit "N" form (no hyphens) -- unlike the strict 36-char hyphenated form the
+        // save-time boundary (NpgsqlUiTopologyRepository.AdminRuntimeTargetRefRe) requires. This
+        // proves TryParseManifestTargetRef really is the more lenient superset: a target_ref no
+        // save-time-validated dispatchTargetRefByTrigger entry could ever contain still resolves
+        // here. See NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs
+        // ValidateLayoutPatchAsync_DispatchTargetRefByTrigger_NonHyphenatedUuid_FailsClose for the
+        // save-time half rejecting the identical string.
+        const string nFormUuid = "aaaaaaaabbbbccccddddaaaaaaaabbbb"; // 32 hex digits, no hyphens
+        var manifestGuid = Guid.Parse(nFormUuid);
+        Assert.True(Guid.TryParse(nFormUuid, out _), "test fixture precondition: nFormUuid must itself be Guid.TryParse-valid");
+
+        var repo = new TrackingManifestRepository(manifestGuid);
+        var dispatcher = BuildDispatcher(repo);
+        var targetRef = $"manifest:{nFormUuid}:search_wiring";
+
+        var response = await dispatcher.DispatchAsync(MakeRequest(BuildPayload(targetRef: targetRef)));
+
+        Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
+        Assert.True(repo.LoadByIdCalled);
+        Assert.Equal(manifestGuid, repo.LoadByIdCalledWith);
+    }
+
+    [Fact]
+    public async Task DispatchAsync_TargetRef_NonAdminRuntimeDestination_SkipsLayerActionAuthorization()
+    {
+        // The generic package-wiring target_ref shape (manifest:<uuid>:<wiringKey>, e.g.
+        // screenReadQueryWiring) has no layer:action suffix to authorize and must stay unaffected --
+        // this authorization is scoped to admin_runtime-destination manifests only.
+        var repo = new TrackingManifestRepository(KnownManifestId, runtimeDestination: "topology_transform_runtime");
+        var dispatcher = BuildDispatcher(repo);
+        var targetRef = $"manifest:{KnownManifestId}:search_wiring";
+
+        var response = await dispatcher.DispatchAsync(MakeRequest(BuildPayload(targetRef: targetRef)));
+
+        Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
+    }
 }
 
 // ─── Test doubles ─────────────────────────────────────────────────────────────
@@ -249,6 +379,85 @@ internal sealed class TrackingManifestRepository(Guid? knownManifestId, string r
         var result = knownManifestId.HasValue ? MakeManifest(knownManifestId.Value) : null;
         return Task.FromResult<ManifestRecord?>(result);
     }
+
+    public override Task<IReadOnlyList<ManifestListItem>> ListManifestsAsync(
+        string? statusFilter, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<ManifestListItem>>([]);
+
+    public override Task<ManifestDetailRecord?> LoadDetailByIdAsync(Guid manifestId, CancellationToken ct = default) =>
+        Task.FromResult<ManifestDetailRecord?>(null);
+
+    public override Task<int> CountActiveAxisConflictsAsync(
+        string role, string target, string layer, string action, Guid? excludeManifestId, CancellationToken ct = default) =>
+        Task.FromResult(0);
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> CreateDraftAsync(
+        Guid? relationRegistryId, IReadOnlyList<JsonElement> topology, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedDraft();
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> UpdateDraftAsync(
+        Guid manifestId, Guid? relationRegistryId, IReadOnlyList<JsonElement> topology, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedDraft();
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> PromoteAsync(
+        Guid manifestId, IReadOnlySet<string> allowedRuntimeDestinations, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedLifecycle();
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> DeprecateAsync(
+        Guid manifestId, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedLifecycle();
+
+    public override Task<IReadOnlyList<PromotionManifestListItem>> ListPromotionManifestsAsync(
+        string? statusFilter, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.EmptyPromotionList(statusFilter, ct);
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> UpdatePromotionMetadataDraftAsync(
+        Guid manifestId, JsonElement promotionEntry, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedMerge();
+
+    public override Task<int> CountActivePromotionKeyConflictsAsync(
+        string manifestKey, string versionLabel, Guid? excludeManifestId, CancellationToken ct = default) =>
+        Task.FromResult(0);
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> MergeTopologyExtensionDraftAsync(
+        Guid manifestId, string entryType, JsonElement entryBody, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedMerge();
+}
+
+/// <summary>Test double for round 17 admin_runtime target_ref hardening: configurable manifest
+/// status and a single optional dispatcher_mapping entry, so tests can control the exact
+/// active/authorization scenario under test.</summary>
+internal sealed class ConfigurableManifestRepository(
+    Guid knownManifestId, string status, string? dispatcherMappingLayer, string? dispatcherMappingAction)
+    : ManifestRepository(NullLogger<ManifestRepository>.Instance)
+{
+    public override Task<ManifestRecord?> LoadByIdAsync(Guid manifestId, CancellationToken ct = default)
+    {
+        if (manifestId != knownManifestId) return Task.FromResult<ManifestRecord?>(null);
+
+        var entries = new List<object> { new { type = "runtime_mapping", runtime_destination = "admin_runtime" } };
+        if (dispatcherMappingLayer is not null && dispatcherMappingAction is not null)
+        {
+            entries.Add(new
+            {
+                type = "dispatcher_mapping",
+                role = "admin",
+                target = "manifest",
+                layer = dispatcherMappingLayer,
+                action = dispatcherMappingAction,
+            });
+        }
+
+        return Task.FromResult<ManifestRecord?>(new ManifestRecord(
+            ManifestId: manifestId,
+            RelationRegistryId: null,
+            Topology: JsonSerializer.SerializeToElement(entries.ToArray()).EnumerateArray().ToArray(),
+            Status: status));
+    }
+
+    public override Task<ManifestRecord?> ResolveActiveManifestAsync(
+        string? role, string? target, string? layer, string? action, CancellationToken ct = default) =>
+        Task.FromResult<ManifestRecord?>(null);
 
     public override Task<IReadOnlyList<ManifestListItem>> ListManifestsAsync(
         string? statusFilter, CancellationToken ct = default) =>

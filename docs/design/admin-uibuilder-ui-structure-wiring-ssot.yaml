@@ -815,10 +815,27 @@ admin_uibuilder_ui_structure_wiring_ssot:
         would have silently dropped it. Both fields are now round-tripped byte-for-byte through
         that pipeline (frontend/tests/visualLayoutBuilder.test.ts) and survive cloneVisualNode's
         node-copy operation unchanged (they carry no backend-assigned identity to strip, unlike
-        runtimeInteractions[].runtimeInteractionId). No dedicated visual editing widget exists for
-        either field (authored directly in seed SQL, same as this whole admin_runtime lane's
-        existing production wiring) -- round-trip fidelity, not a new authoring UI, is what round
-        16 closed.
+        runtimeInteractions[].runtimeInteractionId). Round 16 itself closed round-trip fidelity
+        only, not a new authoring UI. Round 17 (2026-07-29) added the missing NEW-authoring
+        widget: frontend/components/NodeEventAuthoringPanel.tsx's admin_runtime dispatch override
+        section (UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_SECTION_TITLE), reusing the SAME trigger
+        vocabulary as the external-port/instance-operation rows above
+        (runtimeInteractionTriggerOptions) and a NEW closed candidate source --
+        backend/repository/NpgsqlUiTopologyRepository.cs
+        ListAdminRuntimeTargetRefAuthoringCandidatesAsync (ui_topology:
+        list_admin_runtime_target_ref_authoring_candidates admin action, frontend/lib/
+        uiBuilderEventAuthoringHooks.ts useAdminRuntimeTargetRefAuthoringCandidates) -- one
+        candidate per (active admin_runtime manifest, its own dispatcher_mapping layer/action)
+        pair, i.e. every entry the round 17 ManifestDispatcher hardening below would actually
+        authorize, never a frontend-hardcoded per-surface (e.g. enum_dictionary) action
+        enumeration. Wired into UiBuilderAdmin.tsx's node inspector call site, committing to the
+        SAME DraftNode.dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger fields round 16
+        made round-trip-safe. Proof: frontend/tests/adminUxGuard.test.ts (candidate source is
+        DB-derived, not a hardcoded action list; trigger axis reuse; UiBuilderAdmin wiring),
+        backend/tests/Topolactor.Runtime.Tests/AdminRuntimePackageWiringTests.cs
+        (ExecuteDataAsync_ListAdminRuntimeTargetRefAuthoringCandidates_ReturnsDbDerivedCandidateShape).
+        Not yet proven: a live-DB round trip actually authoring a NEW override through this widget
+        against a real manifest/dispatcher_mapping row (unit/in-memory proof only so far).
       required_fields:
         trigger: >-
           Same two-stage trigger validation as admin_runtime_payload_binding_contract's own
@@ -851,13 +868,17 @@ admin_uibuilder_ui_structure_wiring_ssot:
           (_MANIFEST_NOT_ADMIN_RUNTIME) -- the SAME two facts (existence, runtime_destination)
           ManifestDispatcher.DispatchAsync's own LoadByIdAsync/ExtractRuntimeDestination would
           otherwise only discover at actual dispatch time, surfaced here at author/save time
-          instead, plus an active-status check ManifestDispatcher's target_ref-based dispatch path
-          does NOT itself perform today (a pre-existing gap this contract does not silently
-          inherit for newly-authored overrides, even though it does not retroactively fix
-          ManifestDispatcher's own dispatch-time behavior for the layout's pre-existing uniform
-          target_ref -- that is out of this contract's scope). Does not check
+          instead. Round 17 (2026-07-29) closed the TOCTOU this left open and the wider
+          pre-existing gap this note used to flag as permanently out of scope: ManifestDispatcher
+          itself now re-verifies manifest.Status=="active" at DISPATCH time too (not just here at
+          save time) for every admin_runtime target_ref dispatch -- TARGET_REF_MANIFEST_NOT_ACTIVE
+          -- closing the window where a manifest saved into an override while active is later
+          deprecated/redrafted and would otherwise still dispatch. Does not check
           capability_requirement (role) -- a per-request fact, not statically checkable against
-          an authored layout_patch. wiringKey/wiringId are intentionally OMITTED from an override
+          an authored layout_patch; this remains correctly deferred to ManifestDispatcher's own
+          uniform ValidateCapabilityRequirement, which already runs after every manifest
+          resolution path (axes/target_ref/db_notify) equally, target_ref included. wiringKey/
+          wiringId are intentionally OMITTED from an override
           spec (they identify the layout's OWN wiring row, not this override's different target;
           no backend consumer reads request.wiring_key/wiring_id at the top request level today --
           confirmed via full grep of ManifestDispatcher/OperationVectorResolver/
@@ -883,6 +904,54 @@ admin_uibuilder_ui_structure_wiring_ssot:
         declared_seed_surface_catalog admin.enum.management.projection known_gaps for the
         current honestly-open state) -- round 16 closes every authoring/authority boundary this
         mechanism itself has, it does not by itself constitute a single per-screen manifest.
+      round_17_hardening: >-
+        2026-07-29. Closed the remaining dispatch-time gap round 16 explicitly deferred:
+        backend/runtime/ManifestDispatcher.cs's target_ref branch previously only checked manifest
+        existence (LoadByIdAsync performs no status filter, unlike ResolveActiveManifestAsync) and
+        never cross-checked the target_ref's own embedded layer:action against either the
+        request's declared Layer/Action or the resolved manifest's own dispatcher_mapping entries
+        -- meaning an authored (or uniform-layout) admin_runtime target_ref could in principle
+        combine one manifest's identity (e.g. a create_group-only manifest) with an unrelated
+        Layer/Action pair (e.g. delete_group), since AdminRuntime.ExecuteDataAsync dispatches
+        purely on Layer/Action, independent of which manifest_id resolved it. Now, whenever a
+        target_ref-resolved manifest's runtime_destination is admin_runtime: (1)
+        TARGET_REF_MANIFEST_NOT_ACTIVE re-verifies manifest.Status=="active" at dispatch time
+        (closes the TOCTOU vs. the save-time-only check above), (2)
+        TARGET_REF_LAYER_ACTION_MISMATCH requires the target_ref's own "manifest:<uuid>:<layer>:
+        <action>" suffix to equal the request's Layer/Action, and (3)
+        TARGET_REF_LAYER_ACTION_UNAUTHORIZED requires the resolved manifest's OWN
+        dispatcher_mapping to declare that exact layer/action (via the new shared
+        DispatcherMappingAxisAuthority.MatchesAxes, also now reused by
+        NpgsqlManifestRepository's axes-resolution path instead of a parallel duplicate) --
+        role/target axes are intentionally wildcarded in this specific check (request.Target for
+        these dispatches is the node's targetSurface="manifest", not the dispatcher_mapping
+        "target" value used by the pre-existing axes-registered manifests for the same admin
+        action; checking target here would force a collision between the two registration
+        styles). This validation lives in ManifestDispatcher.DispatchAsync's single target_ref
+        branch, which the uniform per-layout target_ref (NpgsqlTopologyRepository.
+        LoadLayoutNodesAsync's tensor-row default) and a per-node dispatchTargetRefByTrigger
+        override both funnel through identically by the time they reach this backend boundary --
+        there is no separate code path to special-case, so both are covered by construction, not
+        by parallel checks. Scoped to admin_runtime-destination manifests only: the generic
+        screenReadQueryWiring target_ref shape (manifest:<uuid>:<wiringKey>, no layer:action
+        suffix) is unaffected. db/seed_empty.sql's manifests 00000000-0000-0000-0000-0000000ae200
+        and ae210/ae220/ae230/ae240/ae250/ae260/ae270/ae280 each gained their own
+        dispatcher_mapping entry (role=admin, target=manifest, layer=enum_dictionary,
+        action=<their own action>) so this new authorization does not reject their existing
+        production wiring; target="manifest" (not "admin") deliberately avoids colliding with the
+        pre-existing axes-registered manifests (00000000-0000-0000-0000-0000000000a7..ae) that
+        declare the SAME layer/action under target="admin" for the hardcoded /admin/enums route --
+        both manifests being simultaneously active with identical [role,target,layer,action]
+        axes would otherwise make ResolveActiveManifestAsync's axes-based resolution
+        MANIFEST_AMBIGUOUS. Proof:
+        backend/tests/Topolactor.Runtime.Tests/ManifestDispatcherTargetRefTests.cs (not-active,
+        layer/action mismatch, manifest-does-not-authorize-this-action -- the literal
+        create_group-manifest-combined-with-delete_group-action scenario --, non-layer:action
+        shape rejected, authorized-succeeds, and non-admin_runtime destinations unaffected) and
+        ManifestCapabilityGateTests.cs (capability_requirement continues to apply on the
+        target_ref path after these new checks, both roles). Not yet proven against a real
+        database (this is unit/in-memory proof only) and not yet consumed by an actual
+        create_group live dispatch -- see declared_seed_surface_catalog known_gaps.
     manifest_topology_boundary:
       rule: >-
         manifest.topology entries for this surface (ui_projection type per

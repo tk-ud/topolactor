@@ -189,8 +189,16 @@ public class ManifestDispatcherCanonicalDefaultEntryTests
         // existing target_ref path — the canonical default entry fallback must never be
         // consulted, and must never override an explicit selection.
         var otherManifestId = Guid.NewGuid();
+        // Round 17 hardening: an admin_runtime-destined target_ref must be in
+        // "manifest:<uuid>:<layer>:<action>" form and the manifest's own dispatcher_mapping must
+        // authorize that layer/action — this fixture's target_ref/dispatcher_mapping/request axes
+        // are kept mutually consistent so this test still isolates the canonical-default-entry
+        // fallback-bypass behavior it exercises, not the (separately tested) authorization gate.
         var manifestRepo = new NoAxesMatchManifestRepository(
-            [JsonSerializer.SerializeToElement(new { type = "runtime_mapping", runtime_destination = "admin_runtime" })],
+            [
+                JsonSerializer.SerializeToElement(new { type = "runtime_mapping", runtime_destination = "admin_runtime" }),
+                JsonSerializer.SerializeToElement(new { type = "dispatcher_mapping", role = "admin", target = "manifest", layer = "screen_list", action = "Search" }),
+            ],
             otherManifestId);
         var contentBundleRepo = new InMemoryContentBundleRepository
         {
@@ -199,7 +207,7 @@ public class ManifestDispatcherCanonicalDefaultEntryTests
         var hubNavResolver = new HubNavigationResolver(contentBundleRepo, manifestRepo);
         var dispatcher = BuildDispatcher(manifestRepo, hubNavResolver);
 
-        var payload = JsonSerializer.SerializeToElement(new { target_ref = $"manifest:{otherManifestId}:projection_entry" });
+        var payload = JsonSerializer.SerializeToElement(new { target_ref = $"manifest:{otherManifestId}:screen_list:Search" });
         var request = new EndpointRequestDto("Search", "default", "screen_list", "Search", null, payload, null, "client", "admin");
         var response = await dispatcher.DispatchAsync(request);
 

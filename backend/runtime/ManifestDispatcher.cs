@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Topolactor.Repository;
 using Topolactor.Schema;
@@ -208,6 +209,52 @@ public class ManifestDispatcher
                         Errors: [new ValidationError(
                             "MANIFEST_NOT_FOUND",
                             $"No manifest found for target_ref manifest_id={targetRefManifestId}.")]);
+                }
+
+                // TOCTOU close (round 17 hardening): LoadByIdAsync (unlike ResolveActiveManifestAsync)
+                // never filters by status, so a target_ref saved into an authored override while its
+                // manifest was active would otherwise still dispatch after that manifest is later
+                // deprecated or reverted to draft. Save-time authorization
+                // (NpgsqlUiTopologyRepository.LoadAdminRuntimeManifestAuthorizationAsync) checks active
+                // status only once, at save time — this dispatch-time check re-verifies it every time.
+                if (!string.Equals(manifest.Status, "active", StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogWarning(
+                        "ManifestDispatcher: target_ref manifest {ManifestId} is not active (status={Status}).",
+                        targetRefManifestId, manifest.Status);
+                    return new EndpointResponseDto(
+                        Success: false,
+                        Emission: null,
+                        Errors: [new ValidationError(
+                            "TARGET_REF_MANIFEST_NOT_ACTIVE",
+                            $"target_ref manifest {targetRefManifestId} has status '{manifest.Status}', not 'active'.")]);
+                }
+
+                // Layer/action authorization (round 17 hardening): AdminRuntime.ExecuteDataAsync
+                // dispatches purely on Request.Layer/Request.Action, independent of which manifest_id
+                // resolved the target_ref (see class remarks). Without this check, an authored
+                // dispatchTargetRefByTrigger override (or, identically, the uniform per-layout
+                // target_ref applied by NpgsqlTopologyRepository.LoadLayoutNodesAsync — both reach this
+                // exact branch, so this check covers both paths identically) could combine one
+                // manifest's identity (e.g. a create_group-only manifest) with an unrelated
+                // Layer/Action pair (e.g. delete_group) that manifest never declared authority over.
+                // Scoped to admin_runtime-destination manifests only: the generic
+                // screenReadQueryWiring target_ref shape (manifest:<uuid>:<wiringKey>, no layer:action
+                // suffix) is a different, pre-existing mechanism and is unaffected.
+                if (string.Equals(ExtractRuntimeDestination(manifest.Topology), "admin_runtime", StringComparison.Ordinal))
+                {
+                    var layerActionError = ValidateAdminRuntimeTargetRefLayerAction(
+                        rawTargetRef!, targetRefManifestId, manifest.Topology, request.Layer, request.Action);
+                    if (layerActionError is not null)
+                    {
+                        _logger.LogWarning(
+                            "ManifestDispatcher: target_ref layer/action authorization failed for manifest {ManifestId}: {Code}",
+                            targetRefManifestId, layerActionError.Code);
+                        return new EndpointResponseDto(
+                            Success: false,
+                            Emission: null,
+                            Errors: [layerActionError]);
+                    }
                 }
             }
             else
@@ -478,6 +525,67 @@ public class ManifestDispatcher
         if (parts.Length < 2) return false;
 
         return Guid.TryParse(parts[1], out manifestId);
+    }
+
+    /// <summary>
+    /// Mirrors frontend/runtime/renderEmission.ts's ADMIN_RUNTIME_TARGET_REF_RE exactly:
+    /// "manifest:&lt;36-char-uuid&gt;:&lt;layer&gt;:&lt;action&gt;" — a proper subset of
+    /// TryParseManifestTargetRef's lenient Guid.TryParse-based manifest-id extraction above.
+    /// </summary>
+    private static readonly Regex AdminRuntimeTargetRefRe =
+        new(@"^manifest:([0-9a-fA-F-]{36}):([^:]+):([^:]+)$", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Round 17 hardening: validates that an admin_runtime-destined target_ref's embedded
+    /// layer:action suffix (1) matches what the request itself declares as Layer/Action, and
+    /// (2) is an operation the resolved manifest's own dispatcher_mapping actually authorizes.
+    /// Both checks are required — (1) alone would not stop a manifest whose dispatcher_mapping
+    /// never declared this action at all; (2) alone would not stop a client sending mismatched
+    /// target_ref/Layer/Action pairs that each independently look valid.
+    /// </summary>
+    private static ValidationError? ValidateAdminRuntimeTargetRefLayerAction(
+        string rawTargetRef,
+        Guid manifestId,
+        IReadOnlyList<JsonElement> topology,
+        string? requestLayer,
+        string? requestAction)
+    {
+        var match = AdminRuntimeTargetRefRe.Match(rawTargetRef);
+        if (!match.Success)
+        {
+            return new ValidationError(
+                "TARGET_REF_ADMIN_RUNTIME_LAYER_ACTION_MISSING",
+                $"target_ref '{rawTargetRef}' resolves to an admin_runtime manifest but is not in " +
+                "\"manifest:<uuid>:<layer>:<action>\" format.");
+        }
+
+        var targetRefLayer = match.Groups[2].Value;
+        var targetRefAction = match.Groups[3].Value;
+
+        if (!string.Equals(targetRefLayer, requestLayer, StringComparison.Ordinal) ||
+            !string.Equals(targetRefAction, requestAction, StringComparison.Ordinal))
+        {
+            return new ValidationError(
+                "TARGET_REF_LAYER_ACTION_MISMATCH",
+                $"target_ref '{rawTargetRef}' encodes layer:action '{targetRefLayer}:{targetRefAction}' but " +
+                $"the request declares Layer='{requestLayer}' Action='{requestAction}'.");
+        }
+
+        // Only layer/action are checked here (role/target are intentionally wildcarded via null):
+        // request.Target for these dispatches is the node's targetSurface ("manifest"), not the
+        // dispatcher_mapping "target" axis value used by the parallel axes-registered manifests for
+        // the same admin action (e.g. auth via /admin/enums' hardcoded route) — checking target here
+        // would either force a collision between the two registration styles (MANIFEST_AMBIGUOUS on
+        // axes resolution) or reject every legitimate target_ref dispatch. Layer/action is the
+        // narrow, sufficient authorization surface for the vulnerability this closes.
+        if (!DispatcherMappingAxisAuthority.MatchesAxes(topology, role: null, target: null, targetRefLayer, targetRefAction))
+        {
+            return new ValidationError(
+                "TARGET_REF_LAYER_ACTION_UNAUTHORIZED",
+                $"manifest {manifestId} has no dispatcher_mapping entry authorizing layer='{targetRefLayer}' action='{targetRefAction}'.");
+        }
+
+        return null;
     }
 
     private async Task<EndpointResponseDto> DispatchToHandlerAsync(

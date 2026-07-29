@@ -1971,6 +1971,16 @@ function LayoutRightDock({
                 onCommitNode?.({ stateJson: nextStateJson }, label)}
               sourceNodeId={selectedNode.nodeId}
               allNodes={draftNodes}
+              dispatchTargetRefByTrigger={selectedNode.dispatchTargetRefByTrigger}
+              dispatchPayloadFromByTrigger={selectedNode.dispatchPayloadFromByTrigger}
+              onCommitDispatchOverrides={(next, label) =>
+                onCommitNode?.(
+                  {
+                    dispatchTargetRefByTrigger: next.targetRefByTrigger,
+                    dispatchPayloadFromByTrigger: next.payloadFromByTrigger,
+                  },
+                  label,
+                )}
             />
           </Accordion>
           <Accordion

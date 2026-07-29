@@ -25,6 +25,14 @@ export type InstanceOperationAuthoringCandidate = {
   targetRef: string;
 };
 
+export type AdminRuntimeTargetRefAuthoringCandidate = {
+  manifestId: string;
+  manifestKey?: string | null;
+  layer: string;
+  action: string;
+  targetRef: string;
+};
+
 /** SSOT: external-port-substrate-ssot.yaml admin_setting_projection */
 export function useExternalPortAuthoringCandidates(active: boolean): {
   candidates: ExternalPortAuthoringCandidate[];
@@ -80,6 +88,44 @@ export function useInstanceOperationAuthoringCandidates(active: boolean): {
       } else {
         setCandidates([]);
         setError(body?.errors?.[0]?.message ?? "instance operation 候補を取得できませんでした。");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [active]);
+  return { candidates, error };
+}
+
+/**
+ * Closed candidate list for dispatchTargetRefByTrigger authoring — every (active admin_runtime
+ * manifest, dispatcher_mapping layer/action) pair, derived entirely from manifest/dispatcher
+ * authority already in the DB (backend/repository/NpgsqlUiTopologyRepository.cs
+ * ListAdminRuntimeTargetRefAuthoringCandidatesAsync). Never a frontend-hardcoded per-surface
+ * (a single surface's own action list) — reusable by any admin_runtime action across any subBundle.
+ * SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml admin_runtime_target_ref_override_contract
+ */
+export function useAdminRuntimeTargetRefAuthoringCandidates(active: boolean): {
+  candidates: AdminRuntimeTargetRefAuthoringCandidate[];
+  error: string | null;
+} {
+  const [candidates, setCandidates] = useState<AdminRuntimeTargetRefAuthoringCandidate[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!active) {
+      setCandidates([]);
+      setError(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const body = await dispatchAdminOp("ui_topology", "list_admin_runtime_target_ref_authoring_candidates");
+      if (cancelled) return;
+      const data = body?.emission?.data as { candidates?: AdminRuntimeTargetRefAuthoringCandidate[] } | undefined;
+      if (Array.isArray(data?.candidates)) {
+        setCandidates(data.candidates);
+        setError(null);
+      } else {
+        setCandidates([]);
+        setError(body?.errors?.[0]?.message ?? "admin_runtime 操作候補を取得できませんでした。");
       }
     })();
     return () => { cancelled = true; };

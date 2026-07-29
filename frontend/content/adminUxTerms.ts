@@ -494,6 +494,21 @@ export const UX_WIRING_IDEMPOTENCY_OPTIONS: readonly { value: string; label: str
 ];
 export const UX_RUNTIME_INTERACTION_EXTERNAL_PORT_SELECT = "操作対象UI指定（external port）";
 export const UX_RUNTIME_INTERACTION_INSTANCE_OPERATION_SELECT = "操作対象UI指定（instance operation）";
+/**
+ * admin_runtime 操作上書き（dispatchTargetRefByTrigger / dispatchPayloadFromByTrigger）—
+ * SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml admin_runtime_target_ref_override_contract。
+ * wiringKind="admin_runtime" のレイアウトが持つ既定の操作（1レイアウト=1操作）を、特定のトリガだけ
+ * 別の manifest 操作へ切り替えるための上書きです。候補は manifest / dispatcher_mapping から生成され、
+ * 画面固有のハードコード選択肢ではありません。
+ */
+export const UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_SECTION_TITLE = "管理操作の上書き（admin_runtime）";
+export const UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_SECTION_HINT =
+  "このレイアウトの既定の管理操作とは別に、特定のトリガだけ他の manifest 操作へ振り替えます。候補は登録済みの manifest / dispatcher_mapping から自動生成されます。";
+export const UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_SELECT = "操作対象UI指定（管理操作）";
+export const UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_EMPTY_HINT =
+  "active な admin_runtime 操作候補がありません。/admin/contents 等で対象 manifest が active かつ dispatcher_mapping 登録済みか確認してください。";
+export const UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_ADD = "+ 管理操作の上書き";
+export const UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_ADD_COMMIT = "管理操作の上書きを確定";
 /** @deprecated use UX_EXTERNAL_INTEGRATION_SECTION_TITLE */
 export const UX_RUNTIME_INTERACTION_EXTERNAL_API_SECTION_TITLE = UX_EXTERNAL_INTEGRATION_SECTION_TITLE;
 /** @deprecated use UX_EXTERNAL_INTEGRATION_SECTION_HINT */

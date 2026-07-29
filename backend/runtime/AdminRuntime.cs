@@ -254,6 +254,7 @@ public partial class AdminRuntime
             "ui_topology:get_package_wiring"   => await DataGetPackageWiringAsync(vector, ct),
             "ui_topology:list_external_port_authoring_candidates" => await DataListExternalPortAuthoringCandidatesAsync(ct),
             "ui_topology:list_instance_operation_authoring_candidates" => await DataListInstanceOperationAuthoringCandidatesAsync(ct),
+            "ui_topology:list_admin_runtime_target_ref_authoring_candidates" => await DataListAdminRuntimeTargetRefAuthoringCandidatesAsync(ct),
             "ui_topology:get_layout_patch_draft" => await DataGetLayoutPatchDraftAsync(vector, ct),
             "ui_topology:update_package_wiring" => await DataUpdatePackageWiringAsync(vector, ct),
             "component_style_design:list"      => await DataListComponentStyleDesignsAsync(vector, ct),
@@ -1266,6 +1267,20 @@ public partial class AdminRuntime
         catch (Exception ex)
         {
             _logger.LogError(ex, "DataListInstanceOperationAuthoringCandidatesAsync failed.");
+            return (null, new ValidationError("DB_UNAVAILABLE", ex.Message));
+        }
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataListAdminRuntimeTargetRefAuthoringCandidatesAsync(CancellationToken ct)
+    {
+        try
+        {
+            var candidates = await _uiTopologyRepository.ListAdminRuntimeTargetRefAuthoringCandidatesAsync(ct);
+            return (JsonSerializer.SerializeToElement(new { candidates }), null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DataListAdminRuntimeTargetRefAuthoringCandidatesAsync failed.");
             return (null, new ValidationError("DB_UNAVAILABLE", ex.Message));
         }
     }

@@ -827,6 +827,86 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         return wiringKind;
     }
 
+    /// <summary>
+    /// Round 17: UI Builder authoring candidate source for dispatchTargetRefByTrigger, mirroring
+    /// ListExternalPortAuthoringCandidatesAsync/ListInstanceOperationAuthoringCandidatesAsync's own
+    /// pattern. Scans every active manifest whose topology declares
+    /// runtime_mapping.runtime_destination="admin_runtime" and expands each of its
+    /// dispatcher_mapping entries into one candidate targetRef
+    /// "manifest:&lt;manifestId&gt;:&lt;layer&gt;:&lt;action&gt;" — the exact shape
+    /// ManifestDispatcher's admin_runtime target_ref authorization (round 17 hardening) and
+    /// ADMIN_RUNTIME_TARGET_REF_RE both require. A manifest with no dispatcher_mapping entries
+    /// (e.g. one only ever addressed by a hand-authored seed target_ref before this candidate
+    /// source existed) yields zero candidates for itself — it is not a silent gap, since without a
+    /// dispatcher_mapping entry ManifestDispatcher itself would now reject the dispatch too
+    /// (TARGET_REF_ADMIN_RUNTIME_LAYER_ACTION_MISSING / _UNAUTHORIZED).
+    /// </summary>
+    public override async Task<IReadOnlyList<AdminRuntimeTargetRefAuthoringCandidateDto>> ListAdminRuntimeTargetRefAuthoringCandidatesAsync(
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT manifest_id, topology FROM manifest WHERE status = 'active'";
+
+        var candidates = new List<AdminRuntimeTargetRefAuthoringCandidateDto>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var manifestId = reader.GetGuid(0);
+            var topologyRaw = reader.IsDBNull(1) ? null : reader.GetFieldValue<string[]>(1);
+            if (topologyRaw is null) continue;
+
+            var isAdminRuntimeDestination = false;
+            string? manifestKey = null;
+            var dispatcherMappings = new List<(string Layer, string Action)>();
+
+            foreach (var entryRaw in topologyRaw)
+            {
+                using var doc = JsonDocument.Parse(entryRaw);
+                var entry = doc.RootElement;
+                if (entry.ValueKind != JsonValueKind.Object) continue;
+                if (!entry.TryGetProperty("type", out var typeEl) || typeEl.ValueKind != JsonValueKind.String) continue;
+                var type = typeEl.GetString();
+
+                if (string.Equals(type, "runtime_mapping", StringComparison.Ordinal) &&
+                    entry.TryGetProperty("runtime_destination", out var destEl) &&
+                    string.Equals(destEl.GetString(), "admin_runtime", StringComparison.Ordinal))
+                {
+                    isAdminRuntimeDestination = true;
+                }
+                else if (string.Equals(type, "hub_grouping", StringComparison.Ordinal) &&
+                    entry.TryGetProperty("manifestKey", out var keyEl) && keyEl.ValueKind == JsonValueKind.String)
+                {
+                    manifestKey = keyEl.GetString();
+                }
+                else if (string.Equals(type, "dispatcher_mapping", StringComparison.Ordinal) &&
+                    entry.TryGetProperty("layer", out var layerEl) && layerEl.ValueKind == JsonValueKind.String &&
+                    entry.TryGetProperty("action", out var actionEl) && actionEl.ValueKind == JsonValueKind.String)
+                {
+                    var layer = layerEl.GetString();
+                    var action = actionEl.GetString();
+                    if (!string.IsNullOrWhiteSpace(layer) && !string.IsNullOrWhiteSpace(action))
+                        dispatcherMappings.Add((layer!, action!));
+                }
+            }
+
+            if (!isAdminRuntimeDestination) continue;
+
+            foreach (var (layer, action) in dispatcherMappings)
+            {
+                candidates.Add(new AdminRuntimeTargetRefAuthoringCandidateDto(
+                    ManifestId: manifestId.ToString(),
+                    ManifestKey: manifestKey,
+                    Layer: layer,
+                    Action: action,
+                    TargetRef: $"manifest:{manifestId}:{layer}:{action}"));
+            }
+        }
+
+        return candidates;
+    }
+
     private static bool ContainsDispatchInstanceOperation(JsonElement nodes)
     {
         foreach (var sourceNode in nodes.EnumerateArray())
