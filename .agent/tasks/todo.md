@@ -1580,6 +1580,8 @@ owner指摘は、round16がgeneric mechanismの「authoring/authority境界」�
 
 **Test結果（round18総括）**: backend `dotnet build`成功、`Topolactor.Runtime.Tests` 1543/1543 pass（round17の1538から新規5件——`ManifestDispatcherTargetRefTests.cs`2件、`ManifestCapabilityGateTests.cs`3件）。frontend `.agent/tests/check-frontend-all-tests.sh`（全件、新規`nodeEventAuthoringPanelAdminRuntimeOverride.test.tsx`8件込み）PASS、`.agent/tests/check-frontend-types.sh`PASS。この環境にはlive PostgreSQLが無く（`pg_isready`/`psql`とも接続失敗）、`Topolactor.Integration.Tests`は本round実行できていない——GitHub Actionsの`backend-tests`workflow（実PostgreSQLをservice containerで提供）を正本のlive-DB proof手段として扱い、push後のCIログを継続的に確認する。
 
+**round18 push後のCI再修正（同日）**: push後のGitHub Actions live-DB testが、`IsGenericStructuralReadTargetRef`が捕捉していなかった別の既存正規convention——`CredentialManagementHubRelationUiProjectionLiveDbTests`が`hub_navigation:get_hub_relations`をtarget_ref経由で、dispatcher_mapping・ui_projectionのいずれも持たない「bare」manifest（navigation enrichment先を選ぶためだけのidentity selector、実際の操作対象は`payload.topologyManifestId`から読む）に対してdispatchする既存パターン——を誤ってTARGET_REF_ADMIN_RUNTIME_LAYER_ACTION_MISSINGで拒否することを検知した。`ManifestDispatcher.cs`へ`IsBareManifestNavigationReadTargetRefAsync`を追加——`hub_navigation:get_hub_relations`/`list_manifests`の閉じたallowlistのみ、resolved manifestがdispatcher_mappingを一切宣言していない場合のみ、かつ同じ(role, layer, action)が既存のaxes登録`target="admin"`系列で独立に有効active登録されていることを再確認した場合のみ許可する——`hub_navigation:create/update/deprecate/reorder`や他の具体的操作（`enum_dictionary:create_group`等）はbare manifestからは引き続き拒否されることを2件の否定的testで証明した（`ManifestDispatcherTargetRefTests.cs`新規4件、1547/1547 pass）。commit `de11015`。
+
 ### 対応資料
 
 **必読（全文精読必須——「到達可能」であることと「実際に読んだ」ことは別である。2026-07-28の直接指摘により再指定）:**
