@@ -274,16 +274,26 @@ public class ManifestDispatcherTargetRefTests
     }
 
     [Fact]
-    public async Task DispatchAsync_TargetRef_AdminRuntimeManifest_NonLayerActionShape_ReturnsMissingError()
+    public async Task DispatchAsync_TargetRef_AdminRuntimeManifest_NonLayerActionShape_SkipsAuthorization_StillDispatches()
     {
+        // Round 17 correction (caught by live-DB CI, not locally reproducible without real
+        // PostgreSQL): a genuine, pre-existing production convention dispatches an explicit
+        // manifest selection for a plain page load using a GENERIC wiringKey target_ref (e.g.
+        // "manifest:<uuid>:projection_entry", "manifest:<uuid>:hub_relations_read") against
+        // Layer="screen_list"/Action="Search" axes, even when that manifest's runtime_destination
+        // is admin_runtime -- this never encodes a specific admin_runtime operation and must not
+        // be rejected. The layer/action authorization added above applies ONLY when the target_ref
+        // itself is already in the "manifest:<uuid>:<layer>:<action>" shape.
         var repo = new ConfigurableManifestRepository(KnownManifestId, status: "active", dispatcherMappingLayer: null, dispatcherMappingAction: null);
-        var dispatcher = BuildDispatcher(repo);
+        var dispatcher = BuildDispatcher(repo, new Dictionary<string, IDispatchableRuntime>
+        {
+            ["admin_runtime"] = new StubSuccessRuntime(),
+        });
         var targetRef = $"manifest:{KnownManifestId}:some_wiring_key"; // no layer:action suffix
 
-        var response = await dispatcher.DispatchAsync(MakeAdminRuntimeRequest("enum_dictionary", "create_group", targetRef));
+        var response = await dispatcher.DispatchAsync(MakeAdminRuntimeRequest("screen_list", "Search", targetRef));
 
-        Assert.False(response.Success);
-        Assert.Contains(response.Errors, e => e.Code == "TARGET_REF_ADMIN_RUNTIME_LAYER_ACTION_MISSING");
+        Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
     }
 
     [Fact]

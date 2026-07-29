@@ -335,6 +335,13 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         var cs = GetConnectionString();
         if (cs is null) return;
 
+        // Round 17 hardening (ManifestDispatcher now authorizes a target_ref's layer:action
+        // against the resolved manifest's OWN dispatcher_mapping): create_group/delete_group must
+        // dispatch through their own dedicated write manifests (ae210/ae230), not ae200 (which
+        // only declares list_groups) -- same discipline DispatchViaOwnWriteManifestAsync below
+        // already uses for the newer per-action-manifest tests in this file.
+        const string createGroupManifestId = "00000000-0000-0000-0000-0000000ae210";
+        const string deleteGroupManifestId = "00000000-0000-0000-0000-0000000ae230";
         var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var groupName = $"live-db-write-proof-{suffix}";
@@ -364,7 +371,7 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             // it) fails close and never reaches the repository.
             var unconfirmedCreatePayload = System.Text.Json.JsonSerializer.SerializeToElement(new
             {
-                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:create_group",
+                target_ref = $"manifest:{createGroupManifestId}:enum_dictionary:create_group",
                 groupName,
             });
             var unconfirmedCreateRequest = new EndpointRequestDto(
@@ -379,7 +386,7 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             // validates without mutating -- the same payload shape, never persisted.
             var dryRunCreatePayload = System.Text.Json.JsonSerializer.SerializeToElement(new
             {
-                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:create_group",
+                target_ref = $"manifest:{createGroupManifestId}:enum_dictionary:create_group",
                 groupName,
                 dryRun = true,
             });
@@ -395,7 +402,7 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             // payloadFrom (node:<nameInputNodeId>.value) would produce.
             var createPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
             {
-                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:create_group",
+                target_ref = $"manifest:{createGroupManifestId}:enum_dictionary:create_group",
                 groupName,
                 confirmed = true,
             });
@@ -418,7 +425,7 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             // NEGATIVE: malformed (non-UUID) groupId fails close, never silently "succeeds".
             var malformedDeletePayload = System.Text.Json.JsonSerializer.SerializeToElement(new
             {
-                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:delete_group",
+                target_ref = $"manifest:{deleteGroupManifestId}:enum_dictionary:delete_group",
                 groupId = "not-a-uuid",
             });
             var malformedDeleteRequest = new EndpointRequestDto(
@@ -431,7 +438,7 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             // NEGATIVE: a syntactically valid but nonexistent groupId fails close.
             var nonexistentDeletePayload = System.Text.Json.JsonSerializer.SerializeToElement(new
             {
-                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:delete_group",
+                target_ref = $"manifest:{deleteGroupManifestId}:enum_dictionary:delete_group",
                 groupId = Guid.NewGuid().ToString(),
             });
             var nonexistentDeleteRequest = new EndpointRequestDto(
@@ -450,7 +457,7 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             // event.row.groupId, without needing the node-value-tracking fix at all.
             var deletePayload = System.Text.Json.JsonSerializer.SerializeToElement(new
             {
-                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:delete_group",
+                target_ref = $"manifest:{deleteGroupManifestId}:enum_dictionary:delete_group",
                 groupId = createdGroupId,
                 confirmed = true,
             });
@@ -497,16 +504,14 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
 
         var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
 
+        // Round 17 hardening: each write action must dispatch through its OWN dedicated manifest
+        // (ManifestDispatcher now authorizes a target_ref's layer:action against that manifest's
+        // own dispatcher_mapping) -- delegates to the same DispatchViaOwnWriteManifestAsync the
+        // newer per-action-manifest tests in this file already use, instead of a bare
+        // AdminEnumManagementManifestId (ae200) carrier that only declares list_groups.
         async Task<EndpointResponseDto> DispatchAsync(string action, object payload)
         {
-            var node = System.Text.Json.Nodes.JsonNode.Parse(
-                System.Text.Json.JsonSerializer.SerializeToElement(payload).GetRawText())!.AsObject();
-            node["target_ref"] = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:{action}";
-            return await dispatcher.DispatchAsync(new EndpointRequestDto(
-                action, "manifest", "enum_dictionary", action,
-                IdOrHubId: null,
-                Payload: System.Text.Json.JsonSerializer.SerializeToElement(node),
-                Context: null, TriggerKind: "client", Role: "admin"));
+            return await DispatchViaOwnWriteManifestAsync(dispatcher, action, payload);
         }
 
         // demo_status (index_num=1, db/enum_seed.sql) already exists -- create_group with the
@@ -574,9 +579,10 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         Assert.Contains(nonexistentMemberWrite.Errors, e => e.Code == "ENUM_ITEM_NOT_FOUND");
 
         // None of the above negative attempts altered demo_status's real membership.
+        // get_group is ae280's own action (not ae200's) -- see round 17 hardening note above.
         var afterPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
         {
-            target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:get_group",
+            target_ref = "manifest:00000000-0000-0000-0000-0000000ae280:enum_dictionary:get_group",
             groupId = demoStatusGroupId,
         });
         var afterResponse = await dispatcher.DispatchAsync(new EndpointRequestDto(
@@ -766,10 +772,13 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             Assert.True(previewResponse.Success, string.Join(";", previewResponse.Errors.Select(e => e.Code + ":" + e.Message)));
             Assert.Contains("\"dryRun\":true", previewResponse.Emission!.Data!.Value.GetRawText());
 
+            // list_groups is ae200's own action, not create_group's own manifest (ae210) -- round
+            // 17 hardening now authorizes a target_ref's layer:action against the resolved
+            // manifest's own dispatcher_mapping, so this must resolve through ae200.
             var listVector = new EndpointRequestDto(
                 "list_groups", "manifest", "enum_dictionary", "list_groups",
                 IdOrHubId: null,
-                Payload: System.Text.Json.JsonSerializer.SerializeToElement(new { target_ref = $"manifest:{createGroupManifestId}:enum_dictionary:list_groups" }),
+                Payload: System.Text.Json.JsonSerializer.SerializeToElement(new { target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups" }),
                 Context: null, TriggerKind: "client", Role: "admin");
             async Task<string> ListGroupsRawAsync()
             {
@@ -1450,12 +1459,13 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
 
         async Task<string> GetGroupRawAsync()
         {
+            // get_group is ae280's own action (not ae200's) -- round 17 hardening note above.
             var r = await dispatcher.DispatchAsync(new EndpointRequestDto(
                 "get_group", "manifest", "enum_dictionary", "get_group",
                 IdOrHubId: null,
                 Payload: System.Text.Json.JsonSerializer.SerializeToElement(new
                 {
-                    target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:get_group",
+                    target_ref = "manifest:00000000-0000-0000-0000-0000000ae280:enum_dictionary:get_group",
                     groupId,
                 }),
                 Context: null, TriggerKind: "client", Role: "admin"));

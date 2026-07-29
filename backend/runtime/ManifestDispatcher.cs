@@ -238,13 +238,27 @@ public class ManifestDispatcher
                 // exact branch, so this check covers both paths identically) could combine one
                 // manifest's identity (e.g. a create_group-only manifest) with an unrelated
                 // Layer/Action pair (e.g. delete_group) that manifest never declared authority over.
-                // Scoped to admin_runtime-destination manifests only: the generic
-                // screenReadQueryWiring target_ref shape (manifest:<uuid>:<wiringKey>, no layer:action
-                // suffix) is a different, pre-existing mechanism and is unaffected.
-                if (string.Equals(ExtractRuntimeDestination(manifest.Topology), "admin_runtime", StringComparison.Ordinal))
+                //
+                // Scoped STRICTLY to target_refs already in the "manifest:<uuid>:<layer>:<action>"
+                // shape (AdminRuntimeTargetRefRe) -- not to "any admin_runtime-destination manifest"
+                // as first implemented. A live-DB run caught the real, pre-existing, and still-valid
+                // production convention this originally missed: explicit manifest selection for a
+                // plain page load uses a GENERIC wiringKey target_ref (e.g.
+                // "manifest:<uuid>:projection_entry", "manifest:<uuid>:hub_relations_read") against
+                // Layer="screen_list"/Action="Search" axes, on manifests whose runtime_destination
+                // IS admin_runtime (e.g. admin-enum's own ae200, credential-management's manifest
+                // 92) -- this never encodes a specific admin_runtime operation at all; it hits the
+                // "structural read fallback" below (ADMIN_OPERATION_NOT_FOUND downgraded to an empty
+                // success) purely to resolve ui_projection/LayoutNodes for rendering. Gating on
+                // runtime_destination alone rejected this entire legitimate, already-proven
+                // navigation path. The generic screenReadQueryWiring target_ref shape
+                // (manifest:<uuid>:<wiringKey>) is likewise unaffected, for the same reason.
+                var adminRuntimeShapeMatch = AdminRuntimeTargetRefRe.Match(rawTargetRef!);
+                if (adminRuntimeShapeMatch.Success &&
+                    string.Equals(ExtractRuntimeDestination(manifest.Topology), "admin_runtime", StringComparison.Ordinal))
                 {
                     var layerActionError = ValidateAdminRuntimeTargetRefLayerAction(
-                        rawTargetRef!, targetRefManifestId, manifest.Topology, request.Layer, request.Action);
+                        adminRuntimeShapeMatch, targetRefManifestId, manifest.Topology, request.Layer, request.Action);
                     if (layerActionError is not null)
                     {
                         _logger.LogWarning(
@@ -541,26 +555,21 @@ public class ManifestDispatcher
     /// (2) is an operation the resolved manifest's own dispatcher_mapping actually authorizes.
     /// Both checks are required — (1) alone would not stop a manifest whose dispatcher_mapping
     /// never declared this action at all; (2) alone would not stop a client sending mismatched
-    /// target_ref/Layer/Action pairs that each independently look valid.
+    /// target_ref/Layer/Action pairs that each independently look valid. Caller has already
+    /// confirmed the target_ref matches AdminRuntimeTargetRefRe (see class remarks on why a
+    /// non-matching shape, e.g. the generic "projection_entry"/"hub_relations_read" navigation
+    /// convention, must skip this validation entirely rather than being rejected here).
     /// </summary>
     private static ValidationError? ValidateAdminRuntimeTargetRefLayerAction(
-        string rawTargetRef,
+        Match adminRuntimeShapeMatch,
         Guid manifestId,
         IReadOnlyList<JsonElement> topology,
         string? requestLayer,
         string? requestAction)
     {
-        var match = AdminRuntimeTargetRefRe.Match(rawTargetRef);
-        if (!match.Success)
-        {
-            return new ValidationError(
-                "TARGET_REF_ADMIN_RUNTIME_LAYER_ACTION_MISSING",
-                $"target_ref '{rawTargetRef}' resolves to an admin_runtime manifest but is not in " +
-                "\"manifest:<uuid>:<layer>:<action>\" format.");
-        }
-
-        var targetRefLayer = match.Groups[2].Value;
-        var targetRefAction = match.Groups[3].Value;
+        var rawTargetRef = adminRuntimeShapeMatch.Value;
+        var targetRefLayer = adminRuntimeShapeMatch.Groups[2].Value;
+        var targetRefAction = adminRuntimeShapeMatch.Groups[3].Value;
 
         if (!string.Equals(targetRefLayer, requestLayer, StringComparison.Ordinal) ||
             !string.Equals(targetRefAction, requestAction, StringComparison.Ordinal))
