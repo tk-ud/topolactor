@@ -5,25 +5,70 @@
  * Referenced by: docs/design/ui-builder-seed-first-gap-discovery-ssot.yaml event_payload_resolver_gap
  *
  * Recognized source patterns:
- *   node:<nodeId>.value  — current value of a canvas node tracked via onNodeValueChange
- *   event.<path>         — dotted path traversal on the triggering event payload
- *                          e.g. event.item.id, event.row.id, event.record.id, event.value
- *   literal:<string>     — literal string value (static, no runtime resolution)
+ *   node:<nodeId>.value          — current value of a canvas node tracked via onNodeValueChange
+ *   node:<nodeId>.value.<path>   — dotted path traversal INTO that tracked value when it is an
+ *                                  object (e.g. a table's tracked selected-row value) — round 20,
+ *                                  admin-uibuilder-ui-structure-wiring-ssot.yaml
+ *                                  admin_runtime_selected_row_carrier_contract. A bare
+ *                                  `node:<nodeId>.value` (no suffix) is unchanged: the tracked
+ *                                  value itself, whatever its shape.
+ *   event.<path>                 — dotted path traversal on the triggering event payload
+ *                                  e.g. event.item.id, event.row.id, event.record.id, event.value
+ *   literal:<string>             — literal string value (static, no runtime resolution)
  *
  * All other patterns → PAYLOAD_FROM_UNRESOLVED_REF structured error; no silent fallback.
  * Missing nodeId in nodeValues map → PAYLOAD_FROM_NODE_NOT_FOUND error; no silent fallback.
  * Untraversable event path segment → PAYLOAD_FROM_EVENT_PATH_NOT_FOUND error; no silent fallback.
+ * Untraversable node value path segment → PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND error; no silent fallback.
  */
 
-const NODE_VALUE_RE = /^node:([A-Za-z0-9_-]+)\.value$/;
+const NODE_VALUE_RE = /^node:([A-Za-z0-9_-]+)\.value((?:\.[A-Za-z0-9_]+)*)$/;
 const EVENT_PATH_RE = /^event(\.[A-Za-z0-9_]+)+$/;
 const LITERAL_PREFIX = "literal:";
 
 export type PayloadFromSource =
-  | { kind: "node_value"; nodeId: string }
+  | { kind: "node_value"; nodeId: string; path?: string[] }
   | { kind: "event_path"; path: string[] }
   | { kind: "literal"; value: string }
   | { kind: "unresolved_ref"; raw: string };
+
+/**
+ * Traverses a dotted path of own-property keys into `root`, failing closed (returning undefined
+ * traversal state via the returned `ok:false`) the moment a segment is missing or the current
+ * value stops being a traversable plain object — shared by event.<path> and node:<id>.value.<path>
+ * so both dotted-path forms fail the same way on the same kind of malformed input.
+ */
+function traverseDottedPath(
+  root: unknown,
+  path: readonly string[],
+  tracedPrefix: string,
+): { ok: true; value: unknown } | { ok: false; error: string } {
+  let current = root;
+  let traversed = tracedPrefix;
+  for (const seg of path) {
+    if (typeof current !== "object" || current === null || Array.isArray(current)) {
+      return {
+        ok: false,
+        error: `PATH_NOT_TRAVERSABLE: path segment "${seg}" is not traversable at "${traversed}" (value is not an object)`,
+      };
+    }
+    // Own-property identity: `in` (and bracket-index truthiness) also match inherited
+    // Object.prototype keys ("constructor", "toString", ...) — hasOwnProperty keeps a
+    // coincidentally-named segment from resolving to an inherited function instead of
+    // failing close as genuinely absent.
+    if (
+      !Object.prototype.hasOwnProperty.call(current as Record<string, unknown>, seg)
+    ) {
+      return {
+        ok: false,
+        error: `PATH_NOT_TRAVERSABLE: key "${seg}" is absent at "${traversed}"`,
+      };
+    }
+    current = (current as Record<string, unknown>)[seg];
+    traversed += `.${seg}`;
+  }
+  return { ok: true, value: current };
+}
 
 /**
  * Parses a raw payloadFrom source string into a structured descriptor.
@@ -31,7 +76,11 @@ export type PayloadFromSource =
  */
 export function parsePayloadFromSource(raw: string): PayloadFromSource {
   const nodeMatch = NODE_VALUE_RE.exec(raw);
-  if (nodeMatch) return { kind: "node_value", nodeId: nodeMatch[1] };
+  if (nodeMatch) {
+    const suffix = nodeMatch[2]; // "" or ".groupId" / ".groupId.nested" etc.
+    const path = suffix ? suffix.slice(1).split(".") : [];
+    return { kind: "node_value", nodeId: nodeMatch[1], path };
+  }
 
   if (EVENT_PATH_RE.test(raw)) {
     const path = raw.slice("event.".length).split(".");
@@ -77,7 +126,24 @@ export function resolvePayloadFromSource(
           error: `PAYLOAD_FROM_NODE_NOT_FOUND: node "${source.nodeId}" is not in the current canvas node value map`,
         };
       }
-      return { ok: true, value: nodeValues[source.nodeId] };
+      const nodeValue = nodeValues[source.nodeId];
+      const path = source.path ?? [];
+      if (path.length === 0) return { ok: true, value: nodeValue };
+      const suffix = path.join(".");
+      const drilled = traverseDottedPath(
+        nodeValue,
+        path,
+        `node:${source.nodeId}.value`,
+      );
+      if (!drilled.ok) {
+        return {
+          ok: false,
+          error: `PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND: path "node:${source.nodeId}.value.${suffix}" ${
+            drilled.error.slice("PATH_NOT_TRAVERSABLE: ".length)
+          }`,
+        };
+      }
+      return { ok: true, value: drilled.value };
     }
 
     case "event_path": {

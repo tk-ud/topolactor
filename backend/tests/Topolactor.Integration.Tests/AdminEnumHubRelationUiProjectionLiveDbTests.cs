@@ -221,6 +221,146 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
     }
 
     /// <summary>
+    /// Round 20 -- the SECOND operation wired into ae200's own single-surface layout, and the
+    /// first that needs an EXISTING record's identity rather than fresh user input.
+    /// enum_delete_group_button's dispatchPayloadFromByTrigger sources groupId from
+    /// "node:enum_table.value.groupId" -- the tracked value of ae200's OWN enum_table node after a
+    /// row select (frontend/runtime/runtimeComponentFactory.ts tableFactory's onRowClick now also
+    /// supplies `value: row` so emitBoundEvent's existing, universal Lane 3 node-value tracking
+    /// fires for a table select the same way it already does for every input's change/input
+    /// event; frontend/runtime/payloadFromResolver.ts's new node:&lt;id&gt;.value.&lt;path&gt;
+    /// dotted-path extension then extracts .groupId from that tracked row object). This backend
+    /// test cannot exercise that frontend resolution step (EndpointRequestDto's payload is already
+    /// resolved by the time it reaches ManifestDispatcher) -- it proves the seed itself carries the
+    /// EXACT override the tensor patch declares, and that dispatching THROUGH that override
+    /// target_ref genuinely authorizes and executes real enum_dictionary:delete_group under
+    /// ae230's OWN dispatcher_mapping/capability_requirement, exactly as
+    /// DispatchAsync_AdminEnumManagementManifest_CreateGroupFormNode_... proves for create_group.
+    /// The frontend-side node:&lt;id&gt;.value.&lt;path&gt; resolution itself is proven separately
+    /// in frontend/tests/payloadFromResolver.test.ts and
+    /// frontend/tests/projectionShellAdminRuntimeSelectedRowDeleteCapture.test.ts.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_AdminEnumManagementManifest_DeleteGroupFormNode_SurfacesDispatchOverride_AndExecutesViaAe230Authority()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+
+        // Step 1: render ae200's own layout and confirm enum_delete_group_button (the LEAF Action
+        // node -- not its owning enum_delete_group_form) surfaces the EXACT override the seed
+        // declares, sourced from ae200's OWN enum_table node's tracked selected-row value.
+        var entryPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = $"manifest:{AdminEnumManagementManifestId}:projection_entry",
+        });
+        var entryRequest = new EndpointRequestDto(
+            "Search", "default", "screen_list", "Search",
+            IdOrHubId: null, Payload: entryPayload, Context: null, TriggerKind: "client", Role: "admin");
+        var entryResponse = await dispatcher.DispatchAsync(entryRequest);
+        Assert.True(entryResponse.Success, string.Join(";", entryResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+        Assert.NotNull(entryResponse.Emission!.LayoutNodes);
+        var deleteGroupButtonNode = Assert.Single(
+            entryResponse.Emission!.LayoutNodes!, n => n.NodeId == "enum_delete_group_button");
+        Assert.NotNull(deleteGroupButtonNode.DispatchTargetRefByTrigger);
+        var targetRefByTriggerText = deleteGroupButtonNode.DispatchTargetRefByTrigger!.Value.GetRawText();
+        Assert.Contains("manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group", targetRefByTriggerText);
+        Assert.NotNull(deleteGroupButtonNode.DispatchPayloadFromByTrigger);
+        var payloadFromByTriggerText = deleteGroupButtonNode.DispatchPayloadFromByTrigger!.Value.GetRawText();
+        Assert.Contains("node:enum_table.value.groupId", payloadFromByTriggerText);
+        Assert.Contains("literal:true", payloadFromByTriggerText);
+
+        async Task<string> ListGroupsRawAsync()
+        {
+            var listPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups",
+            });
+            var listRequest = new EndpointRequestDto(
+                "list_groups", "manifest", "enum_dictionary", "list_groups",
+                IdOrHubId: null, Payload: listPayload, Context: null, TriggerKind: "client", Role: "admin");
+            var listResponse = await dispatcher.DispatchAsync(listRequest);
+            Assert.True(listResponse.Success, string.Join(";", listResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+            return listResponse.Emission!.Data!.Value.GetRawText();
+        }
+
+        var overrideTargetRef = "manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group";
+
+        // Step 2: real ae210 create_group dispatch (never raw SQL) seeds the row this test will
+        // then delete through ae200's own override.
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var groupName = $"live-db-ae200-delete-group-form-node-{suffix}";
+        var createPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = "manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group",
+            groupName,
+            confirmed = true,
+        });
+        var createResponse = await dispatcher.DispatchAsync(new EndpointRequestDto(
+            "create_group", "manifest", "enum_dictionary", "create_group",
+            IdOrHubId: null, Payload: createPayload, Context: null, TriggerKind: "client", Role: "admin"));
+        Assert.True(createResponse.Success, string.Join(";", createResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+        string? createdGroupId;
+        using (var createdDoc = System.Text.Json.JsonDocument.Parse(createResponse.Emission!.Data!.Value.GetRawText()))
+            createdGroupId = createdDoc.RootElement.GetProperty("groupId").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(createdGroupId));
+        Assert.Contains(groupName, await ListGroupsRawAsync());
+
+        // NEGATIVE (role): a user-role request against the SAME override target_ref is rejected --
+        // ae230's own dispatcher_mapping declares role="admin" -- and the row survives untouched.
+        var userRolePayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = overrideTargetRef,
+            groupId = createdGroupId,
+            confirmed = true,
+        });
+        var userRoleResponse = await dispatcher.DispatchAsync(new EndpointRequestDto(
+            "delete_group", "manifest", "enum_dictionary", "delete_group",
+            IdOrHubId: null, Payload: userRolePayload, Context: null, TriggerKind: "client", Role: "user"));
+        Assert.False(userRoleResponse.Success);
+        Assert.Contains(userRoleResponse.Errors, e => e.Code == "TARGET_REF_ROLE_UNAUTHORIZED");
+        Assert.Contains(groupName, await ListGroupsRawAsync());
+
+        // NEGATIVE (missing group): a groupId that does not exist fails close as
+        // ENUM_GROUP_NOT_FOUND (not a silent no-op success) through the SAME override target_ref --
+        // DataEnumDictionaryDeleteGroupAsync's own before-lookup, exercised here via the override
+        // path exactly like the direct-manifest delete_group path already proves elsewhere in this
+        // file. (IsGroupReferencedInManifestsAsync checks for a manifest topology JSONB reference
+        // to the groupId -- a real seeded group like demo_status is never referenced that way, so
+        // it is not usable as an ENUM_GROUP_IN_USE fixture here; that fail-close path is already
+        // proven directly against ae230 elsewhere in this test class's negative-case coverage.)
+        var missingGroupPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = overrideTargetRef,
+            groupId = Guid.NewGuid().ToString(),
+            confirmed = true,
+        });
+        var missingGroupResponse = await dispatcher.DispatchAsync(new EndpointRequestDto(
+            "delete_group", "manifest", "enum_dictionary", "delete_group",
+            IdOrHubId: null, Payload: missingGroupPayload, Context: null, TriggerKind: "client", Role: "admin"));
+        Assert.False(missingGroupResponse.Success);
+        Assert.Contains(missingGroupResponse.Errors, e => e.Code == "ENUM_GROUP_NOT_FOUND");
+
+        // Step 3: dispatch through the override target_ref with admin role and the real created
+        // groupId -- proving the seeded override genuinely authorizes and executes under ae230's
+        // OWN dispatcher_mapping/capability_requirement, and the deletion is visible through
+        // ae200's own separate uniform list_groups read circuit afterward.
+        var deletePayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = overrideTargetRef,
+            groupId = createdGroupId,
+            confirmed = true,
+        });
+        var deleteResponse = await dispatcher.DispatchAsync(new EndpointRequestDto(
+            "delete_group", "manifest", "enum_dictionary", "delete_group",
+            IdOrHubId: null, Payload: deletePayload, Context: null, TriggerKind: "client", Role: "admin"));
+        Assert.True(deleteResponse.Success, string.Join(";", deleteResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+
+        Assert.DoesNotContain(groupName, await ListGroupsRawAsync());
+    }
+
+    /// <summary>
     /// Combined resolution_chain + hub_navigation:create authoring dispatch proof, per the
     /// navigation_binding_authoring_and_verification resolution criterion confirmed in
     /// .agent/tasks/todo.md (2026-07-22): the SAME live-DB test must (1) author a hub_relation

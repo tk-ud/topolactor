@@ -140,7 +140,12 @@ TAG_LINE_RE = re.compile(r'^\[(?P<slash>/)?(?P<kind>[A-Za-z_][A-Za-z0-9_]*)(?P<a
 ATTR_RE = re.compile(r'([A-Za-z_][A-Za-z0-9_]*)=("(?:[^"\\]|\\.)*"|\S+)')
 HTML_TAG_RE = re.compile(r'<\s*[a-zA-Z][a-zA-Z0-9]*(\s[^<>]*)?/?\s*>')
 
-NODE_VALUE_RE = re.compile(r'^node:[A-Za-z0-9_.]+\.value$')
+# Trailing (?:\.[A-Za-z0-9_]+)* mirrors frontend/runtime/payloadFromResolver.ts's
+# NODE_VALUE_RE dotted-path-drilling extension (round 20 -- admin-uibuilder-ui-
+# structure-wiring-ssot.yaml admin_runtime_selected_row_carrier_contract): a
+# tracked node value that is an object (e.g. a table's selected row) can have a
+# single field extracted, e.g. node:enum_table.value.groupId.
+NODE_VALUE_RE = re.compile(r'^node:[A-Za-z0-9_.]+\.value(?:\.[A-Za-z0-9_]+)*$')
 EVENT_PATH_RE = re.compile(r'^event(\.[A-Za-z0-9_]+)+$')
 LITERAL_RE = re.compile(r'^literal:.*$')
 

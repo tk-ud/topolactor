@@ -839,9 +839,17 @@ function tableFactory(spec: RuntimeComponentSpec): RenderResult {
       rows,
       rowKey: (row) => String(row.id ?? JSON.stringify(row)),
       emptyMessage: (table.emptyMessage as string | undefined) ?? "No data.",
+      // `value: row` (in addition to `row`) is what makes emitBoundEvent's existing,
+      // universal Lane 3 node-value tracking (the `"value" in payload` branch, shared
+      // by every input/select-family component) also fire for a table's row select —
+      // no table-specific tracking path, just supplying the same key every other
+      // component's change/input/select event already relies on. This lets a LATER
+      // node's payloadFrom reference the selected row via
+      // `node:<thisTableNodeId>.value.<field>` (round 20 — admin-uibuilder-ui-
+      // structure-wiring-ssot.yaml admin_runtime_selected_row_carrier_contract).
       onRowClick: spec.eventBinding.select
         ? (row) => {
-          const result = emitBoundEvent(spec, "select", { row });
+          const result = emitBoundEvent(spec, "select", { row, value: row });
           if (!result.ok) throw new Error(result.error);
         }
         : undefined,

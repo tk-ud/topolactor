@@ -374,3 +374,106 @@ Deno.test("resolvePayloadFrom: event.<path> fails close for an Object.prototype-
     );
   }
 });
+
+// ─── node:<nodeId>.value.<path> dotted-path drilling (round 20 — admin-enum
+// selected-row carrier: a table's tracked selected-row object value needs a
+// single field extracted for a later button's payloadFrom) ─────────────────
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<field> parses to node_value with a path", () => {
+  const result = parsePayloadFromSource("node:enum_table.value.groupId");
+  assertEquals(result.kind, "node_value");
+  if (result.kind === "node_value") {
+    assertEquals(result.nodeId, "enum_table");
+    assertEquals(result.path, ["groupId"]);
+  }
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<a>.<b> parses to node_value with a multi-segment path", () => {
+  const result = parsePayloadFromSource("node:enum_table.value.detail.groupId");
+  assertEquals(result.kind, "node_value");
+  if (result.kind === "node_value") {
+    assertEquals(result.nodeId, "enum_table");
+    assertEquals(result.path, ["detail", "groupId"]);
+  }
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value (no suffix) still parses with an empty path — bare tracked-value form unchanged", () => {
+  const result = parsePayloadFromSource("node:hub_search_input.value");
+  assertEquals(result.kind, "node_value");
+  if (result.kind === "node_value") {
+    assertEquals(result.path ?? [], []);
+  }
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<field> drills into an object tracked value", () => {
+  const source: PayloadFromSource = {
+    kind: "node_value",
+    nodeId: "enum_table",
+    path: ["groupId"],
+  };
+  const nodeValues = {
+    enum_table: { groupId: "22222222-2222-2222-2222-222222222201", groupName: "demo_status" },
+  };
+  const result = resolvePayloadFromSource(source, nodeValues, {});
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.value, "22222222-2222-2222-2222-222222222201");
+  }
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<field> fails close (PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND) when the tracked value is not an object", () => {
+  const source: PayloadFromSource = {
+    kind: "node_value",
+    nodeId: "enum_table",
+    path: ["groupId"],
+  };
+  const nodeValues = { enum_table: "not an object" };
+  const result = resolvePayloadFromSource(source, nodeValues, {});
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertMatch(result.error, /PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND/);
+  }
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<field> fails close (PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND) when the field is absent on the tracked object", () => {
+  const source: PayloadFromSource = {
+    kind: "node_value",
+    nodeId: "enum_table",
+    path: ["groupId"],
+  };
+  const nodeValues = { enum_table: { groupName: "demo_status" } };
+  const result = resolvePayloadFromSource(source, nodeValues, {});
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertMatch(result.error, /PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND/);
+    assertMatch(result.error, /groupId/);
+  }
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<field> fails close when the nodeId itself has never been tracked (no row selected yet)", () => {
+  const source: PayloadFromSource = {
+    kind: "node_value",
+    nodeId: "enum_table",
+    path: ["groupId"],
+  };
+  const result = resolvePayloadFromSource(source, {}, {});
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertMatch(result.error, /PAYLOAD_FROM_NODE_NOT_FOUND/);
+  }
+});
+
+Deno.test("payloadFromResolver: resolvePayloadFrom resolves a full delete_group-style payload from a table's tracked selected row", () => {
+  const payloadFrom = {
+    groupId: "node:enum_table.value.groupId",
+    confirmed: "literal:true",
+  };
+  const nodeValues = {
+    enum_table: { groupId: "row-uuid-1", groupName: "demo_status", indexNum: 3 },
+  };
+  const result = resolvePayloadFrom(payloadFrom, nodeValues, {});
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.payload, { groupId: "row-uuid-1", confirmed: "true" });
+  }
+});

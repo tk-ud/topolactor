@@ -148,6 +148,19 @@ function inputChangeSetStateInteraction(targetNodeId: string) {
   }];
 }
 
+function simulateRowClick(rowEl: HTMLTableRowElement) {
+  const event = new (globalThis as unknown as { Event: typeof Event }).Event(
+    "click",
+    { bubbles: true },
+  );
+  try {
+    rowEl.dispatchEvent(event);
+  } catch {
+    // Same rationale as simulateClick below — asserting on captured dispatch
+    // bodies, not on whether this call itself threw.
+  }
+}
+
 function simulateInput(inputEl: HTMLInputElement, value: string) {
   inputEl.value = value;
   const event = new (globalThis as unknown as { Event: typeof Event }).Event(
@@ -978,6 +991,274 @@ Deno.test(
         >).groupName,
         "record_b",
         "Confirm after Load(B) must dispatch record_b's name, NOT the stale record_a — display and dispatch payload must agree after a record switch",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource =
+        originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
+      render(null, container);
+      cleanup();
+    }
+  },
+);
+
+// ─── PR #600 round 20: enum_delete_group_button's payloadFrom sources groupId
+// from "node:enum_table.value.groupId" — the tracked value of a DIFFERENT
+// node (the table), not the button's own input. This requires two things this
+// round added: (1) tableFactory's onRowClick now also supplies `value: row` so
+// emitBoundEvent's existing, universal Lane 3 node-value tracking fires for a
+// table row select the same way it already fires for every other component's
+// change/input/select event, and (2) payloadFromResolver.ts's new
+// node:<id>.value.<path> dotted-path extraction. Mounts the real production
+// ProjectionShell + Table, simulates a genuine row click then a genuine
+// button click, and asserts the delete dispatch carries the SELECTED ROW's
+// own groupId — the real db/seed_empty.sql ae200 enum_table/
+// enum_delete_group_button shape. ───────────────────────────────────────────
+
+Deno.test(
+  "ProjectionShell (real mount): clicking a table row tracks that row as the table node's own value, and a separate button's payloadFrom (node:<table>.value.<field>) reads a field off it (real db/seed_empty.sql ae200 enum_table/enum_delete_group_button shape, round 20)",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource =
+      FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    const AE230_DELETE_GROUP_TARGET_REF =
+      "manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group";
+
+    function tableAndDeleteButtonEmission() {
+      return {
+        manifestId: ADMIN_ENUM_MANIFEST_ID,
+        layoutId: "layout-ae200-selected-row-carrier-scenario",
+        projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+        layoutNodes: [
+          {
+            nodeId: "enum_table",
+            nodeKind: "catalog_component",
+            componentId: "comp-enum-table-001",
+            componentKind: "data_display/table",
+            componentKey: "table.primitive",
+            orderIndex: 0,
+            // The LAYOUT's own uniform binding (ae205's real target_ref, list_groups) — a row
+            // select re-issues this same idempotent read, exactly like production.
+            wiringKind: "admin_runtime",
+            targetSurface: "manifest",
+            targetRef:
+              `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:list_groups`,
+            // table:null forces tableFactory's fallback to the flat top-level props (the same
+            // shape db/seed_empty.sql's real enum_table propsJson uses) instead of the
+            // placeholder default's own nested `table` object.
+            propsJson: JSON.stringify({
+              table: null,
+              columns: [
+                { key: "groupId", header: "Group ID" },
+                { key: "groupName", header: "Group name" },
+              ],
+              rows: [
+                { groupId: "row-uuid-1", groupName: "Alpha" },
+                { groupId: "row-uuid-2", groupName: "Beta" },
+              ],
+            }),
+          },
+          {
+            nodeId: "enum_delete_group_button",
+            nodeKind: "catalog_component",
+            componentId: "comp-delete-group-button-001",
+            componentKind: "action/button",
+            componentKey: "button.primitive",
+            orderIndex: 1,
+            wiringKind: "admin_runtime",
+            targetSurface: "manifest",
+            targetRef:
+              `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:list_groups`,
+            // The node-local override (db/seed_empty.sql's real enum_delete_group_button tensor
+            // node, round 20) — groupId sourced from enum_table's OWN tracked selected-row value,
+            // NOT from any input this button itself owns.
+            dispatchTargetRefByTrigger: {
+              click: AE230_DELETE_GROUP_TARGET_REF,
+            },
+            dispatchPayloadFromByTrigger: {
+              click: {
+                groupId: "node:enum_table.value.groupId",
+                confirmed: "literal:true",
+              },
+            },
+          },
+        ],
+      };
+    }
+
+    const scenario = buildMockScenario((callIndex) => {
+      if (callIndex === 1) {
+        return { success: true, emission: tableAndDeleteButtonEmission() };
+      }
+      // callIndex 2: the row select's own list_groups re-dispatch (harmless, idempotent read).
+      // callIndex 3: the delete button's override dispatch.
+      return { success: true, errors: [] };
+    });
+    globalThis.fetch = scenario.fetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+
+      render(h(ProjectionShell, {}), container);
+
+      let buttonEl: HTMLButtonElement | null = null;
+      await waitFor(() => {
+        buttonEl = container.querySelector("button");
+        return buttonEl !== null;
+      });
+      assertExists(
+        buttonEl,
+        "enum_delete_group_button must have rendered from the initial dispatch's emission",
+      );
+
+      const rows = () =>
+        Array.from(
+          container.querySelectorAll("tbody tr"),
+        ) as HTMLTableRowElement[];
+      await waitFor(() => rows().length === 2);
+      assertEquals(rows().length, 2);
+
+      // Select the SECOND row — proves the tracked value reflects whichever row was
+      // actually clicked, not just always the first.
+      simulateRowClick(rows()[1]);
+      await waitFor(() => scenario.capturedDispatchBodies.length >= 2);
+      assertEquals(
+        scenario.capturedDispatchBodies.length,
+        2,
+        "the row select must have triggered enum_table's own list_groups re-dispatch",
+      );
+
+      simulateClick(buttonEl!);
+      await waitFor(() => scenario.capturedDispatchBodies.length >= 3);
+      assertEquals(
+        scenario.capturedDispatchBodies.length,
+        3,
+        "expected the row-select dispatch plus the delete button's override dispatch",
+      );
+
+      const deleteDispatchBody = scenario.capturedDispatchBodies[2];
+      // Layer/action must reflect the OVERRIDE's own embedded layer:action
+      // (enum_dictionary:delete_group), NOT the layout's own uniform binding
+      // (enum_dictionary:list_groups).
+      assertEquals(deleteDispatchBody.layer, "enum_dictionary");
+      assertEquals(deleteDispatchBody.action, "delete_group");
+      const deletePayload = deleteDispatchBody.payload as Record<
+        string,
+        unknown
+      >;
+      assertEquals(deletePayload.target_ref, AE230_DELETE_GROUP_TARGET_REF);
+      // The SELECTED (second) row's own groupId — not the first row's, not a static value.
+      assertEquals(deletePayload.groupId, "row-uuid-2");
+      assertEquals(deletePayload.confirmed, "true");
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource =
+        originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
+      render(null, container);
+      cleanup();
+    }
+  },
+);
+
+Deno.test(
+  "ProjectionShell (real mount): a button referencing node:<table>.value.<field> before any row has been selected fails close (PAYLOAD_FROM_NODE_NOT_FOUND) — no dispatch, never a silent undefined groupId",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource =
+      FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    const AE230_DELETE_GROUP_TARGET_REF =
+      "manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group";
+
+    const scenario = buildMockScenario((callIndex) => {
+      if (callIndex === 1) {
+        return {
+          success: true,
+          emission: {
+            manifestId: ADMIN_ENUM_MANIFEST_ID,
+            layoutId: "layout-ae200-no-selection-yet-scenario",
+            projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+            layoutNodes: [
+              {
+                nodeId: "enum_table",
+                nodeKind: "catalog_component",
+                componentId: "comp-enum-table-001",
+                componentKind: "data_display/table",
+                componentKey: "table.primitive",
+                orderIndex: 0,
+                propsJson: JSON.stringify({
+                  table: null,
+                  columns: [{ key: "groupId", header: "Group ID" }],
+                  rows: [{ groupId: "row-uuid-1" }],
+                }),
+                // No wiringKind on this node in THIS scenario — no eventBinding.select at all,
+                // so a row click never fires onRowClick, and enum_table's own tracked value is
+                // never seeded (no select ever occurred).
+              },
+              {
+                nodeId: "enum_delete_group_button",
+                nodeKind: "catalog_component",
+                componentId: "comp-delete-group-button-001",
+                componentKind: "action/button",
+                componentKey: "button.primitive",
+                orderIndex: 1,
+                wiringKind: "admin_runtime",
+                targetSurface: "manifest",
+                targetRef:
+                  `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:list_groups`,
+                dispatchTargetRefByTrigger: {
+                  click: AE230_DELETE_GROUP_TARGET_REF,
+                },
+                dispatchPayloadFromByTrigger: {
+                  click: {
+                    groupId: "node:enum_table.value.groupId",
+                    confirmed: "literal:true",
+                  },
+                },
+              },
+            ],
+          },
+        };
+      }
+      return { success: true, errors: [] };
+    });
+    globalThis.fetch = scenario.fetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+      render(h(ProjectionShell, {}), container);
+
+      let buttonEl: HTMLButtonElement | null = null;
+      await waitFor(() => {
+        buttonEl = container.querySelector("button");
+        return buttonEl !== null;
+      });
+      assertExists(buttonEl);
+
+      simulateClick(buttonEl!);
+      for (let i = 0; i < 10; i++) await flushUpdates();
+
+      assertEquals(
+        scenario.capturedDispatchBodies.length,
+        1,
+        "a click referencing an unselected table's tracked value must fail close (PAYLOAD_FROM_NODE_NOT_FOUND) with no second dispatch — never a silent undefined/null groupId sent to the backend",
       );
     } finally {
       globalThis.fetch = originalFetch;

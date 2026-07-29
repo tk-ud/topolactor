@@ -1125,6 +1125,33 @@ round 17受入条件（1109行目以前「唯一残る未解決scope（round 17�
 - 残り8 actionの配線を、本roundで確立した「translator生成→検証→転記」パイプラインを経ずに、手書きseed分岐で済ませる。
 - 「ローカルでlive-DBが起動可能」という発見を理由に、CI（GitHub Actions実PostgreSQL）でのproof取得を省略する——CIは本Bundleの継続的な証明surfaceであり、ローカル実行はそれを代替しない。
 
+### admin-enum subBundle 実装記録（2026-07-29 round 15 — 2番目のvertical slice: delete_group、および「既存recordの識別子を後続writeへ運ぶ」ための新規generic mechanism）
+
+round 14（create_group）は新規フォーム入力のみを必要とする書き込みだった。delete_groupは**既存recordの識別子（groupId）**が必要な最初の操作であり、round 9-14で調査済みの「別layoutへ値を運ぶ」cross-manifest carrier問題とは別の、より単純な問題（**同一layout内で、あるnodeの選択値を別nodeのpayloadFromから読む**）であることを確認した上で着手した。
+
+**実施内容（generic mechanism、admin-enum専用分岐なし）**:
+- `frontend/runtime/runtimeComponentFactory.ts`の`tableFactory`: 行クリックの`emitBoundEvent(spec,"select",{row})`へ`value: row`を追加しただけ——`emitBoundEvent`が既に持つ「`"value" in payload`ならどのcomponentのchange/input/select eventでも無条件に`onNodeValueChange`を呼ぶ」という既存の汎用Lane 3 tracking機構（テーブル以外の全component typeで既に使われている）を、テーブルのselectイベントでも初めて発火させただけで、新しいtracking経路は追加していない。
+- `frontend/runtime/payloadFromResolver.ts`: `node:<nodeId>.value`の正規表現へ、オブジェクト値の1フィールドを取り出す任意の`.field`サフィックス（`node:<nodeId>.value.<field>`）を追加。既存の`event.<path>`ドット区切りtraversalと同じロジックを共有ヘルパー(`traverseDottedPath`)へ切り出し、新規エラーコード`PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND`を追加。既存の`node:<id>.value`（サフィックス無し）の挙動は完全に不変（37件の既存+新規testで確認）。
+- `.agent/scripts/react_schema_topology_seed_translator.py`: 同型の`NODE_VALUE_RE`（Python側）へ同じサフィックス許容を追加。
+- `.agent/tests/fixtures/react-schema-topology-seed-translator/admin-enum-ae200.input.json`: `enum_delete_group_form`（`enum_delete_group_confirm_input`一意のrequiredフィールド + `enum_delete_group_button`、`actionRef=manifest:...ae230:enum_dictionary:delete_group`、`payloadFrom=groupId:node:enum_table.value.groupId,confirmed:literal:true`）を追加。**translator自身がAction単体をForm/Workflowの子でない形で許さない（`ACTION_NOT_OWNED_BY_FORM_OR_WORKFLOW`）、かつForm単体をField無しで許さない（`EMPTY_FORM`）ため**、確認用の1 required fieldを持つForm形に揃えた——この確認フィールドの値自体は現状バックエンドに渡らず実際のgroup名と突き合わせ検証されない、正直に記録する限定事項。
+- 実際に`generate-react-schema`→`generate-topology-seed`のCLIを再実行し、その出力をそのまま`db/seed_empty.sql`のae200 `layout_schema_json.records[]`（15レコード）と`layout_patch_json`（`enum_delete_group_button`ノード、Action自身の`this_resolved_key`でキー——round19の翻訳バグ修正が本操作にも正しく一般化することを確認）へ転記した。
+
+**証明（3層、role/missing-record negative caseを含む）**:
+- (a) `frontend/tests/payloadFromResolver.test.ts`へ8件の新規test（parse、drill成功、非object値でのfail-close、fieldなしでのfail-close、node未trackでのfail-close、実際のdelete_group風payload解決）を追加、既存29件との合計37件全pass。
+- (b) `backend/tests/Topolactor.Integration.Tests/AdminEnumHubRelationUiProjectionLiveDbTests.cs`へ新規test `DispatchAsync_AdminEnumManagementManifest_DeleteGroupFormNode_SurfacesDispatchOverride_AndExecutesViaAe230Authority`を追加。ローカル実PostgreSQL 16に対し、(1) ae200のprojection dispatchが`enum_delete_group_button`ノードへ正しいoverrideを持つこと、(2) 実create_group dispatchで作った行をこのoverride経由で実際に削除できること（削除後list_groupsから消えることを確認）、(3) user roleでの同一操作が`TARGET_REF_ROLE_UNAUTHORIZED`で拒否され対象行が生存すること、(4) 存在しないgroupIdへの削除が`ENUM_GROUP_NOT_FOUND`でfail-closeすることを証明。
+- (c) `frontend/tests/projectionShellAdminRuntimeWritePayloadCapture.test.ts`へ2件の新規test（本番`ProjectionShell`+`Table`を実マウント）を追加: 1件目はテーブル行クリック→別nodeの削除ボタンクリックで、選択した行（2行中2番目）自身のgroupIdが正しくdispatch payloadへ載ることを証明。2件目は行未選択のまま削除ボタンを押すと`PAYLOAD_FROM_NODE_NOT_FOUND`でfail-closeし、dispatchが一切発生しないことを証明。
+
+**作業中に発見・訂正した誤り（正直に記録）**: 当初「demo_status（22222222-2222-2222-2222-222222222201、demo_activeが所属）をこのoverride経由で削除しようとするとENUM_GROUP_IN_USEでfail-closeするはず」という referenced-delete negative testを書いたが、`DataEnumDictionaryDeleteGroupAsync`が呼ぶ`IsGroupReferencedInManifestsAsync`は「manifestのtopology JSONBにこのgroupIdの文字列が含まれるか」を見る検査であり、「group_itemsに所属itemがあるか」を見る検査ではない（後者はitem側のdelete_item専用チェック）ことが判明——このtestは実際にdemo_statusを本当に削除してしまい、ローカルテストDBの共有seed dataを破壊した。誤ったtestを`ENUM_GROUP_NOT_FOUND`（存在しないgroupIdでのnegative case）へ置き換え、ローカルDBを21 SQLファイルの完全再適用で復元し、`AdminEnumHubRelationUiProjectionLiveDbTests`全25件・`Topolactor.Runtime.Tests`全1553件・`check-backend-tests.sh`・frontend全test・型check・translator check scriptを再実行して無傷であることを確認した。
+
+**未着手のまま残る内容（正直な記録）**: 9 action中2つ（create_group/delete_group）のみ実配線済み。残り7 action（list_groups——実質は既にlayout自身の一律bindingとして機能——を除く、get_group/update_group/create_item/update_item/delete_item/set_group_items）は未着手。update_group/create_item等、既存recordの「現在値」をフォームへ表示する必要がある操作は、今回確立した「テーブルのtracked選択値をnode:<table>.value.<field>で読む」機構で識別子は運べるが、その識別子を使って別途取得した現在値をフォームフィールドへ事前入力する経路（round11/12のonRuntimeDispatchResult機構は同一manifestのdryRun再dispatchのみを想定しており、confirmProjectionEntryEmissionのadoptedManifestId一致チェックにより別manifest——例えばget_group/ae280——のレスポンスをae200へ採用することは現状ブロックされる）は別途要検討であり、本roundでは解決していない。統合UX（search/show-all/inline-update/delete-confirm/membership-editing/dryRun-preview-confirm-write-reread）、完全なnegative boundary証明群、`AdminEnumsRoster.tsx`/route撤去も未着手のまま。
+
+### Governance NG boundary追記（round 15）
+
+- 本round2 action目の実配線完了をもって、admin-enum subBundleまたは`admin-surface-topology-seed-conversion` Bundle全体がimplementedであるかのように扱う——残り7 action・統合UX・negative boundary証明・route撤去が未着手である。
+- `node:<nodeId>.value.<field>`拡張を、admin-enum専用の特別扱いとしてadmin-enumのコードへ直接実装する——実際には`payloadFromResolver.ts`/translatorの共有・汎用ロジックへ実装済みであり、他のどのsurfaceのどのtable/select componentからも同じ構文で使える。
+- 本roundで発見した「別manifestのレスポンスをae200へ採用できない」という制約を、根拠なく「解決済み」と主張する、または逆に「解決不能」と断定して調査を止める——round9-14と同様、具体的なコード根拠（confirmProjectionEntryEmissionのadoptedManifestId一致チェック）を示した上で「本roundでは着手していない」と正確に記録するに留める。
+- 誤って実データを破壊したこと（demo_status削除）を隠す、またはローカルDB復元の証跡を省略する。
+
 ---
 
 ## Bundle `admin-runtime-operation-dispatch-lane-determination`
