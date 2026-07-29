@@ -1303,12 +1303,17 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
             # discipline for adminRuntimeDispatchOverride (round 17).
             interactions = record.get("runtimeInteractions") or []
             admin_runtime_override = record.get("adminRuntimeDispatchOverride")
-            if interactions or admin_runtime_override:
+            if interactions:
                 parent_key = wrapper.get("parentKey")
                 # Resolve against the OWNING Form's disambiguated identity (the running map
                 # built above), never the raw parentKey string alone -- two different Form
                 # instances that happen to share a key must never merge their actions'
-                # runtimeInteractions into the same tensor node.
+                # runtimeInteractions into the same tensor node. Correct for runtimeInteractions
+                # specifically: backend/repository/LayoutSchemaTensorComposer.cs's
+                # BuildInteractionsBySourceActionKey groups tensor entries by
+                # "{formTensorNodeId}::{sourceActionKey}" and Compose looks them up against each
+                # LEAF's OWN resolved nodeId scoped by ITS OWNING FORM -- the tensor node carrying
+                # runtimeInteractions is deliberately keyed by the FORM, not the leaf.
                 owning_form_key = (
                     last_resolved_key_by_raw_key.get(parent_key, parent_key)
                     if parent_key is not None
@@ -1318,6 +1323,26 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                     "nodeId": owning_form_key,
                     "nodeKind": "catalog_component",
                     "runtimeInteractions": list(interactions),
+                })
+            if admin_runtime_override:
+                # Round 19 fix: dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger are NOT
+                # scoped by BuildInteractionsBySourceActionKey's sourceActionKey mechanism --
+                # LayoutSchemaTensorComposer.Compose merges them via nodeLocalDataByNodeId, a
+                # plain NodeId match against a CATALOG LEAF's own resolved key (NodeLocalData's own
+                # doc comment: "the match key is the tensor node's own NodeId directly, not
+                # {formNodeId}::{sourceActionKey}"). Attaching this override to owning_form_key (a
+                # STRUCTURAL topology_ui_form record, per StructuralRecordTypes) meant Compose's
+                # isCatalogLeaf gate silently excluded it from EVERY merge -- confirmed via a real
+                # live-DB round trip (Topolactor.Integration.Tests
+                # AdminEnumHubRelationUiProjectionLiveDbTests.
+                # DispatchAsync_AdminEnumManagementManifest_CreateGroupFormNode_..., which failed
+                # with a null DispatchTargetRefByTrigger before this fix). The override must be
+                # keyed by the ACTION LEAF's own resolved identity instead, matching every other
+                # NodeLocalData field's convention.
+                tensor_nodes.append({
+                    "nodeId": this_resolved_key,
+                    "nodeKind": "catalog_component",
+                    "runtimeInteractions": [],
                     "adminRuntimeDispatchOverride": admin_runtime_override,
                 })
 

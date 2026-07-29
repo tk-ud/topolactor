@@ -1222,6 +1222,20 @@ def main():
             "42d. the override is NEVER folded into runtimeInteractions[] (action-authority-vs-effect-data separation, round 6/15/16 design)",
             aro_node is not None and aro_node.get("runtimeInteractions") == [],
         )
+        expect(
+            "42f. (round 19) the override's tensor node is keyed by the ACTION LEAF's own resolved "
+            "key ('confirm_button'), NOT its owning Form's key ('create_group_form') -- "
+            "backend/repository/LayoutSchemaTensorComposer.cs's Compose merges "
+            "dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger via a plain NodeId match "
+            "against a catalog leaf (isCatalogLeaf-gated), never via "
+            "BuildInteractionsBySourceActionKey's sourceActionKey scoping that only applies to "
+            "runtimeInteractionsJson -- a Form record is structural (StructuralRecordTypes), so "
+            "keying this override by the owning form's nodeId silently drops it from every real "
+            "merge (caught by a live-DB round trip, Topolactor.Integration.Tests "
+            "AdminEnumHubRelationUiProjectionLiveDbTests."
+            "DispatchAsync_AdminEnumManagementManifest_CreateGroupFormNode_..., before this fix).",
+            aro_node is not None and aro_node.get("nodeId") == "confirm_button",
+        )
 
         # Negative: an Action declaring this lane but never reaching a tensor node (simulated by
         # validating adoption candidates directly with an empty tensorAdoptionCandidates bucket)

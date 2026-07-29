@@ -286,6 +286,134 @@ Deno.test(
 );
 
 Deno.test(
+  "ProjectionShell (real mount): a node's own dispatchTargetRefByTrigger override dispatches to a DIFFERENT manifest/layer/action than the layout's own uniform target_ref (real db/seed_empty.sql ae200 enum_create_group_button shape, round 19)",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource =
+      FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    const AE210_CREATE_GROUP_TARGET_REF =
+      "manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group";
+
+    const scenario = buildMockScenario((callIndex) => {
+      if (callIndex === 1) {
+        return {
+          success: true,
+          emission: {
+            manifestId: ADMIN_ENUM_MANIFEST_ID,
+            layoutId: "layout-ae200-scenario",
+            projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+            layoutNodes: [
+              {
+                nodeId: "enum_create_group_name_input",
+                nodeKind: "catalog_component",
+                componentId: "comp-name-input-001",
+                componentKind: "form_input/input",
+                componentKey: "text_input.primitive",
+                orderIndex: 0,
+                runtimeInteractions: inputChangeSetStateInteraction(
+                  "enum_create_group_button",
+                ),
+              },
+              {
+                nodeId: "enum_create_group_button",
+                nodeKind: "catalog_component",
+                componentId: "comp-create-group-button-001",
+                componentKind: "action/button",
+                componentKey: "button.primitive",
+                orderIndex: 1,
+                // The LAYOUT's own uniform binding (ae205's real target_ref) — every OTHER node
+                // in ae200's layout dispatches list_groups by default.
+                wiringKind: "admin_runtime",
+                targetSurface: "manifest",
+                targetRef:
+                  `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:list_groups`,
+                // The node-local override (db/seed_empty.sql's real enum_create_group_button
+                // tensor node, round 19) — must WIN over the layout's own uniform target_ref
+                // above for this node's "click" trigger.
+                dispatchTargetRefByTrigger: {
+                  click: AE210_CREATE_GROUP_TARGET_REF,
+                },
+                dispatchPayloadFromByTrigger: {
+                  click: {
+                    groupName: "node:enum_create_group_name_input.value",
+                    confirmed: "literal:true",
+                  },
+                },
+              },
+            ],
+          },
+        };
+      }
+      // The override dispatch triggered by the simulated button click.
+      return { success: true, errors: [] };
+    });
+    globalThis.fetch = scenario.fetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+
+      render(h(ProjectionShell, {}), container);
+
+      let buttonEl: HTMLButtonElement | null = null;
+      await waitFor(() => {
+        buttonEl = container.querySelector("button");
+        return buttonEl !== null;
+      });
+      assertExists(
+        buttonEl,
+        "the enum_create_group_button must have rendered from the initial dispatch's emission",
+      );
+      const inputEl = container.querySelector("input");
+      assertExists(inputEl, "the group name input must have rendered");
+
+      simulateInput(inputEl as HTMLInputElement, "live-db-round-trip-status");
+      await flushUpdates();
+
+      simulateClick(buttonEl!);
+      await waitFor(() => scenario.capturedDispatchBodies.length >= 2);
+
+      assertEquals(
+        scenario.capturedDispatchBodies.length >= 2,
+        true,
+        "expected an initial dispatch plus the button click's override dispatch",
+      );
+      const overrideDispatchBody = scenario.capturedDispatchBodies[1];
+      // Layer/action must reflect the OVERRIDE's own embedded layer:action
+      // (enum_dictionary:create_group), NOT the layout's own uniform binding
+      // (enum_dictionary:list_groups) -- proving the node-level override actually took effect,
+      // not merely that the layout happened to already be bound to the right thing.
+      assertEquals(overrideDispatchBody.layer, "enum_dictionary");
+      assertEquals(overrideDispatchBody.action, "create_group");
+      const overridePayload = overrideDispatchBody.payload as Record<
+        string,
+        unknown
+      >;
+      assertEquals(overridePayload.target_ref, AE210_CREATE_GROUP_TARGET_REF);
+      assertEquals(overridePayload.groupName, "live-db-round-trip-status");
+      // literal: sources always resolve to a JS string (payloadFromResolver.ts) -- the backend's
+      // IsTruthyPayloadFlag deliberately accepts this string form for exactly this reason
+      // (AdminRuntimeMasterRoster.cs), so "true" (not the JSON boolean) is the correct wire value.
+      assertEquals(overridePayload.confirmed, "true");
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource =
+        originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
+      render(null, container);
+      cleanup();
+    }
+  },
+);
+
+Deno.test(
   "ProjectionShell (real mount): a genuine SSE refresh event reconciles a removed node's tracked value — a later dispatch referencing it fails close, never reuses the stale value",
   async () => {
     ensureRuntimeComponentRegistryInitialized();

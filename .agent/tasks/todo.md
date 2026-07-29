@@ -1106,6 +1106,25 @@ PR review roundとは別に、ユーザーから直接「CRUDの雛形（`docs/r
 
 **今後の必須参照指定**: `docs/reference/seed-data-authoring-guide.md`を、本Bundleおよび`admin-surface-topology-seed-conversion`親Bundleの対応資料において「到達可能」ではなく「Section 9含め全文精読必須」の参照として明記する（下記「対応資料」節に追記）。
 
+### admin-enum subBundle 実装記録（2026-07-29 round 14 — round 15-19（`admin-runtime-operation-dispatch-lane-determination`/`admin-write-surface-selection-context-and-mode-composition-gap`両Bundleで確立したgeneric mechanism）を使った、admin-enum単一画面CRUD統合の最初の垂直スライス: create_group）
+
+round 17受入条件（1109行目以前「唯一残る未解決scope（round 17時点）」参照）が指摘した4点のうち、(1)「ae200へcanonical generation経路で実配線」の最初の1 action分（create_group）を、手書きseed分岐を使わず`react_schema_topology_seed_translator.py`のtranslator生成結果をそのまま転記する形で実装した。
+
+**実施内容**:
+- `.agent/tests/fixtures/react-schema-topology-seed-translator/admin-enum-ae200.input.json`のReact-like schemaへ`enum_create_group_form`/`enum_create_group_name_input`/`enum_create_group_button`の3要素を追加し、`enum_create_group_button`の`actionRef`をae210自身の`manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group`（`wiringLane=admin_runtime_dispatch_override_wiring`）とした。
+- 実際に`generate-react-schema` CLIを再実行し、その出力をそのまま第2段fixture（`admin-enum-ae200.topology-seed.input.json`）へ転記し、さらにtranslator本体を実行して得た`layout_schema_json.records[]`/`layout_patch_json`をそのまま`db/seed_empty.sql`のae200行へ転記した（手で個々のaction/nodeId/route分岐を書き起こしていない）。
+- **この過程で、translator自身の真のバグを発見・修正した**: `split_flat_records_into_adoption_candidates`が、`runtimeInteractions`と`adminRuntimeDispatchOverride`（`dispatchTargetRefByTrigger`/`dispatchPayloadFromByTrigger`の元データ）を同じ1つのtensor node（owning FormのnodeId）へまとめていたが、backend側`LayoutSchemaTensorComposer.Compose()`のnodeId一致マージは`isCatalogLeaf`（Structural record type除外——Formは常にstructural）でのみ発火するため、Formキーの`adminRuntimeDispatchOverride`は本番で決して合流しない実配線バグだった。tensor node生成を2つに分離し、`adminRuntimeDispatchOverride`はAction自身の`this_resolved_key`でキーする形に修正した。
+- この修正を3層で証明した: (a) `check_react_schema_topology_seed_translator.py`へ新規assertion `42f`を追加し、`git stash`で修正前は失敗・修正後は成功することを確認、(b) `AdminEnumHubRelationUiProjectionLiveDbTests.cs`へ新規test（`DispatchAsync_AdminEnumManagementManifest_CreateGroupFormNode_SurfacesDispatchOverride_AndExecutesViaAe210Authority`）を追加し、ローカルで起動した実PostgreSQL 16（CIの`backend-tests.yml`と同一のschema適用手順を再現）に対してae200のprojection dispatchが`enum_create_group_button`ノードへ正しい`dispatchTargetRefByTrigger`/`dispatchPayloadFromByTrigger`を持つこと、admin roleでのcreate_group実行が実際にDBへ反映されること、user roleでの同一操作が`TARGET_REF_ROLE_UNAUTHORIZED`で拒否されることを証明、(c) `frontend/tests/projectionShellAdminRuntimeWritePayloadCapture.test.ts`へ本番`ProjectionShell`を実マウントする新規test（DOM input+click→dispatch capture）を追加し、node-levelのdispatchTargetRefByTrigger overrideがlayout全体の一律target_ref（list_groups）より優先されてcreate_groupへdispatchされることを証明した。
+- **この環境で実際にPostgreSQL 16が起動可能であることを新たに確認した**（`pg_lsclusters`でinstall済みだが停止中だったサーバを`sudo service postgresql start`で起動、CIと同じ21 SQLファイルを同一順序で適用）——round17末尾の「この環境にはlive PostgreSQLが存在しないためCI実行が必要」という記述は本roundにより訂正する。ローカルでのlive-DB proofは可能である（ただしCI自身の証明義務が消えるわけではない）。
+
+**未着手のまま残る内容（正直な記録）**: 9 action中1つ（create_group）のみが実配線済み。残り8 action（list_groups/get_group/update_group/delete_group/create_item/update_item/delete_item/set_group_items）のae200/ae2xx統合、search/show-all/inline-update/delete-confirm/membership-editing/dryRun-preview-confirm-write-rereadを1画面へ統合するUX構成、selection A→B・cancel・stale tracker・SSE refresh等の完全なnegative boundary証明群、`AdminEnumsRoster.tsx`/`frontend/routes/admin/enums.tsx`の撤去は、いずれもまだ手を付けていない。
+
+### Governance NG boundary追記（round 14）
+
+- 本round1 actionの実配線完了をもって、admin-enum subBundleまたは`admin-surface-topology-seed-conversion` Bundle全体がimplementedであるかのように扱う——残り8 action・統合UX・negative boundary証明・route撤去が未着手である。
+- 残り8 actionの配線を、本roundで確立した「translator生成→検証→転記」パイプラインを経ずに、手書きseed分岐で済ませる。
+- 「ローカルでlive-DBが起動可能」という発見を理由に、CI（GitHub Actions実PostgreSQL）でのproof取得を省略する——CIは本Bundleの継続的な証明surfaceであり、ローカル実行はそれを代替しない。
+
 ---
 
 ## Bundle `admin-runtime-operation-dispatch-lane-determination`
