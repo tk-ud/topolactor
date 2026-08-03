@@ -77,6 +77,7 @@ SEED_RECORD_NESTED_LIST_KEYS = {
     "topology_ui_form": [("fields", "fieldKeys"), ("actions", "actionKeys")],
     "topology_ui_table": [("columns", "columnKeys")],
     "topology_ui_workflow": [("steps", "stepKeys")],
+    "topology_ui_modal": [("children", "childKeys")],
 }
 
 REQUIRED_SSOT_SECTIONS = [
@@ -105,7 +106,7 @@ DEFAULT_PROTECTED_VOCABULARY = [
     "unapproved_executable_function_or_schema_authority",
 ]
 
-CONTAINER_UNITS = {"projection", "category", "section", "form", "workflow"}
+CONTAINER_UNITS = {"projection", "category", "section", "form", "workflow", "modal"}
 LEAF_UNITS = {"field", "table", "step", "action", "validation", "prop_binding", "payload_from", "style_ref"}
 ALL_TAGGABLE_UNITS = CONTAINER_UNITS | LEAF_UNITS
 
@@ -117,8 +118,21 @@ ALL_TAGGABLE_UNITS = CONTAINER_UNITS | LEAF_UNITS
 LABEL_REQUIRED_UNITS = set(ALL_TAGGABLE_UNITS)
 
 # react_schema_contract prohibited_features.mutation_action_not_owned_by_a_form:
-# an Action node's direct parent must be a Form or a Workflow.
-VALID_ACTION_OWNER_NODE_KINDS = {"Form", "Workflow"}
+# an Action node's direct parent must always be a Form, a Workflow, or a Modal -- verified
+# against db/physical_search_crud_aggregate_preset_seed.sql's crud_submit_button/
+# crud_cancel_button, whose parentNodeId is "crud_create_modal" (a Modal, no Form wrapper).
+VALID_ACTION_OWNER_NODE_KINDS = {"Form", "Workflow", "Modal"}
+
+# A Section may ALSO directly own an Action, but only when that Action's own wiringLane is
+# disclosure_state_wiring (round 24) -- a pure UI-local disclosure trigger with no backend dispatch
+# authority at all, verified against the SAME fixture: crud_add_button/crud_search_button (plain
+# trigger buttons, not mutations) have parentNodeId "crud_shell", a bare Section, no Form at all.
+# Deliberately NOT extended to every lane: check_react_schema_topology_seed_translator.py's own
+# check 40 proves a REAL dispatch Action (external_instance_wiring) injected directly under a
+# Section must still be rejected -- unconditionally allowing Section as an Action owner would
+# silently defeat that protection. Only the narrowest lane this round's own evidence supports is
+# added, not a blanket exception.
+SECTION_OWNABLE_ACTION_LANES = {"disclosure_state_wiring"}
 
 UNIT_TO_NODE_KIND = {
     "projection": "Projection",
@@ -128,12 +142,36 @@ UNIT_TO_NODE_KIND = {
     "field": "Field",
     "table": "Table",
     "workflow": "Workflow",
+    "modal": "Modal",
     "step": "Step",
     "action": "Action",
     "validation": "Validation",
     "prop_binding": "PropBinding",
     "payload_from": "PayloadFrom",
     "style_ref": "StyleRef",
+}
+
+# wiring_lane_contract.lanes.disclosure_state_wiring actionType vocabulary (round 24) -- the
+# SAME actionTypes backend/repository/NpgsqlUiTopologyRepository.cs ValidateRuntimeInteractions
+# accepts for an active-topology runtimeInteractions[] entry whose target is a disclosure
+# container or disclosure/tabs|accordion (setActiveKey) node. This translator only emits Modal
+# containers today, so only the *Modal actionTypes are reachable via a real fixture; the others
+# are still recognized vocabulary (not UNKNOWN) so a future round adding Drawer/Dialog/Tabs
+# container kinds does not also need a new actionType allowlist.
+DISCLOSURE_ACTION_TYPES = {
+    "openModal", "closeModal", "toggleModal",
+    "openDrawer", "closeDrawer", "toggleDrawer",
+    "openDialog", "closeDialog", "toggleDialog",
+    "setActiveKey", "setState",
+}
+
+# Only the *Modal family has a matching container kind this translator can emit and therefore
+# cross-validate today (see validate_disclosure_targets) -- Drawer/Dialog/Tabs/Accordion target
+# kind checking is deferred to whichever future round adds those container kinds.
+DISCLOSURE_TARGET_KIND_BY_ACTION_TYPE = {
+    "openModal": "Modal",
+    "closeModal": "Modal",
+    "toggleModal": "Modal",
 }
 
 TAG_LINE_RE = re.compile(r'^\[(?P<slash>/)?(?P<kind>[A-Za-z_][A-Za-z0-9_]*)(?P<attrs>(?:\s+.+)?)\]$')
@@ -397,6 +435,14 @@ def build_node(kind, attrs, source_refs, known_gaps):
         node["display"] = attrs.get("display", "")
     if kind == "workflow":
         node["steps"] = []
+    if kind == "modal":
+        # react_schema_contract.allowed_node_kinds.Modal: only disclosure/modal is emitted by
+        # this translator today (round 24) -- title/body are optional display props carried
+        # through to the tensor node's propsJson by the seed transcription step, never
+        # validated here.
+        node["componentKind"] = "disclosure/modal"
+        node["title"] = attrs.get("title", "")
+        node["body"] = attrs.get("body", "")
     if kind in ("step", "action"):
         wiring_lane = attrs.get("wiringLane")
         event_binding = {
@@ -411,8 +457,34 @@ def build_node(kind, attrs, source_refs, known_gaps):
         output_prop = attrs.get("outputProp")
         if output_prop:
             event_binding["outputProp"] = output_prop
+        # wiring_lane_contract.lanes.disclosure_state_wiring (round 24): the structured fields
+        # build_runtime_interaction_candidate actually reads for a disclosure/setActiveKey/setState
+        # runtimeInteractions[] entry -- targetRef above stays in the ui-local:<nodeId>.<stateKey>
+        # shape purely so validate_wiring_node's existing targetRef_shape check has something to
+        # validate; it is never read for this lane's actual candidate.
+        if wiring_lane == "disclosure_state_wiring":
+            d_target = attrs.get("disclosureTargetNodeId", "")
+            d_path = attrs.get("disclosureStatePath") or "open"
+            event_binding["disclosureActionType"] = attrs.get("disclosureActionType")
+            event_binding["disclosureTargetNodeId"] = d_target
+            event_binding["disclosureStatePath"] = d_path
+            if d_target:
+                event_binding["targetRef"] = f"ui-local:{d_target}.{d_path}"
         node["eventBinding"] = event_binding
         node["actionRef"] = attrs.get("actionRef", "")
+        # secondaryDisclosureAction (round 24): independent of the primary wiringLane above --
+        # lets one Action carry BOTH a real dispatch (e.g. admin_runtime_dispatch_override_wiring)
+        # AND an additional disclosure state change (e.g. closeModal) on the same trigger, the
+        # same way a real admin/uibuilder author can attach more than one runtimeInteraction to
+        # one node/trigger. See wiring_lane_contract.lanes.disclosure_state_wiring.secondary_combination.
+        secondary_action_type = attrs.get("secondaryDisclosureActionType")
+        if secondary_action_type:
+            node["secondaryDisclosureAction"] = {
+                "trigger": event_binding["trigger"],
+                "actionType": secondary_action_type,
+                "targetNodeId": attrs.get("secondaryDisclosureTargetNodeId", ""),
+                "statePath": attrs.get("secondaryDisclosureStatePath") or "open",
+            }
         if attrs.get("idempotencyPolicy"):
             node["idempotencyPolicy"] = attrs.get("idempotencyPolicy")
         if attrs.get("lifecycleDispatchConfirmed") is not None:
@@ -710,6 +782,8 @@ def runtime_action_type_for_event_binding(event_binding):
         return "routeNavigation"
     if lane == "contents_api_wiring":
         return "contentsApiDispatch"
+    if lane == "disclosure_state_wiring":
+        return event_binding.get("disclosureActionType")
     return None
 
 
@@ -740,6 +814,17 @@ def build_runtime_interaction_candidate(node):
     action_type = runtime_action_type_for_event_binding(event_binding)
     if not action_type:
         return None
+    # disclosure_state_wiring (round 24): this actionType family's runtimeInteractions[] entry
+    # carries targetNodeId/statePath, never targetRef/payloadFrom -- matches
+    # NpgsqlUiTopologyRepository.cs ValidateRuntimeInteractions' own shape for these actionTypes.
+    if action_type in DISCLOSURE_ACTION_TYPES:
+        return {
+            "trigger": event_binding.get("trigger"),
+            "actionType": action_type,
+            "targetNodeId": event_binding.get("disclosureTargetNodeId", ""),
+            "statePath": event_binding.get("disclosureStatePath") or "open",
+            "sourceActionKey": node.get("key"),
+        }
     target_ref = runtime_target_ref_for_event_binding(event_binding, action_type) or node.get("actionRef") or ""
     candidate = {
         "trigger": event_binding.get("trigger"),
@@ -786,6 +871,24 @@ def build_admin_runtime_dispatch_override_candidate(node):
     }
 
 
+def build_secondary_disclosure_runtime_interaction_candidate(node):
+    """Build an ADDITIONAL runtimeInteractions[] entry from an Action/Step's
+    secondaryDisclosureAction (round 24) -- independent of whatever the node's primary
+    eventBinding/wiringLane already produced (a dispatch override candidate, a different
+    runtimeInteractions candidate, or nothing). See
+    wiring_lane_contract.lanes.disclosure_state_wiring.secondary_combination."""
+    secondary = node.get("secondaryDisclosureAction")
+    if not secondary:
+        return None
+    return {
+        "trigger": secondary.get("trigger"),
+        "actionType": secondary.get("actionType"),
+        "targetNodeId": secondary.get("targetNodeId", ""),
+        "statePath": secondary.get("statePath") or "open",
+        "sourceActionKey": node.get("key"),
+    }
+
+
 def validate_ui_catalog_node(node, declared_surface, errors, path):
     allowed_kinds = set()
     if declared_surface:
@@ -796,6 +899,11 @@ def validate_ui_catalog_node(node, declared_surface, errors, path):
         control = node.get("control")
         if control and allowed_kinds and control not in allowed_kinds and not node.get("knownGapRefs"):
             errors.append(err("UNKNOWN_COMPONENT_KIND", path, "blocking", f"field control '{control}' is not a registered componentKind for this surface and carries no knownGapRef"))
+
+    if node.get("kind") == "Modal":
+        component_kind = node.get("componentKind")
+        if component_kind and allowed_kinds and component_kind not in allowed_kinds and not node.get("knownGapRefs"):
+            errors.append(err("UNKNOWN_COMPONENT_KIND", path, "blocking", f"modal componentKind '{component_kind}' is not a registered componentKind for this surface and carries no knownGapRef"))
 
     if node.get("kind") == "StyleRef":
         token = node.get("tokenRef", "")
@@ -811,13 +919,19 @@ def validate_structural_node(node, parent, errors, path):
 
     if node.get("kind") == "Action":
         parent_kind = parent.get("kind") if parent else None
-        if parent_kind not in VALID_ACTION_OWNER_NODE_KINDS:
+        action_lane = (node.get("eventBinding") or {}).get("wiringLane")
+        owned_by_section_disclosure_trigger = (
+            parent_kind == "Section" and action_lane in SECTION_OWNABLE_ACTION_LANES
+        )
+        if parent_kind not in VALID_ACTION_OWNER_NODE_KINDS and not owned_by_section_disclosure_trigger:
             errors.append(
                 err(
                     "ACTION_NOT_OWNED_BY_FORM_OR_WORKFLOW",
                     path,
                     "blocking",
-                    f"Action '{node.get('key')}' must be a direct child of a Form or Workflow node, not {parent_kind or 'the document root'}",
+                    f"Action '{node.get('key')}' must be a direct child of a Form, Workflow, or Modal node "
+                    f"(or a Section node, only when wiringLane is one of {sorted(SECTION_OWNABLE_ACTION_LANES)}), "
+                    f"not {parent_kind or 'the document root'}",
                 )
             )
 
@@ -828,6 +942,70 @@ def walk_and_validate(node, lanes_def, declared_surface, errors, path="$.root", 
     validate_structural_node(node, parent, errors, path)
     for i, child in enumerate(node.get("children") or []):
         walk_and_validate(child, lanes_def, declared_surface, errors, f"{path}.children[{i}]", parent=node)
+
+
+def collect_node_kinds_by_key(node, out):
+    """Maps every node's key -> react_schema kind, across the whole tree (children only --
+    every node this translator builds lives in `children`, including Form/Workflow's Field/
+    Action/Step members; finalize_node's fields/actions/steps arrays are key-string summaries
+    derived FROM children, not a separate storage location). Used by
+    validate_disclosure_targets to check a disclosureTargetNodeId/secondaryDisclosureAction
+    targetNodeId actually refers to a real node of the expected kind."""
+    key = node.get("key")
+    if key:
+        out[key] = node.get("kind")
+    for c in node.get("children") or []:
+        collect_node_kinds_by_key(c, out)
+
+
+def _disclosure_target_checks_for_node(node):
+    """Yields (attr_label, actionType, targetNodeId) for every disclosure-family target this
+    node's eventBinding/secondaryDisclosureAction declares -- the two independent places
+    build_node can populate one (see wiring_lane_contract.lanes.disclosure_state_wiring)."""
+    eb = node.get("eventBinding") or {}
+    if isinstance(eb, dict) and eb.get("wiringLane") == "disclosure_state_wiring":
+        yield ("disclosureActionType", eb.get("disclosureActionType"), eb.get("disclosureTargetNodeId"))
+    secondary = node.get("secondaryDisclosureAction")
+    if secondary:
+        yield ("secondaryDisclosureActionType", secondary.get("actionType"), secondary.get("targetNodeId"))
+
+
+def validate_disclosure_targets(node, kinds_by_key, errors, path="$.root"):
+    """Cross-tree check (cannot live in validate_structural_node, which only sees one node and
+    its immediate parent): every disclosureActionType/secondaryDisclosureActionType must be a
+    recognized actionType, every disclosure target must require a non-empty targetNodeId, and
+    -- for the *Modal family, the only container kind this translator can emit and therefore
+    cross-check today -- that targetNodeId must resolve to an actual Modal node in this tree.
+    A stale/typo'd/never-declared target fails closed here rather than silently producing a
+    runtimeInteractions[] entry the runtime would fail to resolve (RUNTIME_INTERACTION_TARGET_NODE_NOT_FOUND
+    / RUNTIME_INTERACTION_TARGET_KIND_MISMATCH at the backend layout-patch boundary, or a
+    silently-inert click at runtime for seed-only data that bypasses that boundary)."""
+    node_path = node.get("_path", path)
+    for label, action_type, target_node_id in _disclosure_target_checks_for_node(node):
+        if not action_type or action_type not in DISCLOSURE_ACTION_TYPES:
+            errors.append(err(
+                "DISCLOSURE_ACTION_TYPE_UNSUPPORTED", node_path, "blocking",
+                f"{label} '{action_type}' on Action/Step '{node.get('key')}' is not a recognized disclosure actionType",
+            ))
+            continue
+        if not target_node_id:
+            errors.append(err(
+                "DISCLOSURE_TARGET_NODE_REQUIRED", node_path, "blocking",
+                f"{label} '{action_type}' on Action/Step '{node.get('key')}' requires a non-empty target node id",
+            ))
+            continue
+        expected_kind = DISCLOSURE_TARGET_KIND_BY_ACTION_TYPE.get(action_type)
+        if expected_kind is None:
+            continue
+        actual_kind = kinds_by_key.get(target_node_id)
+        if actual_kind != expected_kind:
+            errors.append(err(
+                "DISCLOSURE_TARGET_KIND_MISMATCH", node_path, "blocking",
+                f"{label} '{action_type}' on Action/Step '{node.get('key')}' targets '{target_node_id}' "
+                f"(kind {actual_kind or 'not found in this tree'}), expected a {expected_kind} node",
+            ))
+    for c in node.get("children") or []:
+        validate_disclosure_targets(c, kinds_by_key, errors, path)
 
 
 # ---------------------------------------------------------------------------
@@ -853,8 +1031,9 @@ KIND_SPECIFIC_CONSUMED_KEYS = {
     "Field": {"control", "required"},
     "Table": {"source", "display"},
     "Workflow": {"steps"},
-    "Step": {"eventBinding", "actionRef", "runtimeInteractions", "idempotencyPolicy", "lifecycleDispatchConfirmed", "debounceMs"},
-    "Action": {"eventBinding", "actionRef", "runtimeInteractions", "idempotencyPolicy", "lifecycleDispatchConfirmed", "debounceMs"},
+    "Modal": {"componentKind", "title", "body"},
+    "Step": {"eventBinding", "actionRef", "runtimeInteractions", "idempotencyPolicy", "lifecycleDispatchConfirmed", "debounceMs", "secondaryDisclosureAction"},
+    "Action": {"eventBinding", "actionRef", "runtimeInteractions", "idempotencyPolicy", "lifecycleDispatchConfirmed", "debounceMs", "secondaryDisclosureAction"},
     "Validation": {"rule", "severity", "appliesTo"},
     "PropBinding": {"targetProp", "source"},
     "PayloadFrom": {"targetField", "source"},
@@ -927,13 +1106,38 @@ def convert_node_to_seed_record(node, schema_to_seed_map, target_surface, loss_e
     elif react_kind == "Workflow":
         record["workflowKey"] = record["key"]
         record["steps"] = [c for c in converted_children if c["recordType"] == "topology_ui_workflow_step"]
+    elif react_kind == "Modal":
+        record["modalKey"] = record["key"]
+        record["componentKind"] = node.get("componentKind", "disclosure/modal")
+        if node.get("title"):
+            record["title"] = node["title"]
+        if node.get("body"):
+            record["body"] = node["body"]
+        record["children"] = converted_children
+        # modal_self_close_invariant (wiring_lane_contract.lanes.disclosure_state_wiring): every
+        # Modal this translator emits carries its own toggle->closeModal runtimeInteraction,
+        # never authored/omittable -- modalFactory's requireBinding(spec, "toggle") fails the
+        # whole render closed without it.
+        record["runtimeInteractions"] = [{
+            "trigger": "toggle",
+            "actionType": "closeModal",
+            "targetNodeId": record["key"],
+            "statePath": "open",
+            "sourceActionKey": record["key"],
+        }]
     elif react_kind == "Step":
         record["stepKey"] = record["key"]
         record["actionRef"] = node.get("actionRef", "")
         record["eventBinding"] = node.get("eventBinding")
+        runtime_interactions = []
         runtime_interaction = build_runtime_interaction_candidate(node)
         if runtime_interaction is not None:
-            record["runtimeInteractions"] = [runtime_interaction]
+            runtime_interactions.append(runtime_interaction)
+        secondary_interaction = build_secondary_disclosure_runtime_interaction_candidate(node)
+        if secondary_interaction is not None:
+            runtime_interactions.append(secondary_interaction)
+        if runtime_interactions:
+            record["runtimeInteractions"] = runtime_interactions
         admin_runtime_override = build_admin_runtime_dispatch_override_candidate(node)
         if admin_runtime_override is not None:
             record["adminRuntimeDispatchOverride"] = admin_runtime_override
@@ -941,9 +1145,15 @@ def convert_node_to_seed_record(node, schema_to_seed_map, target_surface, loss_e
         record["actionKey"] = record["key"]
         record["actionRef"] = node.get("actionRef", "")
         record["eventBinding"] = node.get("eventBinding")
+        runtime_interactions = []
         runtime_interaction = build_runtime_interaction_candidate(node)
         if runtime_interaction is not None:
-            record["runtimeInteractions"] = [runtime_interaction]
+            runtime_interactions.append(runtime_interaction)
+        secondary_interaction = build_secondary_disclosure_runtime_interaction_candidate(node)
+        if secondary_interaction is not None:
+            runtime_interactions.append(secondary_interaction)
+        if runtime_interactions:
+            record["runtimeInteractions"] = runtime_interactions
         admin_runtime_override = build_admin_runtime_dispatch_override_candidate(node)
         if admin_runtime_override is not None:
             record["adminRuntimeDispatchOverride"] = admin_runtime_override
@@ -1916,6 +2126,9 @@ def cmd_generate_react_schema(args):
         declared_surface = next((s for s in declared_surfaces if s.get("seed_surface_key") == target_surface), None)
         tree_errors = []
         walk_and_validate(root_node, lanes_def, declared_surface, tree_errors)
+        kinds_by_key = {}
+        collect_node_kinds_by_key(root_node, kinds_by_key)
+        validate_disclosure_targets(root_node, kinds_by_key, tree_errors)
         output["validationErrors"].extend(tree_errors)
 
     source_refs = envelope.get("sourceYamlRefs") or []
@@ -2055,6 +2268,9 @@ def cmd_generate_topology_seed(args):
     # the same contracts rather than trusting it blindly (exchange_mapping
     # canonical_direction rule).
     walk_and_validate(root_node, lanes_def, declared_surface, tree_errors)
+    kinds_by_key = {}
+    collect_node_kinds_by_key(root_node, kinds_by_key)
+    validate_disclosure_targets(root_node, kinds_by_key, tree_errors)
     output["validationErrors"].extend(tree_errors)
 
     schema_to_seed_map = dig(ssot_root, "exchange_mapping", "schema_to_seed_record_mapping") or {}

@@ -5,7 +5,7 @@ namespace Topolactor.Repository;
 /// <summary>
 /// Composes LayoutNodeRecords from components_layout_design.layout_schema_json.records[] —
 /// the structural authority tree (Category/Section/Form/Workflow/Validation/Field/Table/Action/
-/// WorkflowStep/Unresolved — the full
+/// WorkflowStep/Modal/Unresolved — the full
 /// react-schema-topology-seed-translator-ssot.yaml layoutAdoptionCandidates.source_record_types
 /// vocabulary) — for layouts where that tree is populated. Structural record types become
 /// "structural_node" leaves with no componentId/componentKind; Field/Table/Action/WorkflowStep
@@ -13,9 +13,13 @@ namespace Topolactor.Repository;
 /// from the existing topology.ui_component_registry preset catalog
 /// (db/ui_component_registry_preset_catalog_bootstrap.sql) via the caller's existing
 /// LoadComponentIdsByKeysAsync/LoadComponentKindsByIdsAsync batch lookups — no new registry rows or
-/// query shapes; Unresolved records become "unresolved_gap" leaves that never resolve to a
-/// component and always fail explicit at frontend render time, carrying their authored
-/// knownGapRefs.
+/// query shapes; Modal (round 24) also becomes a "catalog_component" leaf but its componentKind is
+/// the record's own literal value (always "disclosure/modal" today), never a registry lookup, and
+/// it carries no ComponentId (a built-in runtime primitive, not a registry-backed preset) —
+/// unlike every other catalog leaf, a Modal can itself be a parent of further catalog leaves (its
+/// authored Confirm/Cancel Action children); Unresolved records become "unresolved_gap" leaves
+/// that never resolve to a component and always fail explicit at frontend render time, carrying
+/// their authored knownGapRefs.
 ///
 /// Tensor runtimeInteractions merge: authored tensor nodes (layout_patch_json.nodes[]) key their
 /// runtimeInteractions array at the FORM level, with each entry individually tagged by
@@ -48,6 +52,17 @@ public static class LayoutSchemaTensorComposer
     private const string TableRecordType = "topology_ui_table";
     private const string WorkflowStepRecordType = "topology_ui_workflow_step";
     private const string UnresolvedRecordType = "topology_ui_unresolved";
+    // Round 24 (admin-enum subBundle, mutation-confirmation-workflow): a Modal record carries its
+    // own componentKind directly (always "disclosure/modal" today) rather than resolving one via
+    // a control/display convention table the way Field/Table do -- there is no "modal shape"
+    // vocabulary to convention-map, and the translator already only ever emits one literal value.
+    // Modal IS a catalog leaf (renders a real component, unlike Category/Section/Form/Workflow/
+    // Validation's structural_node) but, uniquely among catalog leaves so far, can itself be a
+    // PARENT of further catalog leaves (its Confirm/Cancel Action children) -- the generic
+    // ParentNodeId/lastResolvedNodeIdByKey resolution below already supports any record type
+    // acting as a parent, so this needs no separate tree-walk.
+    private const string ModalRecordType = "topology_ui_modal";
+    private const string ModalComponentKind = "disclosure/modal";
 
     // Canonical control -> ui_component_registry.component_key convention for Field leaves.
     // Reuses the existing preset catalog rows; does not invent new registry entries.
@@ -88,7 +103,8 @@ public static class LayoutSchemaTensorComposer
         string? Label,
         string? Control,
         string? Display = null,
-        IReadOnlyList<string>? KnownGapRefs = null);
+        IReadOnlyList<string>? KnownGapRefs = null,
+        string? ComponentKind = null);
 
     // Full recognized recordType vocabulary (structural + catalog + unresolved-gap) — matches
     // docs/design/react-schema-topology-seed-translator-ssot.yaml
@@ -99,6 +115,7 @@ public static class LayoutSchemaTensorComposer
         new(StructuralRecordTypes, StringComparer.Ordinal)
         {
             "topology_ui_field", ActionRecordType, TableRecordType, WorkflowStepRecordType, UnresolvedRecordType,
+            ModalRecordType,
         };
 
     /// <summary>
@@ -184,6 +201,10 @@ public static class LayoutSchemaTensorComposer
                     ? ctl.GetString() : null;
                 var display = record.TryGetProperty("display", out var dsp) && dsp.ValueKind == JsonValueKind.String
                     ? dsp.GetString() : null;
+                var componentKind = record.TryGetProperty("componentKind", out var ck) && ck.ValueKind == JsonValueKind.String
+                    ? ck.GetString() : null;
+                if (recordType == ModalRecordType && string.IsNullOrWhiteSpace(componentKind))
+                    return new RecordsParseResult.Invalid($"records[{index}].record recordType \"{ModalRecordType}\" is missing a non-empty componentKind.");
 
                 // record_common_required_fields (docs/design/react-schema-topology-seed-translator-ssot.yaml
                 // topology_ui_seed_contract.record_common_required_fields, mirrored at runtime so a
@@ -215,7 +236,7 @@ public static class LayoutSchemaTensorComposer
                     return new RecordsParseResult.Invalid(
                         $"records[{index}].record.recordType \"{UnresolvedRecordType}\" is missing a non-empty knownGapRefs array.");
 
-                rows.Add(new SchemaRecordRow(recordType!, key!, parentKey, label, control, display, knownGapRefs));
+                rows.Add(new SchemaRecordRow(recordType!, key!, parentKey, label, control, display, knownGapRefs, componentKind));
                 index++;
             }
             return new RecordsParseResult.Valid(rows);
@@ -239,6 +260,7 @@ public static class LayoutSchemaTensorComposer
         {
             if (StructuralRecordTypes.Contains(row.RecordType)) continue;
             if (row.RecordType == UnresolvedRecordType) continue;
+            if (row.RecordType == ModalRecordType) continue;
             var key = ResolveComponentKey(row);
             if (key is not null) keys.Add(key);
         }
@@ -455,7 +477,15 @@ public static class LayoutSchemaTensorComposer
             string? componentId = null;
             string? componentKind = null;
 
-            if (isCatalogLeaf)
+            if (row.RecordType == ModalRecordType)
+            {
+                // No ui_component_registry lookup: the record already carries its own literal
+                // componentKind (validated non-empty in ParseRecords) -- there is no component_key
+                // convention to resolve, and no ComponentId either (Modal is a built-in runtime
+                // primitive, not a registry-backed preset component).
+                componentKind = row.ComponentKind;
+            }
+            else if (isCatalogLeaf)
             {
                 var componentKey = ResolveComponentKey(row);
                 if (componentKey is not null && componentKeyToId.TryGetValue(componentKey, out var resolvedId))

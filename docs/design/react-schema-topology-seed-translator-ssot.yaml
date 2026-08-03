@@ -264,7 +264,7 @@ react_schema_topology_seed_translator_ssot:
     ai_allowed: false
     grammar_kind: bracket_tag_line_based
     tag_shape:
-      container_units: [projection, category, section, form, workflow]
+      container_units: [projection, category, section, form, workflow, modal]
       leaf_units: [field, table, step, action, validation, prop_binding, payload_from, style_ref]
       open_tag_syntax: '[unitKind key=.. attr=.. attr2="value with space" ...]'
       close_tag_syntax: "[/unitKind]"
@@ -305,8 +305,9 @@ react_schema_topology_seed_translator_ssot:
       field: '[field key=.. label=.. control=.. required=true|false sourceYamlRefs=.. knownGapRefs=..]'
       table: '[table key=.. label=.. source=.. display=.. sourceYamlRefs=..]'
       workflow: '[workflow key=.. label=.. authorityMarker=.. sourceYamlRefs=..] ... [/workflow]'
+      modal: '[modal key=.. label=.. title=.. body=.. sourceYamlRefs=..] ... [/modal]'
       step: '[step key=.. actionRef=.. wiringLane=.. authorityMarker=.. order=.. sourceYamlRefs=..]'
-      action: '[action key=.. actionRef=.. wiringLane=.. authorityMarker=.. sourceYamlRefs=.. knownGapRefs=..]'
+      action: '[action key=.. actionRef=.. wiringLane=.. authorityMarker=.. sourceYamlRefs=.. knownGapRefs=.. disclosureActionType=.. disclosureTargetNodeId=.. disclosureStatePath=.. secondaryDisclosureActionType=.. secondaryDisclosureTargetNodeId=.. secondaryDisclosureStatePath=..]'
       validation: '[validation key=.. appliesTo=.. rule=.. severity=blocking|warning sourceYamlRefs=..]'
       prop_binding: '[prop_binding targetProp=.. source=.. sourceYamlRefs=..]'
       payload_from: '[payload_from targetField=.. source=.. sourceYamlRefs=..]'
@@ -315,6 +316,15 @@ react_schema_topology_seed_translator_ssot:
       authorityMarker, wiringLane, and knownGapRefs are attributes on their owning tag, never
       standalone bracket units; this matches text_decomposition_contract's authority_marker /
       known_gap_ref "not a standalone node" rule.
+    disclosure_action_attributes: >-
+      disclosureActionType/disclosureTargetNodeId/disclosureStatePath (round 24, admin-enum
+      subBundle) are read only when the action/step's wiringLane is disclosure_state_wiring --
+      see wiring_lane_contract.lanes.disclosure_state_wiring for the actionType vocabulary and
+      the targetNodeId/statePath shape they produce. secondaryDisclosureActionType/
+      secondaryDisclosureTargetNodeId/secondaryDisclosureStatePath are independent of wiringLane
+      entirely: any action/step may carry them regardless of its primary lane, adding one
+      additional runtimeInteractions[] entry alongside whatever the primary lane already
+      produces (see wiring_lane_contract.lanes.disclosure_state_wiring.secondary_combination).
     unresolved_fragment_rule: >-
       Any inputText line/fragment that is not inside a recognized open/leaf tag, or whose
       unitKind is not in text_decomposition_contract.units, becomes an Unresolved element
@@ -375,6 +385,15 @@ react_schema_topology_seed_translator_ssot:
       Workflow:
         required: [steps, authorityMarker]
         emits_seed: topology_ui_workflow
+      Modal:
+        required: [componentKind, children]
+        emits_seed: topology_ui_modal
+        note: >-
+          componentKind is always "disclosure/modal" (round 24 -- the translator does not yet
+          support Drawer/Dialog container kinds; a future round adds those alongside their own
+          disclosure_state_wiring targetKind support). title/body are optional display props,
+          carried through to the tensor node's propsJson by the seed transcription step, never
+          read or validated by the translator itself.
       Step:
         required: [eventBinding, authorityMarker]
         emits_seed: topology_ui_workflow_step
@@ -456,6 +475,8 @@ react_schema_topology_seed_translator_ssot:
         required: [tableKey, source, display, columns]
       topology_ui_workflow:
         required: [workflowKey, steps, authorityMarker]
+      topology_ui_modal:
+        required: [modalKey, componentKind, children]
       topology_ui_workflow_step:
         required: [stepKey, actionRef, eventBinding, authorityMarker]
       topology_ui_action:
@@ -981,6 +1002,7 @@ react_schema_topology_seed_translator_ssot:
       field: Field
       table: Table
       workflow: Workflow
+      modal: Modal
       step: Step
       action: Action
       validation: Validation
@@ -998,6 +1020,7 @@ react_schema_topology_seed_translator_ssot:
       Field: topology_ui_field
       Table: topology_ui_table
       Workflow: topology_ui_workflow
+      Modal: topology_ui_modal
       Step: topology_ui_workflow_step
       Action: topology_ui_action
       Validation: topology_ui_validation
@@ -1154,6 +1177,65 @@ react_schema_topology_seed_translator_ssot:
           adminRuntimeDispatchOverride candidate (build_admin_runtime_dispatch_override_candidate in
           .agent/scripts/react_schema_topology_seed_translator.py) and merged into that SAME tensor
           node's own dispatchTargetRefByTrigger / dispatchPayloadFromByTrigger maps, keyed by trigger.
+      disclosure_state_wiring:
+        meaning: >-
+          UI-local overlay disclosure state (open/close/toggle) for a disclosure/modal target
+          node -- the SAME actionType/targetNodeId/statePath vocabulary
+          frontend/lib/runtimeInteractionAuthoring.ts (NodeEventAuthoringPanel.tsx's authoring
+          flow) actually produces and
+          backend/repository/NpgsqlUiTopologyRepository.cs ValidateRuntimeInteractions actually
+          validates for an ACTIVE (admin_runtime-wired) topology layout. Round 24 (admin-enum
+          subBundle, mutation-confirmation-workflow) addition: closes a real translator gap found
+          by verifying against the actual authoring/validation code rather than assuming
+          internal_instance_wiring's existing ui-local:<nodeId>.<stateKey> + localStateMutation
+          shape was reusable for this. It is not: uiEventEffectRunner.ts's
+          UI_STATE_UPDATE_OPEN_ACTIONS does treat localStateMutation as a member of the same
+          ui_state_update family at RUNTIME, but ValidateRuntimeInteractions' isDisclosure /
+          isActiveKey / isSetState checks never accept the literal actionType "localStateMutation"
+          for an active-topology layout_patch save (RUNTIME_INTERACTION_ACTION_UNSUPPORTED) -- so
+          it is not a shape a human author using the real UI Builder could actually persist for
+          this purpose, only a shape a hand-authored seed SQL insert can bypass validation to use.
+        examples: [openModal, closeModal, toggleModal]
+        targetRef_shape: 'ui-local:<nodeId>.<stateKey>'
+        authority_ref: >-
+          frontend/lib/runtimeInteractionAuthoring.ts OVERLAY_OPENABLE_COMPONENT_KINDS;
+          backend/repository/NpgsqlUiTopologyRepository.cs ValidateRuntimeInteractions
+        allowed_authority_mapping_values: [draft_or_projection_only]
+        allowed_payload_from_sources: []
+        disclosure_action_type_field: >-
+          The eventBinding for this lane additionally carries disclosureActionType (one of the
+          examples above) plus disclosureTargetNodeId/disclosureStatePath (statePath defaults to
+          "open") -- the two structured fields runtimeInteractions[]'s own targetNodeId/statePath
+          actually need, since a single targetRef string cannot unambiguously carry both a node id
+          and an actionType family. targetRef itself stays in the SAME ui-local:<nodeId>.<stateKey>
+          shape internal_instance_wiring already established, purely so this lane's
+          event_binding_shape targetRef_shape check has something consistent to validate; it is
+          never read by build_runtime_interaction_candidate, which reads
+          disclosureActionType/disclosureTargetNodeId/disclosureStatePath directly.
+        record_carrier: >-
+          Folded into tensorAdoptionCandidates[].layoutPatchJson.nodes[].runtimeInteractions[] as
+          {trigger, actionType is disclosureActionType, targetNodeId is disclosureTargetNodeId,
+          statePath is disclosureStatePath, sourceActionKey} -- the same runtimeInteractions[]
+          shape build_runtime_interaction_candidate already produces for the dispatch lanes,
+          never a localStateMutation/ui-local entry.
+        secondary_combination: >-
+          An action's PRIMARY eventBinding may declare a different lane entirely -- most commonly
+          admin_runtime_dispatch_override_wiring, for a Confirm button that both dispatches the
+          real write and closes its own confirm modal on the same trigger.
+          secondaryDisclosureActionType/secondaryDisclosureTargetNodeId/secondaryDisclosureStatePath
+          attrs on that SAME action tag add one ADDITIONAL runtimeInteractions[] entry independent
+          of the primary lane's own candidate, mirroring how the real
+          runtimeInteractions[] array lets one trigger carry more than one interaction and how
+          renderEmission.ts's per-trigger componentEventBinding merge treats a runtimeDispatch
+          binding and a ui_state_update (disclosure) binding as independent, non-colliding keys on
+          the same trigger object.
+        modal_self_close_invariant: >-
+          Every Modal container node this translator emits automatically carries its own toggle
+          trigger closeModal runtimeInteractions[] entry targeting itself with statePath open (not
+          authorable, never omitted) -- frontend/runtime/runtimeComponentFactory.ts modalFactory
+          calls requireBinding(spec, "toggle") and fails the ENTIRE render closed when a Modal node
+          has no "toggle" eventBinding (the native backdrop/close-affordance path, independent of
+          any authored Confirm/Cancel button).
     event_binding_shape:
       required: [trigger, wiringLane, targetRef, authority]
       optional: [payloadFrom, outputProp, stateTarget]
@@ -1602,7 +1684,7 @@ react_schema_topology_seed_translator_ssot:
         declared_by_yaml_ref: docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.enum
         seed_role: admin_enum_dictionary_management_projection_manifest_seed
         record_subjects: [manifest_projection, enum_group_and_item_management_projection, enum_search_projection]
-        exchange_units: [category, section, field, table]
+        exchange_units: [category, section, field, table, modal, action]
         authority_boundary: preview_dictionary_delta_validate_against_enum_authority_explicit_confirm_write_diff_log
         component_catalog_refs:
           catalog_ref: ui_catalog_boundary_contract.frontend_component_catalog
@@ -1612,6 +1694,7 @@ react_schema_topology_seed_translator_ssot:
             - data_display/table (table.primitive)
             - form_input/form_field (form_field.template)
             - action/button (button.primitive)
+            - disclosure/modal (modal.template)
         style_catalog_refs:
           catalog_ref: ui_catalog_boundary_contract.style_catalog
           refs: []

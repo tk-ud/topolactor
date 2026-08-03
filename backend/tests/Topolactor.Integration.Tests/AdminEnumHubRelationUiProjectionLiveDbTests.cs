@@ -100,11 +100,21 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         Assert.NotNull(confirmButton.RuntimeInteractions);
         Assert.Contains("localStateMutation", confirmButton.RuntimeInteractions!.Value.GetRawText());
 
-        // render completion: every catalog_component leaf resolved a componentId.
+        // render completion: every catalog_component leaf resolved either a registry componentId
+        // (Field/Table/Action/WorkflowStep) or, for a Modal (round 24), its own literal
+        // componentKind directly -- Modal is a built-in runtime primitive, never registry-backed,
+        // so a null ComponentId with a non-null ComponentKind is its EXPECTED resolved shape, not
+        // an unresolved gap (see LayoutSchemaTensorComposer.cs ModalRecordType handling). A leaf
+        // with BOTH null is the real gap this assertion exists to catch.
         var unresolvedLeaves = nodes
-            .Where(n => n.NodeKind == "catalog_component" && n.ComponentId is null)
+            .Where(n => n.NodeKind == "catalog_component" && n.ComponentId is null && n.ComponentKind is null)
             .ToList();
         Assert.Empty(unresolvedLeaves);
+
+        var confirmModal = Assert.Single(nodes, n => n.NodeId == "enum_delete_group_confirm_modal");
+        Assert.Equal("catalog_component", confirmModal.NodeKind);
+        Assert.Equal("disclosure/modal", confirmModal.ComponentKind);
+        Assert.Null(confirmModal.ComponentId);
 
         Assert.Empty(emission.Errors);
     }
@@ -223,34 +233,40 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
     /// <summary>
     /// Round 20 -- the SECOND operation wired into ae200's own single-surface layout, and the
     /// first that needs an EXISTING record's identity rather than fresh user input.
-    /// enum_delete_group_button's dispatchPayloadFromByTrigger sources groupId from
-    /// "node:enum_table.value.groupId" -- the tracked value of ae200's OWN enum_table node after a
-    /// row select (frontend/runtime/runtimeComponentFactory.ts tableFactory's onRowClick now also
-    /// supplies `value: row` so emitBoundEvent's existing, universal Lane 3 node-value tracking
-    /// fires for a table select the same way it already does for every input's change/input
-    /// event; frontend/runtime/payloadFromResolver.ts's new node:&lt;id&gt;.value.&lt;path&gt;
-    /// dotted-path extension then extracts .groupId from that tracked row object). This backend
-    /// test cannot exercise that frontend resolution step (EndpointRequestDto's payload is already
-    /// resolved by the time it reaches ManifestDispatcher) -- it proves the seed itself carries the
-    /// EXACT override the tensor patch declares, and that dispatching THROUGH that override
-    /// target_ref genuinely authorizes and executes real enum_dictionary:delete_group under
-    /// ae230's OWN dispatcher_mapping/capability_requirement, exactly as
-    /// DispatchAsync_AdminEnumManagementManifest_CreateGroupFormNode_... proves for create_group.
-    /// The frontend-side node:&lt;id&gt;.value.&lt;path&gt; resolution itself is proven separately
-    /// in frontend/tests/payloadFromResolver.test.ts and
-    /// frontend/tests/projectionShellAdminRuntimeSelectedRowDeleteCapture.test.ts.
+    /// enum_delete_group_confirm_button's (round 24: retargeted from enum_delete_group_button,
+    /// which now only opens the confirm modal -- see below) dispatchPayloadFromByTrigger sources
+    /// groupId from "node:enum_table.value.groupId" -- the tracked value of ae200's OWN enum_table
+    /// node after a row select (frontend/runtime/runtimeComponentFactory.ts tableFactory's
+    /// onRowClick now also supplies `value: row` so emitBoundEvent's existing, universal Lane 3
+    /// node-value tracking fires for a table select the same way it already does for every
+    /// input's change/input event; frontend/runtime/payloadFromResolver.ts's new
+    /// node:&lt;id&gt;.value.&lt;path&gt; dotted-path extension then extracts .groupId from that
+    /// tracked row object). This backend test cannot exercise that frontend resolution step
+    /// (EndpointRequestDto's payload is already resolved by the time it reaches ManifestDispatcher)
+    /// -- it proves the seed itself carries the EXACT override the tensor patch declares, and that
+    /// dispatching THROUGH that override target_ref genuinely authorizes and executes real
+    /// enum_dictionary:delete_group under ae230's OWN dispatcher_mapping/capability_requirement,
+    /// exactly as DispatchAsync_AdminEnumManagementManifest_CreateGroupFormNode_... proves for
+    /// create_group. The frontend-side node:&lt;id&gt;.value.&lt;path&gt; resolution itself is
+    /// proven separately in frontend/tests/payloadFromResolver.test.ts and
+    /// frontend/tests/projectionShellAdminRuntimeSelectedRowDeleteCapture.test.ts. Round 24 also
+    /// proves the confirm-dialog gating itself: enum_delete_group_button (the visible trigger)
+    /// carries NO dispatch override at all (openModal only, targeting
+    /// enum_delete_group_confirm_modal) -- the write moved entirely onto
+    /// enum_delete_group_confirm_button, inside the modal.
     /// </summary>
     [Fact]
-    public async Task DispatchAsync_AdminEnumManagementManifest_DeleteGroupFormNode_SurfacesDispatchOverride_AndExecutesViaAe230Authority()
+    public async Task DispatchAsync_AdminEnumManagementManifest_DeleteGroupConfirmModalNode_SurfacesDispatchOverride_AndExecutesViaAe230Authority()
     {
         var cs = GetConnectionString();
         if (cs is null) return;
 
         var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
 
-        // Step 1: render ae200's own layout and confirm enum_delete_group_button (the LEAF Action
-        // node -- not its owning enum_delete_group_form) surfaces the EXACT override the seed
-        // declares, sourced from ae200's OWN enum_table node's tracked selected-row value.
+        // Step 1: render ae200's own layout and confirm enum_delete_group_confirm_button (the LEAF
+        // Action node inside the Modal -- not enum_delete_group_button, which only opens the
+        // dialog) surfaces the EXACT override the seed declares, sourced from ae200's OWN
+        // enum_table node's tracked selected-row value.
         var entryPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
         {
             target_ref = $"manifest:{AdminEnumManagementManifestId}:projection_entry",
@@ -261,15 +277,34 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         var entryResponse = await dispatcher.DispatchAsync(entryRequest);
         Assert.True(entryResponse.Success, string.Join(";", entryResponse.Errors.Select(e => e.Code + ":" + e.Message)));
         Assert.NotNull(entryResponse.Emission!.LayoutNodes);
-        var deleteGroupButtonNode = Assert.Single(
-            entryResponse.Emission!.LayoutNodes!, n => n.NodeId == "enum_delete_group_button");
-        Assert.NotNull(deleteGroupButtonNode.DispatchTargetRefByTrigger);
-        var targetRefByTriggerText = deleteGroupButtonNode.DispatchTargetRefByTrigger!.Value.GetRawText();
+        var confirmButtonNode = Assert.Single(
+            entryResponse.Emission!.LayoutNodes!, n => n.NodeId == "enum_delete_group_confirm_button");
+        Assert.NotNull(confirmButtonNode.DispatchTargetRefByTrigger);
+        var targetRefByTriggerText = confirmButtonNode.DispatchTargetRefByTrigger!.Value.GetRawText();
         Assert.Contains("manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group", targetRefByTriggerText);
-        Assert.NotNull(deleteGroupButtonNode.DispatchPayloadFromByTrigger);
-        var payloadFromByTriggerText = deleteGroupButtonNode.DispatchPayloadFromByTrigger!.Value.GetRawText();
+        Assert.NotNull(confirmButtonNode.DispatchPayloadFromByTrigger);
+        var payloadFromByTriggerText = confirmButtonNode.DispatchPayloadFromByTrigger!.Value.GetRawText();
         Assert.Contains("node:enum_table.value.groupId", payloadFromByTriggerText);
         Assert.Contains("literal:true", payloadFromByTriggerText);
+
+        // The visible Delete trigger itself carries no write authority at all -- clicking it can
+        // only open the modal (proven at the frontend runtime layer; here we prove the seed gives
+        // it nothing to dispatch even if that gating were ever bypassed).
+        var deleteGroupButtonNode = Assert.Single(
+            entryResponse.Emission!.LayoutNodes!, n => n.NodeId == "enum_delete_group_button");
+        Assert.Null(deleteGroupButtonNode.DispatchTargetRefByTrigger);
+        Assert.Null(deleteGroupButtonNode.DispatchPayloadFromByTrigger);
+
+        // The Cancel button inside the modal is present and, like the Delete trigger, carries no
+        // write authority -- only the Confirm button's node does.
+        var cancelButtonNode = Assert.Single(
+            entryResponse.Emission!.LayoutNodes!, n => n.NodeId == "enum_delete_group_cancel_button");
+        Assert.Null(cancelButtonNode.DispatchTargetRefByTrigger);
+        Assert.Null(cancelButtonNode.DispatchPayloadFromByTrigger);
+
+        var confirmModalNode = Assert.Single(
+            entryResponse.Emission!.LayoutNodes!, n => n.NodeId == "enum_delete_group_confirm_modal");
+        Assert.Equal("disclosure/modal", confirmModalNode.ComponentKind);
 
         async Task<string> ListGroupsRawAsync()
         {
@@ -457,8 +492,10 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             Assert.NotNull(response.Emission);
             var emission = response.Emission!;
 
+            // See the same-named assertion's comment above (Modal's null ComponentId with a
+            // non-null ComponentKind is its expected resolved shape, not an unresolved gap).
             var unresolvedLeaves = emission.LayoutNodes!
-                .Where(n => n.NodeKind == "catalog_component" && n.ComponentId is null)
+                .Where(n => n.NodeKind == "catalog_component" && n.ComponentId is null && n.ComponentKind is null)
                 .ToList();
             Assert.Empty(unresolvedLeaves);
 
