@@ -1237,32 +1237,22 @@ def main():
             aro_node is not None and aro_node.get("nodeId") == "confirm_button",
         )
 
-        # 42g (round 21 audit): the Python NODE_VALUE_RE grammar for payloadFrom's
+        # 42g (round 21/22 audit): the Python NODE_VALUE_RE grammar for payloadFrom's
         # node:<nodeId>.value(.<path>)* pattern must accept/reject the IDENTICAL set of raw
-        # source strings the frontend's payloadFromResolver.ts NODE_VALUE_RE does -- proven via
-        # the SAME literal string list mirrored in frontend/tests/payloadFromResolver.test.ts's
-        # own "round 21 grammar parity" block, per
-        # docs/design/ui-builder-preset-ecosystem-ssot.yaml payloadFrom_resolver_contract
-        # .recognized_source_patterns.node_value_path.cross_implementation_parity. Neither
-        # implementation may accept or reject a string the other disagrees on.
+        # source strings the frontend's payloadFromResolver.ts NODE_VALUE_RE does. Round 22 fix:
+        # both suites now read the SAME shared, machine-readable corpus file --
+        # .agent/tests/fixtures/payload-from-node-value-grammar-corpus.json -- rather than each
+        # hand-retyping its own copy of the accept/reject lists (round 21's own version had done
+        # exactly that duplication, which this round's own audit flagged as an NG-axis violation
+        # to leave standing). Editing a case means editing that ONE file; both suites pick it up
+        # automatically, and neither can silently drift from the other.
         sys.path.insert(0, str(REPO_ROOT / ".agent" / "scripts"))
         import react_schema_topology_seed_translator as translator_module  # noqa: E402
         node_value_re = translator_module.NODE_VALUE_RE
-        grammar_parity_accept = [
-            "node:enum_table.value",
-            "node:enum_table.value.groupId",
-            "node:enum_table.value.detail.groupId",
-            "node:crud-search-input.value.query",
-            "node:hub_search_input.value",
-        ]
-        grammar_parity_reject = [
-            "node:enum_table",  # missing .value entirely
-            "node:enum_table.value.",  # trailing dot, no segment
-            "node:.value",  # empty nodeId
-            "node:enum_table.values",  # "values" is not "value" -- no fuzzy prefix match
-            "event.row.id",  # a different pattern kind entirely
-            "literal:node:enum_table.value.groupId",  # literal: prefix wins, not a node_value match
-        ]
+        grammar_corpus_path = REPO_ROOT / ".agent" / "tests" / "fixtures" / "payload-from-node-value-grammar-corpus.json"
+        grammar_corpus = json.loads(grammar_corpus_path.read_text())
+        grammar_parity_accept = grammar_corpus["accept"]
+        grammar_parity_reject = grammar_corpus["reject"]
         expect(
             "42g. Python NODE_VALUE_RE accepts every string the frontend grammar accepts "
             "(node:<id>.value and node:<id>.value.<path> forms, hyphenated nodeIds included)",

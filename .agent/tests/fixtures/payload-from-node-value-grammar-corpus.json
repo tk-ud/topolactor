@@ -1,0 +1,20 @@
+{
+  "schemaId": "topolactor.payload_from_node_value_grammar_corpus.v1",
+  "owningSsot": "docs/design/ui-builder-preset-ecosystem-ssot.yaml#payloadFrom_resolver_contract.recognized_source_patterns.node_value_path",
+  "note": "Single shared conformance corpus for the node:<nodeId>.value(.<path>)* payloadFrom grammar (round 22 audit fix). frontend/tests/payloadFromResolver.test.ts and .agent/scripts/check_react_schema_topology_seed_translator.py both read THIS file directly -- neither hand-retypes the accept/reject lists. Add a new case here, and both suites pick it up on their next run with zero code duplication.",
+  "accept": [
+    "node:enum_table.value",
+    "node:enum_table.value.groupId",
+    "node:enum_table.value.detail.groupId",
+    "node:crud-search-input.value.query",
+    "node:hub_search_input.value"
+  ],
+  "reject": [
+    "node:enum_table",
+    "node:enum_table.value.",
+    "node:.value",
+    "node:enum_table.values",
+    "event.row.id",
+    "literal:node:enum_table.value.groupId"
+  ]
+}

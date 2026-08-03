@@ -563,29 +563,28 @@ Deno.test("payloadFromResolver: node:<nodeId>.value.<field> parses correctly for
   }
 });
 
-// Round 21 grammar parity: the SAME literal string lists as
-// check_react_schema_topology_seed_translator.py's 42g/42h assertions against the Python
-// NODE_VALUE_RE — proves neither implementation accepts/rejects a string the other disagrees
-// on (docs/design/ui-builder-preset-ecosystem-ssot.yaml payloadFrom_resolver_contract
-// .recognized_source_patterns.node_value_path.cross_implementation_parity).
-const GRAMMAR_PARITY_ACCEPT = [
-  "node:enum_table.value",
-  "node:enum_table.value.groupId",
-  "node:enum_table.value.detail.groupId",
-  "node:crud-search-input.value.query",
-  "node:hub_search_input.value",
-];
-const GRAMMAR_PARITY_REJECT = [
-  "node:enum_table", // missing .value entirely
-  "node:enum_table.value.", // trailing dot, no segment
-  "node:.value", // empty nodeId
-  "node:enum_table.values", // "values" is not "value" -- no fuzzy prefix match
-  "event.row.id", // a different pattern kind entirely
-  "literal:node:enum_table.value.groupId", // literal: prefix wins, not a node_value match
-];
+// Round 21/22 grammar parity: reads the SAME shared, machine-readable corpus file
+// check_react_schema_topology_seed_translator.py's 42g/42h assertions read against the
+// Python NODE_VALUE_RE — round 22 fix: this used to be a hand-retyped literal list in each
+// suite (a duplication the round 22 audit itself flagged as an NG-axis violation to leave
+// standing); both suites now read ONE physical artifact, so neither can silently drift from
+// the other. docs/design/ui-builder-preset-ecosystem-ssot.yaml payloadFrom_resolver_contract
+// .recognized_source_patterns.node_value_path.cross_implementation_parity.
+type GrammarCorpus = { accept: string[]; reject: string[] };
 
-Deno.test("payloadFromResolver: frontend NODE_VALUE_RE accepts every string the Python translator grammar accepts (round 21 parity list)", () => {
-  for (const raw of GRAMMAR_PARITY_ACCEPT) {
+async function loadGrammarCorpus(): Promise<GrammarCorpus> {
+  const raw = await Deno.readTextFile(
+    new URL(
+      "../../.agent/tests/fixtures/payload-from-node-value-grammar-corpus.json",
+      import.meta.url,
+    ),
+  );
+  return JSON.parse(raw) as GrammarCorpus;
+}
+
+Deno.test("payloadFromResolver: frontend NODE_VALUE_RE accepts every string the shared grammar corpus marks accept (round 21/22 parity)", async () => {
+  const corpus = await loadGrammarCorpus();
+  for (const raw of corpus.accept) {
     const result = parsePayloadFromSource(raw);
     assertEquals(
       result.kind,
@@ -595,13 +594,72 @@ Deno.test("payloadFromResolver: frontend NODE_VALUE_RE accepts every string the 
   }
 });
 
-Deno.test("payloadFromResolver: frontend NODE_VALUE_RE rejects every string the Python translator grammar rejects (round 21 parity list)", () => {
-  for (const raw of GRAMMAR_PARITY_REJECT) {
+Deno.test("payloadFromResolver: frontend NODE_VALUE_RE rejects every string the shared grammar corpus marks reject (round 21/22 parity)", async () => {
+  const corpus = await loadGrammarCorpus();
+  for (const raw of corpus.reject) {
     const result = parsePayloadFromSource(raw);
     assertEquals(
       result.kind === "node_value",
       false,
       `expected "${raw}" NOT to parse as node_value but it did`,
     );
+  }
+});
+
+// ─── round 22 audit: a resolver-successful undefined value must not silently
+// vanish over the wire. resolvePayloadFromSource itself still resolves a
+// present-but-undefined tracked value as ok (unchanged — see the "empty input
+// is valid" test above), but resolvePayloadFrom's aggregate payload is what
+// dispatchOperation (frontend/api/dispatch.ts) hands directly to
+// JSON.stringify(req) with no intermediate boundary — and JSON.stringify
+// silently DROPS any object key whose value is `undefined`. These tests prove
+// the field survives serialization as an explicit `null`, not a vanished key. ──
+
+Deno.test("payloadFromResolver: resolvePayloadFrom normalizes a resolved-but-undefined node value to null (not omitted) in the aggregate payload", () => {
+  const payloadFrom = { groupId: "node:enum_table.value.groupId" };
+  const nodeValues = { enum_table: { groupId: undefined } };
+  const result = resolvePayloadFrom(payloadFrom, nodeValues, {});
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(
+      Object.prototype.hasOwnProperty.call(result.payload, "groupId"),
+      true,
+      "groupId must remain a present key on the resolved payload, not be dropped",
+    );
+    assertEquals(result.payload.groupId, null);
+  }
+});
+
+Deno.test("payloadFromResolver: a resolvePayloadFrom payload containing a normalized-to-null field survives JSON.stringify with the key still present (proves the actual wire-serialization boundary, not just the in-memory object)", () => {
+  const payloadFrom = {
+    groupId: "node:enum_table.value.groupId",
+    confirmed: "literal:true",
+  };
+  const nodeValues = { enum_table: { groupId: undefined, groupName: "demo" } };
+  const result = resolvePayloadFrom(payloadFrom, nodeValues, {});
+  assertEquals(result.ok, true);
+  if (!result.ok) return;
+  const wire = JSON.stringify(result.payload);
+  const reparsed = JSON.parse(wire) as Record<string, unknown>;
+  assertEquals(
+    Object.prototype.hasOwnProperty.call(reparsed, "groupId"),
+    true,
+    "groupId must survive the actual JSON.stringify -> wire -> JSON.parse round trip as an explicit key, never silently dropped",
+  );
+  assertEquals(reparsed.groupId, null);
+  assertEquals(reparsed.confirmed, "true");
+});
+
+Deno.test("payloadFromResolver: resolvePayloadFrom does NOT normalize a genuinely-present (non-undefined) falsy value — only undefined is coerced to null, not 0/''/false", () => {
+  const payloadFrom = {
+    count: "node:counter.value",
+    label: "node:label_input.value",
+    active: "node:active_toggle.value",
+  };
+  const nodeValues = { counter: 0, label_input: "", active_toggle: false };
+  const result = resolvePayloadFrom(payloadFrom, nodeValues, {});
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.payload, { count: 0, label: "", active: false });
   }
 });

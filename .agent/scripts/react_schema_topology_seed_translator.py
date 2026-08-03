@@ -155,8 +155,9 @@ HTML_TAG_RE = re.compile(r'<\s*[a-zA-Z][a-zA-Z0-9]*(\s[^<>]*)?/?\s*>')
 # the frontend but rejected by this Python regex.
 #
 # Trailing (?:\.[A-Za-z0-9_]+)* mirrors frontend/runtime/payloadFromResolver.ts's
-# NODE_VALUE_RE dotted-path-drilling extension (round 20 -- admin-uibuilder-ui-
-# structure-wiring-ssot.yaml admin_runtime_selected_row_carrier_contract): a
+# NODE_VALUE_RE dotted-path-drilling extension (round 20 -- owning SSOT:
+# docs/design/ui-builder-preset-ecosystem-ssot.yaml
+# payloadFrom_resolver_contract.recognized_source_patterns.node_value_path): a
 # tracked node value that is an object (e.g. a table's selected row) can have a
 # single field extracted, e.g. node:enum_table.value.groupId.
 NODE_VALUE_RE = re.compile(r'^node:[A-Za-z0-9_-]+\.value(?:\.[A-Za-z0-9_]+)*$')

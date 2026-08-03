@@ -845,8 +845,9 @@ function tableFactory(spec: RuntimeComponentSpec): RenderResult {
       // no table-specific tracking path, just supplying the same key every other
       // component's change/input/select event already relies on. This lets a LATER
       // node's payloadFrom reference the selected row via
-      // `node:<thisTableNodeId>.value.<field>` (round 20 — admin-uibuilder-ui-
-      // structure-wiring-ssot.yaml admin_runtime_selected_row_carrier_contract).
+      // `node:<thisTableNodeId>.value.<field>` (round 20 — SSOT:
+      // docs/design/ui-builder-preset-ecosystem-ssot.yaml payloadFrom_resolver_contract
+      // .recognized_source_patterns.node_value_path).
       onRowClick: spec.eventBinding.select
         ? (row) => {
           const result = emitBoundEvent(spec, "select", { row, value: row });

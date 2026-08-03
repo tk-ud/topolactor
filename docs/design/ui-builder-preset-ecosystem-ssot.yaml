@@ -207,9 +207,16 @@ ui_builder_preset_ecosystem_ssot:
         cross_implementation_parity: >
           frontend/runtime/payloadFromResolver.ts's NODE_VALUE_RE and
           .agent/scripts/react_schema_topology_seed_translator.py's NODE_VALUE_RE must accept
-          and reject the identical set of raw source strings for this pattern — proven by a
-          paired positive/negative fixture set in both check_react_schema_topology_seed_translator.py
-          and frontend/tests/payloadFromResolver.test.ts, not by inspection alone.
+          and reject the identical set of raw source strings for this pattern. Round 22 fix: both
+          are proven against ONE shared, machine-readable corpus file --
+          .agent/tests/fixtures/payload-from-node-value-grammar-corpus.json ({accept: [...],
+          reject: [...]}) -- read directly by both
+          check_react_schema_topology_seed_translator.py's 42g/42h assertions and
+          frontend/tests/payloadFromResolver.test.ts's matching Deno.test cases, never
+          hand-retyped as two independently-maintained literal lists (round 21's own version did
+          exactly that, which this round's own audit correctly flagged as a duplication risk to
+          close). Adding a new grammar case means editing that ONE file; both suites pick it up
+          without further code changes.
       event_path:
         syntax: "event.<segment>.<segment>..."
         examples:

@@ -3693,10 +3693,10 @@ ON CONFLICT (package_id) DO UPDATE
 -- select event previously never carried. That tracked row object is then
 -- addressed via payloadFromResolver.ts's new node:<id>.value.<field>
 -- dotted-path extension (node:enum_table.value.groupId) -- a payloadFrom
--- source form that did not exist before this round; see
--- payloadFromResolver.ts's header doc comment and
--- admin-uibuilder-ui-structure-wiring-ssot.yaml
--- admin_runtime_selected_row_carrier_contract. enum_delete_group_confirm_input
+-- source form that did not exist before this round; owning SSOT:
+-- docs/design/ui-builder-preset-ecosystem-ssot.yaml
+-- payloadFrom_resolver_contract.recognized_source_patterns.node_value_path.
+-- enum_delete_group_confirm_input
 -- is a plain required text field (not yet cross-checked against the actual
 -- group name -- an honestly-scoped limitation, not silently claimed as full
 -- confirmation) needed only because the react_schema_topology_seed_translator
@@ -3806,7 +3806,8 @@ ON CONFLICT (wiring_id) DO UPDATE
 --    tracked value by field, not just a form input's own .value -- see
 --    frontend/runtime/payloadFromResolver.ts's node:<id>.value.<path>
 --    extension and runtimeComponentFactory.ts tableFactory's onRowClick
---    (round 20, admin_runtime_selected_row_carrier_contract).
+--    (round 20, owning SSOT: ui-builder-preset-ecosystem-ssot.yaml
+--    payloadFrom_resolver_contract.recognized_source_patterns.node_value_path).
 -- componentId/componentKind for every leaf (enum_search/enum_group_filter/
 -- enum_table/enum_form/enum_confirm_button/enum_create_group_name_input/
 -- enum_create_group_button/enum_delete_group_confirm_input/

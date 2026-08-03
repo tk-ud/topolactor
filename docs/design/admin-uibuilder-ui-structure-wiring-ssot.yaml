@@ -409,6 +409,19 @@ admin_uibuilder_ui_structure_wiring_ssot:
           resolution_note for the full record, including the honestly-open remaining item
           (hardcoded /admin/enums retirement still pending a genuine UX-parity replacement).
     admin_runtime_payload_binding_contract:
+      payload_source_grammar_authority: >-
+        Round 22 correction: this contract governs WHERE dispatchPayloadFromByTrigger is
+        authored/validated/threaded (the fields above), never the grammar of the source
+        strings inside it (node:<id>.value, node:<id>.value.<path>, event.<path>,
+        literal:<value>) -- that grammar's single owning authority is
+        docs/design/ui-builder-preset-ecosystem-ssot.yaml
+        payloadFrom_resolver_contract.recognized_source_patterns (including its
+        node_value_path entry, added round 21 for the admin-enum delete_group selected-row
+        use case this contract's own db/seed_empty.sql ae200 example now also uses).
+        Earlier round 20/21 code comments referenced a
+        "admin_runtime_selected_row_carrier_contract" name that was never actually a
+        section in any SSOT file (round 22 audit catch) -- every such reference has been
+        corrected to point here instead.
       role: >-
         2026-07-24, formalizes a canonical, validated payload-binding extension of
         component_wiring_execution_lane's admin_runtime case. 2026-07-25 (PR #599
@@ -1046,6 +1059,49 @@ admin_uibuilder_ui_structure_wiring_ssot:
         production DOM proof and live-DB proof of that specific wiring, the full negative-boundary
         suite for it, and AdminEnumsRoster.tsx/hardcoded route retirement -- unchanged from round 18,
         still this Bundle's largest remaining scope (see .agent/tasks/todo.md).
+      round_21_hardening: >-
+        2026-07-29. Owner audit found a structural gap in round 19's
+        IsBareManifestNavigationReadTargetRefAsync exemption: it resolved the axes-registered
+        operation-authority manifest (via ResolveActiveManifestAsync) purely to read its
+        identity_selector_read declaration, then discarded that manifest reference entirely --
+        DispatchAsync's later ValidateCapabilityRequirement call (further down in the same method)
+        only ever runs against the BARE target_ref manifest, which by this exemption's own
+        precondition (HasAnyDispatcherMapping/HasUiProjectionEntry both false) can never carry a
+        capability_requirement of its own. The REAL operation-authority manifest's own
+        capability_requirement (explicit, or inferred from ITS OWN runtime_mapping via
+        ResolveRequiredRole) was never consulted through this path. Not yet an active bypass as of
+        this writing -- db/seed_empty.sql declares zero explicit capability_requirement entries
+        anywhere, and the universal admin_runtime-destination role=admin inference already applies
+        to the bare manifest itself too (it necessarily shares the same runtime_destination, since
+        that is DispatchAsync's own outer gate condition for reaching this branch at all) -- but a
+        real structural gap: an axes manifest later declaring a MORE RESTRICTIVE explicit
+        capability_requirement than plain admin_runtime inference would be silently bypassed by
+        anyone reaching it through a bare manifest's target_ref instead of its own axes/target_ref.
+        Fixed by changing IsBareManifestNavigationReadTargetRefAsync's return type from bare bool to
+        BareManifestNavigationReadResult{bool Eligible, ValidationError? CapabilityError} -- it now
+        runs ValidateCapabilityRequirement against the axes manifest's OWN topology internally and
+        returns the result, and DispatchAsync's caller fails closed on a non-null CapabilityError
+        (AUTH_CAPABILITY_DENIED) exactly where it already fails closed on ineligibility
+        (TARGET_REF_ADMIN_RUNTIME_LAYER_ACTION_MISSING). This does NOT duplicate any
+        capability_requirement onto the bare manifest -- it evaluates the axes manifest's own
+        declared authority, the same manifest ResolveActiveManifestAsync's normal (non-target_ref)
+        path would have validated had target_ref not short-circuited resolution. Proof:
+        backend/tests/Topolactor.Runtime.Tests/ManifestDispatcherTargetRefTests.cs (axes-manifest
+        capability_requirement role-mismatch fails closed / role-match succeeds, 2 new tests, 31/31
+        total in that file) plus a real-PostgreSQL live-DB counterpart,
+        ManifestDispatcherBareManifestCapabilityRequirementLiveDbTests.cs (round 22 -- a bare
+        selector manifest and a SEPARATE axes-registered operation-authority manifest inserted
+        directly via real SQL under a made-up, seed-non-colliding (layer, action) pair, dispatched
+        through the real ManifestDispatcher/NpgsqlManifestRepository, proving role-mismatch fails
+        AUTH_CAPABILITY_DENIED and role-match does not), included in
+        .agent/tests/check-backend-tests.sh's TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY filter so GitHub
+        Actions actually runs it. Also promoted the node:<id>.value.<path>
+        selected-row-carrier grammar (round 20) from code-comment-only to
+        docs/design/ui-builder-preset-ecosystem-ssot.yaml
+        payloadFrom_resolver_contract.recognized_source_patterns.node_value_path, and while adding
+        frontend/Python grammar-parity tests against it, found and fixed a genuine pre-existing
+        divergence: the Python NODE_VALUE_RE's nodeId character class allowed dots but not hyphens,
+        the frontend's the reverse -- aligned both to [A-Za-z0-9_-]+.
     manifest_topology_boundary:
       rule: >-
         manifest.topology entries for this surface (ui_projection type per

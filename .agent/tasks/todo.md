@@ -1173,6 +1173,29 @@ round 21監査は、round19-20で実装したgeneric mechanismに対し3つの�
 - capability_requirementの検証をbare manifest自身へ複製し、axes manifest自身への正しい検証を回避する。
 - grammar parity修正を「frontendに合わせてPythonを直す」以外の方法（例えばfrontendの方をPythonの旧文字クラスに合わせる、両方を無関係な第三の文字クラスへ変更する等）で場当たり的に解決し、SSOTで定義した正本文字クラスと不整合にする。
 
+### admin-enum subBundle 実装記録（2026-07-29 round 17 — round21の3欠落（bare capability実PostgreSQL proof欠如／grammar二重ハードコード／present-undefined leafのJSON transport無言消失）を解消、旧SSOT参照の是正）
+
+round 22監査はround21が実装した2件の修正自体は妥当としつつ、(1) bare-manifest capability_requirement修正の実PostgreSQL proofが無くtest double止まりであること、(2) frontend/Python grammar parityの「証明」がregexとaccept/reject corpusを両ファイルへ手作業で複製しただけで、単一authorityになっていないこと、(3) `node:<id>.value.<path>`が「present-but-undefined値も成功扱い」とした既存規約とJSON.stringifyの相互作用により、resolver成功と判定されたfieldがwireへ送る直前に無言で消失する具体的バグがあること、(4) 存在しない`admin_runtime_selected_row_carrier_contract`という架空のSSOT名がコメント5箇所に残っていること、を指摘した。全4件を解消した。
+
+**1. bare capability実PostgreSQL proof（実装済み）**: `backend/tests/Topolactor.Integration.Tests/ManifestDispatcherBareManifestCapabilityRequirementLiveDbTests.cs`を新設。実seedデータに衝突しない一意な(layer, action)ペアを使い、bare selector manifestとaxes-registered operation-authority manifest（`identity_selector_read:true`＋明示的`capability_requirement`）を実SQLで別々に挿入し、実`ManifestDispatcher`／`NpgsqlManifestRepository`経由でdispatchして role不一致→`AUTH_CAPABILITY_DENIED`、role一致→非拒否、の2 testを証明した。`.agent/tests/check-backend-tests.sh`の`TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY`フィルタへこのクラス名を追加し、GitHub Actionsが実際にこのtestを実行するようにした（追加しなければCIはこのtestを黙って無視する構成だったため、これ自体が今回の是正対象）。
+
+**2. grammar parityの単一authority化（実装済み）**: `.agent/tests/fixtures/payload-from-node-value-grammar-corpus.json`を新設し、frontend `NODE_VALUE_RE`とPython `NODE_VALUE_RE`のaccept/reject文字列corpusをこの1ファイルへ集約した。`frontend/tests/payloadFromResolver.test.ts`（`Deno.readTextFile`経由）と`.agent/scripts/check_react_schema_topology_seed_translator.py`（`json.loads`経由）の両方がこの同一物理artifactを読み込む形に変更し、round21が残していた「2箇所への手作業転記」を解消した。ケース追加は今後この1ファイルの編集のみで両suiteへ反映される。
+
+**3. present-undefined leafのJSON transport無言消失（実装済み・test証明済み）**: `resolvePayloadFromSource`自身の「present-but-undefined tracked値は成功（エラーではない）」という既存規約（SSOT `prohibited.treating_undefined_node_value_as_error`）は変更していないが、`resolvePayloadFrom`の集約payload構築時に`result.value === undefined ? null : result.value`で正規化するよう修正した。理由: この集約payloadは`frontend/api/dispatch.ts`の`JSON.stringify(req)`へ中間境界なしで直接渡り、`JSON.stringify`はvalueが`undefined`のキーを無言で削除するため、resolverが成功と判定したfieldが実際のwireから消える——「resolution errorで無言のpartial payloadを禁止する」という既存規約と同じ原則に違反する具体的バグだった。3つの候補（明示null化／resolution error化／field omissionを明示型とする）のうち、既存の「undefinedはエラーではない」規約と矛盾せず、かつ後方互換を保ったまま実際のwireで観測可能にする、という既存SSOTから一意に導出できる案（明示null化）を採用し、Ownerへの個別確認は要さなかった——他の2案は既存規約と矛盾するか新たな設計判断を要するため不採用とした根拠をコード内コメントへ明記した。`frontend/tests/payloadFromResolver.test.ts`へ3件のtest（null正規化そのもの、実際の`JSON.stringify`→`JSON.parse`往復でキーが生存すること、`0`/`""`/`false`等の正当なfalsy値は正規化されないこと）を追加。
+
+**4. 旧SSOT参照の是正（実装済み）**: 存在しない`admin_runtime_selected_row_carrier_contract`という名前への参照が`runtimeComponentFactory.ts`/`payloadFromResolver.ts`/`react_schema_topology_seed_translator.py`/`db/seed_empty.sql`（2箇所）の計5箇所に残っていた（round20/21が作った、実際にはどのSSOTにも存在しないcontract名）。全て実際の正本参照（`ui-builder-preset-ecosystem-ssot.yaml payloadFrom_resolver_contract.recognized_source_patterns.node_value_path`）へ訂正した。併せて`admin-uibuilder-ui-structure-wiring-ssot.yaml`の`admin_runtime_payload_binding_contract`へ、payloadFromの文字列grammar自体はこのcontractの管轄ではなく`ui-builder-preset-ecosystem-ssot.yaml`側が正本である旨のcross-reference（`payload_source_grammar_authority`）を追加し、`round_21_hardening`節（bare capability修正の記録、実PostgreSQL proof追加を反映して更新）も追加した。`PAYLOAD_FROM_UNRESOLVED_REF`のerror message文字列も`.value.<path>`形式を含むよう更新した。
+
+**未着手のまま残る内容（正直な記録、round21/22いずれも未着手のまま）**:
+- **mutation confirmation workflow**（preview/validate/explicit confirm/write/reread）。create_group/delete_groupは依然クリック一発で`confirmed:literal:true`を直接送るのみ。
+- **cross-manifest response adoption**の設計。`confirmProjectionEntryEmission`のmanifest-id一致検査は意図的に変更していない。
+- 残り7 action・統合UX・完全なnegative boundary証明群・`AdminEnumsRoster.tsx`/route撤去。
+
+### Governance NG boundary追記（round 17）
+
+- 本roundで解消した4件（実PostgreSQL proof・grammar単一化・undefined transport・旧SSOT参照是正）の完了をもって、admin-enum subBundleまたは`admin-surface-topology-seed-conversion` Bundle全体がimplementedであるかのように扱う——mutation confirmation workflow・cross-manifest response adoption・残り7 action・統合UX・完全negative boundary証明・route撤去のいずれも未着手である。
+- undefined→null正規化を「resolverがエラーを返すべきだった」規約変更にすり替える、またはbare `node:<id>.value`側の既存「undefinedは正常」規約を無断で変更する。
+- grammar corpusファイルを片方のsuiteだけが読み、もう片方は従来通りの手書きlistへ戻す。
+
 ---
 
 ## Bundle `admin-runtime-operation-dispatch-lane-determination`
