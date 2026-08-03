@@ -207,21 +207,13 @@ export type ResolvePayloadFromResult =
  * Returns { ok: false, errors } (with all error codes) when any field fails.
  * Never silently drops unresolved fields or returns partial payloads on error.
  *
- * undefined -> null normalization (round 22 audit): resolvePayloadFromSource's own
- * "a present-but-undefined tracked value resolves ok, not an error" contract (SSOT
- * payloadFrom_resolver_contract.prohibited.treating_undefined_node_value_as_error) is
- * unchanged here — a present key with an undefined value is still a successful
- * resolution, not added to `errors`. But this function's OWN output feeds directly into
- * dispatchOperation's `JSON.stringify(req)` (frontend/api/dispatch.ts) with no
- * intermediate boundary, and JSON.stringify silently DROPS any object key whose value is
- * `undefined` — a resolved field the caller believes it sent would vanish from the wire
- * with zero signal, violating the SAME "no silent field omission" principle
- * partial_payload_on_resolution_error already protects for the error path. `null` is the
- * one JS value that (a) survives JSON.stringify explicitly, (b) preserves the "not an
- * error" resolver semantics unchanged, and (c) gives the backend DTO an actual value to
- * validate against (e.g. a real ENUM_GROUP_ID_MALFORMED for a null groupId) instead of
- * the field silently never having existed. This is the ONE normalization uniquely
- * implied by the two existing, unmodified contracts above — not a fresh design fork.
+ * undefined -> null normalization (round 22/23): a present-but-undefined resolved value is
+ * normalized to explicit JSON `null` here (resolvePayloadFromSource itself is UNCHANGED —
+ * still returns `{ok: true, value: undefined}`). Full rationale, the three candidate
+ * designs considered, and why this is the one normalization uniquely implied by existing
+ * contracts (not a fresh design fork) is owned by
+ * docs/design/ui-builder-preset-ecosystem-ssot.yaml
+ * payloadFrom_resolver_contract.wire_transport_contract — read that before changing this.
  */
 export function resolvePayloadFrom(
   payloadFrom: Record<string, string>,

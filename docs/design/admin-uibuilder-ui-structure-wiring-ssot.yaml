@@ -1089,13 +1089,26 @@ admin_uibuilder_ui_structure_wiring_ssot:
         backend/tests/Topolactor.Runtime.Tests/ManifestDispatcherTargetRefTests.cs (axes-manifest
         capability_requirement role-mismatch fails closed / role-match succeeds, 2 new tests, 31/31
         total in that file) plus a real-PostgreSQL live-DB counterpart,
-        ManifestDispatcherBareManifestCapabilityRequirementLiveDbTests.cs (round 22 -- a bare
-        selector manifest and a SEPARATE axes-registered operation-authority manifest inserted
-        directly via real SQL under a made-up, seed-non-colliding (layer, action) pair, dispatched
-        through the real ManifestDispatcher/NpgsqlManifestRepository, proving role-mismatch fails
-        AUTH_CAPABILITY_DENIED and role-match does not), included in
+        ManifestDispatcherBareManifestCapabilityRequirementLiveDbTests.cs (round 22/23 -- bare
+        selector manifests and SEPARATE axes-registered operation-authority manifests inserted
+        directly via real SQL under made-up, seed-non-colliding (layer, action) pairs per test,
+        dispatched through the real ManifestDispatcher/NpgsqlManifestRepository: capability
+        role-mismatch fails AUTH_CAPABILITY_DENIED / role-match does not (round 22); round 23 added
+        the remaining real-PostgreSQL negative dimensions -- axes manifest inactive (status !=
+        'active'), axes manifest missing its identity_selector_read declaration entirely, axes
+        manifest's own dispatcher_mapping.role not matching the request's role, and two active
+        manifests both axes-registered for the identical (role, layer, action) triggering
+        ManifestDispatcher's existing MANIFEST_AMBIGUOUS catch from deep inside this bare-manifest
+        path -- all fail TARGET_REF_ADMIN_RUNTIME_LAYER_ACTION_MISSING or MANIFEST_AMBIGUOUS as
+        appropriate, 6 tests total in that file), included in
         .agent/tests/check-backend-tests.sh's TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY filter so GitHub
-        Actions actually runs it. Also promoted the node:<id>.value.<path>
+        Actions actually runs all of them. The "valid path reaches a real dispatch outcome" positive
+        proof for the REAL hub_navigation:get_hub_relations bare-manifest path (not just "no
+        AUTH_CAPABILITY_DENIED") is already covered end-to-end by
+        CredentialManagementHubRelationUiProjectionLiveDbTests /
+        AdminEnumHubRelationUiProjectionLiveDbTests's own HubNavigationCreate tests (bare source
+        manifest -> target_ref -> real dispatch -> Emission.NavigationSequence reflecting an
+        actually-authored relation) -- not duplicated in the new file. Also promoted the node:<id>.value.<path>
         selected-row-carrier grammar (round 20) from code-comment-only to
         docs/design/ui-builder-preset-ecosystem-ssot.yaml
         payloadFrom_resolver_contract.recognized_source_patterns.node_value_path, and while adding

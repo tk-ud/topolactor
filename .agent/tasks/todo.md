@@ -1196,6 +1196,24 @@ round 22監査はround21が実装した2件の修正自体は妥当としつつ�
 - undefined→null正規化を「resolverがエラーを返すべきだった」規約変更にすり替える、またはbare `node:<id>.value`側の既存「undefinedは正常」規約を無断で変更する。
 - grammar corpusファイルを片方のsuiteだけが読み、もう片方は従来通りの手書きlistへ戻す。
 
+### admin-enum subBundle 実装記録（2026-07-29 round 18 — round22成果の維持確認 + 実DB negative boundary拡張 + cross-consumer transport証明 + wire_transport_contractのSSOT格上げ + mutation confirmation workflowの具体的unblock調査）
+
+round 23監査はround22の4件修正を有効として維持しつつ、(1) bare capability実DB proofがcapability match/mismatchの2testに留まり、inactive／identity_selector_read欠落／role mismatch／axes ambiguityの実DB証明が無いこと、(2) `undefined→null`正規化がコードコメントのみでSSOT未反映であること、admin_runtime以外のconsumer（external_port／instance_operation）で未確認であること、を指摘した。両方とも本round内で解消した。
+
+**1. bare capability実DB negative boundary拡張（実装済み）**: `ManifestDispatcherBareManifestCapabilityRequirementLiveDbTests.cs`へ4件追加（計6件）。各testは一意な(layer, action)ペアを使い、確実なfinally cleanupで実施: axes manifestが`status != 'active'`（inactive）、axes manifestに`identity_selector_read`宣言が無い、axes manifestの`dispatcher_mapping.role`がrequestのroleと不一致、同一axes（role/layer/action）に対し2つのactive manifestが存在する（`MANIFEST_AMBIGUOUS`、`ManifestDispatcher`本体の既存catchがbare-manifest経路の奥深くからの例外も正しく変換することを証明）——いずれもfail-closeを実PostgreSQL・実`ManifestDispatcher`・実`NpgsqlManifestRepository`経由で証明した。「valid pathが実際のdispatch outcomeまで到達する」証明は、既存の`CredentialManagementHubRelationUiProjectionLiveDbTests`/`AdminEnumHubRelationUiProjectionLiveDbTests`のHubNavigationCreate testが実operationで既に証明済み（bare manifest→target_ref→実hub_navigation:get_hub_relations dispatch→`Emission.NavigationSequence`が実際に作成したrelationを反映）であることを確認し、重複実装しなかった。
+
+**2. undefined→null transport contractのSSOT格上げ + 全consumer証明（実装済み）**: `docs/design/ui-builder-preset-ecosystem-ssot.yaml`の`payloadFrom_resolver_contract`トップレベルへ`wire_transport_contract`を新設し、問題・解決・3つの意味区分（present/present-undefined/absent-key-error）・`resolvePayloadFromSource`と`resolvePayloadFrom`の責務分離・全consumer適用範囲を正式記載した。`payloadFromResolver.ts`側の実装コメントはSSOTへの参照のみに短縮した。この正規化が`resolvePayloadFrom`という単一共有関数（admin_runtime／external_port／instance_operationの3レーン全てが使う）に実装されているため、consumer非依存であることを`frontend/tests/externalPortDispatchRuntime.test.ts`へ2件の新規test（`dispatchExternalPort`/`dispatchInstanceOperation`それぞれで実際の`/api/dispatch` wire bodyをmocked fetch経由で捕捉し、undefinedだったfieldが`dispatch_payload`内でnullとして生存することを証明）で追加証明した。
+
+**3. mutation confirmation workflowの具体的unblock調査（実装せず、正直に記録——重要な設計知見）**: round21/22は「preview/confirm/write/rereadのUXは新設計が必要」と一般論で記録していたが、本roundで実装コードを実際に読み、**新しいbackend/runtime設計は不要**であることを具体的に確認した。既存の`safety_guard/apply_confirm_dialog`（`ApplyConfirmDialog.tsx`/`applyConfirmDialogFactory`、既にcatalog登録済み・production稼働中——`PackageWiringEditor`のConfirmDialogとして既に使われている）と、`localStateStore`の値を`props.data.open`へ反映する既存の`applyLocalStateOverrides`機構（`renderEmission.ts`）を組み合わせれば、「削除ボタン押下→confirm dialog表示→dialogのConfirmボタンが実writeをdispatch→Cancelは何も送らない」という完全なUXは、既存のgeneric mechanismだけで成立することを確認した。**唯一かつ具体的な欠落**: `.agent/scripts/react_schema_topology_seed_translator.py`のDSLには、`stateJson`（初期値宣言）・`targetNodeId`/`statePath`（他nodeを対象にしたlocal state mutation）・`localStateMutation`以外のactionType（`openDialog`/`closeDialog`/`toggleDialog`等）を著述する経路が一つも存在しない（`internal_instance_wiring`レーンは常に`localStateMutation`——「true書き込みのみ」——にマップされ、"close"に相当する著述手段が無い）。これはbackend validation側では既に受理される語彙（PackageWiringEditorのConfirmDialogが本番で使用中）だが、translator DSLだけがこの語彙へ到達する経路を持たない、という具体的・限定的なgapである。次round以降の具体的着手項目として記録する: (a) DSLへ`stateJson`/`targetNodeId`/`statePath`/複数actionType著述を追加、(b) `enum_delete_group_confirm_dialog`（componentKind`safety_guard/apply_confirm_dialog`）をae200へ追加、削除ボタン自身は直接writeを送らず`localStateMutation`でdialogを開くだけに変更、dialogの`submit`トリガへ既存の`dispatchTargetRefByTrigger`/`dispatchPayloadFromByTrigger`機構で実writeを配線、(c) 生成・live-DB・DOM proof。真のdryRunプレビュー（`preview_dictionary_delta`——backend再取得ベースの差分表示）は、選択行の既知データ（groupName等）をdialogのdescriptionへそのまま表示する形で当面代替できる（これも既存機構で可能——別途backend dryRun再取得は、confirmProjectionEntryEmissionのadoptedManifestId制約と同じ「別レスポンスの採用」問題に触れるため、別途の設計が必要）。
+
+**未着手のまま残る内容（正直な記録）**: 上記(a)(b)(c)の実装、cross-manifest response adoptionの設計、残り7 action、統合UX、完全negative boundary証明群、`AdminEnumsRoster.tsx`/route撤去。
+
+### Governance NG boundary追記（round 18）
+
+- 本roundのnegative boundary拡張・transport証明・調査結果をもって、admin-enum subBundleまたは`admin-surface-topology-seed-conversion` Bundle全体がimplementedであるかのように扱う——mutation confirmation workflow実装・response adoption設計・残り7 action・統合UX・route撤去のいずれも未着手である。
+- 「新しいbackend/runtime設計は不要」という本round自身の発見を、「だから既に実装済みである」にすり替える——発見したのはunblockする具体的経路であり、実装そのものはまだ行っていない。
+- translator DSL拡張を、admin-enum専用の分岐として実装する——`stateJson`/`targetNodeId`/`statePath`/複数actionType著述は、他のどのsurfaceのどのdialog/local-state componentからも使える汎用DSL機能として実装すること。
+
 ---
 
 ## Bundle `admin-runtime-operation-dispatch-lane-determination`

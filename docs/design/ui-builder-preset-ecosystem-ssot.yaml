@@ -244,6 +244,73 @@ ui_builder_preset_ecosystem_ssot:
       - PAYLOAD_FROM_EVENT_PATH_NOT_FOUND
       - PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND
       - PAYLOAD_FROM_UNRESOLVED_REF
+    wire_transport_contract:
+      # Round 22 fix, round 23 SSOT promotion (was code-comment-only). Applies at the
+      # resolvePayloadFrom() AGGREGATE boundary, not per-source-kind -- every recognized
+      # source pattern above (node_value, node_value_path, event_path) can independently
+      # produce a present-but-successfully-resolved value of `undefined` (a present tracked
+      # node whose current value is undefined; a present event-payload key whose own value
+      # is undefined at the traversal leaf). literal: never resolves to undefined (always a
+      # string). This contract governs what happens to THAT resolved value between
+      # resolvePayloadFromSource's per-field success and the actual network payload —
+      # independent of, and layered on top of, each source kind's own resolution semantics
+      # above (which are unchanged: undefined is still success, not
+      # PAYLOAD_FROM_*_NOT_FOUND).
+      problem: >-
+        implementation.ts (frontend/api/dispatch.ts dispatchOperation) hands
+        resolvePayloadFrom's aggregate payload object directly to
+        `body: JSON.stringify(req)` with NO intermediate boundary. JSON.stringify silently
+        DROPS any object key whose value is exactly `undefined` (ECMA-262 JSON.stringify
+        abstract operation SerializeJSONProperty: an undefined property value is omitted,
+        not serialized as anything). A field the resolver reported as `{ok: true}` could
+        therefore vanish from the actual wire request with zero signal to any layer —
+        violating the same "no silent partial payload" principle
+        partial_payload_on_resolution_error already protects on the ERROR path, but for the
+        SUCCESS path instead.
+      resolution: >-
+        resolvePayloadFrom() (NOT resolvePayloadFromSource — see consumer_layering below)
+        normalizes `undefined` to explicit `null` when assembling its aggregate payload
+        object. This is the ONE normalization uniquely implied by the two existing,
+        unmodified contracts above: (1) treating_undefined_node_value_as_error is already
+        prohibited, so downgrading undefined to a resolution ERROR (one of the three
+        candidates considered) would contradict existing, unchanged policy; (2) the new
+        "resolved fields must not silently vanish over the wire" requirement rules out
+        leaving the status quo (undefined passed through unchanged) since JSON.stringify
+        silently drops it. `null` is the one JS/JSON value that is simultaneously (a) NOT an
+        error under contract (1), and (b) always serialized as an explicit, observable value
+        under contract (2) — no third option satisfies both existing constraints
+        simultaneously, so no Owner comparison was required for this specific case. The
+        DISTINCT question of whether backend DTOs should treat a null field differently from
+        an entirely absent one is each DTO's own, pre-existing, unmodified deserialization
+        behavior (e.g. Guid.TryParse(null) fails the same way Guid.TryParse(missing) does in
+        System.Text.Json's default null-to-default-value binding) — this contract does not
+        touch or homogenize backend-side null/missing handling, only guarantees the field
+        reaches the backend as null rather than not reaching it at all.
+      semantic_distinctions:
+        present_with_value: "the resolved field appears in the wire payload with its actual value — unchanged"
+        present_undefined: "normalized to JSON `null` in the wire payload — round 22/23 fix; NOT the same wire representation as never having been in payloadFrom at all"
+        absent_key_error: "PAYLOAD_FROM_NODE_NOT_FOUND / PAYLOAD_FROM_EVENT_PATH_NOT_FOUND / PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND — the whole resolvePayloadFrom call fails, no partial payload is ever sent for ANY field, per partial_payload_on_resolution_error"
+        explicit_null_source: "a source that resolves to a genuine business-data null (not currently reachable — no recognized source pattern above can produce a literal JSON null today, only undefined) would be indistinguishable on the wire from a normalized-undefined field; this is a known, accepted non-goal since no such source exists yet"
+      consumer_layering: >-
+        resolvePayloadFromSource (the per-field function) is UNCHANGED — it still returns
+        `{ok: true, value: undefined}` for a present-undefined resolution, preserving the
+        existing "undefined is not an error" contract at that layer for any caller that reads
+        individual field resolutions directly (e.g. authoring-time preview tooling). Only
+        resolvePayloadFrom (the aggregate function every runtime dispatch caller actually
+        uses) applies the null normalization when assembling its output object.
+      applies_to_all_consumers: >-
+        resolvePayloadFrom is the SAME shared function used by ALL THREE
+        component_wiring_execution_lane dispatch paths in
+        frontend/runtime/runtimeComponentFactory.ts's emitBoundEvent — admin_runtime
+        (binding.runtimeDispatch), dispatchExternalPort (binding.externalPortDispatch), and
+        dispatchInstanceOperation (binding.instanceOperationDispatch) — so this normalization
+        is consumer-agnostic by construction, not something each dispatch lane implements
+        separately. Proven for all three: frontend/tests/payloadFromResolver.test.ts
+        (admin_runtime path, resolver-level + actual JSON.stringify/JSON.parse round trip),
+        frontend/tests/externalPortDispatchRuntime.test.ts (dispatchExternalPort and
+        dispatchInstanceOperation, each capturing the REAL /api/dispatch request body through
+        a mocked fetch and confirming the normalized-to-null field survives inside the
+        nested dispatch_payload object both lanes wrap their resolved payload in).
 
   # ---------------------------------------------------------------------------
   # hub_search.readonly.v1 — wiring alignment contract

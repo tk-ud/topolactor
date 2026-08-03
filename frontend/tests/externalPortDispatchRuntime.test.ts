@@ -153,6 +153,111 @@ Deno.test("dispatchExternalPort resolved payload enqueues backend command throug
   schedulerTestOnly.resetCommandQueue();
 });
 
+// ─── round 23 audit: the undefined -> null wire-transport fix (payloadFromResolver.ts
+// resolvePayloadFrom) is a single shared function used by ALL THREE dispatch lanes
+// (admin_runtime, dispatchExternalPort, dispatchInstanceOperation) — proven for
+// admin_runtime in frontend/tests/payloadFromResolver.test.ts; these two prove the SAME
+// fix reaches the actual /api/dispatch request body for the other two lanes too, not just
+// structurally implied by shared code. ─────────────────────────────────────────
+
+Deno.test("dispatchExternalPort: a resolved-but-undefined payloadFrom field survives the real /api/dispatch wire body as an explicit null, not a silently dropped key", async () => {
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  const capturedBodies: Record<string, unknown>[] = [];
+  globalThis.fetch = ((url: string, init?: RequestInit) => {
+    if (String(url) === "/api/dispatch") {
+      capturedBodies.push(JSON.parse(String(init?.body ?? "{}")));
+    }
+    return Promise.resolve(new Response(JSON.stringify({ success: true }), { status: 200 }));
+  }) as typeof fetch;
+
+  const result = factoryTestOnly.emitBoundEvent({
+    componentId: "button-1",
+    componentType: "action/button",
+    props: { data: { label: "Send" } },
+    payloadFromNodeValues: { selected_row: { recordId: undefined, label: "Alpha" } },
+    eventBinding: {
+      click: {
+        eventType: "click",
+        externalPortDispatch: {
+          portTargetRef: "external-port:response_port:00000000-0000-0000-0000-00000000abcd",
+          payloadFrom: {
+            recordId: "node:selected_row.value.recordId",
+            label: "node:selected_row.value.label",
+          },
+        },
+      },
+    },
+  }, "click", {});
+  assertEquals(result.ok, true);
+
+  for (let i = 0; i < 20 && capturedBodies.length === 0; i++) {
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  globalThis.fetch = originalFetch;
+  schedulerTestOnly.resetCommandQueue();
+
+  assertEquals(capturedBodies.length, 1);
+  const dispatchPayload = capturedBodies[0].payload as Record<string, unknown>;
+  const externalPayload = dispatchPayload.dispatch_payload as Record<string, unknown>;
+  assertEquals(
+    Object.prototype.hasOwnProperty.call(externalPayload, "recordId"),
+    true,
+    "recordId must remain a present key on the actual /api/dispatch wire body, not be dropped",
+  );
+  assertEquals(externalPayload.recordId, null);
+  assertEquals(externalPayload.label, "Alpha");
+});
+
+Deno.test("dispatchInstanceOperation: a resolved-but-undefined payloadFrom field survives the real /api/dispatch wire body as an explicit null, not a silently dropped key", async () => {
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  const capturedBodies: Record<string, unknown>[] = [];
+  globalThis.fetch = ((url: string, init?: RequestInit) => {
+    if (String(url) === "/api/dispatch") {
+      capturedBodies.push(JSON.parse(String(init?.body ?? "{}")));
+    }
+    return Promise.resolve(new Response(JSON.stringify({ success: true }), { status: 200 }));
+  }) as typeof fetch;
+
+  const result = factoryTestOnly.emitBoundEvent({
+    componentId: "button-1",
+    componentType: "action/button",
+    props: { data: { label: "Send" } },
+    payloadFromNodeValues: { selected_row: { instanceId: undefined, label: "Beta" } },
+    eventBinding: {
+      click: {
+        eventType: "click",
+        instanceOperationDispatch: {
+          instanceTargetRef: "instance-port:some_instance:00000000-0000-0000-0000-00000000abcd",
+          payloadFrom: {
+            instanceId: "node:selected_row.value.instanceId",
+            label: "node:selected_row.value.label",
+          },
+        },
+      },
+    },
+  }, "click", {});
+  assertEquals(result.ok, true);
+
+  for (let i = 0; i < 20 && capturedBodies.length === 0; i++) {
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  globalThis.fetch = originalFetch;
+  schedulerTestOnly.resetCommandQueue();
+
+  assertEquals(capturedBodies.length, 1);
+  const dispatchPayload = capturedBodies[0].payload as Record<string, unknown>;
+  const instancePayload = dispatchPayload.dispatch_payload as Record<string, unknown>;
+  assertEquals(
+    Object.prototype.hasOwnProperty.call(instancePayload, "instanceId"),
+    true,
+    "instanceId must remain a present key on the actual /api/dispatch wire body, not be dropped",
+  );
+  assertEquals(instancePayload.instanceId, null);
+  assertEquals(instancePayload.label, "Beta");
+});
+
 // ─── external port generic lane: no provider-specific dispatch ────────────────
 
 Deno.test("external port generic lane: enqueueExternalPortDispatchCommand uses target=external_port (not provider-specific)", async () => {
