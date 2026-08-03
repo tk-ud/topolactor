@@ -1152,6 +1152,27 @@ round 14（create_group）は新規フォーム入力のみを必要とする書
 - 本roundで発見した「別manifestのレスポンスをae200へ採用できない」という制約を、根拠なく「解決済み」と主張する、または逆に「解決不能」と断定して調査を止める——round9-14と同様、具体的なコード根拠（confirmProjectionEntryEmissionのadoptedManifestId一致チェック）を示した上で「本roundでは着手していない」と正確に記録するに留める。
 - 誤って実データを破壊したこと（demo_status削除）を隠す、またはローカルDB復元の証跡を省略する。
 
+### admin-enum subBundle 実装記録（2026-07-29 round 16 — bare-manifest経路のcapability_requirement欠落修正、selected-row carrier grammarのSSOT正式化、frontend/translator grammar不一致の発見・修正）
+
+round 21監査は、round19-20で実装したgeneric mechanismに対し3つの具体的欠落を指摘した。うち2件を本roundで解消し、残る「mutation confirmation workflow（preview/validate/explicit confirm/write/reread）」「cross-manifest response adoption」「残り7 action」「統合UX」「negative boundary証明群」「route撤去」は着手していない——正直に記録する。
+
+**1. bare-manifest経路のcapability_requirement欠落（実装済み・test証明済み）**: `IsBareManifestNavigationReadTargetRefAsync`はbool一つしか返さず、呼び出し元は常に「target_refが指すbare manifest自身」（定義上dispatcher_mapping/ui_projectionを持たない、故にcapability_requirementも実質常に空）のcapability_requirementしか検証していなかった。実際にこのaction/layerを所有するaxes-registered manifest（`ResolveActiveManifestAsync`が解決するもの）自身のcapability_requirementは一度も検証されていなかった。現行seedには`capability_requirement`エントリが1件も存在しないため今日時点では即座に悪用可能ではない（admin_runtime destination全体へのrole=admin推論により実質的にrole要件は既に効いている）が、将来axes manifestへより厳格なcapability_requirementを追加した場合にbare-manifest target_ref経由で静かにバイパスされる構造的欠陥だった。`IsBareManifestNavigationReadTargetRefAsync`を`BareManifestNavigationReadResult{bool Eligible, ValidationError? CapabilityError}`を返す形に変更し、axes manifest自身の`ValidateCapabilityRequirement`結果を呼び出し元へ伝播、fail-closeするよう修正した。bare manifest自身へcapability_requirementを複製する形は取っていない（NG軸で明示的に禁止）。`backend/tests/Topolactor.Runtime.Tests/ManifestDispatcherTargetRefTests.cs`へ新規2 test（axes manifest自身のcapability_requirement role不一致でfail-close／role一致で成功）を追加、既存29 testと合わせ計31 test全pass。
+
+**2. `node:<nodeId>.value.<path>` selected-row carrierのSSOT正式化（実装済み）**: round20で実装コメントのみに存在していたこのgrammar（認識文法、nodeId文法、path segment文法、own-property traversal、array/null/undefined扱い、prototype key、error code、bare`.value`との後方互換）を`docs/design/ui-builder-preset-ecosystem-ssot.yaml`の`payloadFrom_resolver_contract.recognized_source_patterns.node_value_path`へ正式追加した。
+
+**3. frontend/Python translator間のgrammar不一致を発見・修正（実装済み・test証明済み）**: SSOT正式化の一環でfrontend `NODE_VALUE_RE`とPython `NODE_VALUE_RE`の同一文字列に対する受理/拒否を突き合わせるpaired parity test（`check_react_schema_topology_seed_translator.py`の42g/42h、`frontend/tests/payloadFromResolver.test.ts`の同一文字列list使用test）を追加したところ、**round20以前から存在した真のバグ**を発見した: Python側のnodeId文字クラスが`[A-Za-z0-9_.]+`（ドット許容・ハイフン不可）、frontend側が`[A-Za-z0-9_-]+`（ハイフン許容・ドット不可）と、互いに異なっていた（round20は既存のPython nodeIdクラスをそのまま流用し、suffix部分だけ追加したため見逃していた）。`node:crud-search-input.value.query`（実在するhyphenated nodeId形状、`ui-builder-preset-ecosystem-ssot.yaml`自身のhub_search_preset layout_treeで使用されている命名規則）がfrontendでは通りPythonでは拒否される具体的な不一致をparity testが検出した。Python側を`[A-Za-z0-9_-]+`（frontendと同一）へ修正し、SSOTへ「dot はpath区切りのみに使う、nodeId自体には使わない」ことを明記した。既存fixtureにnodeId内ドットへ依存するものが無いことをgrep確認済み。frontend 46 test・Python 42g/42h含む全check script（既知の無関係な7aフレークのみ残存、git stash確認済み）全pass。node_value_pathのnull中間値・array中間値・present-undefined-leaf・prototype key（constructor/toString）・多段traversal成功の5件のnegative/edge-case testも本roundで追加した（round20時点では非object値1パターンのみ証明していた）。
+
+**未着手のまま残る内容（正直な記録、round21が指摘した残り3項目）**:
+- **mutation confirmation workflow**: create_group/delete_groupは現状クリック一発で`confirmed:literal:true`を直接送るのみで、`enum-dictionary-ssot.yaml`が要求するpreview（dryRun表示）/validate/explicit confirm dialog/write/post-write rereadの完全なUXを構成していない。delete_groupの`enum_delete_group_confirm_input`（確認用required field）は表示されるが値は実際のvalidationへ接続されていない——round20で「正直な限定事項」として記録済みだが、round21はこれを明確な未達scopeとして再指摘しており、解消していない。
+- **cross-manifest response adoption**: `confirmProjectionEntryEmission`のadoptedManifestId一致チェックにより、ae280（get_group）等別manifestのレスポンスをae200自身のフィールドへ反映することは依然ブロックされたまま。round21はこのチェックを弱めることを明示的に禁止し、代わりにprojection ownership/response adoption/target node/expected response schema/request correlation/stale response rejectionを定義するgeneric response-binding contractの設計を要求しているが、本roundでは着手していない。
+- **残り7 action・統合UX・完全なnegative boundary証明群・`AdminEnumsRoster.tsx`/route撤去**: いずれも未着手のまま。
+
+### Governance NG boundary追記（round 16）
+
+- 本roundで修正した2件（capability_requirement欠落・grammar不一致）の完了をもって、admin-enum subBundleまたは`admin-surface-topology-seed-conversion` Bundle全体がimplementedであるかのように扱う——mutation confirmation workflow・cross-manifest response adoption・残り7 action・統合UX・negative boundary証明・route撤去のいずれも未着手である。
+- capability_requirementの検証をbare manifest自身へ複製し、axes manifest自身への正しい検証を回避する。
+- grammar parity修正を「frontendに合わせてPythonを直す」以外の方法（例えばfrontendの方をPythonの旧文字クラスに合わせる、両方を無関係な第三の文字クラスへ変更する等）で場当たり的に解決し、SSOTで定義した正本文字クラスと不整合にする。
+
 ---
 
 ## Bundle `admin-runtime-operation-dispatch-lane-determination`

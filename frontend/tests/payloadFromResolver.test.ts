@@ -477,3 +477,131 @@ Deno.test("payloadFromResolver: resolvePayloadFrom resolves a full delete_group-
     assertEquals(result.payload, { groupId: "row-uuid-1", confirmed: "true" });
   }
 });
+
+// ─── round 21 audit: exhaustive edge-case coverage for node:<id>.value.<path>
+// per docs/design/ui-builder-preset-ecosystem-ssot.yaml payloadFrom_resolver_contract
+// .recognized_source_patterns.node_value_path ────────────────────────────────
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<a>.<b> drills through nested objects (multi-segment success, not just single-segment)", () => {
+  const source: PayloadFromSource = {
+    kind: "node_value",
+    nodeId: "enum_table",
+    path: ["detail", "groupId"],
+  };
+  const nodeValues = { enum_table: { detail: { groupId: "nested-uuid-1" } } };
+  const result = resolvePayloadFromSource(source, nodeValues, {});
+  assertEquals(result.ok, true);
+  if (result.ok) assertEquals(result.value, "nested-uuid-1");
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<field> fails close (PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND) when an INTERMEDIATE segment is null", () => {
+  const source: PayloadFromSource = {
+    kind: "node_value",
+    nodeId: "enum_table",
+    path: ["detail", "groupId"],
+  };
+  const nodeValues = { enum_table: { detail: null } };
+  const result = resolvePayloadFromSource(source, nodeValues, {});
+  assertEquals(result.ok, false);
+  if (!result.ok) assertMatch(result.error, /PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND/);
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<field> fails close (PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND) when the tracked value itself is null", () => {
+  const source: PayloadFromSource = {
+    kind: "node_value",
+    nodeId: "enum_table",
+    path: ["groupId"],
+  };
+  const nodeValues = { enum_table: null };
+  const result = resolvePayloadFromSource(source, nodeValues, {});
+  assertEquals(result.ok, false);
+  if (!result.ok) assertMatch(result.error, /PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND/);
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<field> fails close (PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND) when the tracked value is an ARRAY, not an object — no implicit array-as-object fallback", () => {
+  const source: PayloadFromSource = {
+    kind: "node_value",
+    nodeId: "enum_table",
+    path: ["groupId"],
+  };
+  const nodeValues = { enum_table: [{ groupId: "row-uuid-1" }] };
+  const result = resolvePayloadFromSource(source, nodeValues, {});
+  assertEquals(result.ok, false);
+  if (!result.ok) assertMatch(result.error, /PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND/);
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<field> resolves ok when the field is PRESENT but its value is undefined — absent key vs. present-undefined-value distinction", () => {
+  const source: PayloadFromSource = {
+    kind: "node_value",
+    nodeId: "enum_table",
+    path: ["groupId"],
+  };
+  const nodeValues = { enum_table: { groupId: undefined } };
+  const result = resolvePayloadFromSource(source, nodeValues, {});
+  assertEquals(result.ok, true);
+  if (result.ok) assertEquals(result.value, undefined);
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<field> fails close for an Object.prototype-shaped field segment (constructor/toString) that was never actually set on the tracked object — own-property identity, not `in`", () => {
+  const source: PayloadFromSource = {
+    kind: "node_value",
+    nodeId: "enum_table",
+    path: ["constructor"],
+  };
+  const nodeValues = { enum_table: {} };
+  const result = resolvePayloadFromSource(source, nodeValues, {});
+  assertEquals(result.ok, false);
+  if (!result.ok) assertMatch(result.error, /PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND/);
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<field> parses correctly for a hyphenated nodeId with a dotted field suffix — nodeId grammar unchanged by this extension", () => {
+  const result = parsePayloadFromSource("node:crud-search-input.value.query");
+  assertEquals(result.kind, "node_value");
+  if (result.kind === "node_value") {
+    assertEquals(result.nodeId, "crud-search-input");
+    assertEquals(result.path, ["query"]);
+  }
+});
+
+// Round 21 grammar parity: the SAME literal string lists as
+// check_react_schema_topology_seed_translator.py's 42g/42h assertions against the Python
+// NODE_VALUE_RE — proves neither implementation accepts/rejects a string the other disagrees
+// on (docs/design/ui-builder-preset-ecosystem-ssot.yaml payloadFrom_resolver_contract
+// .recognized_source_patterns.node_value_path.cross_implementation_parity).
+const GRAMMAR_PARITY_ACCEPT = [
+  "node:enum_table.value",
+  "node:enum_table.value.groupId",
+  "node:enum_table.value.detail.groupId",
+  "node:crud-search-input.value.query",
+  "node:hub_search_input.value",
+];
+const GRAMMAR_PARITY_REJECT = [
+  "node:enum_table", // missing .value entirely
+  "node:enum_table.value.", // trailing dot, no segment
+  "node:.value", // empty nodeId
+  "node:enum_table.values", // "values" is not "value" -- no fuzzy prefix match
+  "event.row.id", // a different pattern kind entirely
+  "literal:node:enum_table.value.groupId", // literal: prefix wins, not a node_value match
+];
+
+Deno.test("payloadFromResolver: frontend NODE_VALUE_RE accepts every string the Python translator grammar accepts (round 21 parity list)", () => {
+  for (const raw of GRAMMAR_PARITY_ACCEPT) {
+    const result = parsePayloadFromSource(raw);
+    assertEquals(
+      result.kind,
+      "node_value",
+      `expected "${raw}" to parse as node_value but got "${result.kind}"`,
+    );
+  }
+});
+
+Deno.test("payloadFromResolver: frontend NODE_VALUE_RE rejects every string the Python translator grammar rejects (round 21 parity list)", () => {
+  for (const raw of GRAMMAR_PARITY_REJECT) {
+    const result = parsePayloadFromSource(raw);
+    assertEquals(
+      result.kind === "node_value",
+      false,
+      `expected "${raw}" NOT to parse as node_value but it did`,
+    );
+  }
+});

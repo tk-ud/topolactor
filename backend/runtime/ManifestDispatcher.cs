@@ -303,20 +303,45 @@ public class ManifestDispatcher
                                 Errors: [layerActionError]);
                         }
                     }
-                    else if (!IsGenericStructuralReadTargetRef(manifest.Topology, request.Layer, request.Action) &&
-                        !await IsBareManifestNavigationReadTargetRefAsync(
-                            manifest.Topology, request.Role, request.Layer, request.Action, ct))
+                    else if (!IsGenericStructuralReadTargetRef(manifest.Topology, request.Layer, request.Action))
                     {
-                        _logger.LogWarning(
-                            "ManifestDispatcher: target_ref '{TargetRef}' resolves to an admin_runtime manifest for a concrete operation (Layer={Layer} Action={Action}) but is not in manifest:<uuid>:<layer>:<action> format.",
-                            rawTargetRef, request.Layer, request.Action);
-                        return new EndpointResponseDto(
-                            Success: false,
-                            Emission: null,
-                            Errors: [new ValidationError(
-                                "TARGET_REF_ADMIN_RUNTIME_LAYER_ACTION_MISSING",
-                                $"target_ref '{rawTargetRef}' resolves to an admin_runtime manifest for a concrete operation " +
-                                $"(Layer='{request.Layer}' Action='{request.Action}') but is not in \"manifest:<uuid>:<layer>:<action>\" format.")]);
+                        var bareNavigationRead = await IsBareManifestNavigationReadTargetRefAsync(
+                            manifest.Topology, request.Role, request.Layer, request.Action, ct);
+                        if (!bareNavigationRead.Eligible)
+                        {
+                            _logger.LogWarning(
+                                "ManifestDispatcher: target_ref '{TargetRef}' resolves to an admin_runtime manifest for a concrete operation (Layer={Layer} Action={Action}) but is not in manifest:<uuid>:<layer>:<action> format.",
+                                rawTargetRef, request.Layer, request.Action);
+                            return new EndpointResponseDto(
+                                Success: false,
+                                Emission: null,
+                                Errors: [new ValidationError(
+                                    "TARGET_REF_ADMIN_RUNTIME_LAYER_ACTION_MISSING",
+                                    $"target_ref '{rawTargetRef}' resolves to an admin_runtime manifest for a concrete operation " +
+                                    $"(Layer='{request.Layer}' Action='{request.Action}') but is not in \"manifest:<uuid>:<layer>:<action>\" format.")]);
+                        }
+                        // Round 21 audit catch: the manifest checked by the ValidateCapabilityRequirement
+                        // call further below (after this whole if/else block) is `manifest` -- the BARE
+                        // target_ref manifest this branch exists specifically because it declares NO
+                        // dispatcher_mapping/ui_projection of its own (see
+                        // IsBareManifestNavigationReadTargetRefAsync's own doc comment). The REAL
+                        // operation-authority manifest for this Layer/Action is the axes-registered one
+                        // IsBareManifestNavigationReadTargetRefAsync resolved internally to read
+                        // identity_selector_read from -- that manifest's OWN capability_requirement (explicit
+                        // or inferred from its own runtime_mapping) must be honored here too, or an
+                        // operation-authority manifest that later declares a MORE RESTRICTIVE
+                        // capability_requirement than plain role=admin would be silently bypassed by anyone
+                        // reaching it via a bare manifest's target_ref instead of its own axes/target_ref.
+                        if (bareNavigationRead.CapabilityError is not null)
+                        {
+                            _logger.LogWarning(
+                                "ManifestDispatcher: capability requirement not met for bare-manifest-navigation-read operation authority (Layer={Layer} Action={Action}): {Code}",
+                                request.Layer, request.Action, bareNavigationRead.CapabilityError.Code);
+                            return new EndpointResponseDto(
+                                Success: false,
+                                Emission: null,
+                                Errors: [bareNavigationRead.CapabilityError]);
+                        }
                     }
                 }
             }
@@ -852,22 +877,50 @@ public class ManifestDispatcher
     /// operation-scope claim whatsoever. Adding a new identity-selector-compatible read action means
     /// authoring "identity_selector_read": true on that action's OWN axes-registered
     /// dispatcher_mapping entry (SSOT-owned seed data) — never editing this method.
+    ///
+    /// Round 21 audit catch: this method previously returned a bare bool, so its caller had no way
+    /// to also enforce the axes-registered manifest's OWN capability_requirement (explicit, or
+    /// inferred from that manifest's own runtime_mapping — ValidateCapabilityRequirement) — only the
+    /// BARE target_ref manifest's (necessarily empty, by this method's own dispatcher_mapping/
+    /// ui_projection preconditions) capability_requirement was ever checked, further below in
+    /// DispatchAsync. Today this is not yet an active bypass (list_manifests/get_hub_relations's
+    /// axes manifests both declare runtime_mapping.runtime_destination=admin_runtime, which
+    /// ValidateCapabilityRequirement's OWN inference rule already requires role=admin for — and the
+    /// bare target_ref manifest reaching this branch necessarily has the SAME runtime_destination,
+    /// since that is DispatchAsync's own outer gate condition for this whole branch — so the
+    /// practical role=admin requirement is coincidentally already enforced either way), but it is a
+    /// structural gap: an axes manifest that later declares a MORE RESTRICTIVE explicit
+    /// capability_requirement (e.g. a narrower role) than plain admin_runtime inference would be
+    /// silently bypassed by anyone reaching it through a bare manifest's target_ref. Returning the
+    /// resolved axesManifest's own ValidateCapabilityRequirement result alongside the eligibility
+    /// bool lets the caller fail close on it — this is NOT duplicating the bare manifest's own
+    /// (structurally empty) capability_requirement onto anything; it evaluates the axes manifest's
+    /// OWN declared authority, exactly as ResolveActiveManifestAsync's normal (non-target_ref) path
+    /// already would have.
     /// </summary>
-    private async Task<bool> IsBareManifestNavigationReadTargetRefAsync(
+    private readonly record struct BareManifestNavigationReadResult(
+        bool Eligible, ValidationError? CapabilityError);
+
+    private async Task<BareManifestNavigationReadResult> IsBareManifestNavigationReadTargetRefAsync(
         IReadOnlyList<JsonElement> topology, string? requestRole, string? requestLayer, string? requestAction,
         CancellationToken ct)
     {
-        if (requestLayer is null || requestAction is null) return false;
-        if (DispatcherMappingAxisAuthority.HasAnyDispatcherMapping(topology)) return false;
-        if (HasUiProjectionEntry(topology)) return false;
-        if (_manifestRepository is null) return false;
+        if (requestLayer is null || requestAction is null) return new(false, null);
+        if (DispatcherMappingAxisAuthority.HasAnyDispatcherMapping(topology)) return new(false, null);
+        if (HasUiProjectionEntry(topology)) return new(false, null);
+        if (_manifestRepository is null) return new(false, null);
 
         var axesManifest = await _manifestRepository.ResolveActiveManifestAsync(
             role: requestRole, target: "admin", layer: requestLayer, action: requestAction, ct: ct);
-        if (axesManifest is null) return false;
+        if (axesManifest is null) return new(false, null);
 
-        return DispatcherMappingAxisAuthority.IsDeclaredIdentitySelectorRead(
-            axesManifest.Topology, requestLayer, requestAction);
+        if (!DispatcherMappingAxisAuthority.IsDeclaredIdentitySelectorRead(
+            axesManifest.Topology, requestLayer, requestAction))
+        {
+            return new(false, null);
+        }
+
+        return new(true, ValidateCapabilityRequirement(axesManifest.Topology, requestRole));
     }
 
     /// <summary>

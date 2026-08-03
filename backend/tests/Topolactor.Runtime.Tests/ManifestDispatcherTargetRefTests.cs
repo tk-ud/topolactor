@@ -402,6 +402,54 @@ public class ManifestDispatcherTargetRefTests
     }
 
     [Fact]
+    public async Task DispatchAsync_TargetRef_BareManifest_AxesManifestOwnCapabilityRequirement_RoleMismatch_FailsClosed()
+    {
+        // Round 21 audit catch: the BARE target_ref manifest (KnownManifestId) declares no
+        // dispatcher_mapping/ui_projection/capability_requirement of its own (by this whole
+        // exemption's own precondition) -- previously ONLY that bare manifest's (necessarily empty)
+        // capability_requirement was ever checked, so a MORE RESTRICTIVE explicit
+        // capability_requirement declared on the axes-registered operation-authority manifest
+        // itself (here: required_role="super_admin", stricter than the request's "admin") was never
+        // consulted at all. Proves it now fails closed via that axes manifest's OWN requirement.
+        var repo = new ConfigurableManifestRepository(
+            KnownManifestId, status: "active", dispatcherMappingLayer: null, dispatcherMappingAction: null,
+            hasUiProjection: false,
+            adminAxesRegisteredOperation: ("admin", "hub_navigation", "get_hub_relations", true),
+            axesManifestCapabilityRequirementRole: "super_admin");
+        var dispatcher = BuildDispatcher(repo, new Dictionary<string, IDispatchableRuntime>
+        {
+            ["admin_runtime"] = new StubSuccessRuntime(),
+        });
+        var targetRef = $"manifest:{KnownManifestId}:hub_relations_read";
+
+        var response = await dispatcher.DispatchAsync(MakeAdminRuntimeRequest("hub_navigation", "get_hub_relations", targetRef));
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "AUTH_CAPABILITY_DENIED");
+    }
+
+    [Fact]
+    public async Task DispatchAsync_TargetRef_BareManifest_AxesManifestOwnCapabilityRequirement_RoleMatches_Succeeds()
+    {
+        // Same axes-manifest-owned capability_requirement as above, but matching the request's role
+        // -- proves the new check is a genuine role comparison, not an unconditional fail-close.
+        var repo = new ConfigurableManifestRepository(
+            KnownManifestId, status: "active", dispatcherMappingLayer: null, dispatcherMappingAction: null,
+            hasUiProjection: false,
+            adminAxesRegisteredOperation: ("admin", "hub_navigation", "get_hub_relations", true),
+            axesManifestCapabilityRequirementRole: "admin");
+        var dispatcher = BuildDispatcher(repo, new Dictionary<string, IDispatchableRuntime>
+        {
+            ["admin_runtime"] = new StubSuccessRuntime(),
+        });
+        var targetRef = $"manifest:{KnownManifestId}:hub_relations_read";
+
+        var response = await dispatcher.DispatchAsync(MakeAdminRuntimeRequest("hub_navigation", "get_hub_relations", targetRef));
+
+        Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
+    }
+
+    [Fact]
     public async Task DispatchAsync_TargetRef_BareManifest_HubNavigationGetHubRelations_NoAdminAxesRegistration_StillRejected()
     {
         // Proves the axes-registration re-check is actually load-bearing, not just the allowlist
@@ -700,7 +748,11 @@ internal sealed class ConfigurableManifestRepository(
     Guid knownManifestId, string status, string? dispatcherMappingLayer, string? dispatcherMappingAction,
     bool hasUiProjection = false, string? dispatcherMappingRole = "admin",
     (string Role, string Layer, string Action, bool IdentitySelectorRead)? adminAxesRegisteredOperation = null,
-    string? secondDispatcherMappingRole = null, string? capabilityRequirementRole = null)
+    string? secondDispatcherMappingRole = null, string? capabilityRequirementRole = null,
+    // Round 21: the axes-registered manifest ResolveActiveManifestAsync resolves for
+    // adminAxesRegisteredOperation's own OWN explicit capability_requirement -- distinct from
+    // capabilityRequirementRole above, which is the BARE target_ref manifest's own (LoadByIdAsync).
+    string? axesManifestCapabilityRequirementRole = null)
     : ManifestRepository(NullLogger<ManifestRepository>.Instance)
 {
     public override Task<ManifestRecord?> LoadByIdAsync(Guid manifestId, CancellationToken ct = default)
@@ -766,17 +818,22 @@ internal sealed class ConfigurableManifestRepository(
             string.Equals(action, reg.Action, StringComparison.Ordinal) &&
             string.Equals(role, reg.Role, StringComparison.Ordinal))
         {
+            var axesEntries = new List<object>
+            {
+                new
+                {
+                    type = "dispatcher_mapping", role = reg.Role, target = "admin", layer = reg.Layer, action = reg.Action,
+                    identity_selector_read = reg.IdentitySelectorRead,
+                },
+            };
+            if (axesManifestCapabilityRequirementRole is not null)
+            {
+                axesEntries.Add(new { type = "capability_requirement", required_role = axesManifestCapabilityRequirementRole });
+            }
             return Task.FromResult<ManifestRecord?>(new ManifestRecord(
                 ManifestId: Guid.NewGuid(),
                 RelationRegistryId: null,
-                Topology: JsonSerializer.SerializeToElement(new object[]
-                {
-                    new
-                    {
-                        type = "dispatcher_mapping", role = reg.Role, target = "admin", layer = reg.Layer, action = reg.Action,
-                        identity_selector_read = reg.IdentitySelectorRead,
-                    },
-                }).EnumerateArray().ToArray(),
+                Topology: JsonSerializer.SerializeToElement(axesEntries.ToArray()).EnumerateArray().ToArray(),
                 Status: "active"));
         }
         return Task.FromResult<ManifestRecord?>(null);

@@ -1237,6 +1237,44 @@ def main():
             aro_node is not None and aro_node.get("nodeId") == "confirm_button",
         )
 
+        # 42g (round 21 audit): the Python NODE_VALUE_RE grammar for payloadFrom's
+        # node:<nodeId>.value(.<path>)* pattern must accept/reject the IDENTICAL set of raw
+        # source strings the frontend's payloadFromResolver.ts NODE_VALUE_RE does -- proven via
+        # the SAME literal string list mirrored in frontend/tests/payloadFromResolver.test.ts's
+        # own "round 21 grammar parity" block, per
+        # docs/design/ui-builder-preset-ecosystem-ssot.yaml payloadFrom_resolver_contract
+        # .recognized_source_patterns.node_value_path.cross_implementation_parity. Neither
+        # implementation may accept or reject a string the other disagrees on.
+        sys.path.insert(0, str(REPO_ROOT / ".agent" / "scripts"))
+        import react_schema_topology_seed_translator as translator_module  # noqa: E402
+        node_value_re = translator_module.NODE_VALUE_RE
+        grammar_parity_accept = [
+            "node:enum_table.value",
+            "node:enum_table.value.groupId",
+            "node:enum_table.value.detail.groupId",
+            "node:crud-search-input.value.query",
+            "node:hub_search_input.value",
+        ]
+        grammar_parity_reject = [
+            "node:enum_table",  # missing .value entirely
+            "node:enum_table.value.",  # trailing dot, no segment
+            "node:.value",  # empty nodeId
+            "node:enum_table.values",  # "values" is not "value" -- no fuzzy prefix match
+            "event.row.id",  # a different pattern kind entirely
+            "literal:node:enum_table.value.groupId",  # literal: prefix wins, not a node_value match
+        ]
+        expect(
+            "42g. Python NODE_VALUE_RE accepts every string the frontend grammar accepts "
+            "(node:<id>.value and node:<id>.value.<path> forms, hyphenated nodeIds included)",
+            all(node_value_re.match(s) for s in grammar_parity_accept),
+        )
+        expect(
+            "42h. Python NODE_VALUE_RE rejects every string the frontend grammar rejects "
+            "(missing .value, trailing dot with no segment, empty nodeId, near-miss suffix, "
+            "a different pattern kind, and literal: prefix precedence)",
+            not any(node_value_re.match(s) for s in grammar_parity_reject),
+        )
+
         # Negative: an Action declaring this lane but never reaching a tensor node (simulated by
         # validating adoption candidates directly with an empty tensorAdoptionCandidates bucket)
         # must fail closed, mirroring the pre-existing RUNTIME_INTERACTIONS_NOT_PERSISTED_LAYOUT_PATH

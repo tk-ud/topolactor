@@ -140,12 +140,26 @@ TAG_LINE_RE = re.compile(r'^\[(?P<slash>/)?(?P<kind>[A-Za-z_][A-Za-z0-9_]*)(?P<a
 ATTR_RE = re.compile(r'([A-Za-z_][A-Za-z0-9_]*)=("(?:[^"\\]|\\.)*"|\S+)')
 HTML_TAG_RE = re.compile(r'<\s*[a-zA-Z][a-zA-Z0-9]*(\s[^<>]*)?/?\s*>')
 
+# nodeId grammar [A-Za-z0-9_-]+ (round 21 audit fix): MUST match
+# frontend/runtime/payloadFromResolver.ts's own NODE_VALUE_RE exactly --
+# docs/design/ui-builder-preset-ecosystem-ssot.yaml payloadFrom_resolver_contract
+# .recognized_source_patterns.node_value_path.nodeId_grammar declares this the ONE
+# canonical_layout_node_identity vocabulary (no dots -- a dot is exclusively the
+# path-suffix separator, never part of a nodeId itself). This Python regex previously
+# allowed a dot INSIDE the nodeId segment (a pre-existing, undetected divergence from the
+# frontend's hyphen-inclusive/dot-exclusive class, predating round 20's suffix addition) --
+# caught by check_react_schema_topology_seed_translator.py's 42g/42h paired grammar-parity
+# assertions (round 21), which proved "node:crud-search-input.value.query" (a real,
+# hyphenated nodeId shape used elsewhere in this codebase, e.g.
+# ui-builder-preset-ecosystem-ssot.yaml's own hub_search_preset layout_tree) was accepted by
+# the frontend but rejected by this Python regex.
+#
 # Trailing (?:\.[A-Za-z0-9_]+)* mirrors frontend/runtime/payloadFromResolver.ts's
 # NODE_VALUE_RE dotted-path-drilling extension (round 20 -- admin-uibuilder-ui-
 # structure-wiring-ssot.yaml admin_runtime_selected_row_carrier_contract): a
 # tracked node value that is an object (e.g. a table's selected row) can have a
 # single field extracted, e.g. node:enum_table.value.groupId.
-NODE_VALUE_RE = re.compile(r'^node:[A-Za-z0-9_.]+\.value(?:\.[A-Za-z0-9_]+)*$')
+NODE_VALUE_RE = re.compile(r'^node:[A-Za-z0-9_-]+\.value(?:\.[A-Za-z0-9_]+)*$')
 EVENT_PATH_RE = re.compile(r'^event(\.[A-Za-z0-9_]+)+$')
 LITERAL_RE = re.compile(r'^literal:.*$')
 

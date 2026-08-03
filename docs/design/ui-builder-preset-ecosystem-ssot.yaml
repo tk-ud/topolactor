@@ -159,6 +159,57 @@ ui_builder_preset_ecosystem_ssot:
         example: "node:hub_search_input.value"
         resolves_to: current value of the named canvas node (tracked via onNodeValueChange)
         error_when_missing: PAYLOAD_FROM_NODE_NOT_FOUND
+      node_value_path:
+        # Round 21 (PR #600 admin-enum subBundle, admin_runtime_selected_row_carrier_contract):
+        # promoted from implementation-comment-only to this owning SSOT after audit — the frontend
+        # runtime, the Python translator, and this contract must all derive from this ONE grammar
+        # definition, never three independently-maintained regexes.
+        syntax: "node:<nodeId>.value.<segment>(.<segment>)*"
+        nodeId_grammar: >
+          IDENTICAL to node_value's own <nodeId> grammar — this is not a separate vocabulary.
+          canonical_layout_node_identity (see components_wiring_execution_lane / layout node
+          identity SSOT: an ASCII nodeId of [A-Za-z0-9_-]+, the same character class every
+          layout_schema_json / ui_topology_tensor nodeId already uses). No dots, no path
+          metacharacters — a nodeId containing "." would be ambiguous against this suffix
+          grammar and is out of scope (never authored anywhere in this codebase today).
+        segment_grammar: "[A-Za-z0-9_]+ (no hyphens — matches a JS object property key, not a nodeId)"
+        example: "node:enum_table.value.groupId"
+        resolves_to: >
+          own-property dotted-path traversal INTO the named canvas node's CURRENT tracked value
+          (the same value bare node_value resolves to), when that value is a plain object.
+          Symmetric with event_path's own traversal semantics below (own-property identity check,
+          not `in`/truthiness — a nodeId/segment coinciding with an inherited Object.prototype key,
+          e.g. "constructor"/"toString", must never resolve to an inherited function).
+        array_intermediary: >
+          An array value at any traversed segment (including the tracked node value itself) is
+          NOT traversable — fails PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND, the same as a non-object
+          scalar. This contract does not define array-index traversal (no "[0]" or bare numeric
+          segment syntax); a future need for it requires a new, explicit grammar addition here
+          first, never an implicit array-as-object fallback.
+        null_intermediary: >
+          A null value at any traversed segment fails PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND
+          (typeof null === "object" in JS, but null is explicitly excluded from "traversable",
+          identical to event_path's own null handling).
+        present_undefined_leaf: >
+          A present-but-undefined VALUE at the final segment resolves ok (mirrors bare
+          node_value's own "undefined tracked value is valid input, not an error" contract) — only
+          an ABSENT KEY (own-property check fails) is PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND, the
+          same "absent key vs. present-undefined-value" distinction event_path already draws.
+        backward_compatibility: >
+          A bare "node:<nodeId>.value" (no trailing ".<segment>") is UNCHANGED — same
+          PAYLOAD_FROM_NODE_NOT_FOUND-only error surface, same resolved value (the tracked value
+          itself, whatever its shape) as before this pattern existed. This is a strict grammar
+          EXTENSION (the segment suffix is optional and additive), not a redefinition of the
+          existing bare form.
+        error_when_missing_node: PAYLOAD_FROM_NODE_NOT_FOUND (same as bare node_value — the
+          nodeId itself is untracked; the path suffix is never reached)
+        error_when_untraversable: PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND
+        cross_implementation_parity: >
+          frontend/runtime/payloadFromResolver.ts's NODE_VALUE_RE and
+          .agent/scripts/react_schema_topology_seed_translator.py's NODE_VALUE_RE must accept
+          and reject the identical set of raw source strings for this pattern — proven by a
+          paired positive/negative fixture set in both check_react_schema_topology_seed_translator.py
+          and frontend/tests/payloadFromResolver.test.ts, not by inspection alone.
       event_path:
         syntax: "event.<segment>.<segment>..."
         examples:
@@ -184,6 +235,7 @@ ui_builder_preset_ecosystem_ssot:
     error_codes:
       - PAYLOAD_FROM_NODE_NOT_FOUND
       - PAYLOAD_FROM_EVENT_PATH_NOT_FOUND
+      - PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND
       - PAYLOAD_FROM_UNRESOLVED_REF
 
   # ---------------------------------------------------------------------------
