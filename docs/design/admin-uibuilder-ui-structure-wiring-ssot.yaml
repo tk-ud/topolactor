@@ -1160,12 +1160,64 @@ admin_uibuilder_ui_structure_wiring_ssot:
         failed canonical redispatch surfaces the warning banner and retains the stale-but-real DOM
         without resending the write or reopening the modal, and a canonical redispatch forces a
         stale prop-bound tracked value back to the DB-authoritative one while a passive SSE refresh
-        of the same value leaves an in-progress edit untouched). Not yet done (admin-enum subBundle
-        scope, tracked in .agent/tasks/todo.md, not restated here as owning SSOT authority): dryRun
-        preview wired into the confirm-modal UI flow for any of the 7 write actions, items browse
-        UX via the existing get_group read composed into this surface's own parent read (no new
-        list_items action, no direct child-Emission adoption), the full negative-boundary matrix,
-        and AdminEnumsRoster.tsx/route retirement.
+        of the same value leaves an in-progress edit untouched). Not yet done as of round_27_28
+        (admin-enum subBundle scope, tracked in .agent/tasks/todo.md, not restated here as owning
+        SSOT authority): dryRun preview wired into the confirm-modal UI flow for any of the 7 write
+        actions, items browse UX via the existing get_group read composed into this surface's own
+        parent read (no new list_items action, no direct child-Emission adoption), the full
+        negative-boundary matrix, and AdminEnumsRoster.tsx/route retirement.
+      dryrun_preview_gated_confirm_modal: >-
+        preview-gap round (2026-08-04). Generic runtime boundary contract, not admin-enum-specific
+        -- applies to ANY node whose open/action trigger carries an admin_runtime_dispatch_override_
+        wiring override paired with a secondaryDisclosureAction that opens a confirm surface: that
+        trigger's dispatch is authored with the SAME target_ref/field-source mapping the eventual
+        confirmed write inside the opened surface uses, differing only in payload.dryRun=literal:true
+        instead of payload.confirmed=literal:true (the SAME generic mutation_confirmation_contract
+        preview/confirm vocabulary admin-normal-surface-projection-seed-ssot.yaml already declares
+        for team_markdown's saved-view-update contract -- never a new preview mechanism). The
+        confirm surface's own open (secondaryDisclosureActionType=openModal) is deferred to that
+        dryRun dispatch's own success via the SAME deferLocalStateMutationToDispatchSuccess
+        generic hook a Confirm button's own secondaryDisclosureActionType=closeModal already used
+        (frontend/runtime/runtimeComponentFactory.ts emitBoundEvent) -- no new gating mechanism.
+        A settled dryRun preview result is classified purely by the dispatched request's OWN
+        resolved payload.dryRun flag (RuntimeDispatchResultContext.dryRun, forwarded from
+        dispatchRuntimeComponentCommandAndForwardResult -- never inferred from operation name,
+        nodeId, or manifest UUID): on preview success, ProjectionShell.tsx's
+        handleRuntimeDispatchResult takes no further action beyond what the deferred local-state
+        mutation (opening the confirm surface) already did -- it is NEVER classified the same as a
+        settled CONFIRMED write's success, and never triggers refreshCurrentManifestAsync's
+        canonical_reread (round_27_28's own child-write-success trigger remains reserved for an
+        actual confirmed write landing). On preview failure, the SAME generic settled-dispatch-
+        failure surfacing round_27_28 already described as intended but had not yet implemented
+        applies uniformly (result.errors[0].message via the existing non-destructive refreshWarning
+        banner) -- covering a preview's own validation failure and a confirmed write's own backend
+        rejection alike, never a preview-specific code path. Typed field values and the tracked
+        table-row selection are unaffected by either outcome, since neither branch touches the live
+        node value tracker or emission state at all -- retention falls out of doing nothing, not a
+        dedicated preservation mechanism. Confirm re-resolves the SAME payloadFrom mapping fresh
+        from current node values at its own click time (unchanged pre-existing generic behavior).
+        Proof: db/seed_empty.sql's ae204/ae206 (regenerated via
+        .agent/tests/fixtures/react-schema-topology-seed-translator/admin-enum-ae200.input.json,
+        never hand-edited) carries this shape for all 7 write actions;
+        backend/tests/Topolactor.Integration.Tests/AdminEnumHubRelationUiProjectionLiveDbTests.cs's
+        EachWriteActionEmbeddedBehindOwnConfirmModal_StructurallyResolves theory (extended with the
+        expected preview field source) plus the two dedicated create_group/delete_group node tests
+        prove this live-DB, structurally, for all 7 operations;
+        frontend/tests/projectionShellAdminRuntimeWritePayloadCapture.test.ts's preview-gap shared
+        scenario (production ProjectionShell mount, all 7 operations table-driven) proves failed-
+        preview-never-opens-with-error-surfaced, succeeded-preview-opens-without-adopting-state-or-
+        triggering-canonical-reread, Cancel-never-dispatches, and Confirm-re-resolves-fresh-and-
+        dispatches-confirmed. A generic Section-ownable-Action-lane addition
+        (admin_runtime_dispatch_override_wiring, alongside the pre-existing disclosure_state_wiring)
+        was required in react_schema_topology_seed_translator.py so this preview trigger button can
+        legally sit directly under a Section the same way its disclosure-only predecessor did — see
+        that file's SECTION_OWNABLE_ACTION_LANES comment for the narrow-scope rationale (paired-
+        with-a-Modal-opening-secondaryDisclosureAction only, never a bare ungated mutation). Not yet
+        done (admin-enum subBundle scope, unchanged from round_27_28): items browse UX, the full
+        negative-boundary matrix (this round proves structural wiring + core preview success/
+        failure/retention/no-canonical-reread for all 7 operations, not the complete existing
+        delete_group-scale negative matrix replicated across all 7), and AdminEnumsRoster.tsx/route
+        retirement.
     manifest_topology_boundary:
       rule: >-
         manifest.topology entries for this surface (ui_projection type per

@@ -1438,6 +1438,37 @@ PR #600（round14〜24、コミット履歴は上記の各round実装記録を�
 - ae200のtranslator sourceは`.agent/tests/fixtures/react-schema-topology-seed-translator/admin-enum-ae200.input.json`、生成物は`db/seed_empty.sql`のae204/ae206（`components_layout_design.layout_schema_json`/`ui_topology_tensor.layout_patch_json`）。generated seedを直接手編集せず、translator sourceを直し再生成すること（round26で確立した手順）。
 - backend側のadmin-enum write/read actionは`AdminEnumHubRelationUiProjectionLiveDbTests.cs`にlive-DB testが揃っている。
 
+### admin-enum subBundle 実装記録（2026-08-04 round 30 — 未着手優先度1位だったpreview（dryRun）のUI配線を全7 write actionへ実装。owner決定済みの既存構成（child response非採用、ae200 canonical reread、expected target identity、tracker clear、refresh ordering）は無変更のまま維持）
+
+**round30の指示**: 現行todoが定義するBundle scopeを再確認し、最上位未処理だったpreview/dryRun confirmation workflowについて、SSOT/wiring/test/production実装を全7 enum_dictionary write operationで整合させること。dryRun成功時のみconfirmation Modalを開き、失敗時はModalを開かずvalidation errorを明示、preview後もtyped値とselectionを保持、Confirm時は最新node valueからpayloadを再解決、Cancelはwriteしない、confirmed write成功後のみae200 canonical rereadを行う、という6点が受入条件。
+
+**1. 設計方針（実装前に確認・既存機構の純粋な組み合わせで実現）**: open/actionボタン（従来`wiringLane=disclosure_state_wiring`でopenModalのみ、write権限なし）を、Confirmボタンと全く同じ`admin_runtime_dispatch_override_wiring`（`dispatchTargetRefByTrigger`/`dispatchPayloadFromByTrigger`）へ変更し、Confirmと同じtarget_ref・同じ業務fieldのpayloadFromマッピングを共有しつつ`confirmed:literal:true`の代わりに`dryRun:literal:true`を持たせた。Modalを開く動作は`secondaryDisclosureActionType=openModal`（Confirmボタンが`secondaryDisclosureActionType=closeModal`で既に使っている、dispatch成功後にのみ適用される`deferLocalStateMutationToDispatchSuccess`機構と同一のもの）へ変更——新しいgating機構・新しいactionType・新しいruntime laneは一切追加していない。dryRun成功時のみ（`result.success`のみを見る既存の汎用チェック）Modalが開き、失敗時はModal開放処理自体が適用されない（既存の汎用挙動そのまま）。
+
+**2. 発見した唯一の新規欠落（実装前に発見・解消）**: `.agent/scripts/react_schema_topology_seed_translator.py`の`SECTION_OWNABLE_ACTION_LANES`が`disclosure_state_wiring`のみを許可しており、`admin_runtime_dispatch_override_wiring`を直下に持つActionをSection直下に置けなかった（`ACTION_NOT_OWNED_BY_FORM_OR_WORKFLOW`）。open buttonは元々Section直下にいる（Modalの外）ため、このガードを`admin_runtime_dispatch_override_wiring`（ただし常にModalを開くsecondaryDisclosureActionを伴う場合のみ、という設計意図をコメントに明記）へも拡張した——既存の否定的test（check 40、`external_instance_wiring`を使う）には触れない、最小限の拡張。
+
+**3. dryRun成功/失敗の分類（新規、汎用）**: `RuntimeDispatchResultContext`へ`dryRun: boolean`を追加（`RuntimeDispatchSpec.payload.dryRun`の実際に解決された値から導出、backend`IsTruthyPayloadFlag`と同じtrue/"true"受理）。`ProjectionShell.tsx`の`handleRuntimeDispatchResult`で、cross-manifestな設定済みresultが`context.dryRun===true`の場合は状態採用もcanonical rerereadも一切行わない（NG軸「dryRun成功をconfirmed write成功と同一分類してcanonical rerereadを起動する」を明示的に回避）。`!result.success`の場合は（dryRun/confirmed問わず汎用に）`result.errors[0].message`を既存の`refreshWarning`非破壊banner経由で表示するよう新規追加した——従来はこの経路の失敗が完全に無言で握り潰されていた（round27/28自身が「(b) error display」を意図として記述しながら未実装だった箇所）。
+
+**4. seed再生成**: `.agent/tests/fixtures/react-schema-topology-seed-translator/admin-enum-ae200.input.json`の7つのopen/actionボタン宣言のみを書き換え、`generate-react-schema`→`generate-topology-seed`を実行しzero validationErrorsを確認、`db/seed_empty.sql`のae204/ae206へverbatim転記した。**転記時に発見・是正した実装ミス（正直に記録）**: `ae206`（tensor）には翻訳器の自動生成に含まれない、過去round（round14/20）で直接手パッチされていた2種の内容——`enum_table`ノード自体（columns/propBindings、Table recordはtranslatorがtensor化しない）と、7つの`*_confirm_modal`ノードそれぞれの`propsJson`（title/body/open状態、Modal recordのpropsJsonもtranslatorは生成しない）——が存在した。最初の verbatim 上書きでこの2種を丸ごと消してしまい、backend live-DB testで`enum_table.PropsJson`がnullになる形で発覚した。旧ae206から該当ノードを個別に抽出し、新規生成物へマージしてから書き込み直すことで解消した——今後この2種の内容はtranslator自体が生成するまで、再生成のたびに同様のマージが必要である（このBundle固有の既知の限定事項として引き継ぐ）。
+
+**5. test証明**: `backend/tests/Topolactor.Integration.Tests/AdminEnumHubRelationUiProjectionLiveDbTests.cs`の既存`EachWriteActionEmbeddedBehindOwnConfirmModal_StructurallyResolves`Theory（7 InlineData）と、create_group/delete_group個別testのopen buttonアサーションを、「dispatchなし」から「対応するae21x〜27x targetへのdryRun previewを持つ」へ全面更新——実PostgreSQL経由で全7 operation分green（`bash .agent/tests/check-backend-tests.sh`、backend_runtime_tests/backend_db_continuity_tests共にPASS、既知の無関係stale test除き回帰なし）。`frontend/tests/projectionShellAdminRuntimeWritePayloadCapture.test.ts`のround26 shared scenario testを、preview成功/失敗/値保持/no-canonical-reread/Cancel/Confirm freshを全7 operation table-drivenで証明するtestへ全面書き換え（型チェック`deno check`clean、ロジック単体`--filter`実行でassertion全pass。**正直な既知の制限**: このsandbox環境ではDeno 2.0.0/2.1.4いずれでも、本ファイル内の`ProjectionShell`実マウント系testが（変更前から存在する、私が触っていないtestも含めて）テスト本体成功後に`Leaks detected`という環境依存のresource sanitizer誤検出でFAILする——baseline（変更前コミット）と変更後で失敗test数・内容を完全比較し、新規失敗が皆無であることを確認済み。CIの実行環境がこの問題を再現するかは未確認であり、次のAgentはCI結果を実際に確認すること）。
+
+**6. SSOT記録**: `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`の`wiring_mode`配下（round_21_hardening/round_27_28_settled_child_dispatch_result_authorityと同じ階層）へ`dryrun_preview_gated_confirm_modal`を新設し、上記の汎用契約を記録した。
+
+**未着手のまま残る内容（正直な記録）**:
+- **items browse UX**: round22から変わらず未着手。既存`get_group`（ae280）をae200自身のparent readへ構成する方針は未調査のまま。
+- **完全なnegative boundary matrix（全7 operation × 全シナリオ）**: 本roundはpreview成功/失敗/値保持/no-canonical-reread/Cancel/Confirm freshの6軸を7 operation全部でstructurally+DOM証明したが、round21以前がdelete_group1本に集中させた「missing record／duplicate index／referenced delete／role mismatch」等のフルnegative matrixをpreview軸へ横展開してはいない。
+- **`enum_confirm_form`/`enum_form`/`enum_confirm_button`の再監査**: round21〜29から変わらず未着手。
+- **`AdminEnumsRoster.tsx`/`/admin/enums`のthin_projection_wrapper route撤去**: items browse UX・完全negative boundaryのいずれも未達のため、parity成立の前提を満たしていない。
+
+これらを次roundへ明示的に引き継ぐ。
+
+### Governance NG boundary追記（round 30）
+
+- 本roundのpreview配線完了をもって、admin-enum subBundleまたは`admin-surface-topology-seed-conversion` Bundle全体がimplementedであるかのように扱う——items browse UX・完全negative boundary・route撤去のいずれも未達である。
+- dryRun成功をconfirmed write成功と同一分類してcanonical rerereadを起動する——本round自身が明示的に回避した設計。`context.dryRun`による分岐を除去しない。
+- open/actionボタンのpreview dispatchを、Confirmボタンとは別の新規actionType/payloadFrom解決経路/runtime laneとして実装する——既存の`admin_runtime_dispatch_override_wiring`＋`deferLocalStateMutationToDispatchSuccess`の純粋な組み合わせのみで実現すること。
+- `db/seed_empty.sql`のae204/ae206を、translator再生成の結果でverbatim上書きする際に、`enum_table`ノードおよび各`*_confirm_modal`ノードの手動propsJson/propBindingsパッチを消失させる——本round自身が発見・是正した実装ミスであり、次のtranslator再生成でも同じマージ作業が必要。
+
 ---
 
 ## Bundle `admin-runtime-operation-dispatch-lane-determination`

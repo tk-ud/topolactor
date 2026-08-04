@@ -24,10 +24,24 @@ type NormalizedDesign = {
  * the manifest that was targeted, rather than inferring "this must be an ordinary cross-manifest
  * child response" merely because its manifestId differs from whatever the caller currently has
  * adopted. See ProjectionShell.tsx's handleRuntimeDispatchResult.
+ *
+ * dryRun (preview-gap round): whether the dispatched request's OWN resolved payload carried a
+ * truthy `dryRun` field — mirrors backend AdminRuntimeMasterRoster.cs's own IsTruthyPayloadFlag
+ * acceptance of both the JSON boolean `true` and the JSON string `"true"` (a data-defined
+ * literal:true payloadFrom source always resolves to a string, never a JS boolean, at the wire —
+ * see AdminRuntimeMasterRoster.cs's own comment on this exact point). This is the SAME generic
+ * payload.dryRun / payload.confirmed mutation_confirmation_contract vocabulary
+ * admin-normal-surface-projection-seed-ssot.yaml already declares for ANY surface's write preview
+ * (team_markdown's saved-view-update contract uses the identical flag), never an operation name,
+ * nodeId, manifest UUID, or admin-enum-specific field. A caller uses this to tell a genuine
+ * mutating write's settled result apart from a non-mutating preview probe's settled result,
+ * without inspecting response content or hardcoding either side's identity.
  */
 export type RuntimeDispatchResultContext = {
   /** The dispatchSpec.targetRef that was actually sent, if any (e.g. "manifest:<uuid>:<wiringKey>"). */
   targetRef?: string;
+  /** Whether the dispatched request's own resolved payload.dryRun was truthy. */
+  dryRun: boolean;
 };
 
 export type RuntimeComponentSpec = {

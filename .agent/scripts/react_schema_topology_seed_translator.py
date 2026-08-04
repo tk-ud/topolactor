@@ -123,16 +123,24 @@ LABEL_REQUIRED_UNITS = set(ALL_TAGGABLE_UNITS)
 # crud_cancel_button, whose parentNodeId is "crud_create_modal" (a Modal, no Form wrapper).
 VALID_ACTION_OWNER_NODE_KINDS = {"Form", "Workflow", "Modal"}
 
-# A Section may ALSO directly own an Action, but only when that Action's own wiringLane is
-# disclosure_state_wiring (round 24) -- a pure UI-local disclosure trigger with no backend dispatch
-# authority at all, verified against the SAME fixture: crud_add_button/crud_search_button (plain
-# trigger buttons, not mutations) have parentNodeId "crud_shell", a bare Section, no Form at all.
-# Deliberately NOT extended to every lane: check_react_schema_topology_seed_translator.py's own
-# check 40 proves a REAL dispatch Action (external_instance_wiring) injected directly under a
-# Section must still be rejected -- unconditionally allowing Section as an Action owner would
-# silently defeat that protection. Only the narrowest lane this round's own evidence supports is
-# added, not a blanket exception.
-SECTION_OWNABLE_ACTION_LANES = {"disclosure_state_wiring"}
+# A Section may ALSO directly own an Action, but only when that Action's own wiringLane is one of
+# these two (round 24 + preview-gap round): disclosure_state_wiring is a pure UI-local disclosure
+# trigger with no backend dispatch authority at all, verified against the SAME fixture:
+# crud_add_button/crud_search_button (plain trigger buttons, not mutations) have parentNodeId
+# "crud_shell", a bare Section, no Form at all. admin_runtime_dispatch_override_wiring was added
+# for the SAME structural role a disclosure_state_wiring open-trigger button already occupies
+# directly under a Section (a mutation_confirmation_contract preview_dictionary_delta trigger --
+# admin-normal-surface-projection-seed-ssot.yaml -- that dispatches a non-mutating
+# payload.dryRun=true probe to the SAME target manifest/fields the eventual confirmed write inside
+# the Modal uses, deferring its own secondaryDisclosureActionType=openModal to that dispatch's
+# success): it is never a bare, ungated mutation Action sitting under a Section on its own, always
+# paired with a secondaryDisclosureAction that only ever OPENS a Modal (never a raw create/update/
+# delete with no confirm step to follow). Deliberately NOT extended to every lane:
+# check_react_schema_topology_seed_translator.py's own check 40 proves a REAL dispatch Action
+# (external_instance_wiring) injected directly under a Section must still be rejected --
+# unconditionally allowing Section as an Action owner would silently defeat that protection. Only
+# the narrowest lanes this round's own evidence supports are added, not a blanket exception.
+SECTION_OWNABLE_ACTION_LANES = {"disclosure_state_wiring", "admin_runtime_dispatch_override_wiring"}
 
 UNIT_TO_NODE_KIND = {
     "projection": "Projection",

@@ -21,6 +21,7 @@ import {
 } from "../runtime/visualLayoutUtils.ts";
 import type { DispatchResponse, Emission } from "../api/dispatch.ts";
 import type { RuntimeDispatchSpec } from "../runtime/frontendScheduler.ts";
+import type { RuntimeDispatchResultContext } from "../runtime/runtimeComponentAdapter.ts";
 import { ensureRuntimeComponentRegistryInitialized } from "../runtime/runtimeComponentRegistry.ts";
 
 const ADMIN_ENUM_MANIFEST_ID = "00000000-0000-0000-0000-0000000ae200";
@@ -450,7 +451,7 @@ Deno.test("renderEmission: onNodeValueChange option registers per-node closures 
 
 Deno.test("renderEmission: onRuntimeDispatchResult option registers per-node closures carrying nodeId and forwards the dispatch identity context (round 29)", () => {
   ensureRuntimeComponentRegistryInitialized();
-  const captured: Array<[string, DispatchResponse, { targetRef?: string }]> = [];
+  const captured: Array<[string, DispatchResponse, RuntimeDispatchResultContext]> = [];
   const emission: Emission = {
     layoutId: "layout-rdr-001",
     layoutNodes: [
@@ -473,7 +474,10 @@ Deno.test("renderEmission: onRuntimeDispatchResult option registers per-node clo
     success: true,
     emission: { layoutId: "layout-rdr-001", data: { ok: true } },
   };
-  const fakeContext = { targetRef: "manifest:ae230-uuid:enum_dictionary:delete_group" };
+  const fakeContext: RuntimeDispatchResultContext = {
+    targetRef: "manifest:ae230-uuid:enum_dictionary:delete_group",
+    dryRun: false,
+  };
   specs[0].runtimeSpec!.onRuntimeDispatchResult?.(fakeResult, fakeContext);
   assertEquals(captured, [["node-rdr-1", fakeResult, fakeContext]]);
 });

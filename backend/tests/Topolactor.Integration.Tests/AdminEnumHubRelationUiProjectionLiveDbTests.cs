@@ -178,12 +178,22 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         Assert.Contains("node:enum_create_group_name_input.value", payloadFromByTriggerText);
         Assert.Contains("literal:true", payloadFromByTriggerText);
 
-        // The visible Create trigger itself carries no write authority -- clicking it can only
-        // open the modal (same gating class as delete_group's Delete trigger).
+        // preview-gap round: the visible Create trigger now ALSO carries a non-mutating dryRun
+        // preview dispatch to the SAME ae210 target -- the modal only opens once that preview
+        // dispatch settles successfully (deferred secondaryDisclosureActionType=openModal), never
+        // unconditionally on click.
         var createGroupButtonNode = Assert.Single(
             entryResponse.Emission!.LayoutNodes!, n => n.NodeId == "enum_create_group_button");
-        Assert.Null(createGroupButtonNode.DispatchTargetRefByTrigger);
-        Assert.Null(createGroupButtonNode.DispatchPayloadFromByTrigger);
+        Assert.NotNull(createGroupButtonNode.DispatchTargetRefByTrigger);
+        Assert.Contains(
+            "manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group",
+            createGroupButtonNode.DispatchTargetRefByTrigger!.Value.GetRawText());
+        Assert.NotNull(createGroupButtonNode.DispatchPayloadFromByTrigger);
+        var previewPayloadFromText = createGroupButtonNode.DispatchPayloadFromByTrigger!.Value.GetRawText();
+        Assert.Contains("node:enum_create_group_name_input.value", previewPayloadFromText);
+        Assert.Contains("\"dryRun\"", previewPayloadFromText);
+        Assert.Contains("literal:true", previewPayloadFromText);
+        Assert.DoesNotContain("confirmed", previewPayloadFromText);
         Assert.NotNull(createGroupButtonNode.RuntimeInteractions);
         Assert.Contains("openModal", createGroupButtonNode.RuntimeInteractions!.Value.GetRawText());
 
@@ -312,13 +322,22 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         Assert.Contains("node:enum_table.value.groupId", payloadFromByTriggerText);
         Assert.Contains("literal:true", payloadFromByTriggerText);
 
-        // The visible Delete trigger itself carries no write authority at all -- clicking it can
-        // only open the modal (proven at the frontend runtime layer; here we prove the seed gives
-        // it nothing to dispatch even if that gating were ever bypassed).
+        // preview-gap round: the visible Delete trigger now ALSO carries a non-mutating dryRun
+        // preview dispatch to the SAME ae230 target (groupId re-resolved fresh from enum_table's
+        // own tracked selected-row value, same source the Confirm button itself uses) -- the modal
+        // only opens once that preview dispatch settles successfully.
         var deleteGroupButtonNode = Assert.Single(
             entryResponse.Emission!.LayoutNodes!, n => n.NodeId == "enum_delete_group_button");
-        Assert.Null(deleteGroupButtonNode.DispatchTargetRefByTrigger);
-        Assert.Null(deleteGroupButtonNode.DispatchPayloadFromByTrigger);
+        Assert.NotNull(deleteGroupButtonNode.DispatchTargetRefByTrigger);
+        Assert.Contains(
+            "manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group",
+            deleteGroupButtonNode.DispatchTargetRefByTrigger!.Value.GetRawText());
+        Assert.NotNull(deleteGroupButtonNode.DispatchPayloadFromByTrigger);
+        var deletePreviewPayloadFromText = deleteGroupButtonNode.DispatchPayloadFromByTrigger!.Value.GetRawText();
+        Assert.Contains("node:enum_table.value.groupId", deletePreviewPayloadFromText);
+        Assert.Contains("\"dryRun\"", deletePreviewPayloadFromText);
+        Assert.Contains("literal:true", deletePreviewPayloadFromText);
+        Assert.DoesNotContain("confirmed", deletePreviewPayloadFromText);
         // Round 26: this is the leaf whose RuntimeInteractions (openModal) previously resolved to
         // NULL against a real Compose pipeline -- see round 26 todo.md entry for the full story.
         // Its owning tensor entry must now be scoped to its RESOLVED PARENT ("enum_dictionary_roster"),
@@ -442,26 +461,45 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
     /// <summary>
     /// Round 26 -- shared structural proof, generalized across all 7 write actions, that each is
     /// now embedded in ae200's OWN single surface behind the SAME disclosure/modal explicit-confirm
-    /// pattern create_group/delete_group already proved (round 24/25): open button carries NO
-    /// dispatch (openModal only), the modal resolves componentKind=disclosure/modal AND its own
-    /// required toggle self-close (modalFactory's requireBinding(spec,"toggle") -- round 26 found
-    /// and fixed a translator bug where this was silently dropped from every Modal, including
-    /// delete_group's already-shipped one, never caught because the existing DOM tests use
-    /// hand-built mock layoutNodes that bypass the real Compose pipeline entirely), the confirm
-    /// button inside the modal carries the exact node-local dispatch override, and the cancel
+    /// pattern create_group/delete_group already proved (round 24/25). Preview-gap round: the open
+    /// button now ALSO carries a non-mutating dryRun preview dispatch to the SAME target manifest
+    /// the Confirm button writes to (same field-source mapping, "dryRun" instead of "confirmed"),
+    /// deferring its own openModal to that dispatch's own success -- proven here structurally for
+    /// all 7 operations via the SAME dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger seed
+    /// mechanism the Confirm button already used (no new wiring lane, actionType, or per-operation
+    /// branch). The modal resolves componentKind=disclosure/modal AND its own required toggle
+    /// self-close (modalFactory's requireBinding(spec,"toggle") -- round 26 found and fixed a
+    /// translator bug where this was silently dropped from every Modal, including delete_group's
+    /// already-shipped one, never caught because the existing DOM tests use hand-built mock
+    /// layoutNodes that bypass the real Compose pipeline entirely), the confirm button inside the
+    /// modal carries the exact node-local dispatch override (confirmed:true), and the cancel
     /// button carries NO dispatch, only closeModal. One shared theory, not 7 duplicated test
-    /// bodies, per this round's instruction to reuse a shared scenario contract.
+    /// bodies, per round 26's instruction to reuse a shared scenario contract.
     /// </summary>
     [Theory]
-    [InlineData("enum_create_group", "manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group")]
-    [InlineData("enum_update_group", "manifest:00000000-0000-0000-0000-0000000ae220:enum_dictionary:update_group")]
-    [InlineData("enum_delete_group", "manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group")]
-    [InlineData("enum_create_item", "manifest:00000000-0000-0000-0000-0000000ae240:enum_dictionary:create_item")]
-    [InlineData("enum_update_item", "manifest:00000000-0000-0000-0000-0000000ae250:enum_dictionary:update_item")]
-    [InlineData("enum_delete_item", "manifest:00000000-0000-0000-0000-0000000ae260:enum_dictionary:delete_item")]
-    [InlineData("enum_set_group_items", "manifest:00000000-0000-0000-0000-0000000ae270:enum_dictionary:set_group_items")]
+    [InlineData(
+        "enum_create_group", "manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group",
+        "node:enum_create_group_name_input.value")]
+    [InlineData(
+        "enum_update_group", "manifest:00000000-0000-0000-0000-0000000ae220:enum_dictionary:update_group",
+        "node:enum_table.value.groupId")]
+    [InlineData(
+        "enum_delete_group", "manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group",
+        "node:enum_table.value.groupId")]
+    [InlineData(
+        "enum_create_item", "manifest:00000000-0000-0000-0000-0000000ae240:enum_dictionary:create_item",
+        "node:enum_create_item_name_input.value")]
+    [InlineData(
+        "enum_update_item", "manifest:00000000-0000-0000-0000-0000000ae250:enum_dictionary:update_item",
+        "node:enum_update_item_index_input.value")]
+    [InlineData(
+        "enum_delete_item", "manifest:00000000-0000-0000-0000-0000000ae260:enum_dictionary:delete_item",
+        "node:enum_delete_item_index_input.value")]
+    [InlineData(
+        "enum_set_group_items", "manifest:00000000-0000-0000-0000-0000000ae270:enum_dictionary:set_group_items",
+        "node:enum_table.value.groupId")]
     public async Task DispatchAsync_AdminEnumManagementManifest_EachWriteActionEmbeddedBehindOwnConfirmModal_StructurallyResolves(
-        string prefix, string expectedTargetRef)
+        string prefix, string expectedTargetRef, string expectedFieldSource)
     {
         var cs = GetConnectionString();
         if (cs is null) return;
@@ -479,8 +517,14 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         var nodes = entryResponse.Emission!.LayoutNodes!;
 
         var openButton = Assert.Single(nodes, n => n.NodeId == $"{prefix}_button");
-        Assert.Null(openButton.DispatchTargetRefByTrigger);
-        Assert.Null(openButton.DispatchPayloadFromByTrigger);
+        Assert.NotNull(openButton.DispatchTargetRefByTrigger);
+        Assert.Contains(expectedTargetRef, openButton.DispatchTargetRefByTrigger!.Value.GetRawText());
+        Assert.NotNull(openButton.DispatchPayloadFromByTrigger);
+        var openPayloadFromText = openButton.DispatchPayloadFromByTrigger!.Value.GetRawText();
+        Assert.Contains(expectedFieldSource, openPayloadFromText);
+        Assert.Contains("\"dryRun\"", openPayloadFromText);
+        Assert.Contains("literal:true", openPayloadFromText);
+        Assert.DoesNotContain("confirmed", openPayloadFromText);
         Assert.NotNull(openButton.RuntimeInteractions);
         Assert.Contains("openModal", openButton.RuntimeInteractions!.Value.GetRawText());
 

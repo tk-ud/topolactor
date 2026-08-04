@@ -2211,6 +2211,26 @@ const CONFIRM_MODAL_SCENARIOS: readonly ConfirmModalScenarioConfig[] = [
   },
 ];
 
+/** field -> source mapping shared by the preview dispatch (open button) and the confirmed write
+ * dispatch (Confirm button) -- both resolve the SAME business fields, differing only in the
+ * dryRun/confirmed literal appended by each call site. */
+function scenarioFieldSources(
+  config: ConfirmModalScenarioConfig,
+): Record<string, string> {
+  const sources: Record<string, string> = {};
+  for (const key of config.expectedPayloadKeys) {
+    if (key === "groupId") {
+      sources[key] = "node:enum_table.value.groupId";
+    } else {
+      const fieldNodeId = Object.keys(config.typedFields)[
+        config.expectedPayloadKeys.filter((k) => k !== "groupId").indexOf(key)
+      ];
+      sources[key] = `node:${fieldNodeId}.value`;
+    }
+  }
+  return sources;
+}
+
 function buildConfirmModalLayoutNodes(
   config: ConfirmModalScenarioConfig,
   rows: Record<string, unknown>[],
@@ -2256,6 +2276,16 @@ function buildConfirmModalLayoutNodes(
     });
   }
 
+  // preview-gap round: the SAME field-source mapping the Confirm button below uses (minus
+  // "confirmed"/plus "dryRun") — the open/action button now dispatches a non-mutating preview
+  // to the SAME target manifest BEFORE the modal is allowed to open (deferred
+  // secondaryDisclosureActionType=openModal, gated on this dispatch's own success), mirroring
+  // db/seed_empty.sql's real ae204/ae206 shape (react_schema_topology_seed_translator.py's
+  // build_admin_runtime_dispatch_override_candidate + build_secondary_disclosure_runtime_
+  // interaction_candidate both attaching to the SAME open-button leaf node).
+  const previewPayloadFrom: Record<string, string> = { ...scenarioFieldSources(config) };
+  previewPayloadFrom["dryRun"] = "literal:true";
+
   nodes.push({
     nodeId: `${prefix}_button`,
     nodeKind: "catalog_component",
@@ -2263,6 +2293,11 @@ function buildConfirmModalLayoutNodes(
     componentKind: "action/button",
     componentKey: "button.primitive",
     orderIndex: orderIndex++,
+    wiringKind: "admin_runtime",
+    targetSurface: "manifest",
+    targetRef: `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:list_groups`,
+    dispatchTargetRefByTrigger: { click: targetRef },
+    dispatchPayloadFromByTrigger: { click: previewPayloadFrom },
     runtimeInteractions: [
       {
         trigger: "click",
@@ -2291,18 +2326,9 @@ function buildConfirmModalLayoutNodes(
     ],
   });
 
-  const dispatchPayloadFrom: Record<string, string> = {};
-  for (const key of config.expectedPayloadKeys) {
-    if (key === "groupId") {
-      dispatchPayloadFrom[key] = "node:enum_table.value.groupId";
-    } else {
-      // typed-field keys map 1:1, in declared order, onto this scenario's own field nodeIds.
-      const fieldNodeId = Object.keys(typedFields)[
-        config.expectedPayloadKeys.filter((k) => k !== "groupId").indexOf(key)
-      ];
-      dispatchPayloadFrom[key] = `node:${fieldNodeId}.value`;
-    }
-  }
+  // Same field-source mapping as previewPayloadFrom above (minus "dryRun"/plus "confirmed") —
+  // Confirm re-resolves fresh from current node values at click time, same as before.
+  const dispatchPayloadFrom: Record<string, string> = { ...scenarioFieldSources(config) };
   dispatchPayloadFrom["confirmed"] = "literal:true";
 
   nodes.push({
@@ -2371,9 +2397,26 @@ function queryCancelButtonFor(container: Element, prefix: string) {
   ) as HTMLButtonElement | null;
 }
 
+/** "manifest:<uuid>:<layer>:<action>" -> "<uuid>", the same generic parse
+ * ProjectionShell.tsx's extractManifestIdFromTargetRef uses. */
+function manifestIdFromTargetRef(targetRef: string): string {
+  const m = /^manifest:([^:]+):/.exec(targetRef);
+  if (!m) throw new Error(`not a manifest targetRef: ${targetRef}`);
+  return m[1];
+}
+
+function payloadOf(b: Record<string, unknown>): Record<string, unknown> {
+  return (b.payload ?? {}) as Record<string, unknown>;
+}
+
+function queryRefreshWarning(container: Element): string | null {
+  const el = container.querySelector("[data-projection-refresh-warning]");
+  return el ? el.textContent : null;
+}
+
 for (const config of CONFIRM_MODAL_SCENARIOS) {
   Deno.test(
-    `ProjectionShell (real mount, round 26 shared scenario): ${config.label}'s ae200-embedded confirm modal — closed by default, DOM-absent when closed, opens on click, Cancel closes with no write, Confirm dispatches the exact expected payload and closes only after backend success`,
+    `ProjectionShell (real mount, preview-gap round shared scenario): ${config.label}'s ae200-embedded confirm modal — the open/action button dispatches a dryRun preview to the SAME target manifest; a FAILED preview never opens the modal and surfaces the backend validation error while typed values/selection survive; a SUCCEEDED preview opens the modal without adopting state or triggering a canonical reread; Cancel sends no write; Confirm re-resolves fresh values, dispatches confirmed:true, and closes only after backend success`,
     async () => {
       ensureRuntimeComponentRegistryInitialized();
       schedulerTestOnly.resetCommandQueue();
@@ -2385,18 +2428,42 @@ for (const config of CONFIRM_MODAL_SCENARIOS) {
         FakeEventSource;
       const originalFetch = globalThis.fetch;
 
-      const scenario = buildMockScenario((callIndex) => {
+      const targetManifestId = manifestIdFromTargetRef(config.targetRef);
+      let previewAttempts = 0;
+      const scenario = buildMockScenario((callIndex, body) => {
         if (callIndex === 1) {
           return {
             success: true,
             emission: {
               manifestId: ADMIN_ENUM_MANIFEST_ID,
-              layoutId: `layout-ae200-round26-${config.label}-scenario`,
+              layoutId: `layout-ae200-preview-gap-${config.label}-scenario`,
               projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
               layoutNodes: buildConfirmModalLayoutNodes(config, [
                 { groupId: "row-uuid-1", groupName: "Alpha" },
               ]),
             },
+          };
+        }
+        const payload = payloadOf(body);
+        const isPreviewDispatch = payload.target_ref === config.targetRef &&
+          payload.dryRun === "true";
+        if (isPreviewDispatch) {
+          previewAttempts += 1;
+          if (previewAttempts === 1) {
+            // First preview attempt: a genuine backend validation failure — never a queue/network
+            // rejection — proving a failed preview surfaces explicitly and never opens the modal.
+            return {
+              success: false,
+              errors: [{
+                code: "ENUM_PREVIEW_VALIDATION_FAILED",
+                message: `${config.label} preview validation failed (scenario-injected).`,
+              }],
+            };
+          }
+          // Every subsequent preview attempt succeeds — a non-mutating validation-only result.
+          return {
+            success: true,
+            emission: { manifestId: targetManifestId, data: { ok: true, dryRun: true, valid: true } },
           };
         }
         return { success: true, errors: [] };
@@ -2428,34 +2495,9 @@ for (const config of CONFIRM_MODAL_SCENARIOS) {
           `${config.label}'s Cancel must not be in the DOM before opening`,
         );
 
-        // Open.
-        simulateClick(openButtonEl!);
-        await flushUpdates();
-        assertExists(
-          queryModalFor(container),
-          `${config.label}'s modal must open`,
-        );
-        const confirmButtonEl = queryConfirmButtonFor(container, config.prefix);
-        const cancelButtonEl = queryCancelButtonFor(container, config.prefix);
-        assertExists(confirmButtonEl, `${config.label}'s Confirm must be nested inside the open modal`);
-        assertExists(cancelButtonEl, `${config.label}'s Cancel must be nested inside the open modal`);
-
-        // Cancel: no dispatch, modal closes.
-        simulateClick(cancelButtonEl!);
-        await flushUpdates();
-        assert(
-          queryModalFor(container) === null,
-          `${config.label}'s modal must close on Cancel`,
-        );
-        assertEquals(
-          scenario.capturedDispatchBodies.length,
-          1,
-          `Cancel must never dispatch for ${config.label} -- only the initial entry dispatch so far`,
-        );
-
-        // Reopen, fill fields, select the row if needed, then Confirm.
-        simulateClick(queryOpenButtonFor(container, config.prefix)!);
-        await flushUpdates();
+        // Type the fields (and select the row, if needed) BEFORE the first open/preview attempt —
+        // this surface's typed fields live outside the modal, so the SAME click that requests the
+        // preview is the click that would otherwise open the modal.
         for (const [nodeId, value] of Object.entries(config.typedFields)) {
           const inputEl = container.querySelector(
             `[data-node-id="${nodeId}"] input`,
@@ -2472,24 +2514,121 @@ for (const config of CONFIRM_MODAL_SCENARIOS) {
           await flushUpdates();
         }
 
+        // --- Attempt 1: preview FAILS -> modal never opens, error surfaced, values retained ---
+        simulateClick(queryOpenButtonFor(container, config.prefix)!);
+        await waitFor(() => previewAttempts >= 1);
+        await flushUpdates();
+        assert(
+          queryModalFor(container) === null,
+          `${config.label}'s modal must NOT open when the dryRun preview fails`,
+        );
+        assert(
+          (queryRefreshWarning(container) ?? "").includes(
+            `${config.label} preview validation failed`,
+          ),
+          `${config.label}'s failed preview must surface the backend validation error explicitly, got: ${
+            queryRefreshWarning(container)
+          }`,
+        );
+        // Value retention is proven through the mechanism that actually carries it in this
+        // architecture -- the live node value tracker resolved fresh into each dispatch's own
+        // payload (form_input/input's rendered DOM value display is a separate, pre-existing,
+        // unrelated component-registry gap -- form_input/search_input is this repo's own
+        // established display-value-carrying control, per round23's "Load(A)->Load(B)" test; this
+        // scenario's field control choice mirrors the real ae200 seed's form_input/form_field
+        // fields and is not itself in scope here). The failed preview attempt's OWN dispatch
+        // payload already proves the typed values were resolved correctly; the retry below proves
+        // they SURVIVED across the failure (never reset/cleared by the failed attempt).
+        const failedPreviewPayload = payloadOf(
+          scenario.capturedDispatchBodies[scenario.capturedDispatchBodies.length - 1],
+        );
+        const fieldSources = scenarioFieldSources(config);
+        for (const [nodeId, value] of Object.entries(config.typedFields)) {
+          const key = Object.entries(fieldSources).find(
+            ([, source]) => source === `node:${nodeId}.value`,
+          )?.[0];
+          assertExists(key, `${config.label}'s ${nodeId} must map to a preview payload field`);
+          assertEquals(
+            failedPreviewPayload[key!],
+            value,
+            `${config.label}'s ${nodeId} typed value must reach the (failed) preview dispatch payload`,
+          );
+        }
+        const dispatchCountAfterFailedPreview = scenario.capturedDispatchBodies.length;
+
+        // --- Attempt 2: preview SUCCEEDS -> modal opens, no state adoption, no canonical reread ---
+        simulateClick(queryOpenButtonFor(container, config.prefix)!);
+        await waitFor(() => previewAttempts >= 2);
+        await flushUpdates();
+        assertExists(
+          queryModalFor(container),
+          `${config.label}'s modal must open once the dryRun preview succeeds`,
+        );
+        assertEquals(
+          queryRefreshWarning(container),
+          null,
+          `${config.label}'s stale failure banner must clear once a later preview succeeds`,
+        );
+        // preview-gap round core assertion: a settled dryRun preview SUCCESS must never be
+        // classified the same as a confirmed write success -- exactly one extra dispatch call
+        // (the successful preview itself) happened, never a second (canonical reread) call.
+        assertEquals(
+          scenario.capturedDispatchBodies.length,
+          dispatchCountAfterFailedPreview + 1,
+          `${config.label}'s successful preview must dispatch exactly once -- ` +
+            `no canonical reread triggered by preview success`,
+        );
+
+        const confirmButtonEl = queryConfirmButtonFor(container, config.prefix);
+        const cancelButtonEl = queryCancelButtonFor(container, config.prefix);
+        assertExists(confirmButtonEl, `${config.label}'s Confirm must be nested inside the open modal`);
+        assertExists(cancelButtonEl, `${config.label}'s Cancel must be nested inside the open modal`);
+
+        // Cancel: no dispatch, modal closes.
+        const dispatchCountBeforeCancel = scenario.capturedDispatchBodies.length;
+        simulateClick(cancelButtonEl!);
+        await flushUpdates();
+        assert(
+          queryModalFor(container) === null,
+          `${config.label}'s modal must close on Cancel`,
+        );
+        assertEquals(
+          scenario.capturedDispatchBodies.length,
+          dispatchCountBeforeCancel,
+          `Cancel must never dispatch for ${config.label}`,
+        );
+
+        // Reopen (a fresh, successful preview attempt) then Confirm.
+        simulateClick(queryOpenButtonFor(container, config.prefix)!);
+        await waitFor(() => previewAttempts >= 3);
+        await flushUpdates();
+        assertExists(
+          queryModalFor(container),
+          `${config.label}'s modal must reopen on a fresh successful preview`,
+        );
+
         const confirmAgainEl = queryConfirmButtonFor(container, config.prefix);
         assertExists(confirmAgainEl, `${config.label}'s Confirm must still be present after reopening`);
         simulateClick(confirmAgainEl!);
-        function payloadOf(b: Record<string, unknown>) {
-          return (b.payload ?? {}) as Record<string, unknown>;
-        }
         await waitFor(() =>
           scenario.capturedDispatchBodies.some((b) =>
-            payloadOf(b).target_ref === config.targetRef
+            payloadOf(b).target_ref === config.targetRef &&
+            payloadOf(b).confirmed === "true"
           )
         );
         const confirmBody = scenario.capturedDispatchBodies.find((b) =>
-          payloadOf(b).target_ref === config.targetRef
+          payloadOf(b).target_ref === config.targetRef &&
+          payloadOf(b).confirmed === "true"
         ) as Record<string, unknown>;
         assertExists(confirmBody, `${config.label}'s Confirm dispatch must target ${config.targetRef}`);
         assertEquals(confirmBody.layer, "enum_dictionary");
         const confirmPayload = payloadOf(confirmBody);
         assertEquals(confirmPayload.confirmed, "true");
+        assertEquals(
+          confirmPayload.dryRun,
+          undefined,
+          `${config.label}'s Confirm dispatch must never carry a dryRun flag`,
+        );
         for (const key of config.expectedPayloadKeys) {
           assertExists(
             confirmPayload[key],
@@ -2497,7 +2636,7 @@ for (const config of CONFIRM_MODAL_SCENARIOS) {
           );
         }
 
-        // Backend success (default mock response after call index 1) closes the modal.
+        // Backend success closes the modal.
         await waitFor(() => queryModalFor(container) === null);
       } finally {
         globalThis.fetch = originalFetch;

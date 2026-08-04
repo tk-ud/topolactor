@@ -342,7 +342,7 @@ Deno.test("emitBoundEvent: admin_runtime Lane 2 forwards the settled dispatch re
   }) as typeof fetch;
   try {
     let forwardedResult: unknown = null;
-    let forwardedContext: { targetRef?: string } | null = null;
+    let forwardedContext: { targetRef?: string; dryRun: boolean } | null = null;
     const spec: RuntimeComponentSpec = {
       componentId: "comp-load-button-001",
       packageId: null,
@@ -384,9 +384,14 @@ Deno.test("emitBoundEvent: admin_runtime Lane 2 forwards the settled dispatch re
     assertEquals(result.emission?.data, serverEmissionData);
     // Round 29: the authored targetRef actually dispatched must be forwarded verbatim as context,
     // so a caller can confirm a settled response really landed on the manifest it targeted.
+    // preview-gap round: this dispatch's payloadFrom carries no dryRun field, so context.dryRun
+    // must be false — the resolved payload actually sent, never assumed.
     assertEquals(
       forwardedContext,
-      { targetRef: `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:update_group` },
+      {
+        targetRef: `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:update_group`,
+        dryRun: false,
+      },
     );
   } finally {
     globalThis.fetch = originalFetch;

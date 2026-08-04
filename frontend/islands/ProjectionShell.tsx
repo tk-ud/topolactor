@@ -384,7 +384,26 @@ export default function ProjectionShell(): JSX.Element {
         context: RuntimeDispatchResultContext,
       ) => {
         if (!mounted) return;
-        if (!result.success || !result.emission) return;
+        // preview-gap round: (b) error display — a settled dispatch failure (a dryRun preview's
+        // own validation error, or a confirmed write's backend rejection alike) was previously a
+        // silent no-op here; the caller's own success-gated local-state mutation (e.g. deferred
+        // Modal-open/close) already stays un-applied on failure independently of this handler, so
+        // this only adds the missing explicit, non-destructive surface for WHY it didn't apply.
+        // Generic — classified by result.success alone, never by context.dryRun or any
+        // operation/nodeId — so a confirmed write's failure gets the same explicit surfacing a
+        // preview's failure does, matching round_27_28_settled_child_dispatch_result_authority's
+        // own "(a) success/failure determination, (b) error display" description.
+        if (!result.success) {
+          console.error(
+            "[ProjectionShell] RUNTIME_DISPATCH_RESULT_FAILED:",
+            result.errors,
+          );
+          setRefreshWarning(
+            result.errors?.[0]?.message ?? "操作を完了できませんでした。",
+          );
+          return;
+        }
+        if (!result.emission) return;
         const dispatched = result.emission;
         const expectedManifestId = extractManifestIdFromTargetRef(context.targetRef);
         if (expectedManifestId) {
@@ -402,14 +421,32 @@ export default function ProjectionShell(): JSX.Element {
           }
           if (expectedManifestId !== adoptedManifestIdRef.current) {
             // Confirmed expected cross-manifest child response — never adopted into ae200's own
-            // state; re-read ae200's own canonical identity now that the write landed.
+            // state. preview-gap round: a settled DRY-RUN preview's SUCCESS is a validation-only
+            // signal — its own success-gated local-state mutation (the caller's deferred Modal
+            // open) already consumed it; it must never ALSO be classified the same as a settled
+            // CONFIRMED write's success, which is the only case that re-reads ae200's own
+            // canonical identity (round_27_28_settled_child_dispatch_result_authority). Generic:
+            // context.dryRun reflects what this dispatch's own resolved payload actually carried,
+            // never an operation name/nodeId/manifest UUID.
+            if (context.dryRun) {
+              // Clears a stale failure banner from a previous failed preview attempt on this
+              // same trigger — this success supersedes it. No state adoption, no canonical reread.
+              setRefreshWarning(null);
+              return;
+            }
+            // Re-read ae200's own canonical identity now that the confirmed write landed.
             void refreshCurrentManifestAsync("canonical_reread");
             return;
           }
           // expectedManifestId === adopted identity: a same-manifest authored override (e.g. the
           // "Load current values" dryRun pattern) — falls through to the same direct-adoption
-          // logic as the no-target_ref path below.
+          // logic as the no-target_ref path below. This is the ONE dryRun shape that DOES adopt:
+          // it is a same-manifest read/prefill, not a cross-manifest write preview.
         } else if (dispatched.manifestId !== adoptedManifestIdRef.current) {
+          if (context.dryRun) {
+            setRefreshWarning(null);
+            return;
+          }
           void refreshCurrentManifestAsync("canonical_reread");
           return;
         }

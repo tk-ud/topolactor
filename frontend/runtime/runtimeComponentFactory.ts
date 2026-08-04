@@ -429,6 +429,18 @@ function isPreviewMode(spec: RuntimeComponentSpec): boolean {
  * normal {success:false} response) never fires onSettled — the mutation stays un-applied,
  * matching the existing "no synchronous caller left to propagate to" console.error-only handling.
  */
+/**
+ * preview-gap round: mirrors backend AdminRuntimeMasterRoster.cs's own IsTruthyPayloadFlag —
+ * a data-defined literal:true payloadFrom source always resolves to the JSON STRING "true" at
+ * the wire (payloadFromResolver.ts's literal: source), never a JS boolean, so both shapes must
+ * be accepted identically to the backend's own acceptance. Generic mutation_confirmation_contract
+ * vocabulary (admin-normal-surface-projection-seed-ssot.yaml), not admin-enum-specific.
+ */
+function isTruthyDryRunPayloadFlag(payload: Record<string, unknown> | undefined): boolean {
+  const value = payload?.dryRun;
+  return value === true || value === "true";
+}
+
 function dispatchRuntimeComponentCommandAndForwardResult(
   spec: RuntimeComponentSpec,
   dispatchSpec: Parameters<typeof enqueueRuntimeComponentCommand>[0],
@@ -437,7 +449,12 @@ function dispatchRuntimeComponentCommandAndForwardResult(
   // Round 29: the authored targetRef actually dispatched (never inferred/guessed downstream) —
   // forwarded verbatim so a caller can confirm a settled response landed on the manifest that
   // was actually targeted, instead of merely noticing it differs from some other identity.
-  const context: RuntimeDispatchResultContext = { targetRef: dispatchSpec.targetRef };
+  // preview-gap round: dryRun mirrors the SAME dispatchSpec.payload the request itself carries —
+  // the settled result is classified by what was actually sent, never by operation/nodeId/UUID.
+  const context: RuntimeDispatchResultContext = {
+    targetRef: dispatchSpec.targetRef,
+    dryRun: isTruthyDryRunPayloadFlag(dispatchSpec.payload),
+  };
   enqueueRuntimeComponentCommand(dispatchSpec)
     .then((result) => {
       spec.onRuntimeDispatchResult?.(result, context);
