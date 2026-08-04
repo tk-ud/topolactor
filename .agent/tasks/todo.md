@@ -1411,6 +1411,33 @@ round 23監査はround22の4件修正を有効として維持しつつ、(1) bar
 - `nodeValueTrackerRef.current.clear()`を、read/prefill目的のsame-manifest adoption分岐（`handleRuntimeDispatchResult`のexpected-identity-matches-adopted分岐）へも適用する——round24自身が発見した通り、これは同一フォーム内の他の未送信fieldを破壊する回帰を引き起こす。`clear()`は`refreshCurrentManifestAsync`のcanonical_reread経路のみに限定すること。
 - `canonicalGenRef`/`passiveGenRef`の二軸ordering契約を、単一カウンタへ差し戻す——round24自身が発見した通り、単一カウンタはapi_command_lane FIFOの処理待ち中に無関係なpassive_invalidationが開始しただけでcanonical_rerereadの正当な結果（成功・失敗いずれも）を無言破棄する回帰を引き起こす。
 
+### 引き継ぎ（2026-08-04、PR #600 round24時点でマージ、admin-enum subBundle継続作業のための整理）
+
+PR #600（round14〜24、コミット履歴は上記の各round実装記録を参照）はここで一旦マージされる。以降のadmin-enum subBundle作業は新しいPRで継続する前提で、現状を以下にまとめる——上記の個別round記録（round14〜24、20件以上）を読み返さなくても再開できることを目的とした要約。
+
+**確定済みのarchitecture（回帰させないこと）**:
+- ae200単一surfaceに、7つのenum_dictionary write action（create_group/update_group/delete_group/create_item/update_item/delete_item/set_group_items）すべてがdisclosure/modalパターン（open→confirm modal→confirm button→backend dispatch→success時のみclose）で埋め込み済み。個別のwrite用route/画面は存在しない。
+- **child manifest（ae210〜ae280）のwrite responseは、ae200自身のEmission/tracker/local state/component propsへ一切採用しない**。settled child dispatch resultは成功/失敗判定・エラー表示・成功時のみのlocal mutationにのみ使う。write成功後は、ae200自身のadopted manifest identityをcanonical再Dispatchし、DB正本から状態を再構成する（`ProjectionShell.tsx`の`refreshCurrentManifestAsync`、`handleRuntimeDispatchResult`）。
+- refreshには`"passive_invalidation"`（SSE由来、編集中値を保護）と`"canonical_reread"`（write成功後、DB正本へ強制的に戻す）の2つのintentがあり、tracker挙動・warning表示挙動はこの軸で分岐する。operation名・nodeId・manifest UUIDによる個別分岐は存在しない（生成すること自体がNG）。
+- settled child responseが「expected cross-manifest child」かどうかは、dispatch時点で実際にauthorizeされた`target_ref`（`RuntimeDispatchResultContext.targetRef`）から導出したexpected manifest identityと、応答のmanifestIdの一致で判定する。「adoptedと単に異なる」だけでは判定しない。
+- canonical_rerereadの結果は、より新しいpassive_invalidationが後から開始しただけでは失われない（`canonicalGenRef`/`passiveGenRef`の二軸priority、`ProjectionShell.tsx`）。
+- `success:true`＋Emission欠落、応答identity不一致、redispatch失敗はすべて`refreshWarning`という非破壊banner（既存DOMを保持したまま表示、画面全体を置き換える`error` stateとは別）で明示表示される。silent returnは、stale generationとunmount後のみに限定されている。
+
+**実PostgreSQL・実DOM検証済みの範囲**: 7 write action全てのopen/confirm/cancel/payload identity/backend failure/canonical reread成功・失敗/tracker reset（propBindingあり・なし双方）についてはdelete_groupを中心に検証済み。他6 operationは「開く・閉じる・正しいpayloadで正しいtarget_refへdispatchする」までは実DB+DOM双方で証明済みだが、canonical reread/identity mismatch/orderingの負のシナリオはdelete_groupでのみ証明されている（7 operation全部への横展開は未実施）。
+
+**未着手のまま残っている項目（次PRでの着手候補、優先度はこの順を推奨）**:
+1. **preview（dryRun）のUI配線** — 全7 operationで、confirm前にdryRun previewを挟む2段階flow（入力→open confirmation→dryRun preview dispatch→preview検証→preview表示→explicit confirm→confirmed write）が未実装。現状のConfirmボタンは`confirmed:literal:true`を直接送るのみ。backend側は全7 operationで`dryRun:literal:true`を受理・検証済み（round22時点で確認）なので、backend側の追加実装は恐らく不要——frontendのconfirm flowをpreview段階込みで再構成する作業。
+2. **items browse UX** — 選択したgroupに属するitemsを同一surface上で閲覧・選択できるようにする。新規`list_items` actionを発明せず、既存の`get_group` read authorityをae200のparent readとして構成する方針が指示済み（未調査）。これが済むとupdate_item/delete_item/set_group_itemsのmanual indexNum入力を撤去できる。
+3. **完全negative boundary matrix（全7 operation × 全シナリオ）** — open/cancel/preview/confirm/payload identity/backend failure/missing value/unexpected response identity/canonical reread成功・失敗/SSE競合/二重送信防止/success後resetを、shared scenario contractとして7 operation全部に展開する。delete_group分は完了済みなので、他6 operationへ同じscenario configを適用する形になるはず。
+4. **`enum_confirm_form`/`enum_form`/`enum_confirm_button`の再監査** — 現行7 modal flowでauthorityを持たないorphan recordが残っていないか、translator source・generated seed・layout・testを横断して確認し、不要なら除去する。
+5. **`AdminEnumsRoster.tsx`/`/admin/enums` route撤去** — 上記1〜3が完了しUX parityが成立してから着手すること。残す場合はthin navigation wrapperに限定し、hardcoded CRUD executionや独自state/API経路を残さない。
+
+**次に着手する人への実務的なポインタ**:
+- 中心ファイルは`frontend/islands/ProjectionShell.tsx`（refresh/identity/tracker実装）、`frontend/runtime/projectionEntry.ts`（confirmProjectionEntryEmission等）、`frontend/runtime/liveNodeValueTracker.ts`（tracker）、`frontend/runtime/runtimeComponentAdapter.ts`/`runtimeComponentFactory.ts`/`renderEmission.ts`（dispatch結果のcontext配線）。
+- testは`frontend/tests/projectionShellAdminRuntimeWritePayloadCapture.test.ts`に集約されている（round25〜29累計で22 test）。delete_groupの負のシナリオ群はここに揃っているので、他operationへ展開する際のテンプレートとして使える。
+- ae200のtranslator sourceは`.agent/tests/fixtures/react-schema-topology-seed-translator/admin-enum-ae200.input.json`、生成物は`db/seed_empty.sql`のae204/ae206（`components_layout_design.layout_schema_json`/`ui_topology_tensor.layout_patch_json`）。generated seedを直接手編集せず、translator sourceを直し再生成すること（round26で確立した手順）。
+- backend側のadmin-enum write/read actionは`AdminEnumHubRelationUiProjectionLiveDbTests.cs`にlive-DB testが揃っている。
+
 ---
 
 ## Bundle `admin-runtime-operation-dispatch-lane-determination`
