@@ -89,6 +89,12 @@ export default function ProjectionShell(): JSX.Element {
   const [emission, setEmission] = useState<Emission | null>(null);
   const [specs, setSpecs] = useState<ComponentSpec[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // Round 28 (pipeline-continuity-ssot.yaml explicit_error_log_retain_old_dom): distinct from
+  // `error` (which replaces the WHOLE screen — reserved for initial-load failure). A failed
+  // canonical reread or passive refresh must retain the existing DOM rather than blank the
+  // screen; this banner-only state surfaces that failure without discarding what's rendered.
+  // Cleared on the next successful refresh.
+  const [refreshWarning, setRefreshWarning] = useState<string | null>(null);
   const [authFallback, setAuthFallback] = useState(false);
   const [projectionToken, setProjectionToken] = useState<string | undefined>(
     undefined,
@@ -314,6 +320,24 @@ export default function ProjectionShell(): JSX.Element {
       // Failure is handled entirely by the caller's own settled-result gate (emitBoundEvent's
       // onSettled / deferLocalStateMutationToDispatchSuccess) — this callback does nothing on
       // failure, so a failed write's Modal correctly stays open with no stale merge.
+      //
+      // Round 28: the FIRST, narrow, purpose-built check is whether this result's manifestId
+      // matches the CURRENTLY ADOPTED identity — never confirmProjectionEntryEmission's broader
+      // package/explicit-?manifest=-selection checks, which exist to confirm "is this the right
+      // thing to RENDER" (meaningful for the initial load and a redispatch's own response, which
+      // ARE candidates for rendering) and are the WRONG tool here: a settled child-manifest write
+      // result is by design NEVER going to be rendered regardless of whether it happens to satisfy
+      // an explicit ?manifest= URL selection, so checking it against that selection would
+      // misclassify the ordinary, expected case (a legitimate child write, whose manifestId simply
+      // isn't ae200's) as a genuine anomaly whenever the URL selection happens to equal the
+      // adopted identity (the common case) — collapsing round 27's redispatch behavior back into a
+      // spurious warning. A mismatch here (manifestId differs from adopted) is ALWAYS the ordinary
+      // cross-manifest child-write shape → canonical reread. Only when the manifestId DOES match
+      // the adopted identity (a same-manifest result — theoretically possible in a future ae200-
+      // native write) do the explicit package/manifest checks apply, since only THEN is adoption
+      // itself in play; confirmation.reason then distinguishes a genuine explicit-selection
+      // violation (surfaced as a warning) from the (here, structurally unreachable — manifestId
+      // already matched) adopted-identity branch.
       const handleRuntimeDispatchResult = (
         _nodeId: string,
         result: DispatchResponse,
@@ -321,15 +345,24 @@ export default function ProjectionShell(): JSX.Element {
         if (!mounted) return;
         if (!result.success || !result.emission) return;
         const dispatched = result.emission;
+        if (dispatched.manifestId !== adoptedManifestIdRef.current) {
+          void refreshCurrentManifestAsync("canonical_reread");
+          return;
+        }
         const confirmation = confirmProjectionEntryEmission(
           entrySelection,
           dispatched,
           { adoptedManifestId: adoptedManifestIdRef.current },
         );
         if (!confirmation.ok) {
-          void refreshCurrentManifestAsync();
+          console.error(
+            "[ProjectionShell] EXPLICIT_SELECTION_VIOLATED_ON_RUNTIME_DISPATCH_RESULT:",
+            confirmation.error,
+          );
+          setRefreshWarning(confirmation.error);
           return;
         }
+        setRefreshWarning(null);
         setEmission(dispatched);
         emissionRef.current = dispatched;
         const dispatchedNodes = toRunnerWiringNodes(dispatched.layoutNodes);
@@ -417,7 +450,26 @@ export default function ProjectionShell(): JSX.Element {
       // refreshGenRef generation started after this call began (a newer SSE event, or a second
       // write settling first) discards this call's result rather than let it overwrite newer
       // state — same discipline the SSE path already had, now shared instead of duplicated.
+      //
+      // Round 28: `intent` is a GENERIC (never operation/nodeId/manifest-UUID-keyed) distinction
+      // between the two reasons this function is ever called — derived purely from WHICH caller
+      // invoked it, never from inspecting response content:
+      //   - "passive_invalidation": an SSE event only signals something MAY have changed; a value
+      //     the user is actively editing in a still-open field must survive this refresh, so the
+      //     tracker reconciliation below does NOT force-overwrite (matches the pre-round-28 SSE
+      //     behavior, unchanged).
+      //   - "canonical_reread": a write just settled — the DB is now the sole authority for
+      //     whatever the write touched (a stale typed value, a stale prefill, a selection that no
+      //     longer exists) and the tracker must be forced back to what the fresh read carries, the
+      //     same forceOverwrite:true discipline handleRuntimeDispatchResult's OWN same-manifest
+      //     adoption branch already used above.
+      // A failure at any stage (dispatch failure, missing Emission, or a genuine identity mismatch
+      // on the redispatch's OWN response) surfaces as an explicit, non-destructive refreshWarning
+      // (pipeline-continuity-ssot.yaml explicit_error_log_retain_old_dom) — the existing DOM is
+      // never blanked, the write is never re-sent, and no Modal is reopened; only a stale
+      // (superseded-generation) or unmounted result is discarded silently, as before.
       const refreshCurrentManifestAsync = async (
+        intent: "passive_invalidation" | "canonical_reread",
         identityPayload?: Record<string, unknown>,
       ) => {
         const gen = ++refreshGenRef.current;
@@ -437,11 +489,23 @@ export default function ProjectionShell(): JSX.Element {
           };
 
           const result = await queueClientCommand(axes, refreshToken);
-          if (!result.success || gen !== refreshGenRef.current || !mounted) {
+          if (gen !== refreshGenRef.current || !mounted) return;
+          if (!result.success) {
+            console.error(
+              "[ProjectionShell] MANIFEST_REFRESH_DISPATCH_FAILED:",
+              result.errors,
+            );
+            setRefreshWarning(
+              result.errors?.[0]?.message ?? "最新データの再取得に失敗しました",
+            );
             return;
           }
           const updated = result.emission;
-          if (!updated) return;
+          if (!updated) {
+            console.error("[ProjectionShell] MANIFEST_REFRESH_EMISSION_MISSING");
+            setRefreshWarning("最新データの再取得に失敗しました（応答データなし）");
+            return;
+          }
           const refreshConfirmation = confirmProjectionEntryEmission(
             entrySelection,
             updated,
@@ -452,8 +516,10 @@ export default function ProjectionShell(): JSX.Element {
               "[ProjectionShell] PROJECTION_ENTRY_MISMATCH_ON_REFRESH:",
               refreshConfirmation.error,
             );
+            setRefreshWarning(refreshConfirmation.error);
             return;
           }
+          setRefreshWarning(null);
           setEmission(updated);
           emissionRef.current = updated;
           const refreshedNodes = toRunnerWiringNodes(updated.layoutNodes);
@@ -465,6 +531,7 @@ export default function ProjectionShell(): JSX.Element {
             updated.layoutNodes ?? [],
             updated.data ?? {},
             resolveRuntimeDataPath,
+            { forceOverwrite: intent === "canonical_reread" },
           );
           if (effectRunnerRef.current) {
             effectRunnerRef.current.updateNodes(refreshedNodes);
@@ -501,6 +568,7 @@ export default function ProjectionShell(): JSX.Element {
             "[ProjectionShell] MANIFEST_REFRESH_ERROR:",
             err,
           );
+          setRefreshWarning("最新データの再取得中にエラーが発生しました");
         }
       };
 
@@ -540,7 +608,7 @@ export default function ProjectionShell(): JSX.Element {
         if (payload.table_registry_id) {
           identityPayload.table_registry_id = payload.table_registry_id;
         }
-        void refreshCurrentManifestAsync(identityPayload);
+        void refreshCurrentManifestAsync("passive_invalidation", identityPayload);
       });
 
       const dispatcher = createSseDispatcherWithProjectionRuntime(
@@ -620,6 +688,14 @@ export default function ProjectionShell(): JSX.Element {
       data-projection-surface="product"
       data-primary-dom-projection
     >
+      {refreshWarning && (
+        <div
+          data-projection-refresh-warning
+          class="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3"
+        >
+          <p class="text-sm text-amber-700">{refreshWarning}</p>
+        </div>
+      )}
       <LayoutProjectionTree
         specs={specs}
         layoutId={emission?.layoutId}

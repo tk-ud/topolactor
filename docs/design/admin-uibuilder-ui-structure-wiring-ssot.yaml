@@ -1115,6 +1115,57 @@ admin_uibuilder_ui_structure_wiring_ssot:
         frontend/Python grammar-parity tests against it, found and fixed a genuine pre-existing
         divergence: the Python NODE_VALUE_RE's nodeId character class allowed dots but not hyphens,
         the frontend's the reverse -- aligned both to [A-Za-z0-9_-]+.
+      round_27_28_settled_child_dispatch_result_authority: >-
+        2026-08-04. Owner decision, generic runtime boundary contract (not admin-enum-specific --
+        applies to ANY node whose admin_runtime_dispatch_override_wiring targets a manifest OTHER
+        than the one currently rendered): a settled dispatch result from such an override is never
+        merged into the rendering surface's own projection state (Emission/tracker/local state/
+        component props), regardless of whether the dispatch succeeded. Its settled result is used
+        ONLY for (a) success/failure determination, (b) error display, and (c) success-gated local
+        state mutation (e.g. closing a disclosure this trigger also carries). Frontend implementation:
+        frontend/islands/ProjectionShell.tsx's handleRuntimeDispatchResult classifies a settled
+        result by comparing its Emission.ManifestId against the rendering surface's OWN adopted
+        manifest identity (a narrow, purpose-built comparison -- never confirmProjectionEntryEmission's
+        broader explicit ?package=/?manifest= URL-selection checks, which exist to confirm "is this
+        the right thing to RENDER" and are the wrong tool for classifying a result that was never
+        going to be rendered regardless of outcome). A manifestId mismatch is the ordinary, expected
+        shape of any cross-manifest write override result and triggers a canonical reread: the
+        rendering surface re-dispatches ITS OWN currently-adopted manifest identity
+        (refreshCurrentManifestAsync) to reconstruct list/detail/prefill state from the DB, sharing
+        the exact same manifest-identity boundary (adopted-identity pin, generation-counter
+        staleness guard) the pre-existing SSE passive-invalidation refresh path already used --
+        extracted into one shared function, not duplicated. A manifestId match (same-manifest
+        result) is instead confirmed against the FULL confirmProjectionEntryEmission check (package/
+        explicit-manifest/adopted-identity), since only then is adoption itself in play; a genuine
+        explicit-selection violation there is surfaced as a non-destructive UI warning, never
+        silently folded into a redispatch that would not address it.
+        Refresh intent (round 28) is a second, orthogonal, equally generic distinction carried as an
+        explicit parameter on the shared refresh function -- never derived from operation name,
+        nodeId, or manifest UUID: "passive_invalidation" (an SSE event only signals something MAY
+        have changed; an in-progress edit in a still-open field must survive) leaves the live node
+        value tracker's reconciliation non-destructive (no forceOverwrite), while "canonical_reread"
+        (a write just settled; the DB is now sole authority for whatever it touched) forces the
+        tracker back to what the fresh read carries, reusing the SAME forceOverwrite:true mechanism
+        the pre-existing same-manifest adoption path already applied. A canonical-reread dispatch
+        failure (backend success:false, a missing Emission, a queue/network rejection, or the
+        redispatch's own response failing confirmProjectionEntryEmission) is distinguished from a
+        stale (superseded-generation) or unmounted result: the latter two are normal, silent
+        discard boundaries, while the former surfaces an explicit, non-destructive warning
+        (pipeline-continuity-ssot.yaml explicit_error_log_retain_old_dom) that retains the existing
+        DOM rather than blanking it, never re-sends the settled write, and never reopens any
+        disclosure the write's own success already closed. Proof:
+        frontend/tests/projectionShellAdminRuntimeWritePayloadCapture.test.ts (round 27: a child
+        manifest's own canary response never reaches rendered state, exactly one canonical
+        redispatch fires per settled write, only the redispatch's own data renders; round 28: a
+        failed canonical redispatch surfaces the warning banner and retains the stale-but-real DOM
+        without resending the write or reopening the modal, and a canonical redispatch forces a
+        stale prop-bound tracked value back to the DB-authoritative one while a passive SSE refresh
+        of the same value leaves an in-progress edit untouched). Not yet done (admin-enum subBundle
+        scope, tracked in .agent/tasks/todo.md, not restated here as owning SSOT authority): dryRun
+        preview wired into the confirm-modal UI flow for any of the 7 write actions, items browse
+        UX via the existing get_group read composed into this surface's own parent read (no new
+        list_items action, no direct child-Emission adoption), the full negative-boundary matrix,
+        and AdminEnumsRoster.tsx/route retirement.
     manifest_topology_boundary:
       rule: >-
         manifest.topology entries for this surface (ui_projection type per

@@ -169,9 +169,32 @@ export function resolveHubNavigationLinks(
     });
 }
 
+/**
+ * Round 28: structured discriminant for WHICH confirmation check failed —
+ * every failure previously carried the same "PROJECTION_ENTRY_..." error-message
+ * PREFIX shape regardless of cause (an explicit ?manifest= URL mismatch and an
+ * adopted-identity mismatch both produced "PROJECTION_ENTRY_MANIFEST_MISMATCH:"),
+ * so a caller could not distinguish them without substring-matching the message —
+ * exactly the "error code文字列のsubstring判定を主authorityにしない" anti-pattern
+ * this field exists to avoid. A caller that needs to treat "the response belongs to
+ * a manifest OTHER than the one currently adopted" (the ordinary, expected shape of
+ * any child-manifest write's own settled result — see ProjectionShell.tsx's
+ * handleRuntimeDispatchResult) differently from "the caller's OWN explicit package/
+ * manifest URL selection was violated" (a genuine anomaly, never expected for a
+ * write override result) reads this field, never the error string.
+ */
+export type ProjectionEntryConfirmationMismatchReason =
+  | "explicit_package_mismatch"
+  | "explicit_manifest_mismatch"
+  | "adopted_manifest_mismatch";
+
 export type ProjectionEntryConfirmation =
   | { ok: true }
-  | { ok: false; error: string };
+  | {
+    ok: false;
+    error: string;
+    reason: ProjectionEntryConfirmationMismatchReason;
+  };
 
 export type ProjectionEntryConfirmationOptions = {
   /**
@@ -209,6 +232,7 @@ export function confirmProjectionEntryEmission(
   if (selection.packageId && emission.packageId !== selection.packageId) {
     return {
       ok: false,
+      reason: "explicit_package_mismatch",
       error: `PROJECTION_ENTRY_PACKAGE_MISMATCH: selected package ` +
         `"${selection.packageId}" but emission resolved package ` +
         `"${emission.packageId ?? "(absent)"}".`,
@@ -217,6 +241,7 @@ export function confirmProjectionEntryEmission(
   if (selection.manifestId && emission.manifestId !== selection.manifestId) {
     return {
       ok: false,
+      reason: "explicit_manifest_mismatch",
       error: `PROJECTION_ENTRY_MANIFEST_MISMATCH: selected manifest ` +
         `"${selection.manifestId}" but this dispatch resolved manifest ` +
         `"${emission.manifestId ?? "(absent)"}".`,
@@ -226,6 +251,7 @@ export function confirmProjectionEntryEmission(
   if (adoptedManifestId && emission.manifestId !== adoptedManifestId) {
     return {
       ok: false,
+      reason: "adopted_manifest_mismatch",
       error: `PROJECTION_ENTRY_MANIFEST_MISMATCH: adopted manifest ` +
         `"${adoptedManifestId}" but this dispatch resolved manifest ` +
         `"${emission.manifestId ?? "(absent)"}".`,

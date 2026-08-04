@@ -1876,6 +1876,242 @@ Deno.test(
   },
 );
 
+
+Deno.test(
+  "ProjectionShell (real mount, round 28): a failed ae200 canonical reread (after a settled write succeeded) surfaces an explicit, non-destructive warning — retains the old DOM, never resends the write, never reopens the modal",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource =
+      FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    const CHILD_MANIFEST_ID = "00000000-0000-0000-0000-0000000ae230";
+
+    // The initial mount's own screen_list/Search load must succeed (it is the baseline the
+    // test's own assertions depend on); only the SUBSEQUENT redispatch (triggered by the
+    // settled write) is made to fail, isolating the redispatch-failure behavior specifically.
+    let screenListSearchCount = 0;
+    const scenario = buildMockScenario((_callIndex, body) => {
+      const layer = body.layer as string | undefined;
+      const action = body.action as string | undefined;
+      if (layer === "screen_list" && action === "Search") {
+        screenListSearchCount++;
+        if (screenListSearchCount === 1) {
+          return {
+            success: true,
+            emission: {
+              manifestId: ADMIN_ENUM_MANIFEST_ID,
+              layoutId: "layout-ae200-round28-redispatch-failure-scenario",
+              projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+              layoutNodes: enumDeleteGroupConfirmModalLayoutNodes([
+                { groupId: "row-uuid-1", groupName: "Alpha" },
+              ]),
+            },
+          };
+        }
+        return { success: false, errors: [{ code: "DB_UNAVAILABLE", message: "db unavailable" }] };
+      }
+      if (layer === "enum_dictionary" && action === "delete_group") {
+        return {
+          success: true,
+          emission: { manifestId: CHILD_MANIFEST_ID, data: { ok: true } },
+        };
+      }
+      return { success: true, errors: [] };
+    });
+    globalThis.fetch = scenario.fetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+      render(h(ProjectionShell, {}), container);
+
+      let deleteButtonEl: HTMLButtonElement | null = null;
+      await waitFor(() => {
+        deleteButtonEl = container.querySelector(
+          '[data-node-id="enum_delete_group_button"] button',
+        );
+        return deleteButtonEl !== null;
+      });
+
+      simulateClick(deleteButtonEl!);
+      await flushUpdates();
+      const rows = () =>
+        Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
+      await waitFor(() => rows().length === 1);
+      simulateRowClick(rows()[0]);
+      await flushUpdates();
+
+      const confirmButtonEl = queryConfirmButton(container);
+      assertExists(confirmButtonEl, "Confirm must be present");
+      simulateClick(confirmButtonEl!);
+
+      // Wait for the (failing) redispatch to settle.
+      await waitFor(() => screenListSearchCount >= 2);
+      await flushUpdates();
+
+      const warningEl = container.querySelector(
+        "[data-projection-refresh-warning]",
+      );
+      assertExists(
+        warningEl,
+        "a failed canonical reread must surface an explicit warning banner",
+      );
+
+      // The OLD DOM is retained — the (stale, but real) row is still shown, never blanked.
+      assert(
+        (container.querySelector("tbody")?.textContent ?? "").includes("Alpha"),
+        "a failed redispatch must retain the old DOM rather than blank it — the group row must still be present",
+      );
+
+      // The write itself is never resent because its OWN reread failed.
+      const deleteGroupDispatches = scenario.capturedDispatchBodies.filter(
+        (b) => b.layer === "enum_dictionary" && b.action === "delete_group",
+      );
+      assertEquals(
+        deleteGroupDispatches.length,
+        1,
+        "a failed canonical reread must never cause the settled write to be resent",
+      );
+
+      // The modal still closes — closing is driven by the WRITE's own settled result
+      // (round 25), independent of whether the subsequent canonical reread succeeds.
+      assert(
+        queryDialog(container) === null,
+        "the modal must not be force-reopened just because the canonical reread failed",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource =
+        originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
+      render(null, container);
+      cleanup();
+    }
+  },
+);
+
+Deno.test(
+  "ProjectionShell (real mount, round 28): a settled write's canonical reread resets a stale tracked prop-bound value to the DB-authoritative one, while a passive SSE refresh preserves an in-progress edit",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource =
+      FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    const CHILD_MANIFEST_ID = "00000000-0000-0000-0000-0000000ae230";
+
+    function probeLayoutNodes(probeValue: string, rows: Record<string, unknown>[]) {
+      return [
+        ...enumDeleteGroupConfirmModalLayoutNodes(rows),
+        {
+          nodeId: "canonical_probe_input",
+          nodeKind: "catalog_component",
+          componentId: "comp-canonical-probe-input-001",
+          componentKind: "form_input/search_input",
+          componentKey: "search_input.primitive",
+          orderIndex: 10,
+          runtimeInteractions: inputChangeSetStateInteraction("enum_table"),
+          propBindings: { value: { source: "emission.data.probeValue" } },
+        },
+      ];
+    }
+
+    let searchCallCount = 0;
+    const scenario = buildMockScenario((_callIndex, body) => {
+      const layer = body.layer as string | undefined;
+      const action = body.action as string | undefined;
+      if (layer === "screen_list" && action === "Search") {
+        searchCallCount++;
+        return {
+          success: true,
+          emission: {
+            manifestId: ADMIN_ENUM_MANIFEST_ID,
+            layoutId: "layout-ae200-round28-canonical-reset-scenario",
+            projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+            layoutNodes: probeLayoutNodes(
+              "from-db",
+              searchCallCount === 1
+                ? [{ groupId: "row-uuid-1", groupName: "Alpha" }]
+                : [],
+            ),
+            data: { probeValue: "from-db" },
+          },
+        };
+      }
+      if (layer === "enum_dictionary" && action === "delete_group") {
+        return {
+          success: true,
+          emission: { manifestId: CHILD_MANIFEST_ID, data: { ok: true } },
+        };
+      }
+      return { success: true, errors: [] };
+    });
+    globalThis.fetch = scenario.fetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+      render(h(ProjectionShell, {}), container);
+
+      const probeInput = () =>
+        container.querySelector(
+          '[data-node-id="canonical_probe_input"] input',
+        ) as HTMLInputElement | null;
+      await waitFor(() => probeInput() !== null);
+      await waitFor(() => probeInput()!.value === "from-db");
+
+      // The user starts editing — a value that must survive a PASSIVE (SSE) refresh
+      // but must NOT survive a canonical write reread.
+      simulateInput(probeInput()!, "user-typed-edit");
+      await flushUpdates();
+      assertEquals(probeInput()!.value, "user-typed-edit");
+
+      // A genuine write settles (delete_group), triggering the canonical reread.
+      let deleteButtonEl: HTMLButtonElement | null = null;
+      await waitFor(() => {
+        deleteButtonEl = container.querySelector(
+          '[data-node-id="enum_delete_group_button"] button',
+        );
+        return deleteButtonEl !== null;
+      });
+      simulateClick(deleteButtonEl!);
+      await flushUpdates();
+      const rows = () =>
+        Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
+      await waitFor(() => rows().length === 1);
+      simulateRowClick(rows()[0]);
+      await flushUpdates();
+      const confirmButtonEl = queryConfirmButton(container);
+      assertExists(confirmButtonEl, "Confirm must be present");
+      simulateClick(confirmButtonEl!);
+
+      // Wait for the canonical reread to land.
+      await waitFor(() => searchCallCount >= 2);
+      await waitFor(() => probeInput()?.value === "from-db");
+      assertEquals(
+        probeInput()!.value,
+        "from-db",
+        "a settled write's canonical reread must force the stale typed value back to the DB-authoritative one",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource =
+        originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
+      render(null, container);
+      cleanup();
+    }
+  },
+);
 // ─────────────────────────────────────────────────────────────────────────
 // Round 26: shared scenario contract, generalized across the 6 write actions
 // newly embedded into ae200's single surface behind their own disclosure/modal
