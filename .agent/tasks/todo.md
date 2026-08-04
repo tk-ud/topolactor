@@ -1317,6 +1317,35 @@ round 23監査はround22の4件修正を有効として維持しつつ、(1) bar
 - item識別子の手動入力パターンを、根拠なく「本来はbrowse UIにすべきだった手抜き」として今後のroundで安易に新規backend action（`list_items`等）や新規response adoption機構へ拡張する——実際に必要になった時点で、既存admin/uibuilder生成形式との整合を再検証してから着手すること。
 - `AdminEnumsRoster.tsx`とae200のUX差分（item一覧UIの有無、update_group+set_group_itemsの統合度）を「軽微」と過小評価し、parity成立を宣言してroute撤去を進める。
 
+### admin-enum subBundle 実装記録（2026-08-04 round 22 — owner決定：child manifest response非採用+ae200自身の再Dispatchを、既存SSE refresh機構と同一の共有関数として実装。preview配線／item browse UX／完全negative boundary／route撤去は未着手のまま正直に記録）
+
+**round22の指示**: PR #600のadmin-enum subBundleをchild response非採用・ae200再Dispatch方式で完成させるというowner決定を実装せよ、というもの。範囲はpreview配線、item browse UX、完全negative boundary、route撤去まで及ぶ非常に広いものだったが、本round内では中核となるresponse authority決定（最も高leverageかつowner自身が明示的に確定させた設計）にのみ集中し、残りは正直に未着手として記録する。
+
+**1. child manifest responseの非採用は実は既に成立していた（発見・確認のみ）**: `confirmProjectionEntryEmission`の`adoptedManifestId`ガードは、ae210〜ae270等の子manifestへdispatchされたConfirmクリックのresponseが持つ`manifestId`（そのconfirmが実際にdispatchした子manifest自身のID）とae200自身の`adoptedManifestIdRef`を比較し、一致しない限り既にadoptionを拒否していた——これはround17〜21の作業で既に存在していた保護であり、本round独自の新設ではない。真に欠けていたのは「拒否した後、何もしない」という現状——書き込みが実際には成功していても、画面には一切反映されない——だった。
+
+**2. 共有`refreshCurrentManifestAsync`関数を新設（実装済み）**: `frontend/islands/ProjectionShell.tsx`のSSE refresh経路（`projectionRuntime.onProjectionUpdate`ハンドラ内に元々inline実装されていた、`initialDispatchAxesRef`/`adoptedManifestIdRef`/`refreshGenRef`世代カウンタを使うae200自身の再Dispatchロジック）を、SSE専用のidentity-payload合成部分を除いて丸ごと1つの共有関数`refreshCurrentManifestAsync(identityPayload?)`へ抽出した。SSE側は抽出後、identityPayloadを組み立てて`refreshCurrentManifestAsync`を呼ぶだけの薄い呼び出しに置き換えた。`handleRuntimeDispatchResult`（子manifestのdispatch結果を受け取るcallback）は、`confirmProjectionEntryEmission`が拒否した場合（＝子manifestからのresponseだった場合）に、child responseのデータを一切参照せず`void refreshCurrentManifestAsync()`を呼ぶよう変更した——これがround22の owner決定そのものの実装であり、SSE refreshと同一のmanifest identity boundary・同一の世代カウンタ（stale response拒否）を再利用する、round22 OK軸が明示的に要求した「同じidentity boundaryを使う」を文字通り満たす。dispatch結果の成功／失敗判定・error表示・success-gated local mutation（Modal close）は既存のround25 `onSettled`/`deferLocalStateMutationToDispatchSuccess`機構が引き続き単独で担当し、本roundでは一切変更していない。
+
+**3. 実際に検証して発見した設計含意（実装前には気づいていなかった点）**: `AdminRuntimeDispatchAdapter.cs`を確認したところ、admin_runtime destinationへの全ての成功dispatchは常にEmissionでwrapされる（LayoutNodesを持たない、dataのみの最小限Emissionだが、Emission自体はnullにならない）ことを確認した——つまり`handleRuntimeDispatchResult`の`!result.emission`による早期returnは、enum_dictionary write actionでは実質発生せず、`confirmProjectionEntryEmission`のmanifestId比較が確実に働くことを確認した。
+
+**4. 新規DOM mount testで実際に動作を証明（実装済み・重要なバグを自己発見して修正）**: `frontend/tests/projectionShellAdminRuntimeWritePayloadCapture.test.ts`へ、child manifestのcanary data（実在するae230のmanifestIdを持つが、ae200のlist_groups相当データとは似ても似つかない`{ok, groupId}`という書き込み結果shape）を返すConfirm dispatchと、それに続くae200自身の再Dispatch（screen_list/Search、list_groups相当の新しいdata）を区別できるmock scenarioを追加し、(a) child responseのcanaryデータが画面のどこにも一切現れないこと、(b) ちょうど1回だけae200自身の再Dispatchが発生すること、(c) 再Dispatchの結果（該当groupが消えた新しいlist）が実際に画面へ反映されることを証明した。**この過程で、最初のtest実装が誤ってfalseを返した**——原因はtest自身の誤り（テーブルの空状態が0個の`<tr>`ではなく明示的な「No data.」placeholder行を描画するため、`tbody tr`の個数だけを見るassertionが誤検出した）であり、`refreshCurrentManifestAsync`自体の実装には問題が無かったことを、`console.error`によるstep-by-step debug（setEmission直前のpropsJson内容、confirmProjectionEntryEmissionの結果、実際にrenderされたHTML）で確認した上で、assertionをtextContent検査へ修正した——最終的に全17 test green。
+
+**5. test実行結果**: `dotnet test backend/tests/Topolactor.Runtime.Tests`（1564/1564、本round backend変更なし）、`dotnet test backend/tests/Topolactor.Integration.Tests`（実PostgreSQL、226件中225件——既知の無関係stale test 1件のみ除く、本round backend変更なし）、`deno test frontend/tests/`（2035/2035、新規round22 test 1件込み）、`bash .agent/tests/check-frontend-types.sh`（PASS）、`python3 .agent/scripts/check_react_schema_topology_seed_translator.py`（172件中171件——既知の無関係な7aフレークのみ、本round翻訳器変更なし）、`check-structure.sh`/`check-enum-dictionary.sh`/`check-admin-normal-surface-projection-seed-ssot.sh`/`check-completion-judgment.sh`/`check-worktype-routing.sh`全pass。本round変更ファイルは`frontend/islands/ProjectionShell.tsx`と対応testの2ファイルのみ——backend／seed／translatorは一切変更していない。
+
+**未着手のまま残る内容（正直な記録、round22の指示範囲のうち大部分が未着手）**:
+- **preview（dryRun）のUI配線**: backendは全7 operationで`dryRun:literal:true`を既に受理・検証済みだが（round17-24で確立済み）、ae200のConfirm buttonは依然として`confirmed:literal:true`を直接送るのみで、事前にdryRunを送ってpreview結果を確認してから確認段階へ進む、という2段階のUI flowは実装していない。round22 OK軸が明示的に要求した「previewをae200へ接続する」「preview成功時だけ確認段階へ進む」は未達。
+- **items browse UX / selected group detail の正本再読**: `enum_dictionary:get_group`（ae280）をae200自身のselected group変更トリガとして再利用し、item一覧・membership・prefillを正本から再構成する仕組みは未実装。ae200のmanifest wiringが単一の`admin_runtime` targetRef（list_groups固定）しか持たない、というround14以来の既知の構造的制約に依然として阻まれている——本round内ではこの構造自体を変更していない。
+- **完全なnegative boundary matrix（全7 operation）**: 本roundの新規testは1件のシナリオ（delete_group、child response非採用+redispatch）のみを証明しており、round22 OK軸が要求した「未選択、missing record、malformed identity、duplicate index、duplicate membership、referenced delete、role不一致、unconfirmed write、dryRun非永続、payloadFrom解決失敗、backend failure、stale selection、stale response」の全項目×7 operationは未着手。
+- **`enum_confirm_form`/`enum_form`/`enum_confirm_button`の再監査**: 7つのoperation-specific workflowのいずれにも接続されないno-op controlとして依然放置されている。除去または統合の判断を本round内では行っていない。
+- **`AdminEnumsRoster.tsx`/`/admin/enums`のthin_projection_wrapper route撤去**: preview配線・item browse UX・完全negative boundaryのいずれも未達のため、parity成立の前提を満たしていない。`docs/design/runtime-orchestration-ssot.yaml`の`admin_route_retirement_matrix`該当行の更新も未着手。
+
+これらを次roundへ明示的に引き継ぐ。
+
+### Governance NG boundary追記（round 22）
+
+- 本roundのchild response非採用+ae200再Dispatch実装完了をもって、admin-enum subBundleまたは`admin-surface-topology-seed-conversion` Bundle全体がimplementedであるかのように扱う——preview配線・item browse UX・完全negative boundary・route撤去のいずれも未達である。
+- `refreshCurrentManifestAsync`をSSEおよびwrite-success以外のトリガ（例えば単なる再render契機）から安易に呼び出し、不要な追加dispatchを増やす——本round時点での呼び出し元はSSE invalidationイベントとcross-manifest write success settled resultの2箇所のみに限定する。
+- 本roundのDOM testが最初に誤って失敗した原因（table空状態のplaceholder行）を、実装側のバグとして「修正」しようとする——これはtest assertionの誤りであり、実装（Modal/table component）側の空状態表示自体は正しい既存動作である。
+
 ---
 
 ## Bundle `admin-runtime-operation-dispatch-lane-determination`

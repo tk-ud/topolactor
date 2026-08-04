@@ -299,6 +299,21 @@ export default function ProjectionShell(): JSX.Element {
       // above, an explicit re-Load of a DIFFERENT record must not leave the
       // PREVIOUS record's stale tracked value display/dispatch-divergent from the
       // field just (re)loaded (see seedTrackerFromPropBindingsValue's doc comment).
+      // Round 27 owner decision (child manifest response is never adopted into ae200's own
+      // projection state, regardless of dispatch success): a node's own admin_runtime dispatch
+      // override always targets a DIFFERENT manifest (ae210/ae220/ae230/ae240/ae250/ae260/ae270 —
+      // never ae200 itself), so confirmProjectionEntryEmission's adoptedManifestId guard always
+      // rejects it here (confirmation.ok === false) — this callback's ONLY prior use for a
+      // same-manifest result was ae200's own read-circuit dispatch (list_groups), which is never
+      // routed through this handler in practice (Lane 2's admin_runtime target_ref always points
+      // at a child manifest for every seeded write override). On a rejected (cross-manifest)
+      // result that nonetheless SUCCEEDED, the write itself landed — re-dispatch ae200's OWN
+      // current manifest identity (refreshCurrentManifestAsync, the SAME function and identity
+      // boundary the SSE refresh path uses below) to re-read group list / selected group detail /
+      // items / prefill from the DB, rather than ever merging the child's own Emission fields.
+      // Failure is handled entirely by the caller's own settled-result gate (emitBoundEvent's
+      // onSettled / deferLocalStateMutationToDispatchSuccess) — this callback does nothing on
+      // failure, so a failed write's Modal correctly stays open with no stale merge.
       const handleRuntimeDispatchResult = (
         _nodeId: string,
         result: DispatchResponse,
@@ -312,10 +327,7 @@ export default function ProjectionShell(): JSX.Element {
           { adoptedManifestId: adoptedManifestIdRef.current },
         );
         if (!confirmation.ok) {
-          console.error(
-            "[ProjectionShell] PROJECTION_ENTRY_MISMATCH_ON_RUNTIME_DISPATCH_RESULT:",
-            confirmation.error,
-          );
+          void refreshCurrentManifestAsync();
           return;
         }
         setEmission(dispatched);
@@ -394,6 +406,104 @@ export default function ProjectionShell(): JSX.Element {
         }
       }
 
+      // Round 27: single shared re-dispatch function — the SAME manifest identity boundary
+      // (initialDispatchAxesRef, adoptedManifestIdRef, refreshGenRef generation guard) used by
+      // BOTH the SSE invalidation path below AND a settled cross-manifest write's success path
+      // above (handleRuntimeDispatchResult). Never performs frontend topology/layout judgment;
+      // it only re-dispatches the CURRENTLY adopted axes (optionally merging identity-preserving
+      // payload fields the SSE path forwards) and adopts the response ONLY if
+      // confirmProjectionEntryEmission still confirms the SAME manifest identity — a differently-
+      // manifested response is rejected exactly the same way a stale one is. A higher
+      // refreshGenRef generation started after this call began (a newer SSE event, or a second
+      // write settling first) discards this call's result rather than let it overwrite newer
+      // state — same discipline the SSE path already had, now shared instead of duplicated.
+      const refreshCurrentManifestAsync = async (
+        identityPayload?: Record<string, unknown>,
+      ) => {
+        const gen = ++refreshGenRef.current;
+        try {
+          if (gen !== refreshGenRef.current || !mounted) return;
+          const refreshToken = projectionTokenRef.current;
+          if (!refreshToken) return;
+          const storedAxes = initialDispatchAxesRef.current;
+          if (!storedAxes) return;
+
+          const mergedPayload = identityPayload && Object.keys(identityPayload).length > 0
+            ? { ...(storedAxes.payload ?? {}), ...identityPayload }
+            : storedAxes.payload;
+          const axes: UserOperation = {
+            ...storedAxes,
+            ...(mergedPayload !== undefined ? { payload: mergedPayload } : {}),
+          };
+
+          const result = await queueClientCommand(axes, refreshToken);
+          if (!result.success || gen !== refreshGenRef.current || !mounted) {
+            return;
+          }
+          const updated = result.emission;
+          if (!updated) return;
+          const refreshConfirmation = confirmProjectionEntryEmission(
+            entrySelection,
+            updated,
+            { adoptedManifestId: adoptedManifestIdRef.current },
+          );
+          if (!refreshConfirmation.ok) {
+            console.error(
+              "[ProjectionShell] PROJECTION_ENTRY_MISMATCH_ON_REFRESH:",
+              refreshConfirmation.error,
+            );
+            return;
+          }
+          setEmission(updated);
+          emissionRef.current = updated;
+          const refreshedNodes = toRunnerWiringNodes(updated.layoutNodes);
+          nodeValueTrackerRef.current.reconcile(
+            refreshedNodes.map((n) => n.nodeId),
+          );
+          seedTrackerFromPropBindingsValue(
+            nodeValueTrackerRef.current,
+            updated.layoutNodes ?? [],
+            updated.data ?? {},
+            resolveRuntimeDataPath,
+          );
+          if (effectRunnerRef.current) {
+            effectRunnerRef.current.updateNodes(refreshedNodes);
+            for (
+              const trigger of [
+                "initial_mount",
+                "route_enter",
+                "initial_display",
+              ] as const
+            ) {
+              const lifecycleResult = effectRunnerRef.current.emitLifecycle(trigger);
+              if (!lifecycleResult.ok) {
+                console.error(
+                  `[ProjectionShell] LIFECYCLE_EFFECT_RUNNER_BLOCKED_ON_REFRESH (${trigger}):`,
+                  lifecycleResult.errors,
+                );
+              }
+            }
+          } else if (stateDispatcherRef.current) {
+            predeclareProjectionState(
+              refreshedNodes,
+              stateDispatcherRef.current,
+            );
+          }
+          setSpecs(renderEmission(updated, defaultComponentRegistry, {
+            localStateStore: stateDispatcherRef.current ?? undefined,
+            payloadFromNodeValues: nodeValueTrackerRef.current.snapshot(),
+            onNodeValueChange: nodeValueTrackerRef.current.set,
+            onRuntimeDispatchResult: handleRuntimeDispatchResult,
+          }));
+        } catch (err) {
+          if (gen !== refreshGenRef.current || !mounted) return;
+          console.error(
+            "[ProjectionShell] MANIFEST_REFRESH_ERROR:",
+            err,
+          );
+        }
+      };
+
       // sse_projection_lane wiring per runtime-orchestration-ssot.yaml:
       //   sseReceiver → enqueueProjectionHookTrigger → sseDispatcher → projectionRuntime → onProjectionUpdate
       //
@@ -416,136 +526,21 @@ export default function ProjectionShell(): JSX.Element {
       }
 
       projectionRuntime.onProjectionUpdate((_uiProjection, payload) => {
-        const gen = ++refreshGenRef.current;
-        (async () => {
-          try {
-            if (gen !== refreshGenRef.current || !mounted) return;
-            // Use projectionTokenRef (ref-backed) — closed-over state is stale in [] effect.
-            const refreshToken = projectionTokenRef.current;
-            if (!refreshToken) return;
-            const storedAxes = initialDispatchAxesRef.current;
-            if (!storedAxes) return;
-
-            // SSE payload is an invalidation/refresh trigger only (SSOT:
-            // pipeline-continuity-ssot.yaml sse_projection_lane.refresh_boundary_policy
-            // trigger_role: invalidation_refresh_trigger_only) — it must not perform
-            // frontend topology/layout judgment or silently change WHICH entry is
-            // dispatched. manifest_id / table_id / table_registry_id are forwarded
-            // verbatim as identity-preserving payload context (never discarded), but
-            // never written into axes.target: per runtime-orchestration-ssot.yaml
-            // dispatcher_contract.manifest_resolution, `target` is the axes-resolution
-            // key (dispatcher_mapping.target), while `manifest_id` is a distinct
-            // identity key — conflating them would silently retarget a route-selected
-            // entry (?route=) away from its explicit target on the next refresh.
-            const identityPayload: Record<string, unknown> = {};
-            if (payload.manifest_id) identityPayload.manifest_id = payload.manifest_id;
-            if (payload.table_id) identityPayload.table_id = payload.table_id;
-            if (payload.table_registry_id) {
-              identityPayload.table_registry_id = payload.table_registry_id;
-            }
-
-            // Merge identity fields INTO the stored entry payload (never replace):
-            // a manifest-pinned entry keeps its payload.target_ref across SSE
-            // refresh, so another manifest's event cannot silently retarget it.
-            const mergedPayload = {
-              ...(storedAxes.payload ?? {}),
-              ...identityPayload,
-            };
-            // axes.target is never overwritten from the SSE payload — the entry
-            // selection's route/default target axis is preserved verbatim across
-            // every refresh.
-            const axes: UserOperation = {
-              ...storedAxes,
-              ...(Object.keys(mergedPayload).length > 0
-                ? { payload: mergedPayload }
-                : {}),
-            };
-
-            const result = await queueClientCommand(axes, refreshToken);
-            if (!result.success || gen !== refreshGenRef.current || !mounted) {
-              return;
-            }
-            const updated = result.emission;
-            if (!updated) return;
-            // refresh_boundary_policy.failure_policy: explicit_error_log_retain_old_dom —
-            // an explicit package selection AND the adopted manifest identity must still be
-            // confirmed after refresh; on mismatch, log explicitly and retain the prior
-            // (already-confirmed) DOM rather than silently rendering a differently-packaged or
-            // differently-manifested projection.
-            const refreshConfirmation = confirmProjectionEntryEmission(
-              entrySelection,
-              updated,
-              { adoptedManifestId: adoptedManifestIdRef.current },
-            );
-            if (!refreshConfirmation.ok) {
-              console.error(
-                "[ProjectionShell] PROJECTION_ENTRY_MISMATCH_ON_REFRESH:",
-                refreshConfirmation.error,
-              );
-              return;
-            }
-            setEmission(updated);
-            emissionRef.current = updated;
-            // SSE refresh reconciliation: same dispatcher / runner / fired-registry
-            // (refs are never re-created), so existing state and fired lifecycle
-            // interactions survive. The runner's node list is reconciled to the
-            // refreshed projection (predeclaring any newly-appeared UI状態更新
-            // target, recomputing the loop/policy guards), then lifecycle triggers
-            // are re-emitted so a newly-appeared node's initial_mount executes
-            // exactly once — the fired-registry (keyed by nodeId + interaction
-            // index) guarantees an existing node's already-fired interaction does
-            // not re-execute.
-            const refreshedNodes = toRunnerWiringNodes(updated.layoutNodes);
-            // Reconcile tracked live values to the refreshed node list BEFORE
-            // the effect runner reconciliation below and the renderEmission()
-            // call further down — a removed/replaced node's stale tracked
-            // value must not leak into a later dispatch on this same mount.
-            nodeValueTrackerRef.current.reconcile(
-              refreshedNodes.map((n) => n.nodeId),
-            );
-            seedTrackerFromPropBindingsValue(
-              nodeValueTrackerRef.current,
-              updated.layoutNodes ?? [],
-              updated.data ?? {},
-              resolveRuntimeDataPath,
-            );
-            if (effectRunnerRef.current) {
-              effectRunnerRef.current.updateNodes(refreshedNodes);
-              for (
-                const trigger of [
-                  "initial_mount",
-                  "route_enter",
-                  "initial_display",
-                ] as const
-              ) {
-                const result = effectRunnerRef.current.emitLifecycle(trigger);
-                if (!result.ok) {
-                  console.error(
-                    `[ProjectionShell] LIFECYCLE_EFFECT_RUNNER_BLOCKED_ON_REFRESH (${trigger}):`,
-                    result.errors,
-                  );
-                }
-              }
-            } else if (stateDispatcherRef.current) {
-              predeclareProjectionState(
-                refreshedNodes,
-                stateDispatcherRef.current,
-              );
-            }
-            setSpecs(renderEmission(updated, defaultComponentRegistry, {
-              localStateStore: stateDispatcherRef.current ?? undefined,
-              payloadFromNodeValues: nodeValueTrackerRef.current.snapshot(),
-              onNodeValueChange: nodeValueTrackerRef.current.set,
-              onRuntimeDispatchResult: handleRuntimeDispatchResult,
-            }));
-          } catch (err) {
-            if (gen !== refreshGenRef.current || !mounted) return;
-            console.error(
-              "[ProjectionShell] SSE_PROJECTION_REFRESH_ERROR:",
-              err,
-            );
-          }
-        })();
+        // SSE payload is an invalidation/refresh trigger only (SSOT:
+        // pipeline-continuity-ssot.yaml sse_projection_lane.refresh_boundary_policy
+        // trigger_role: invalidation_refresh_trigger_only) — it must not perform frontend
+        // topology/layout judgment or silently change WHICH entry is dispatched.
+        // manifest_id / table_id / table_registry_id are forwarded verbatim as
+        // identity-preserving payload context (never discarded) via refreshCurrentManifestAsync's
+        // identityPayload parameter — merged INTO the stored entry payload, never replacing it,
+        // and axes.target is never overwritten (see refreshCurrentManifestAsync above).
+        const identityPayload: Record<string, unknown> = {};
+        if (payload.manifest_id) identityPayload.manifest_id = payload.manifest_id;
+        if (payload.table_id) identityPayload.table_id = payload.table_id;
+        if (payload.table_registry_id) {
+          identityPayload.table_registry_id = payload.table_registry_id;
+        }
+        void refreshCurrentManifestAsync(identityPayload);
       });
 
       const dispatcher = createSseDispatcherWithProjectionRuntime(

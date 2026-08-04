@@ -1739,6 +1739,143 @@ Deno.test(
   },
 );
 
+Deno.test(
+  "ProjectionShell (real mount, round 27 owner decision): a successful child-manifest write's own Emission is never adopted into ae200's projection state — ae200 is re-dispatched with its OWN identity afterward, and only THAT response's data is rendered",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource =
+      FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    // A child-manifest emission that, if ever wrongly adopted, would be trivially detectable —
+    // it carries a manifestId belonging to ae230 (delete_group's own dedicated write manifest,
+    // NOT ae200) and a data shape (a bare {ok, groupId} write-result) that looks nothing like
+    // ae200's own list_groups table rows.
+    const CHILD_MANIFEST_ID = "00000000-0000-0000-0000-0000000ae230";
+    const CANARY_CHILD_DATA = { ok: true, groupId: "row-uuid-1" };
+
+    // ae200's own re-dispatch (round 27's redispatch, replaying the SAME entry axes
+    // resolveProjectionEntryAxes produced for the initial mount: layer="screen_list",
+    // action="Search") must be distinguishable from both the confirm dispatch (layer/action =
+    // enum_dictionary/delete_group) and the row-select reissue (enum_dictionary/list_groups).
+    let redispatchCount = 0;
+    const scenario = buildMockScenario((callIndex, body) => {
+      const layer = body.layer as string | undefined;
+      const action = body.action as string | undefined;
+      if (callIndex === 1) {
+        return {
+          success: true,
+          emission: {
+            manifestId: ADMIN_ENUM_MANIFEST_ID,
+            layoutId: "layout-ae200-round27-redispatch-scenario",
+            projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+            layoutNodes: enumDeleteGroupConfirmModalLayoutNodes([
+              { groupId: "row-uuid-1", groupName: "Alpha" },
+            ]),
+          },
+        };
+      }
+      if (layer === "enum_dictionary" && action === "delete_group") {
+        // The confirm dispatch itself: a genuine child-manifest response, WITH an emission (the
+        // real AdminRuntimeDispatchAdapter always wraps a successful data result in one — see
+        // backend/runtime/AdminRuntimeDispatchAdapter.cs), but that emission's manifestId is the
+        // CHILD's own (ae230), which confirmProjectionEntryEmission's adoptedManifestId guard
+        // must reject.
+        return {
+          success: true,
+          emission: {
+            manifestId: CHILD_MANIFEST_ID,
+            data: CANARY_CHILD_DATA,
+          },
+        };
+      }
+      if (layer === "screen_list" && action === "Search") {
+        // ae200's own re-dispatch (round 27) — a FRESH list_groups-shaped read, reflecting the
+        // group having been deleted (empty rows), and the SAME ae200 manifestId.
+        redispatchCount++;
+        return {
+          success: true,
+          emission: {
+            manifestId: ADMIN_ENUM_MANIFEST_ID,
+            layoutId: "layout-ae200-round27-redispatch-scenario",
+            projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+            layoutNodes: enumDeleteGroupConfirmModalLayoutNodes([]),
+          },
+        };
+      }
+      // Row-select reissue (enum_dictionary/list_groups) — irrelevant to this test, no-op.
+      return { success: true, errors: [] };
+    });
+    globalThis.fetch = scenario.fetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+      render(h(ProjectionShell, {}), container);
+
+      let deleteButtonEl: HTMLButtonElement | null = null;
+      await waitFor(() => {
+        deleteButtonEl = container.querySelector(
+          '[data-node-id="enum_delete_group_button"] button',
+        );
+        return deleteButtonEl !== null;
+      });
+
+      simulateClick(deleteButtonEl!);
+      await flushUpdates();
+      const rows = () =>
+        Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
+      await waitFor(() => rows().length === 1);
+      simulateRowClick(rows()[0]);
+      await flushUpdates();
+
+      const confirmButtonEl = queryConfirmButton(container);
+      assertExists(confirmButtonEl, "Confirm must be present");
+      simulateClick(confirmButtonEl!);
+
+      // Wait for the round-27 redispatch to actually fire and settle.
+      await waitFor(() => redispatchCount >= 1);
+      await flushUpdates();
+
+      // The child response's own canary data must never appear anywhere reachable from the
+      // rendered emission — the only proof surface available here is that the redispatch fired
+      // with the CORRECT (ae200-owned) identity and that the table now reflects ITS data (the
+      // deleted group's row is gone), not any state derived from the child's {ok, groupId} shape.
+      // The table's empty state renders an explicit "No data." placeholder row rather than
+      // zero <tr> elements, so absence is checked by content, not row count.
+      await waitFor(() =>
+        !(container.querySelector("tbody")?.textContent ?? "").includes("Alpha")
+      );
+      const tbodyText = container.querySelector("tbody")?.textContent ?? "";
+      assert(
+        !tbodyText.includes("Alpha"),
+        "after the round-27 redispatch, ae200's own re-read must show the group gone, not the child's own {ok, groupId} canary data",
+      );
+      assertEquals(
+        redispatchCount,
+        1,
+        "exactly one ae200 redispatch must fire for the one settled child write",
+      );
+
+      // The modal still closes once the write settled successfully (round 25 behavior,
+      // unaffected by round 27 — closing is driven by the settled RESULT, never by which
+      // response ended up adopted into projection state).
+      await waitFor(() => queryDialog(container) === null);
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource =
+        originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
+      render(null, container);
+      cleanup();
+    }
+  },
+);
+
 // ─────────────────────────────────────────────────────────────────────────
 // Round 26: shared scenario contract, generalized across the 6 write actions
 // newly embedded into ae200's single surface behind their own disclosure/modal
