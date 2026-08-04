@@ -121,7 +121,10 @@ import {
   type NormalizedComponentEventType,
   type RuntimeDispatchSpec,
 } from "./frontendScheduler.ts";
-import type { RuntimeComponentSpec } from "./runtimeComponentAdapter.ts";
+import type {
+  RuntimeComponentSpec,
+  RuntimeDispatchResultContext,
+} from "./runtimeComponentAdapter.ts";
 import type { DispatchResponse } from "../api/dispatch.ts";
 import { resolvePayloadFrom } from "./payloadFromResolver.ts";
 import { applyGuardedLocalStateMutation } from "./uiEventEffectRunner.ts";
@@ -431,9 +434,13 @@ function dispatchRuntimeComponentCommandAndForwardResult(
   dispatchSpec: Parameters<typeof enqueueRuntimeComponentCommand>[0],
   onSettled?: (result: DispatchResponse) => void,
 ): void {
+  // Round 29: the authored targetRef actually dispatched (never inferred/guessed downstream) —
+  // forwarded verbatim so a caller can confirm a settled response landed on the manifest that
+  // was actually targeted, instead of merely noticing it differs from some other identity.
+  const context: RuntimeDispatchResultContext = { targetRef: dispatchSpec.targetRef };
   enqueueRuntimeComponentCommand(dispatchSpec)
     .then((result) => {
-      spec.onRuntimeDispatchResult?.(result);
+      spec.onRuntimeDispatchResult?.(result, context);
       onSettled?.(result);
     })
     .catch((err) => {

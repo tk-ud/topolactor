@@ -17,6 +17,19 @@ type NormalizedDesign = {
   topologyLayoutClassRefs?: string[];
 };
 
+/**
+ * Round 29: identity context accompanying a settled admin_runtime dispatch result —
+ * carries the authored target_ref (dispatchTargetRefByTrigger / RuntimeDispatchSpec.targetRef)
+ * that was ACTUALLY dispatched, so a caller can confirm a settled response really did land on
+ * the manifest that was targeted, rather than inferring "this must be an ordinary cross-manifest
+ * child response" merely because its manifestId differs from whatever the caller currently has
+ * adopted. See ProjectionShell.tsx's handleRuntimeDispatchResult.
+ */
+export type RuntimeDispatchResultContext = {
+  /** The dispatchSpec.targetRef that was actually sent, if any (e.g. "manifest:<uuid>:<wiringKey>"). */
+  targetRef?: string;
+};
+
 export type RuntimeComponentSpec = {
   componentId: string;
   packageId?: string | null;
@@ -55,7 +68,10 @@ export type RuntimeComponentSpec = {
   /** Fires with this node's own latest scalar value on a value-bearing trigger (change/input/select). */
   onNodeValueChange?: (value: unknown) => void;
   /** Fires with the settled result of this node's own admin_runtime dispatch. See ComponentDataHub. */
-  onRuntimeDispatchResult?: (result: DispatchResponse) => void;
+  onRuntimeDispatchResult?: (
+    result: DispatchResponse,
+    context: RuntimeDispatchResultContext,
+  ) => void;
   /**
    * Round 25: the REAL nested schema children (e.g. a Modal's Confirm/Cancel Action children),
    * as already-rendered VNodes — populated by components/LayoutProjectionTree.tsx's

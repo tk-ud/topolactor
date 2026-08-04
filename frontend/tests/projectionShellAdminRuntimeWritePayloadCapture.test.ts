@@ -2510,3 +2510,452 @@ for (const config of CONFIRM_MODAL_SCENARIOS) {
     },
   );
 }
+
+// ─── round 29: authored-target_ref identity confirmation, generic unbound-tracker
+// clear on canonical_reread, and the canonical_reread-outranks-passive_invalidation
+// ordering contract ───────────────────────────────────────────────────────────────
+
+Deno.test(
+  "ProjectionShell (real mount, round 29): a settled write's response manifestId that does NOT match the manifest actually authored in target_ref is a genuine identity anomaly — never treated as an ordinary expected child response, fails close with an explicit warning, and never triggers a canonical reread",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource =
+      FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    // Never the manifest actually authored in target_ref (ae230) nor ae200 itself — proves the
+    // round 29 check is a genuine confirmation against the DISPATCHED identity, not merely a
+    // "differs from adopted" heuristic that would have silently accepted this as an ordinary
+    // cross-manifest child response.
+    const UNEXPECTED_MANIFEST_ID = "00000000-0000-0000-0000-0000000ae999";
+
+    let searchCallCount = 0;
+    const scenario = buildMockScenario((_callIndex, body) => {
+      const layer = body.layer as string | undefined;
+      const action = body.action as string | undefined;
+      if (layer === "screen_list" && action === "Search") {
+        searchCallCount++;
+        return {
+          success: true,
+          emission: {
+            manifestId: ADMIN_ENUM_MANIFEST_ID,
+            layoutId: "layout-ae200-round29-identity-mismatch-scenario",
+            projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+            layoutNodes: enumDeleteGroupConfirmModalLayoutNodes([
+              { groupId: "row-uuid-1", groupName: "Alpha" },
+            ]),
+          },
+        };
+      }
+      if (layer === "enum_dictionary" && action === "delete_group") {
+        return {
+          success: true,
+          emission: { manifestId: UNEXPECTED_MANIFEST_ID, data: { ok: true } },
+        };
+      }
+      return { success: true, errors: [] };
+    });
+    globalThis.fetch = scenario.fetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+      render(h(ProjectionShell, {}), container);
+
+      let deleteButtonEl: HTMLButtonElement | null = null;
+      await waitFor(() => {
+        deleteButtonEl = container.querySelector(
+          '[data-node-id="enum_delete_group_button"] button',
+        );
+        return deleteButtonEl !== null;
+      });
+      simulateClick(deleteButtonEl!);
+      await flushUpdates();
+      const rows = () =>
+        Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
+      await waitFor(() => rows().length === 1);
+      simulateRowClick(rows()[0]);
+      await flushUpdates();
+
+      const confirmButtonEl = queryConfirmButton(container);
+      assertExists(confirmButtonEl, "Confirm must be present");
+      simulateClick(confirmButtonEl!);
+      for (let i = 0; i < 15; i++) await flushUpdates();
+
+      const warningEl = container.querySelector(
+        "[data-projection-refresh-warning]",
+      );
+      assertExists(
+        warningEl,
+        "an identity anomaly (response manifestId != authored target_ref manifest) must surface an explicit warning",
+      );
+      assert(
+        (warningEl!.textContent ?? "").includes(UNEXPECTED_MANIFEST_ID),
+        "the warning must name the unexpected manifest identity actually returned",
+      );
+      assertEquals(
+        searchCallCount,
+        1,
+        "an identity anomaly must NOT be treated as an ordinary expected child response — no canonical reread may be triggered",
+      );
+      assert(
+        (container.querySelector("tbody")?.textContent ?? "").includes("Alpha"),
+        "the old DOM must be retained — never blanked on an identity anomaly",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource =
+        originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
+      render(null, container);
+      cleanup();
+    }
+  },
+);
+
+function unboundProbeLayoutNodes(rows: Record<string, unknown>[]) {
+  return [
+    ...enumDeleteGroupConfirmModalLayoutNodes(rows),
+    {
+      nodeId: "unbound_probe_input",
+      nodeKind: "catalog_component",
+      componentId: "comp-unbound-probe-input-001",
+      componentKind: "form_input/input",
+      componentKey: "text_input.primitive",
+      orderIndex: 10,
+      runtimeInteractions: inputChangeSetStateInteraction(
+        "enum_delete_group_confirm_modal",
+      ),
+      // No propBindings at all — a genuinely unbound, free-typed field. Only
+      // onChange keystroke tracking (renderEmission's onNodeValueChange wiring)
+      // ever populates its tracker entry; nothing re-seeds it from emission.data.
+    },
+    {
+      nodeId: "probe_dispatch_button",
+      nodeKind: "catalog_component",
+      componentId: "comp-probe-dispatch-button-001",
+      componentKind: "action/button",
+      componentKey: "button.primitive",
+      orderIndex: 11,
+      wiringKind: "admin_runtime",
+      targetSurface: "manifest",
+      targetRef: `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:noop_probe`,
+      dispatchPayloadFromByTrigger: {
+        click: { probeField: "node:unbound_probe_input.value" },
+      },
+    },
+  ];
+}
+
+Deno.test(
+  "ProjectionShell (real mount, round 29): a settled write's canonical reread discards an UNBOUND (no propBindings) typed input's stale tracked value — a later dispatch referencing it fails close instead of resending the pre-write value",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource =
+      FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    const CHILD_MANIFEST_ID = "00000000-0000-0000-0000-0000000ae230";
+    let searchCallCount = 0;
+    let noopProbeDispatchCount = 0;
+
+    const scenario = buildMockScenario((_callIndex, body) => {
+      const layer = body.layer as string | undefined;
+      const action = body.action as string | undefined;
+      if (layer === "screen_list" && action === "Search") {
+        searchCallCount++;
+        return {
+          success: true,
+          emission: {
+            manifestId: ADMIN_ENUM_MANIFEST_ID,
+            layoutId: "layout-ae200-round29-unbound-clear-scenario",
+            projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+            layoutNodes: unboundProbeLayoutNodes(
+              searchCallCount === 1
+                ? [{ groupId: "row-uuid-1", groupName: "Alpha" }]
+                : [],
+            ),
+          },
+        };
+      }
+      if (layer === "enum_dictionary" && action === "delete_group") {
+        return {
+          success: true,
+          emission: { manifestId: CHILD_MANIFEST_ID, data: { ok: true } },
+        };
+      }
+      if (layer === "enum_dictionary" && action === "noop_probe") {
+        noopProbeDispatchCount++;
+        return { success: true, errors: [] };
+      }
+      return { success: true, errors: [] };
+    });
+    globalThis.fetch = scenario.fetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+      render(h(ProjectionShell, {}), container);
+
+      const probeInput = () =>
+        container.querySelector(
+          '[data-node-id="unbound_probe_input"] input',
+        ) as HTMLInputElement | null;
+      const probeButton = () =>
+        container.querySelector(
+          '[data-node-id="probe_dispatch_button"] button',
+        ) as HTMLButtonElement | null;
+      await waitFor(() => probeInput() !== null && probeButton() !== null);
+
+      // Type into the UNBOUND field and prove the tracker holds it BEFORE any write —
+      // a probe dispatch referencing it must resolve, not fail close.
+      simulateInput(probeInput()!, "pre-write-typed-value");
+      await flushUpdates();
+      simulateClick(probeButton()!);
+      await waitFor(() => noopProbeDispatchCount >= 1);
+      const firstProbeBody = scenario.capturedDispatchBodies.find(
+        (b) => b.layer === "enum_dictionary" && b.action === "noop_probe",
+      ) as Record<string, unknown>;
+      assertExists(firstProbeBody, "the pre-write probe dispatch must have been sent");
+      assertEquals(
+        (firstProbeBody.payload as Record<string, unknown>).probeField,
+        "pre-write-typed-value",
+        "the tracker must hold the freshly typed value before any write settles",
+      );
+
+      // A genuine, UNRELATED write settles (delete_group), triggering ae200's canonical reread.
+      let deleteButtonEl: HTMLButtonElement | null = null;
+      await waitFor(() => {
+        deleteButtonEl = container.querySelector(
+          '[data-node-id="enum_delete_group_button"] button',
+        );
+        return deleteButtonEl !== null;
+      });
+      simulateClick(deleteButtonEl!);
+      await flushUpdates();
+      const rows = () =>
+        Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
+      await waitFor(() => rows().length === 1);
+      simulateRowClick(rows()[0]);
+      await flushUpdates();
+      const confirmButtonEl = queryConfirmButton(container);
+      assertExists(confirmButtonEl, "Confirm must be present");
+      simulateClick(confirmButtonEl!);
+      await waitFor(() => searchCallCount >= 2);
+      await flushUpdates();
+
+      // A second probe click, AFTER the canonical reread, must fail close (no new probe
+      // dispatch captured) — the unbound field's stale pre-write value must not survive an
+      // unrelated write's canonical reread, and must never be silently resent.
+      simulateClick(probeButton()!);
+      for (let i = 0; i < 10; i++) await flushUpdates();
+      assertEquals(
+        noopProbeDispatchCount,
+        1,
+        "the unbound field's stale tracked value must have been discarded by the canonical " +
+          "reread — a later reference to it must fail close, never resend the pre-write value",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource =
+        originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
+      render(null, container);
+      cleanup();
+    }
+  },
+);
+
+Deno.test(
+  "ProjectionShell (real mount, round 29): a canonical_reread's OWN failure still surfaces as an explicit warning even though a passive_invalidation STARTED (queued) while the canonical reread was still in flight — never silently discarded as merely 'superseded' by that later call",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource =
+      FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    const CHILD_MANIFEST_ID = "00000000-0000-0000-0000-0000000ae230";
+
+    function probeLayoutNodes(probeValue: string, rows: Record<string, unknown>[]) {
+      return [
+        ...enumDeleteGroupConfirmModalLayoutNodes(rows),
+        {
+          nodeId: "canonical_probe_input",
+          nodeKind: "catalog_component",
+          componentId: "comp-canonical-probe-input-001",
+          componentKind: "form_input/search_input",
+          componentKey: "search_input.primitive",
+          orderIndex: 10,
+          runtimeInteractions: inputChangeSetStateInteraction(
+            "enum_delete_group_confirm_modal",
+          ),
+          propBindings: { value: { source: "emission.data.probeValue" } },
+        },
+      ];
+    }
+
+    // The api_command_lane FIFO (frontendScheduler.ts drainClientCommandQueue) serializes
+    // ACTUAL network calls strictly in queue order — a queued-but-not-yet-dequeued command
+    // never races another command's fetch. The bug round 29 fixes is not about network
+    // resolution order; it is that gen assignment happens SYNCHRONOUSLY at
+    // refreshCurrentManifestAsync's call time (before the FIFO even dequeues that call's own
+    // command) — so a passive_invalidation that merely STARTS (and is queued) while an
+    // earlier canonical_reread's command is still draining can, under the OLD single-counter
+    // design, make that canonical_reread's own (guaranteed-to-resolve-first, by FIFO order)
+    // response look "stale" purely because the shared counter moved on, even though nothing
+    // about the canonical_reread's own request was actually superseded. Reproducing this
+    // needs only: hold the canonical_reread's OWN screen_list/Search call pending, fire the
+    // SSE event WHILE it is still pending (bumping passiveGenRef synchronously, before its
+    // own — necessarily later, FIFO-serialized — fetch can even begin), then resolve the
+    // canonical_reread with a FAILURE and confirm it still surfaces as an explicit warning.
+    let searchCallCount = 0;
+    const canonicalSearchResolveHolder: {
+      current: ((body: Record<string, unknown>) => void) | null;
+    } = { current: null };
+
+    const scenario = buildMockScenario((_callIndex, body) => {
+      const layer = body.layer as string | undefined;
+      const action = body.action as string | undefined;
+      if (layer === "screen_list" && action === "Search") {
+        searchCallCount++;
+        if (searchCallCount === 1) {
+          return {
+            success: true,
+            emission: {
+              manifestId: ADMIN_ENUM_MANIFEST_ID,
+              layoutId: "layout-ae200-round29-race-scenario",
+              projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+              layoutNodes: probeLayoutNodes("initial", [
+                { groupId: "row-uuid-1", groupName: "Alpha" },
+              ]),
+              data: { probeValue: "initial" },
+            },
+          };
+        }
+        // Unreachable synchronously — buildMockScenario's responder is synchronous, so the
+        // pending-promise indirection is applied via the wrapping fetch below instead.
+        return { success: true, errors: [] };
+      }
+      if (layer === "enum_dictionary" && action === "delete_group") {
+        return {
+          success: true,
+          emission: { manifestId: CHILD_MANIFEST_ID, data: { ok: true } },
+        };
+      }
+      return { success: true, errors: [] };
+    });
+
+    // Wrap scenario.fetch so ONLY the SECOND screen_list/Search call ever made (the
+    // canonical_reread triggered by delete_group's own settlement) resolves when the test
+    // explicitly calls canonicalSearchResolve — every other call, including any LATER
+    // screen_list/Search call (the passive_invalidation's own eventual, FIFO-later call),
+    // passes through unmodified so nothing is left permanently pending (a permanently-pending
+    // fetch would wedge the shared api_command_lane FIFO for the rest of the test run).
+    let searchCallsSeen = 0;
+    const raceFetch = (async (url: string, init?: RequestInit) => {
+      const isDispatch = url.toString() === "/api/dispatch";
+      if (isDispatch) {
+        const parsed = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+        if (parsed.layer === "screen_list" && parsed.action === "Search") {
+          searchCallsSeen++;
+          if (searchCallsSeen === 2) {
+            // The canonical_reread's own call — held pending until resolved explicitly.
+            return await new Promise<Response>((resolve) => {
+              canonicalSearchResolveHolder.current = (respBody) =>
+                resolve(new Response(JSON.stringify(respBody), { status: 200 }));
+            });
+          }
+        }
+      }
+      return await scenario.fetch(url, init);
+    }) as typeof fetch;
+    globalThis.fetch = raceFetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+      render(h(ProjectionShell, {}), container);
+
+      const probeInput = () =>
+        container.querySelector(
+          '[data-node-id="canonical_probe_input"] input',
+        ) as HTMLInputElement | null;
+      await waitFor(() => probeInput() !== null);
+      await waitFor(() => probeInput()!.value === "initial");
+
+      // Trigger the write → delete_group settles → its canonical reread issues the SECOND
+      // screen_list/Search call, held pending by canonicalSearchResolve above.
+      let deleteButtonEl: HTMLButtonElement | null = null;
+      await waitFor(() => {
+        deleteButtonEl = container.querySelector(
+          '[data-node-id="enum_delete_group_button"] button',
+        );
+        return deleteButtonEl !== null;
+      });
+      simulateClick(deleteButtonEl!);
+      await flushUpdates();
+      const rows = () =>
+        Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
+      await waitFor(() => rows().length === 1);
+      simulateRowClick(rows()[0]);
+      await flushUpdates();
+      const confirmButtonEl = queryConfirmButton(container);
+      assertExists(confirmButtonEl, "Confirm must be present");
+      simulateClick(confirmButtonEl!);
+      await waitFor(() => canonicalSearchResolveHolder.current !== null);
+
+      // Fire a passive SSE event WHILE the canonical reread is still pending — this
+      // synchronously starts a passive_invalidation call (queued behind the canonical
+      // reread in the api_command_lane FIFO; it cannot begin its own fetch yet).
+      assert(FakeEventSource.instances.length > 0, "SSE receiver must have connected");
+      FakeEventSource.instances[0].emit(
+        "projection",
+        JSON.stringify({ manifest_id: ADMIN_ENUM_MANIFEST_ID }),
+      );
+      await flushUpdates();
+
+      // Now resolve the canonical reread — with a FAILURE. Under the old single-counter
+      // design this failure would be silently discarded (the shared counter had already
+      // moved on when the passive call started) — under the round 29 fix, canonicalGenRef
+      // is untouched by a passive call starting, so this failure must still surface.
+      assertExists(
+        canonicalSearchResolveHolder.current,
+        "canonical reread's own call must be pending",
+      );
+      canonicalSearchResolveHolder.current!({
+        success: false,
+        errors: [{ code: "DB_UNAVAILABLE", message: "db unavailable" }],
+      });
+
+      const warningEl = () => container.querySelector("[data-projection-refresh-warning]");
+      await waitFor(() => warningEl() !== null);
+      assertExists(
+        warningEl(),
+        "the canonical reread's own failure must surface as an explicit warning — never " +
+          "silently discarded merely because a later passive_invalidation had already started",
+      );
+      // The old DOM is retained (never blanked) — the probe field still shows the
+      // pre-failure value, since the failed canonical reread never produced an Emission.
+      assertEquals(probeInput()?.value, "initial");
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource =
+        originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
+      render(null, container);
+      cleanup();
+    }
+  },
+);

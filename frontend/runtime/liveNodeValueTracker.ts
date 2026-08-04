@@ -70,6 +70,18 @@ export type LiveNodeValueTracker = {
    * (SSE refresh / node reconciliation boundary).
    */
   reconcile(currentNodeIds: readonly string[]): void;
+  /**
+   * Drops EVERY tracked value, bound or unbound (round 29). A settled write's
+   * canonical reread makes the DB the sole authority for everything the
+   * surface currently displays — not just the fields seedTrackerFromPropBindingsValue
+   * happens to re-seed (propBindings-bound fields). A typed value in a field with NO
+   * propBindings (e.g. a still-open create/update form's free-typed input) would
+   * otherwise survive reconcile()+seed unchanged (reconcile only drops nodes ABSENT
+   * from the new layout; seed only ever ADDS/overwrites propBindings-bound nodeIds) and
+   * could be resent stale on a LATER, unrelated write. Call before reconcile()+seed on
+   * canonical_reread; never on a passive refresh, where an in-progress edit must survive.
+   */
+  clear(): void;
 };
 
 export function createLiveNodeValueTracker(): LiveNodeValueTracker {
@@ -86,6 +98,11 @@ export function createLiveNodeValueTracker(): LiveNodeValueTracker {
       const keep = new Set(currentNodeIds);
       for (const key of Object.keys(store)) {
         if (!keep.has(key)) delete store[key];
+      }
+    },
+    clear() {
+      for (const key of Object.keys(store)) {
+        delete store[key];
       }
     },
   };

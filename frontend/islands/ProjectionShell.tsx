@@ -48,8 +48,21 @@ import {
   resolveProjectionEntryAxes,
 } from "../runtime/projectionEntry.ts";
 import type { DispatchResponse, Emission, LayoutNode } from "../api/dispatch.ts";
+import type { RuntimeDispatchResultContext } from "../runtime/runtimeComponentAdapter.ts";
 import { RecommendNavigationIsland } from "../components/RecommendNavigationIsland.tsx";
 import { LayoutProjectionTree } from "../components/LayoutProjectionTree.tsx";
+
+/**
+ * Round 29: extracts the manifest id an authored target_ref actually pointed at
+ * ("manifest:<uuid>:<wiringKey>" — see projectionEntry.ts's own target_ref construction and
+ * RuntimeDispatchSpec.targetRef's doc comment for the shape). Generic string parsing, never a
+ * lookup table keyed by operation/nodeId/UUID.
+ */
+function extractManifestIdFromTargetRef(targetRef: string | undefined): string | undefined {
+  if (!targetRef) return undefined;
+  const match = /^manifest:([^:]+):/.exec(targetRef);
+  return match ? match[1] : undefined;
+}
 
 /** Narrow an emission's layoutNodes into the WiringNode shape the runtime state/effect runner consumes. */
 function toRunnerWiringNodes(
@@ -100,8 +113,18 @@ export default function ProjectionShell(): JSX.Element {
     undefined,
   );
 
-  // Generation counter prevents stale SSE refresh responses from overwriting newer results.
-  const refreshGenRef = useRef(0);
+  // Round 27/28: monotonic id source shared by every refreshCurrentManifestAsync call, of
+  // either intent — used only to mint a unique gen per call.
+  // Round 29: staleness is no longer "is this the single latest call of ANY kind" (that rule let
+  // a later-STARTING passive_invalidation discard an earlier-but-higher-priority canonical_reread
+  // merely for starting later, even though the canonical result is the one that must win — see
+  // refreshCurrentManifestAsync's isSupersededResult doc comment). canonicalGenRef/passiveGenRef
+  // separately track the latest STARTED call of each tier so canonical_reread can only ever be
+  // superseded by an even-newer canonical_reread — never by any passive_invalidation, regardless
+  // of which resolves first.
+  const refreshCallSeqRef = useRef(0);
+  const canonicalGenRef = useRef(0);
+  const passiveGenRef = useRef(0);
   // Holds the SSE receiver so unmount cleanup can disconnect it.
   const sseReceiverRef = useRef<SseReceiver | null>(null);
   // Stores the initial dispatch axes for SSE identity-preserving refresh.
@@ -331,21 +354,62 @@ export default function ProjectionShell(): JSX.Element {
       // misclassify the ordinary, expected case (a legitimate child write, whose manifestId simply
       // isn't ae200's) as a genuine anomaly whenever the URL selection happens to equal the
       // adopted identity (the common case) — collapsing round 27's redispatch behavior back into a
-      // spurious warning. A mismatch here (manifestId differs from adopted) is ALWAYS the ordinary
-      // cross-manifest child-write shape → canonical reread. Only when the manifestId DOES match
-      // the adopted identity (a same-manifest result — theoretically possible in a future ae200-
-      // native write) do the explicit package/manifest checks apply, since only THEN is adoption
-      // itself in play; confirmation.reason then distinguishes a genuine explicit-selection
-      // violation (surfaced as a warning) from the (here, structurally unreachable — manifestId
-      // already matched) adopted-identity branch.
+      // spurious warning.
+      //
+      // Round 29: "differs from adopted" alone is not enough to call a response an EXPECTED
+      // cross-manifest child response — it only proves the response ISN'T ae200's own identity, not
+      // that it's the response to what was actually dispatched. context.targetRef carries the
+      // target_ref that was truly sent for THIS dispatch (see runtimeComponentFactory.ts's
+      // dispatchRuntimeComponentCommandAndForwardResult); when present, its manifest id is the
+      // authoritative "expected" identity — a response whose manifestId does not match it is a
+      // genuine anomaly (never silently treated as an ordinary child response) and fails close with
+      // an explicit warning.
+      //
+      // A confirmed expected identity still splits into two shapes, since an authored target_ref is
+      // not exclusively a cross-manifest override — round 12's own "Load current values" pattern
+      // authors a target_ref pointing at ae200's OWN adopted identity (a same-manifest override used
+      // purely to route a dryRun/read dispatch through Lane 2) and its result IS meant to be adopted
+      // directly, exactly like the legacy no-target_ref path below:
+      //   - expectedManifestId !== adoptedManifestIdRef.current → a genuine cross-manifest child
+      //     write; never adopted, only used to trigger ae200's own canonical reread.
+      //   - expectedManifestId === adoptedManifestIdRef.current → a same-manifest override result;
+      //     falls through to the SAME confirmProjectionEntryEmission + direct-adoption logic the
+      //     no-target_ref fallback below already used before context existed.
+      // Absent an authored target_ref entirely (a dispatch with no override at all), the pre-
+      // round-29 adopted-identity comparison is the fallback, since there is no dispatched-identity
+      // to confirm against.
       const handleRuntimeDispatchResult = (
         _nodeId: string,
         result: DispatchResponse,
+        context: RuntimeDispatchResultContext,
       ) => {
         if (!mounted) return;
         if (!result.success || !result.emission) return;
         const dispatched = result.emission;
-        if (dispatched.manifestId !== adoptedManifestIdRef.current) {
+        const expectedManifestId = extractManifestIdFromTargetRef(context.targetRef);
+        if (expectedManifestId) {
+          if (dispatched.manifestId !== expectedManifestId) {
+            console.error(
+              "[ProjectionShell] RUNTIME_DISPATCH_RESULT_IDENTITY_MISMATCH:",
+              `authored target_ref resolved manifest "${expectedManifestId}" but the settled ` +
+                `response carries manifest "${dispatched.manifestId ?? "(absent)"}".`,
+            );
+            setRefreshWarning(
+              `書き込み結果の投影先が想定と一致しませんでした（想定: ${expectedManifestId}、` +
+                `実際: ${dispatched.manifestId ?? "(absent)"}）。`,
+            );
+            return;
+          }
+          if (expectedManifestId !== adoptedManifestIdRef.current) {
+            // Confirmed expected cross-manifest child response — never adopted into ae200's own
+            // state; re-read ae200's own canonical identity now that the write landed.
+            void refreshCurrentManifestAsync("canonical_reread");
+            return;
+          }
+          // expectedManifestId === adopted identity: a same-manifest authored override (e.g. the
+          // "Load current values" dryRun pattern) — falls through to the same direct-adoption
+          // logic as the no-target_ref path below.
+        } else if (dispatched.manifestId !== adoptedManifestIdRef.current) {
           void refreshCurrentManifestAsync("canonical_reread");
           return;
         }
@@ -366,6 +430,12 @@ export default function ProjectionShell(): JSX.Element {
         setEmission(dispatched);
         emissionRef.current = dispatched;
         const dispatchedNodes = toRunnerWiringNodes(dispatched.layoutNodes);
+        // Unlike refreshCurrentManifestAsync's canonical_reread (a settled WRITE's DB reread,
+        // where the tracker is cleared — see below), this branch is a same-manifest READ/prefill
+        // adoption (e.g. the "Load current values" pattern) feeding a still-open form: other
+        // fields the user is actively typing into (e.g. an unbound groupId input the very next
+        // Confirm click still needs) must NOT be wiped just because this ONE field's prop-bound
+        // value was refreshed. No clear() here — only reconcile()+seed(), same as before round 29.
         nodeValueTrackerRef.current.reconcile(
           dispatchedNodes.map((n) => n.nodeId),
         );
@@ -440,16 +510,16 @@ export default function ProjectionShell(): JSX.Element {
       }
 
       // Round 27: single shared re-dispatch function — the SAME manifest identity boundary
-      // (initialDispatchAxesRef, adoptedManifestIdRef, refreshGenRef generation guard) used by
-      // BOTH the SSE invalidation path below AND a settled cross-manifest write's success path
-      // above (handleRuntimeDispatchResult). Never performs frontend topology/layout judgment;
-      // it only re-dispatches the CURRENTLY adopted axes (optionally merging identity-preserving
-      // payload fields the SSE path forwards) and adopts the response ONLY if
+      // (initialDispatchAxesRef, adoptedManifestIdRef, canonicalGenRef/passiveGenRef priority
+      // guard) used by BOTH the SSE invalidation path below AND a settled cross-manifest write's
+      // success path above (handleRuntimeDispatchResult). Never performs frontend topology/layout
+      // judgment; it only re-dispatches the CURRENTLY adopted axes (optionally merging identity-
+      // preserving payload fields the SSE path forwards) and adopts the response ONLY if
       // confirmProjectionEntryEmission still confirms the SAME manifest identity — a differently-
-      // manifested response is rejected exactly the same way a stale one is. A higher
-      // refreshGenRef generation started after this call began (a newer SSE event, or a second
-      // write settling first) discards this call's result rather than let it overwrite newer
-      // state — same discipline the SSE path already had, now shared instead of duplicated.
+      // manifested response is rejected exactly the same way a stale one is. Round 29: a call
+      // superseded per isSupersededResult()'s priority-aware ordering (an even-newer call of the
+      // SAME tier, or — for a passive_invalidation only — any canonical_reread started at or after
+      // it) discards this call's result rather than let it overwrite newer/higher-priority state.
       //
       // Round 28: `intent` is a GENERIC (never operation/nodeId/manifest-UUID-keyed) distinction
       // between the two reasons this function is ever called — derived purely from WHICH caller
@@ -472,9 +542,26 @@ export default function ProjectionShell(): JSX.Element {
         intent: "passive_invalidation" | "canonical_reread",
         identityPayload?: Record<string, unknown>,
       ) => {
-        const gen = ++refreshGenRef.current;
+        const gen = ++refreshCallSeqRef.current;
+        if (intent === "canonical_reread") canonicalGenRef.current = gen;
+        else passiveGenRef.current = gen;
+        // Round 29 ordering contract: canonical_reread always outranks passive_invalidation,
+        // regardless of which settles first.
+        //   - canonical_reread is superseded ONLY by an even-newer canonical_reread — never by
+        //     any passive_invalidation, however much later that passive call resolves.
+        //   - passive_invalidation is superseded by a newer passive_invalidation (unchanged
+        //     round 27/28 rule) OR by any canonical_reread that STARTED at or after it began —
+        //     that canonical_reread is the authoritative one and must not be clobbered once it
+        //     lands, even if this passive call's own response arrives first.
+        // A stale/superseded result is discarded exactly like an unmounted one (silent, no
+        // refreshWarning) — this is the same "normal discard boundary" round 28 established,
+        // just with a priority-aware definition of "stale".
+        const isSupersededResult = () =>
+          intent === "canonical_reread"
+            ? canonicalGenRef.current !== gen
+            : passiveGenRef.current !== gen || canonicalGenRef.current > gen;
         try {
-          if (gen !== refreshGenRef.current || !mounted) return;
+          if (isSupersededResult() || !mounted) return;
           const refreshToken = projectionTokenRef.current;
           if (!refreshToken) return;
           const storedAxes = initialDispatchAxesRef.current;
@@ -489,7 +576,7 @@ export default function ProjectionShell(): JSX.Element {
           };
 
           const result = await queueClientCommand(axes, refreshToken);
-          if (gen !== refreshGenRef.current || !mounted) return;
+          if (isSupersededResult() || !mounted) return;
           if (!result.success) {
             console.error(
               "[ProjectionShell] MANIFEST_REFRESH_DISPATCH_FAILED:",
@@ -523,6 +610,17 @@ export default function ProjectionShell(): JSX.Element {
           setEmission(updated);
           emissionRef.current = updated;
           const refreshedNodes = toRunnerWiringNodes(updated.layoutNodes);
+          // Round 29: canonical_reread discards EVERY tracked value first (bound or unbound) —
+          // the DB is now sole authority for the whole surface, not merely the propBindings-bound
+          // fields seedTrackerFromPropBindingsValue re-populates below. A field with NO
+          // propBindings (e.g. a still-open, unrelated form's free-typed input) would otherwise
+          // silently retain its stale value across this write (reconcile() only drops nodes
+          // ABSENT from the new layout; seed() only ever adds/overwrites propBindings-bound
+          // nodeIds) and could be resent on a later, unrelated dispatch. passive_invalidation
+          // never clears — an in-progress edit must survive a background refresh.
+          if (intent === "canonical_reread") {
+            nodeValueTrackerRef.current.clear();
+          }
           nodeValueTrackerRef.current.reconcile(
             refreshedNodes.map((n) => n.nodeId),
           );
@@ -563,7 +661,7 @@ export default function ProjectionShell(): JSX.Element {
             onRuntimeDispatchResult: handleRuntimeDispatchResult,
           }));
         } catch (err) {
-          if (gen !== refreshGenRef.current || !mounted) return;
+          if (isSupersededResult() || !mounted) return;
           console.error(
             "[ProjectionShell] MANIFEST_REFRESH_ERROR:",
             err,

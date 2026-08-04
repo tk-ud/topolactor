@@ -7,6 +7,7 @@ import type { ComponentRegistry } from "../registry/componentRegistry.ts";
 import {
   adaptComponentDataHub,
   type RuntimeComponentSpec,
+  type RuntimeDispatchResultContext,
   type RuntimeGuardedStateStore,
 } from "./runtimeComponentAdapter.ts";
 import { renderRuntimeComponent } from "./runtimePrimitiveRenderer.ts";
@@ -70,7 +71,11 @@ export type RenderEmissionOptions = {
    * ComponentDataHub.onRuntimeDispatchResult / emitBoundEvent
    * (runtimeComponentFactory.ts) for where the result comes from.
    */
-  onRuntimeDispatchResult?: (nodeId: string, result: DispatchResponse) => void;
+  onRuntimeDispatchResult?: (
+    nodeId: string,
+    result: DispatchResponse,
+    context: RuntimeDispatchResultContext,
+  ) => void;
 };
 
 export type ComponentSpec = {
@@ -1510,8 +1515,8 @@ export function renderEmission(
               options.onNodeValueChange!(node.nodeId!, value)
             : undefined,
           onRuntimeDispatchResult: (options?.onRuntimeDispatchResult && node.nodeId)
-            ? (result: DispatchResponse) =>
-              options.onRuntimeDispatchResult!(node.nodeId!, result)
+            ? (result: DispatchResponse, context: RuntimeDispatchResultContext) =>
+              options.onRuntimeDispatchResult!(node.nodeId!, result, context)
             : undefined,
           design: hubDesign,
         };

@@ -448,9 +448,9 @@ Deno.test("renderEmission: onNodeValueChange option registers per-node closures 
 // was previously void-discarded at emitBoundEvent; this is the boundary that
 // lets a caller adopt a node's own dispatch result into production emission) ─
 
-Deno.test("renderEmission: onRuntimeDispatchResult option registers per-node closures carrying nodeId", () => {
+Deno.test("renderEmission: onRuntimeDispatchResult option registers per-node closures carrying nodeId and forwards the dispatch identity context (round 29)", () => {
   ensureRuntimeComponentRegistryInitialized();
-  const captured: Array<[string, DispatchResponse]> = [];
+  const captured: Array<[string, DispatchResponse, { targetRef?: string }]> = [];
   const emission: Emission = {
     layoutId: "layout-rdr-001",
     layoutNodes: [
@@ -465,15 +465,17 @@ Deno.test("renderEmission: onRuntimeDispatchResult option registers per-node clo
     ],
   };
   const specs = renderEmission(emission, {}, {
-    onRuntimeDispatchResult: (nodeId, result) => captured.push([nodeId, result]),
+    onRuntimeDispatchResult: (nodeId, result, context) =>
+      captured.push([nodeId, result, context]),
   });
   assertExists(specs[0].runtimeSpec);
   const fakeResult: DispatchResponse = {
     success: true,
     emission: { layoutId: "layout-rdr-001", data: { ok: true } },
   };
-  specs[0].runtimeSpec!.onRuntimeDispatchResult?.(fakeResult);
-  assertEquals(captured, [["node-rdr-1", fakeResult]]);
+  const fakeContext = { targetRef: "manifest:ae230-uuid:enum_dictionary:delete_group" };
+  specs[0].runtimeSpec!.onRuntimeDispatchResult?.(fakeResult, fakeContext);
+  assertEquals(captured, [["node-rdr-1", fakeResult, fakeContext]]);
 });
 
 // ─── renderEmission: applyLiveNodeValueOverride — display authority unified

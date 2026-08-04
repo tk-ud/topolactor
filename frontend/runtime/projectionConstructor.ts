@@ -8,6 +8,7 @@
  */
 
 import type { DispatchResponse } from "../api/dispatch.ts";
+import type { RuntimeDispatchResultContext } from "./runtimeComponentAdapter.ts";
 
 export type ProjectionFieldKind =
   | "text"
@@ -78,7 +79,10 @@ export type ComponentDataHub = {
    * default (no-op) — callers that never wire this in keep today's behavior
    * unchanged. Never fires for previewMode / non-runtimeDispatch bindings.
    */
-  onRuntimeDispatchResult?: (result: DispatchResponse) => void;
+  onRuntimeDispatchResult?: (
+    result: DispatchResponse,
+    context: RuntimeDispatchResultContext,
+  ) => void;
 };
 
 type RuntimeTopologyComponentProps = JsonObject & {

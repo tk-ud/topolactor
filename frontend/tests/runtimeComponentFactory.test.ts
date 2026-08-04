@@ -342,6 +342,7 @@ Deno.test("emitBoundEvent: admin_runtime Lane 2 forwards the settled dispatch re
   }) as typeof fetch;
   try {
     let forwardedResult: unknown = null;
+    let forwardedContext: { targetRef?: string } | null = null;
     const spec: RuntimeComponentSpec = {
       componentId: "comp-load-button-001",
       packageId: null,
@@ -364,8 +365,9 @@ Deno.test("emitBoundEvent: admin_runtime Lane 2 forwards the settled dispatch re
         },
       },
       payloadFromNodeValues: { "group-id-input": "11111111-1111-1111-1111-111111111111" },
-      onRuntimeDispatchResult: (result) => {
+      onRuntimeDispatchResult: (result, context) => {
         forwardedResult = result;
+        forwardedContext = context;
       },
     };
     const clickResult = __testOnly.emitBoundEvent(spec, "click", {});
@@ -380,6 +382,12 @@ Deno.test("emitBoundEvent: admin_runtime Lane 2 forwards the settled dispatch re
     };
     assertEquals(result.success, true);
     assertEquals(result.emission?.data, serverEmissionData);
+    // Round 29: the authored targetRef actually dispatched must be forwarded verbatim as context,
+    // so a caller can confirm a settled response really landed on the manifest it targeted.
+    assertEquals(
+      forwardedContext,
+      { targetRef: `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:update_group` },
+    );
   } finally {
     globalThis.fetch = originalFetch;
     schedulerTestOnly.resetCommandQueue();
