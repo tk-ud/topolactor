@@ -80,9 +80,16 @@ public class NpgsqlEnumDictionaryRepository : EnumDictionaryRepository
             "INSERT INTO enum.groups (index_num, group_name) VALUES (@i, @n) RETURNING group_id, index_num, group_name";
         cmd.Parameters.AddWithValue("i", idx);
         cmd.Parameters.AddWithValue("n", groupName);
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        await reader.ReadAsync(ct);
-        return new EnumDictionaryGroupDto(reader.GetGuid(0), reader.GetInt32(1), reader.GetString(2));
+        try
+        {
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            await reader.ReadAsync(ct);
+            return new EnumDictionaryGroupDto(reader.GetGuid(0), reader.GetInt32(1), reader.GetString(2));
+        }
+        catch (PostgresException pe) when (pe.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            throw new InvalidOperationException("ENUM_GROUP_INDEX_CONFLICT");
+        }
     }
 
     public override async Task<EnumDictionaryGroupDto?> UpdateGroupAsync(
@@ -97,9 +104,16 @@ public class NpgsqlEnumDictionaryRepository : EnumDictionaryRepository
         if (sets.Count == 0) return (await ListGroupsAsync(ct)).FirstOrDefault(g => g.GroupId == groupId);
         cmd.CommandText = $"UPDATE enum.groups SET {string.Join(", ", sets)} WHERE group_id = @id RETURNING group_id, index_num, group_name";
         cmd.Parameters.AddWithValue("id", groupId);
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct)) return null;
-        return new EnumDictionaryGroupDto(reader.GetGuid(0), reader.GetInt32(1), reader.GetString(2));
+        try
+        {
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct)) return null;
+            return new EnumDictionaryGroupDto(reader.GetGuid(0), reader.GetInt32(1), reader.GetString(2));
+        }
+        catch (PostgresException pe) when (pe.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            throw new InvalidOperationException("ENUM_GROUP_INDEX_CONFLICT");
+        }
     }
 
     public override async Task<bool> DeleteGroupAsync(Guid groupId, CancellationToken ct = default)
@@ -125,8 +139,33 @@ public class NpgsqlEnumDictionaryRepository : EnumDictionaryRepository
             "INSERT INTO enum.items (index_num, name) VALUES (@i, @n) RETURNING index_num, name";
         cmd.Parameters.AddWithValue("i", idx);
         cmd.Parameters.AddWithValue("n", name);
+        try
+        {
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            await reader.ReadAsync(ct);
+            return new EnumDictionaryItemDto(reader.GetInt32(0), reader.GetString(1));
+        }
+        catch (PostgresException pe) when (pe.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            // Defense-in-depth: the action layer pre-checks index_num conflicts via GetItemAsync
+            // before calling this, but a concurrent insert between check and write still hits
+            // uq_enum_items_index (db/enum_tables.sql) -- translate it the same way
+            // DeleteGroupAsync below translates ENUM_GROUP_IN_USE, rather than let a raw
+            // PostgresException surface.
+            throw new InvalidOperationException("ENUM_ITEM_INDEX_CONFLICT");
+        }
+    }
+
+    public override async Task<EnumDictionaryItemDto?> GetItemAsync(
+        int indexNum, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT index_num, name FROM enum.items WHERE index_num = @i";
+        cmd.Parameters.AddWithValue("i", indexNum);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
-        await reader.ReadAsync(ct);
+        if (!await reader.ReadAsync(ct)) return null;
         return new EnumDictionaryItemDto(reader.GetInt32(0), reader.GetString(1));
     }
 
@@ -141,7 +180,21 @@ public class NpgsqlEnumDictionaryRepository : EnumDictionaryRepository
             moveCmd.CommandText = "UPDATE enum.items SET index_num = @new WHERE index_num = @old";
             moveCmd.Parameters.AddWithValue("new", newIndexNum.Value);
             moveCmd.Parameters.AddWithValue("old", indexNum);
-            await moveCmd.ExecuteNonQueryAsync(ct);
+            try
+            {
+                await moveCmd.ExecuteNonQueryAsync(ct);
+            }
+            catch (PostgresException pe) when (pe.SqlState == PostgresErrorCodes.UniqueViolation)
+            {
+                throw new InvalidOperationException("ENUM_ITEM_INDEX_CONFLICT");
+            }
+            catch (PostgresException pe) when (pe.SqlState == PostgresErrorCodes.ForeignKeyViolation)
+            {
+                // Defense in depth: AdminRuntimeMasterRoster.DataEnumDictionaryUpdateItemAsync already
+                // gates this with IsItemReferencedInGroupsAsync before reaching here (same constraint
+                // DeleteItemAsync above guards), so this should not normally trigger.
+                throw new InvalidOperationException("ENUM_ITEM_IN_USE");
+            }
             indexNum = newIndexNum.Value;
         }
 
@@ -166,12 +219,21 @@ public class NpgsqlEnumDictionaryRepository : EnumDictionaryRepository
 
     public override async Task<bool> DeleteItemAsync(int indexNum, CancellationToken ct = default)
     {
+        if (await IsItemReferencedInGroupsAsync(indexNum, ct))
+            throw new InvalidOperationException("ENUM_ITEM_IN_USE");
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = "DELETE FROM enum.items WHERE index_num = @i";
         cmd.Parameters.AddWithValue("i", indexNum);
-        return await cmd.ExecuteNonQueryAsync(ct) > 0;
+        try
+        {
+            return await cmd.ExecuteNonQueryAsync(ct) > 0;
+        }
+        catch (PostgresException pe) when (pe.SqlState == PostgresErrorCodes.ForeignKeyViolation)
+        {
+            throw new InvalidOperationException("ENUM_ITEM_IN_USE");
+        }
     }
 
     public override async Task<EnumDictionaryGroupDetailDto?> SetGroupItemsAsync(
@@ -188,16 +250,33 @@ public class NpgsqlEnumDictionaryRepository : EnumDictionaryRepository
             await delCmd.ExecuteNonQueryAsync(ct);
         }
 
-        for (var pos = 0; pos < enumIndexNums.Count; pos++)
+        try
         {
-            await using var insCmd = conn.CreateCommand();
-            insCmd.Transaction = tx;
-            insCmd.CommandText =
-                "INSERT INTO enum.group_items (group_id, position, enum_index_num) VALUES (@g, @p, @e)";
-            insCmd.Parameters.AddWithValue("g", groupId);
-            insCmd.Parameters.AddWithValue("p", pos);
-            insCmd.Parameters.AddWithValue("e", enumIndexNums[pos]);
-            await insCmd.ExecuteNonQueryAsync(ct);
+            for (var pos = 0; pos < enumIndexNums.Count; pos++)
+            {
+                await using var insCmd = conn.CreateCommand();
+                insCmd.Transaction = tx;
+                insCmd.CommandText =
+                    "INSERT INTO enum.group_items (group_id, position, enum_index_num) VALUES (@g, @p, @e)";
+                insCmd.Parameters.AddWithValue("g", groupId);
+                insCmd.Parameters.AddWithValue("p", pos);
+                insCmd.Parameters.AddWithValue("e", enumIndexNums[pos]);
+                await insCmd.ExecuteNonQueryAsync(ct);
+            }
+        }
+        catch (PostgresException pe) when (pe.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            // uq_enum_group_items_member (group_id, enum_index_num): the action layer
+            // pre-checks enumIndexNums for duplicate values before calling this, but this stays
+            // as defense-in-depth against the same input shape reaching the repository directly.
+            throw new InvalidOperationException("ENUM_GROUP_ITEMS_DUPLICATE_MEMBERSHIP");
+        }
+        catch (PostgresException pe) when (pe.SqlState == PostgresErrorCodes.ForeignKeyViolation)
+        {
+            // enum.group_items.enum_index_num REFERENCES enum.items(index_num): the action layer
+            // pre-checks every provided index_num exists via GetItemAsync, but this stays as
+            // defense-in-depth against a concurrently-deleted item.
+            throw new InvalidOperationException("ENUM_ITEM_NOT_FOUND");
         }
 
         await tx.CommitAsync(ct);
@@ -212,6 +291,18 @@ public class NpgsqlEnumDictionaryRepository : EnumDictionaryRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT EXISTS (SELECT 1 FROM manifest WHERE topology::text LIKE @p)";
         cmd.Parameters.AddWithValue("p", $"%{groupId}%");
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return result is bool b && b;
+    }
+
+    public override async Task<bool> IsItemReferencedInGroupsAsync(
+        int indexNum, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT EXISTS (SELECT 1 FROM enum.group_items WHERE enum_index_num = @i)";
+        cmd.Parameters.AddWithValue("i", indexNum);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result is bool b && b;
     }

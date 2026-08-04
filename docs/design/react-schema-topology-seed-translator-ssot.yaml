@@ -264,7 +264,7 @@ react_schema_topology_seed_translator_ssot:
     ai_allowed: false
     grammar_kind: bracket_tag_line_based
     tag_shape:
-      container_units: [projection, category, section, form, workflow]
+      container_units: [projection, category, section, form, workflow, modal]
       leaf_units: [field, table, step, action, validation, prop_binding, payload_from, style_ref]
       open_tag_syntax: '[unitKind key=.. attr=.. attr2="value with space" ...]'
       close_tag_syntax: "[/unitKind]"
@@ -305,8 +305,9 @@ react_schema_topology_seed_translator_ssot:
       field: '[field key=.. label=.. control=.. required=true|false sourceYamlRefs=.. knownGapRefs=..]'
       table: '[table key=.. label=.. source=.. display=.. sourceYamlRefs=..]'
       workflow: '[workflow key=.. label=.. authorityMarker=.. sourceYamlRefs=..] ... [/workflow]'
+      modal: '[modal key=.. label=.. title=.. body=.. sourceYamlRefs=..] ... [/modal]'
       step: '[step key=.. actionRef=.. wiringLane=.. authorityMarker=.. order=.. sourceYamlRefs=..]'
-      action: '[action key=.. actionRef=.. wiringLane=.. authorityMarker=.. sourceYamlRefs=.. knownGapRefs=..]'
+      action: '[action key=.. actionRef=.. wiringLane=.. authorityMarker=.. sourceYamlRefs=.. knownGapRefs=.. disclosureActionType=.. disclosureTargetNodeId=.. disclosureStatePath=.. secondaryDisclosureActionType=.. secondaryDisclosureTargetNodeId=.. secondaryDisclosureStatePath=..]'
       validation: '[validation key=.. appliesTo=.. rule=.. severity=blocking|warning sourceYamlRefs=..]'
       prop_binding: '[prop_binding targetProp=.. source=.. sourceYamlRefs=..]'
       payload_from: '[payload_from targetField=.. source=.. sourceYamlRefs=..]'
@@ -315,6 +316,15 @@ react_schema_topology_seed_translator_ssot:
       authorityMarker, wiringLane, and knownGapRefs are attributes on their owning tag, never
       standalone bracket units; this matches text_decomposition_contract's authority_marker /
       known_gap_ref "not a standalone node" rule.
+    disclosure_action_attributes: >-
+      disclosureActionType/disclosureTargetNodeId/disclosureStatePath (round 24, admin-enum
+      subBundle) are read only when the action/step's wiringLane is disclosure_state_wiring --
+      see wiring_lane_contract.lanes.disclosure_state_wiring for the actionType vocabulary and
+      the targetNodeId/statePath shape they produce. secondaryDisclosureActionType/
+      secondaryDisclosureTargetNodeId/secondaryDisclosureStatePath are independent of wiringLane
+      entirely: any action/step may carry them regardless of its primary lane, adding one
+      additional runtimeInteractions[] entry alongside whatever the primary lane already
+      produces (see wiring_lane_contract.lanes.disclosure_state_wiring.secondary_combination).
     unresolved_fragment_rule: >-
       Any inputText line/fragment that is not inside a recognized open/leaf tag, or whose
       unitKind is not in text_decomposition_contract.units, becomes an Unresolved element
@@ -375,6 +385,27 @@ react_schema_topology_seed_translator_ssot:
       Workflow:
         required: [steps, authorityMarker]
         emits_seed: topology_ui_workflow
+      Modal:
+        required: [componentKind, children]
+        emits_seed: topology_ui_modal
+        note: >-
+          componentKind is always "disclosure/modal" (round 24 -- the translator does not yet
+          support Drawer/Dialog container kinds; a future round adds those alongside their own
+          disclosure_state_wiring targetKind support). title/body are optional display props,
+          carried through to the tensor node's propsJson by the seed transcription step, never
+          read or validated by the translator itself. That transcription step MUST nest
+          title/body (and an explicit "open":false) under a top-level "data" key in propsJson --
+          e.g. {"data":{"open":false,"title":"...","body":"..."}} -- never flat top-level
+          {"title":"...","body":"..."} (round 25 fix; round 24's original db/seed_empty.sql shape
+          was flat and wrong). frontend/runtime/renderEmission.ts mergeNodeLocalProps only ever
+          shallow-merges propsJson onto componentKind's default props, and
+          frontend/runtime/layoutComponentPreview.ts's own "disclosure/modal" default props are
+          {data:{open:true,title:"Modal",body:"プレビュー"}} (a UI-Builder canvas-preview
+          convenience) -- a flat propsJson would add new unrelated top-level keys while leaving
+          that default's own nested "data" (still open:true, wrong title/body) completely
+          untouched, since modalFactory reads props.data whenever it is present. Only a real
+          ProjectionShell DOM mount test caught this; neither Composer unit tests nor live-DB
+          structural proof exercise propsJson merging at all.
       Step:
         required: [eventBinding, authorityMarker]
         emits_seed: topology_ui_workflow_step
@@ -456,6 +487,8 @@ react_schema_topology_seed_translator_ssot:
         required: [tableKey, source, display, columns]
       topology_ui_workflow:
         required: [workflowKey, steps, authorityMarker]
+      topology_ui_modal:
+        required: [modalKey, componentKind, children]
       topology_ui_workflow_step:
         required: [stepKey, actionRef, eventBinding, authorityMarker]
       topology_ui_action:
@@ -981,6 +1014,7 @@ react_schema_topology_seed_translator_ssot:
       field: Field
       table: Table
       workflow: Workflow
+      modal: Modal
       step: Step
       action: Action
       validation: Validation
@@ -998,6 +1032,7 @@ react_schema_topology_seed_translator_ssot:
       Field: topology_ui_field
       Table: topology_ui_table
       Workflow: topology_ui_workflow
+      Modal: topology_ui_modal
       Step: topology_ui_workflow_step
       Action: topology_ui_action
       Validation: topology_ui_validation
@@ -1135,6 +1170,84 @@ react_schema_topology_seed_translator_ssot:
         authority_ref: docs/design/ui-builder-preset-ecosystem-ssot.yaml cross_preset_authoring_boundary.author_resolution_map.route_navigation_targetRef
         allowed_authority_mapping_values: [draft_or_projection_only, draft_apply_not_execution_authority]
         allowed_payload_from_sources: [literal]
+      admin_runtime_dispatch_override_wiring:
+        meaning: >-
+          per-trigger override of a node's admin_runtime dispatch target (dispatchTargetRefByTrigger)
+          and/or payload (dispatchPayloadFromByTrigger), independent of the owning layout's own
+          uniform wiring_kind=admin_runtime target_ref. Round 17 (2026-07-29) addition, closing the
+          known_gaps entry below: none of the other five lanes maps to this shape, so an
+          Action/Step authoring this override previously had no wiringLane it could legally declare.
+        examples: [enum_group_create_preview, enum_group_create_confirm, admin_write_operation_selector_override]
+        targetRef_shape: 'manifest:<manifestId>:<layer>:<action>'
+        authority_ref: docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml admin_runtime_target_ref_override_contract
+        allowed_authority_mapping_values: [validation_only, preview_only, draft_apply_not_execution_authority]
+        allowed_payload_from_sources: [node_value, event_path, literal]
+        record_carrier: >-
+          Distinct from every other lane above: this lane's Action/Step candidate is NEVER folded
+          into tensorAdoptionCandidates[].layoutPatchJson.nodes[].runtimeInteractions[] (round 6/15/16
+          design: action-authority-vs-effect-data separation). It is carried as its own
+          adminRuntimeDispatchOverride candidate (build_admin_runtime_dispatch_override_candidate in
+          .agent/scripts/react_schema_topology_seed_translator.py) and merged into that SAME tensor
+          node's own dispatchTargetRefByTrigger / dispatchPayloadFromByTrigger maps, keyed by trigger.
+      disclosure_state_wiring:
+        meaning: >-
+          UI-local overlay disclosure state (open/close/toggle) for a disclosure/modal target
+          node -- the SAME actionType/targetNodeId/statePath vocabulary
+          frontend/lib/runtimeInteractionAuthoring.ts (NodeEventAuthoringPanel.tsx's authoring
+          flow) actually produces and
+          backend/repository/NpgsqlUiTopologyRepository.cs ValidateRuntimeInteractions actually
+          validates for an ACTIVE (admin_runtime-wired) topology layout. Round 24 (admin-enum
+          subBundle, mutation-confirmation-workflow) addition: closes a real translator gap found
+          by verifying against the actual authoring/validation code rather than assuming
+          internal_instance_wiring's existing ui-local:<nodeId>.<stateKey> + localStateMutation
+          shape was reusable for this. It is not: uiEventEffectRunner.ts's
+          UI_STATE_UPDATE_OPEN_ACTIONS does treat localStateMutation as a member of the same
+          ui_state_update family at RUNTIME, but ValidateRuntimeInteractions' isDisclosure /
+          isActiveKey / isSetState checks never accept the literal actionType "localStateMutation"
+          for an active-topology layout_patch save (RUNTIME_INTERACTION_ACTION_UNSUPPORTED) -- so
+          it is not a shape a human author using the real UI Builder could actually persist for
+          this purpose, only a shape a hand-authored seed SQL insert can bypass validation to use.
+        examples: [openModal, closeModal, toggleModal]
+        targetRef_shape: 'ui-local:<nodeId>.<stateKey>'
+        authority_ref: >-
+          frontend/lib/runtimeInteractionAuthoring.ts OVERLAY_OPENABLE_COMPONENT_KINDS;
+          backend/repository/NpgsqlUiTopologyRepository.cs ValidateRuntimeInteractions
+        allowed_authority_mapping_values: [draft_or_projection_only]
+        allowed_payload_from_sources: []
+        disclosure_action_type_field: >-
+          The eventBinding for this lane additionally carries disclosureActionType (one of the
+          examples above) plus disclosureTargetNodeId/disclosureStatePath (statePath defaults to
+          "open") -- the two structured fields runtimeInteractions[]'s own targetNodeId/statePath
+          actually need, since a single targetRef string cannot unambiguously carry both a node id
+          and an actionType family. targetRef itself stays in the SAME ui-local:<nodeId>.<stateKey>
+          shape internal_instance_wiring already established, purely so this lane's
+          event_binding_shape targetRef_shape check has something consistent to validate; it is
+          never read by build_runtime_interaction_candidate, which reads
+          disclosureActionType/disclosureTargetNodeId/disclosureStatePath directly.
+        record_carrier: >-
+          Folded into tensorAdoptionCandidates[].layoutPatchJson.nodes[].runtimeInteractions[] as
+          {trigger, actionType is disclosureActionType, targetNodeId is disclosureTargetNodeId,
+          statePath is disclosureStatePath, sourceActionKey} -- the same runtimeInteractions[]
+          shape build_runtime_interaction_candidate already produces for the dispatch lanes,
+          never a localStateMutation/ui-local entry.
+        secondary_combination: >-
+          An action's PRIMARY eventBinding may declare a different lane entirely -- most commonly
+          admin_runtime_dispatch_override_wiring, for a Confirm button that both dispatches the
+          real write and closes its own confirm modal on the same trigger.
+          secondaryDisclosureActionType/secondaryDisclosureTargetNodeId/secondaryDisclosureStatePath
+          attrs on that SAME action tag add one ADDITIONAL runtimeInteractions[] entry independent
+          of the primary lane's own candidate, mirroring how the real
+          runtimeInteractions[] array lets one trigger carry more than one interaction and how
+          renderEmission.ts's per-trigger componentEventBinding merge treats a runtimeDispatch
+          binding and a ui_state_update (disclosure) binding as independent, non-colliding keys on
+          the same trigger object.
+        modal_self_close_invariant: >-
+          Every Modal container node this translator emits automatically carries its own toggle
+          trigger closeModal runtimeInteractions[] entry targeting itself with statePath open (not
+          authorable, never omitted) -- frontend/runtime/runtimeComponentFactory.ts modalFactory
+          calls requireBinding(spec, "toggle") and fails the ENTIRE render closed when a Modal node
+          has no "toggle" eventBinding (the native backdrop/close-affordance path, independent of
+          any authored Confirm/Cancel button).
     event_binding_shape:
       required: [trigger, wiringLane, targetRef, authority]
       optional: [payloadFrom, outputProp, stateTarget]
@@ -1176,7 +1289,18 @@ react_schema_topology_seed_translator_ssot:
           2026-07-24: the same entry's write_payload_capture_mechanism_implemented sibling
           field additionally resolves the write-side sub-gap (node value tracking +
           Lane 2 payloadFrom resolution, live-DB write+reread proof) this cross-reference
-          also covers.
+          also covers. 2026-07-29 (round 17): the translator-side sub-gap this note used to
+          describe ("none of the five lanes... from a seed-authored Action node") is now closed
+          by the new admin_runtime_dispatch_override_wiring lane above (6th lane) plus
+          build_admin_runtime_dispatch_override_candidate in
+          .agent/scripts/react_schema_topology_seed_translator.py -- a seed-authored Action/Step
+          CAN now declare this lane and have it reach
+          tensorAdoptionCandidates[].layoutPatchJson.nodes[].dispatchTargetRefByTrigger /
+          dispatchPayloadFromByTrigger via the generation pipeline, not only via hand-authored
+          seed SQL. Not yet exercised by any real fixture (db/seed_empty.sql's ae210-ae280
+          manifests, which already use this exact node shape, remain hand-authored, predating
+          this lane) -- see .agent/tasks/todo.md for the remaining absorption-into-generation
+          item.
         note: >-
           Cross-reference: docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
           lane_storage_boundary.known_gaps carries the full determination (confirmed via
@@ -1572,7 +1696,7 @@ react_schema_topology_seed_translator_ssot:
         declared_by_yaml_ref: docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.enum
         seed_role: admin_enum_dictionary_management_projection_manifest_seed
         record_subjects: [manifest_projection, enum_group_and_item_management_projection, enum_search_projection]
-        exchange_units: [category, section, field, table]
+        exchange_units: [category, section, field, table, modal, action]
         authority_boundary: preview_dictionary_delta_validate_against_enum_authority_explicit_confirm_write_diff_log
         component_catalog_refs:
           catalog_ref: ui_catalog_boundary_contract.frontend_component_catalog
@@ -1582,6 +1706,7 @@ react_schema_topology_seed_translator_ssot:
             - data_display/table (table.primitive)
             - form_input/form_field (form_field.template)
             - action/button (button.primitive)
+            - disclosure/modal (modal.template)
         style_catalog_refs:
           catalog_ref: ui_catalog_boundary_contract.style_catalog
           refs: []
@@ -1592,40 +1717,88 @@ react_schema_topology_seed_translator_ssot:
         known_gaps:
           - gap: admin_runtime_layer_action_dispatch_wiring_lane_not_yet_implemented
             classification: runtime_dispatch_gap
-            status: open
+            status: resolved_2026_07_27
+            resolution_note: >-
+              admin-runtime-operation-dispatch-lane-determination Bundle resolved the dispatch
+              lane itself generically (wiringKind="admin_runtime" + node-level
+              dispatchPayloadFromByTrigger, 2026-07-22 through 2026-07-25 -- see
+              docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml lane_storage_boundary
+              admin_runtime_payload_binding_contract). admin-enum's own write side then consumed
+              it: all 7 enum_dictionary write actions (create_group/update_group/delete_group/
+              create_item/update_item/delete_item/set_group_items) are wired as dedicated
+              single-purpose write manifests (db/seed_empty.sql
+              00000000-0000-0000-0000-0000000ae210/ae220/ae230/ae240/ae250/ae260/ae270, each with
+              its own hub -- LoadHubNavigationSequenceAsync's HAVING COUNT(*)=1 target-manifest
+              resolution requires one active manifest per hub, so these do not share ae200's own
+              hub), each carrying a preview_button (dispatchPayloadFromByTrigger dryRun:
+              literal:true) and confirm_button (confirmed:literal:true) sharing the layout's one
+              canonical admin_runtime target_ref -- backend/runtime/AdminRuntimeMasterRoster.cs
+              gained the matching payload.dryRun/payload.confirmed mutation_confirmation_contract
+              gate (mirrors the pre-existing team_markdown:saved_view:update contract). Live-DB
+              proof: backend/tests/Topolactor.Integration.Tests/
+              AdminEnumHubRelationUiProjectionLiveDbTests.cs (structural resolution +
+              dispatchPayloadFromByTrigger shape for all 7, a full create_group preview/confirm/
+              write/re-list round trip through its own dedicated manifest, and a hub_navigation:
+              create authoring + resolution-chain proof from ae200 to the create_group manifest
+              as the representative pattern for all 7). historical_note_below_kept_as_history:
+              the enum_confirm_button entry described below (structural-leaf-only,
+              ADMIN_OPERATION_NOT_FOUND fallback) is now superseded for the actions listed above;
+              read-side list_groups/get_group dispatch was already resolved earlier (2026-07-23).
+              Remaining, honestly open item: hardcoded frontend/routes/admin/enums.tsx /
+              AdminEnumsRoster.tsx retirement has NOT happened -- the 7 new write manifests are
+              each a separate bare single-purpose screen (?manifest=<id>), not a UX replacement
+              for AdminEnumsRoster's single polished roster page (search/table/modal/inline-edit
+              in one surface), so retiring the hardcoded route now would violate this Bundle's own
+              NG boundary (no route removal before a genuine production replacement exists).
             note: >-
               admin-surface-topology-seed-conversion admin-enum subBundle (.agent/tasks/todo.md).
               The 9 enum_dictionary:* admin_runtime actions (docs/design/enum-dictionary-ssot.yaml
               admin_runtime_actions) already dispatch correctly on the backend
               (AdminRuntimeDispatchAdapter -> AdminRuntime.ExecuteDataAsync, resolved by
               target/layer/action via OperationVectorResolver -- ManifestDispatcher.cs is already
-              fully generic across runtime_destination=admin_runtime). What is missing is a
-              frontend runtimeInteractions actionType/wiring lane that lets a seed-authored
-              Action node dispatch an arbitrary admin_runtime layer:action vector -- today
-              frontend/runtime/uiEventEffectRunner.ts and renderEmission.ts recognize only
-              dispatchExternalPort (external_integration_wiring/external_instance_wiring) and
-              dispatchInstanceOperation (external_instance_wiring), plus localStateMutation
-              (internal_instance_wiring); none of wiring_lane_contract.lanes' five lanes'
-              targetRef_shape covers admin_runtime layer:action dispatch, and content_bundle:*
-              (contents_api_wiring) is a different backend authority (NpgsqlContentBundleRepository
-              entity CRUD) that this Bundle's NG boundary explicitly forbids substituting in.
-              This is the same gap previously recorded as gap-01
-              ("response-binding architecture 未実装") in .agent/tasks/todo.md's migrated
-              admin-surface-topology-seed-conversion-design-resolution.json content:
-              cross-cutting, high-blast-radius, owner_decision_required architecture choice
-              (a new dedicated runtime lane), which this Bundle's own NG boundary
-              ("新規専用...runtime lane...を追加する" is prohibited) explicitly keeps out of scope
-              for any single subBundle to add unilaterally. Until resolved, admin-enum's
-              enum_confirm_button (button.primitive) and the create/update/delete/set_group_items
-              mutation actions are seeded as structural leaves only (componentId/componentKind
-              resolve; no functioning eventBinding/runtimeInteractions) -- this is why they are
+              fully generic across runtime_destination=admin_runtime).
+
+              SUPERSEDED 2026-07-29 (round 15-19, admin-write-surface-selection-context-and-mode-
+              composition-gap Bundle): the paragraph below (kept for history) called the missing
+              "seed-authored Action node dispatches an arbitrary admin_runtime layer:action vector"
+              capability a cross-cutting, owner_decision_required NEW runtime lane, out of scope for
+              any single subBundle. That blocker no longer applies -- rounds 15-18 built exactly
+              this capability WITHOUT a new lane, reusing the SAME existing "per-trigger authored
+              target, independent of the shared layout wiring row" precedent
+              dispatchExternalPort/dispatchInstanceOperation already established:
+              dispatchTargetRefByTrigger (node-local admin_runtime target_ref override, round 15,
+              hardened rounds 17-19 -- docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
+              admin_runtime_target_ref_override_contract) and dispatchPayloadFromByTrigger
+              (node-local payload binding, pre-existing since round 6-8) together let a node in
+              ANY admin_runtime layout dispatch to a DIFFERENT manifest's layer:action than the
+              layout's own uniform one -- e.g. a "create group" button embedded in ae200's OWN
+              layout, authored with dispatchTargetRefByTrigger={click:
+              "manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group"} and
+              dispatchPayloadFromByTrigger={click:{...}}, dispatches enum_dictionary:create_group
+              against ae210's own dispatcher_mapping/capability_requirement exactly as if that
+              button lived on ae210's own layout. What remains is authoring-only, not architecture:
+              (1) the 7 write manifests (ae210-270) are still each their OWN separate hub-navigable
+              screen rather than nodes wired into ae200's layout via this mechanism, and (2)
+              ae200's own layout has not been authored with the search/table/create-modal/
+              inline-update/delete-confirm/membership-editing/dryRun-preview/confirm/write/reread
+              composition this single-surface goal requires -- see
+              admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.enum for
+              the target UX shape and .agent/tasks/todo.md's admin-enum subBundle section for the
+              concrete per-operation wiring plan. Read/list rendering (enum_dictionary:list_groups)
+              already flows real enum row data (not the ADMIN_OPERATION_NOT_FOUND structural-render
+              fallback) -- see AdminEnumHubRelationUiProjectionLiveDbTests.cs.
+
+              Historical note (pre-round-15, kept for context, no longer the live blocker): admin-
+              enum's enum_confirm_button (button.primitive) and the create/update/delete/
+              set_group_items mutation actions were originally seeded as structural leaves only
+              (componentId/componentKind resolve; no functioning eventBinding/runtimeInteractions),
               authored directly on topology.ui_topology_tensor rather than as React-like Schema
-              Action nodes (input_text_markup_grammar_contract prohibits an action/step tag with
-              no wiringLane attribute, and wiring_lane_contract has no lane whose meaning is
-              admin_runtime layer:action dispatch). Read/list rendering (enum_dictionary:list_groups
-              etc.) is likewise limited to the ADMIN_OPERATION_NOT_FOUND structural-render fallback
-              (ManifestDispatcher.cs, the same fallback admin-dashboard's manifest ad200 uses) --
-              no real enum row data flows into the UI yet.
+              Action nodes, because at that time none of wiring_lane_contract.lanes' five lanes
+              covered admin_runtime layer:action dispatch and adding a sixth was judged
+              owner-decision-required. dispatchTargetRefByTrigger resolved this without adding a
+              sixth lane (it is node-local tensor data, not a new wiring_lane_contract entry) --
+              this historical constraint is why the 7 write manifests still predate that mechanism
+              and have not yet been re-wired to use it.
       - seed_surface_key: ui_component_registry.preset_catalog_bootstrap.v1
         declared_by_yaml_ref: docs/design/component-catalog-classification-ssot.yaml catalog_vocabulary_contract
         seed_role: fixed_uuid_components_bucket_and_ui_component_registry_bootstrap_rows

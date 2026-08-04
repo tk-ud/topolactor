@@ -374,3 +374,292 @@ Deno.test("resolvePayloadFrom: event.<path> fails close for an Object.prototype-
     );
   }
 });
+
+// ─── node:<nodeId>.value.<path> dotted-path drilling (round 20 — admin-enum
+// selected-row carrier: a table's tracked selected-row object value needs a
+// single field extracted for a later button's payloadFrom) ─────────────────
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<field> parses to node_value with a path", () => {
+  const result = parsePayloadFromSource("node:enum_table.value.groupId");
+  assertEquals(result.kind, "node_value");
+  if (result.kind === "node_value") {
+    assertEquals(result.nodeId, "enum_table");
+    assertEquals(result.path, ["groupId"]);
+  }
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<a>.<b> parses to node_value with a multi-segment path", () => {
+  const result = parsePayloadFromSource("node:enum_table.value.detail.groupId");
+  assertEquals(result.kind, "node_value");
+  if (result.kind === "node_value") {
+    assertEquals(result.nodeId, "enum_table");
+    assertEquals(result.path, ["detail", "groupId"]);
+  }
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value (no suffix) still parses with an empty path — bare tracked-value form unchanged", () => {
+  const result = parsePayloadFromSource("node:hub_search_input.value");
+  assertEquals(result.kind, "node_value");
+  if (result.kind === "node_value") {
+    assertEquals(result.path ?? [], []);
+  }
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<field> drills into an object tracked value", () => {
+  const source: PayloadFromSource = {
+    kind: "node_value",
+    nodeId: "enum_table",
+    path: ["groupId"],
+  };
+  const nodeValues = {
+    enum_table: { groupId: "22222222-2222-2222-2222-222222222201", groupName: "demo_status" },
+  };
+  const result = resolvePayloadFromSource(source, nodeValues, {});
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.value, "22222222-2222-2222-2222-222222222201");
+  }
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<field> fails close (PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND) when the tracked value is not an object", () => {
+  const source: PayloadFromSource = {
+    kind: "node_value",
+    nodeId: "enum_table",
+    path: ["groupId"],
+  };
+  const nodeValues = { enum_table: "not an object" };
+  const result = resolvePayloadFromSource(source, nodeValues, {});
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertMatch(result.error, /PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND/);
+  }
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<field> fails close (PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND) when the field is absent on the tracked object", () => {
+  const source: PayloadFromSource = {
+    kind: "node_value",
+    nodeId: "enum_table",
+    path: ["groupId"],
+  };
+  const nodeValues = { enum_table: { groupName: "demo_status" } };
+  const result = resolvePayloadFromSource(source, nodeValues, {});
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertMatch(result.error, /PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND/);
+    assertMatch(result.error, /groupId/);
+  }
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<field> fails close when the nodeId itself has never been tracked (no row selected yet)", () => {
+  const source: PayloadFromSource = {
+    kind: "node_value",
+    nodeId: "enum_table",
+    path: ["groupId"],
+  };
+  const result = resolvePayloadFromSource(source, {}, {});
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertMatch(result.error, /PAYLOAD_FROM_NODE_NOT_FOUND/);
+  }
+});
+
+Deno.test("payloadFromResolver: resolvePayloadFrom resolves a full delete_group-style payload from a table's tracked selected row", () => {
+  const payloadFrom = {
+    groupId: "node:enum_table.value.groupId",
+    confirmed: "literal:true",
+  };
+  const nodeValues = {
+    enum_table: { groupId: "row-uuid-1", groupName: "demo_status", indexNum: 3 },
+  };
+  const result = resolvePayloadFrom(payloadFrom, nodeValues, {});
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.payload, { groupId: "row-uuid-1", confirmed: "true" });
+  }
+});
+
+// ─── round 21 audit: exhaustive edge-case coverage for node:<id>.value.<path>
+// per docs/design/ui-builder-preset-ecosystem-ssot.yaml payloadFrom_resolver_contract
+// .recognized_source_patterns.node_value_path ────────────────────────────────
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<a>.<b> drills through nested objects (multi-segment success, not just single-segment)", () => {
+  const source: PayloadFromSource = {
+    kind: "node_value",
+    nodeId: "enum_table",
+    path: ["detail", "groupId"],
+  };
+  const nodeValues = { enum_table: { detail: { groupId: "nested-uuid-1" } } };
+  const result = resolvePayloadFromSource(source, nodeValues, {});
+  assertEquals(result.ok, true);
+  if (result.ok) assertEquals(result.value, "nested-uuid-1");
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<field> fails close (PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND) when an INTERMEDIATE segment is null", () => {
+  const source: PayloadFromSource = {
+    kind: "node_value",
+    nodeId: "enum_table",
+    path: ["detail", "groupId"],
+  };
+  const nodeValues = { enum_table: { detail: null } };
+  const result = resolvePayloadFromSource(source, nodeValues, {});
+  assertEquals(result.ok, false);
+  if (!result.ok) assertMatch(result.error, /PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND/);
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<field> fails close (PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND) when the tracked value itself is null", () => {
+  const source: PayloadFromSource = {
+    kind: "node_value",
+    nodeId: "enum_table",
+    path: ["groupId"],
+  };
+  const nodeValues = { enum_table: null };
+  const result = resolvePayloadFromSource(source, nodeValues, {});
+  assertEquals(result.ok, false);
+  if (!result.ok) assertMatch(result.error, /PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND/);
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<field> fails close (PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND) when the tracked value is an ARRAY, not an object — no implicit array-as-object fallback", () => {
+  const source: PayloadFromSource = {
+    kind: "node_value",
+    nodeId: "enum_table",
+    path: ["groupId"],
+  };
+  const nodeValues = { enum_table: [{ groupId: "row-uuid-1" }] };
+  const result = resolvePayloadFromSource(source, nodeValues, {});
+  assertEquals(result.ok, false);
+  if (!result.ok) assertMatch(result.error, /PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND/);
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<field> resolves ok when the field is PRESENT but its value is undefined — absent key vs. present-undefined-value distinction", () => {
+  const source: PayloadFromSource = {
+    kind: "node_value",
+    nodeId: "enum_table",
+    path: ["groupId"],
+  };
+  const nodeValues = { enum_table: { groupId: undefined } };
+  const result = resolvePayloadFromSource(source, nodeValues, {});
+  assertEquals(result.ok, true);
+  if (result.ok) assertEquals(result.value, undefined);
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<field> fails close for an Object.prototype-shaped field segment (constructor/toString) that was never actually set on the tracked object — own-property identity, not `in`", () => {
+  const source: PayloadFromSource = {
+    kind: "node_value",
+    nodeId: "enum_table",
+    path: ["constructor"],
+  };
+  const nodeValues = { enum_table: {} };
+  const result = resolvePayloadFromSource(source, nodeValues, {});
+  assertEquals(result.ok, false);
+  if (!result.ok) assertMatch(result.error, /PAYLOAD_FROM_NODE_VALUE_PATH_NOT_FOUND/);
+});
+
+Deno.test("payloadFromResolver: node:<nodeId>.value.<field> parses correctly for a hyphenated nodeId with a dotted field suffix — nodeId grammar unchanged by this extension", () => {
+  const result = parsePayloadFromSource("node:crud-search-input.value.query");
+  assertEquals(result.kind, "node_value");
+  if (result.kind === "node_value") {
+    assertEquals(result.nodeId, "crud-search-input");
+    assertEquals(result.path, ["query"]);
+  }
+});
+
+// Round 21/22 grammar parity: reads the SAME shared, machine-readable corpus file
+// check_react_schema_topology_seed_translator.py's 42g/42h assertions read against the
+// Python NODE_VALUE_RE — round 22 fix: this used to be a hand-retyped literal list in each
+// suite (a duplication the round 22 audit itself flagged as an NG-axis violation to leave
+// standing); both suites now read ONE physical artifact, so neither can silently drift from
+// the other. docs/design/ui-builder-preset-ecosystem-ssot.yaml payloadFrom_resolver_contract
+// .recognized_source_patterns.node_value_path.cross_implementation_parity.
+type GrammarCorpus = { accept: string[]; reject: string[] };
+
+async function loadGrammarCorpus(): Promise<GrammarCorpus> {
+  const raw = await Deno.readTextFile(
+    new URL(
+      "../../.agent/tests/fixtures/payload-from-node-value-grammar-corpus.json",
+      import.meta.url,
+    ),
+  );
+  return JSON.parse(raw) as GrammarCorpus;
+}
+
+Deno.test("payloadFromResolver: frontend NODE_VALUE_RE accepts every string the shared grammar corpus marks accept (round 21/22 parity)", async () => {
+  const corpus = await loadGrammarCorpus();
+  for (const raw of corpus.accept) {
+    const result = parsePayloadFromSource(raw);
+    assertEquals(
+      result.kind,
+      "node_value",
+      `expected "${raw}" to parse as node_value but got "${result.kind}"`,
+    );
+  }
+});
+
+Deno.test("payloadFromResolver: frontend NODE_VALUE_RE rejects every string the shared grammar corpus marks reject (round 21/22 parity)", async () => {
+  const corpus = await loadGrammarCorpus();
+  for (const raw of corpus.reject) {
+    const result = parsePayloadFromSource(raw);
+    assertEquals(
+      result.kind === "node_value",
+      false,
+      `expected "${raw}" NOT to parse as node_value but it did`,
+    );
+  }
+});
+
+// ─── round 22 audit: a resolver-successful undefined value must not silently
+// vanish over the wire. resolvePayloadFromSource itself still resolves a
+// present-but-undefined tracked value as ok (unchanged — see the "empty input
+// is valid" test above), but resolvePayloadFrom's aggregate payload is what
+// dispatchOperation (frontend/api/dispatch.ts) hands directly to
+// JSON.stringify(req) with no intermediate boundary — and JSON.stringify
+// silently DROPS any object key whose value is `undefined`. These tests prove
+// the field survives serialization as an explicit `null`, not a vanished key. ──
+
+Deno.test("payloadFromResolver: resolvePayloadFrom normalizes a resolved-but-undefined node value to null (not omitted) in the aggregate payload", () => {
+  const payloadFrom = { groupId: "node:enum_table.value.groupId" };
+  const nodeValues = { enum_table: { groupId: undefined } };
+  const result = resolvePayloadFrom(payloadFrom, nodeValues, {});
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(
+      Object.prototype.hasOwnProperty.call(result.payload, "groupId"),
+      true,
+      "groupId must remain a present key on the resolved payload, not be dropped",
+    );
+    assertEquals(result.payload.groupId, null);
+  }
+});
+
+Deno.test("payloadFromResolver: a resolvePayloadFrom payload containing a normalized-to-null field survives JSON.stringify with the key still present (proves the actual wire-serialization boundary, not just the in-memory object)", () => {
+  const payloadFrom = {
+    groupId: "node:enum_table.value.groupId",
+    confirmed: "literal:true",
+  };
+  const nodeValues = { enum_table: { groupId: undefined, groupName: "demo" } };
+  const result = resolvePayloadFrom(payloadFrom, nodeValues, {});
+  assertEquals(result.ok, true);
+  if (!result.ok) return;
+  const wire = JSON.stringify(result.payload);
+  const reparsed = JSON.parse(wire) as Record<string, unknown>;
+  assertEquals(
+    Object.prototype.hasOwnProperty.call(reparsed, "groupId"),
+    true,
+    "groupId must survive the actual JSON.stringify -> wire -> JSON.parse round trip as an explicit key, never silently dropped",
+  );
+  assertEquals(reparsed.groupId, null);
+  assertEquals(reparsed.confirmed, "true");
+});
+
+Deno.test("payloadFromResolver: resolvePayloadFrom does NOT normalize a genuinely-present (non-undefined) falsy value — only undefined is coerced to null, not 0/''/false", () => {
+  const payloadFrom = {
+    count: "node:counter.value",
+    label: "node:label_input.value",
+    active: "node:active_toggle.value",
+  };
+  const nodeValues = { counter: 0, label_input: "", active_toggle: false };
+  const result = resolvePayloadFrom(payloadFrom, nodeValues, {});
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.payload, { count: 0, label: "", active: false });
+  }
+});

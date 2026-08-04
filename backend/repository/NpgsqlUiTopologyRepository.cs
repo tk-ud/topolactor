@@ -732,6 +732,181 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     }
 
 
+    /// <summary>
+    /// True when any node in the patch authors dispatchPayloadFromByTrigger or
+    /// dispatchTargetRefByTrigger — used to gate the (DB-backed) wiring_kind="admin_runtime"
+    /// authorization check so unaffected layout_patch saves never pay for it.
+    /// </summary>
+    private static bool ContainsAdminRuntimeNodeLevelDispatchField(JsonElement nodes)
+    {
+        foreach (var node in nodes.EnumerateArray())
+        {
+            if (node.ValueKind != JsonValueKind.Object) continue;
+            if (node.TryGetProperty("dispatchPayloadFromByTrigger", out _)) return true;
+            if (node.TryGetProperty("dispatchTargetRefByTrigger", out _)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Loads the wiring_kind currently bound to this layout_id via
+    /// topology.ui_topology_tensor -> topology.ui_wiring_registry (the SAME join
+    /// NpgsqlTopologyRepository.LoadLayoutNodesAsync uses to resolve a layout's own uniform
+    /// dispatch target at read time). Null when no tensor row exists yet for this layout_id
+    /// (wiring not yet assigned) or when the wiring_kind column itself is null. Throws the SAME
+    /// LAYOUT_NODES_AMBIGUOUS_SELECTOR shape as LoadLayoutNodesAsync when 2+ tensor rows exist —
+    /// this method must never guess which one a save-time authorization check should trust.
+    /// </summary>
+    public override async Task<AdminRuntimeManifestAuthorizationResult> LoadAdminRuntimeManifestAuthorizationAsync(
+        Guid manifestId, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT status, topology FROM manifest WHERE manifest_id = @manifestId";
+        cmd.Parameters.AddWithValue("manifestId", manifestId);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+            return new AdminRuntimeManifestAuthorizationResult(Exists: false, IsActive: false, IsAdminRuntimeDestination: false);
+
+        var status = reader.IsDBNull(0) ? null : reader.GetString(0);
+        var topologyRaw = reader.IsDBNull(1) ? null : reader.GetFieldValue<string[]>(1);
+
+        var isAdminRuntimeDestination = false;
+        if (topologyRaw is not null)
+        {
+            foreach (var entryRaw in topologyRaw)
+            {
+                using var doc = JsonDocument.Parse(entryRaw);
+                var entry = doc.RootElement;
+                if (entry.ValueKind != JsonValueKind.Object) continue;
+                if (!entry.TryGetProperty("type", out var typeEl) ||
+                    !string.Equals(typeEl.GetString(), "runtime_mapping", StringComparison.Ordinal))
+                    continue;
+                if (entry.TryGetProperty("runtime_destination", out var destEl) &&
+                    string.Equals(destEl.GetString(), "admin_runtime", StringComparison.Ordinal))
+                {
+                    isAdminRuntimeDestination = true;
+                    break;
+                }
+            }
+        }
+
+        return new AdminRuntimeManifestAuthorizationResult(
+            Exists: true,
+            IsActive: string.Equals(status, "active", StringComparison.OrdinalIgnoreCase),
+            IsAdminRuntimeDestination: isAdminRuntimeDestination);
+    }
+
+    public override async Task<string?> LoadWiringKindForLayoutAsync(Guid layoutId, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT w.wiring_kind " +
+            "FROM topology.ui_topology_tensor t " +
+            "LEFT JOIN topology.ui_wiring_registry w ON w.wiring_id = t.wiring_id " +
+            "WHERE t.layout_id = @layoutId " +
+            "LIMIT 2";
+        cmd.Parameters.AddWithValue("layoutId", layoutId);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        string? wiringKind = null;
+        var rowCount = 0;
+        while (await reader.ReadAsync(ct))
+        {
+            rowCount++;
+            if (rowCount == 1)
+                wiringKind = reader.IsDBNull(0) ? null : reader.GetString(0);
+            if (rowCount == 2)
+                throw new InvalidOperationException(
+                    $"LAYOUT_NODES_AMBIGUOUS_SELECTOR: multiple tensor rows for layout_id='{layoutId}'.");
+        }
+        return wiringKind;
+    }
+
+    /// <summary>
+    /// Round 17: UI Builder authoring candidate source for dispatchTargetRefByTrigger, mirroring
+    /// ListExternalPortAuthoringCandidatesAsync/ListInstanceOperationAuthoringCandidatesAsync's own
+    /// pattern. Scans every active manifest whose topology declares
+    /// runtime_mapping.runtime_destination="admin_runtime" and expands each of its
+    /// dispatcher_mapping entries into one candidate targetRef
+    /// "manifest:&lt;manifestId&gt;:&lt;layer&gt;:&lt;action&gt;" — the exact shape
+    /// ManifestDispatcher's admin_runtime target_ref authorization (round 17 hardening) and
+    /// ADMIN_RUNTIME_TARGET_REF_RE both require. A manifest with no dispatcher_mapping entries
+    /// (e.g. one only ever addressed by a hand-authored seed target_ref before this candidate
+    /// source existed) yields zero candidates for itself — it is not a silent gap, since without a
+    /// dispatcher_mapping entry ManifestDispatcher itself would now reject the dispatch too
+    /// (TARGET_REF_ADMIN_RUNTIME_LAYER_ACTION_MISSING / _UNAUTHORIZED).
+    /// </summary>
+    public override async Task<IReadOnlyList<AdminRuntimeTargetRefAuthoringCandidateDto>> ListAdminRuntimeTargetRefAuthoringCandidatesAsync(
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT manifest_id, topology FROM manifest WHERE status = 'active'";
+
+        var candidates = new List<AdminRuntimeTargetRefAuthoringCandidateDto>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var manifestId = reader.GetGuid(0);
+            var topologyRaw = reader.IsDBNull(1) ? null : reader.GetFieldValue<string[]>(1);
+            if (topologyRaw is null) continue;
+
+            var isAdminRuntimeDestination = false;
+            string? manifestKey = null;
+            var dispatcherMappings = new List<(string Layer, string Action)>();
+
+            foreach (var entryRaw in topologyRaw)
+            {
+                using var doc = JsonDocument.Parse(entryRaw);
+                var entry = doc.RootElement;
+                if (entry.ValueKind != JsonValueKind.Object) continue;
+                if (!entry.TryGetProperty("type", out var typeEl) || typeEl.ValueKind != JsonValueKind.String) continue;
+                var type = typeEl.GetString();
+
+                if (string.Equals(type, "runtime_mapping", StringComparison.Ordinal) &&
+                    entry.TryGetProperty("runtime_destination", out var destEl) &&
+                    string.Equals(destEl.GetString(), "admin_runtime", StringComparison.Ordinal))
+                {
+                    isAdminRuntimeDestination = true;
+                }
+                else if (string.Equals(type, "hub_grouping", StringComparison.Ordinal) &&
+                    entry.TryGetProperty("manifestKey", out var keyEl) && keyEl.ValueKind == JsonValueKind.String)
+                {
+                    manifestKey = keyEl.GetString();
+                }
+                else if (string.Equals(type, "dispatcher_mapping", StringComparison.Ordinal) &&
+                    entry.TryGetProperty("layer", out var layerEl) && layerEl.ValueKind == JsonValueKind.String &&
+                    entry.TryGetProperty("action", out var actionEl) && actionEl.ValueKind == JsonValueKind.String)
+                {
+                    var layer = layerEl.GetString();
+                    var action = actionEl.GetString();
+                    if (!string.IsNullOrWhiteSpace(layer) && !string.IsNullOrWhiteSpace(action))
+                        dispatcherMappings.Add((layer!, action!));
+                }
+            }
+
+            if (!isAdminRuntimeDestination) continue;
+
+            foreach (var (layer, action) in dispatcherMappings)
+            {
+                candidates.Add(new AdminRuntimeTargetRefAuthoringCandidateDto(
+                    ManifestId: manifestId.ToString(),
+                    ManifestKey: manifestKey,
+                    Layer: layer,
+                    Action: action,
+                    TargetRef: $"manifest:{manifestId}:{layer}:{action}"));
+            }
+        }
+
+        return candidates;
+    }
+
     private static bool ContainsDispatchInstanceOperation(JsonElement nodes)
     {
         foreach (var sourceNode in nodes.EnumerateArray())
@@ -842,12 +1017,14 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     /// which the alias map does not contain, so it falls through to the SAME
     /// RUNTIME_INTERACTION_TRIGGER_REQUIRED an absent/unrecognized key produces.
     /// </summary>
-    private static string? ValidateDispatchPayloadFromByTrigger(JsonElement nodes)
+    private static string? ValidateDispatchPayloadFromByTrigger(JsonElement nodes, string? layoutWiringKind)
     {
         foreach (var node in nodes.EnumerateArray())
         {
             if (node.ValueKind != JsonValueKind.Object) continue;
             if (!node.TryGetProperty("dispatchPayloadFromByTrigger", out var byTriggerEl)) continue;
+            if (!string.Equals(layoutWiringKind, "admin_runtime", StringComparison.Ordinal))
+                return "RUNTIME_INTERACTION_DISPATCH_PAYLOAD_FROM_BY_TRIGGER_REQUIRES_ADMIN_RUNTIME_WIRING";
             if (byTriggerEl.ValueKind != JsonValueKind.Object)
                 return "RUNTIME_INTERACTION_DISPATCH_PAYLOAD_FROM_BY_TRIGGER_MUST_BE_OBJECT";
             var seenCanonicalTriggers = new HashSet<string>(StringComparer.Ordinal);
@@ -864,6 +1041,110 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                 var payloadFromError = ValidatePayloadFromShape(triggerEntry.Value, rejectEmpty: true);
                 if (payloadFromError is not null) return payloadFromError;
             }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Mirrors frontend/runtime/renderEmission.ts's ADMIN_RUNTIME_TARGET_REF_RE exactly — a
+    /// dispatchTargetRefByTrigger value must be the SAME ManifestDispatcher-resolvable
+    /// "manifest:&lt;uuid&gt;:&lt;layer&gt;:&lt;action&gt;" shape node.targetRef itself uses (never a
+    /// bare "&lt;layer&gt;:&lt;action&gt;").
+    /// </summary>
+    private static readonly System.Text.RegularExpressions.Regex AdminRuntimeTargetRefRe =
+        new(@"^manifest:([0-9a-fA-F-]{36}):([^:]+):([^:]+)$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// Validates the node-level dispatchTargetRefByTrigger field —
+    /// { trigger: "manifest:&lt;uuid&gt;:&lt;layer&gt;:&lt;action&gt;" } — a per-node, per-trigger
+    /// admin_runtime dispatch TARGET override, independent of the layout's own uniform
+    /// WiringKind="admin_runtime"/TargetRef (see LayoutNodeRecord.DispatchTargetRefByTriggerJson).
+    /// Trigger key normalization/collision/support rules mirror ValidateDispatchPayloadFromByTrigger
+    /// exactly (same error-code vocabulary, same AuthoredEventTypeAliasMap/
+    /// ComponentWiringExecutionLaneTriggers authority) so both node-level admin_runtime fields agree
+    /// on the same accept/reject decisions for the same trigger inputs. A present-but-malformed
+    /// value fails the WHOLE layout patch closed, mirroring ValidateDispatchPayloadFromByTrigger's
+    /// own contract for the same JSON boundary.
+    /// </summary>
+    private static string? ValidateDispatchTargetRefByTrigger(JsonElement nodes, string? layoutWiringKind)
+    {
+        foreach (var node in nodes.EnumerateArray())
+        {
+            if (node.ValueKind != JsonValueKind.Object) continue;
+            if (!node.TryGetProperty("dispatchTargetRefByTrigger", out var byTriggerEl)) continue;
+            if (!string.Equals(layoutWiringKind, "admin_runtime", StringComparison.Ordinal))
+                return "RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_REQUIRES_ADMIN_RUNTIME_WIRING";
+            if (byTriggerEl.ValueKind != JsonValueKind.Object)
+                return "RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_MUST_BE_OBJECT";
+            var seenCanonicalTriggers = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var triggerEntry in byTriggerEl.EnumerateObject())
+            {
+                if (string.IsNullOrWhiteSpace(triggerEntry.Name))
+                    return "RUNTIME_INTERACTION_TRIGGER_REQUIRED";
+                if (!AuthoredEventTypeAliasMap.TryGetValue(triggerEntry.Name.Trim(), out var canonicalTrigger))
+                    return "RUNTIME_INTERACTION_TRIGGER_REQUIRED";
+                if (!ComponentWiringExecutionLaneTriggers.Contains(canonicalTrigger))
+                    return "RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED";
+                if (!seenCanonicalTriggers.Add(canonicalTrigger))
+                    return "RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION";
+                if (triggerEntry.Value.ValueKind != JsonValueKind.String)
+                    return "RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_VALUE_MUST_BE_STRING";
+                var targetRef = triggerEntry.Value.GetString()?.Trim();
+                if (string.IsNullOrEmpty(targetRef) || !AdminRuntimeTargetRefRe.IsMatch(targetRef))
+                    return "RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_TARGET_REF_INVALID";
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Extracts every distinct manifest_id referenced by dispatchTargetRefByTrigger entries across
+    /// all nodes. Only called after ValidateDispatchTargetRefByTrigger's own shape validation has
+    /// already passed (guarantees each value matches AdminRuntimeTargetRefRe, so parsing here never
+    /// hits a malformed value).
+    /// </summary>
+    private static IReadOnlySet<Guid> ExtractDispatchTargetRefByTriggerManifestIds(JsonElement nodes)
+    {
+        var manifestIds = new HashSet<Guid>();
+        foreach (var node in nodes.EnumerateArray())
+        {
+            if (node.ValueKind != JsonValueKind.Object) continue;
+            if (!node.TryGetProperty("dispatchTargetRefByTrigger", out var byTriggerEl) || byTriggerEl.ValueKind != JsonValueKind.Object)
+                continue;
+            foreach (var triggerEntry in byTriggerEl.EnumerateObject())
+            {
+                if (triggerEntry.Value.ValueKind != JsonValueKind.String) continue;
+                var match = AdminRuntimeTargetRefRe.Match(triggerEntry.Value.GetString()?.Trim() ?? "");
+                if (match.Success && Guid.TryParse(match.Groups[1].Value, out var manifestId))
+                    manifestIds.Add(manifestId);
+            }
+        }
+        return manifestIds;
+    }
+
+    /// <summary>
+    /// Validates that every manifest_id referenced by a dispatchTargetRefByTrigger entry (1) exists,
+    /// (2) is status=active, and (3) declares runtime_destination=admin_runtime -- the SAME facts
+    /// ManifestDispatcher.DispatchAsync would otherwise only discover at actual dispatch time
+    /// (LoadByIdAsync / ExtractRuntimeDestination), surfaced here at layout_patch save time so an
+    /// author cannot persist an override pointing at a nonexistent, deprecated/draft, or
+    /// non-admin_runtime manifest. Does not check capability_requirement (role) -- that is a
+    /// per-request fact, not statically checkable against an authored layout_patch. Only called
+    /// when ExtractDispatchTargetRefByTriggerManifestIds finds at least one referenced manifest_id,
+    /// so a patch with no dispatchTargetRefByTrigger never pays for this DB round trip.
+    /// </summary>
+    private async Task<string?> ValidateDispatchTargetRefByTriggerManifestAuthorizationAsync(
+        IReadOnlySet<Guid> manifestIds, CancellationToken ct)
+    {
+        foreach (var manifestId in manifestIds)
+        {
+            var authorization = await LoadAdminRuntimeManifestAuthorizationAsync(manifestId, ct);
+            if (!authorization.Exists)
+                return $"RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_MANIFEST_NOT_FOUND:{manifestId}";
+            if (!authorization.IsActive)
+                return $"RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_MANIFEST_NOT_ACTIVE:{manifestId}";
+            if (!authorization.IsAdminRuntimeDestination)
+                return $"RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_MANIFEST_NOT_ADMIN_RUNTIME:{manifestId}";
         }
         return null;
     }
@@ -1297,9 +1578,38 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                     var runtimeInteractionError = ValidateRuntimeInteractions(runtimeNodes, approvedInstanceTargetRefs, instanceCandidateSourceError);
                     if (runtimeInteractionError is not null)
                         return normalized with { Ok = false, Valid = false, Message = runtimeInteractionError };
-                    var dispatchPayloadFromByTriggerError = ValidateDispatchPayloadFromByTrigger(runtimeNodes);
+
+                    // dispatchPayloadFromByTrigger/dispatchTargetRefByTrigger are admin_runtime-only
+                    // node-level fields (a layout's wiring_kind is uniform for every node in it —
+                    // NpgsqlTopologyRepository.LoadLayoutNodesAsync — so one lookup per patch save
+                    // suffices). Only queried when the patch actually authors either field, so
+                    // unaffected layout_patch saves never pay for it.
+                    string? layoutWiringKind = null;
+                    if (ContainsAdminRuntimeNodeLevelDispatchField(runtimeNodes))
+                    {
+                        try
+                        {
+                            layoutWiringKind = await LoadWiringKindForLayoutAsync(layoutId, ct);
+                        }
+                        catch (InvalidOperationException ex) when (ex.Message.StartsWith("LAYOUT_NODES_AMBIGUOUS_SELECTOR", StringComparison.Ordinal))
+                        {
+                            return normalized with { Ok = false, Valid = false, Message = ex.Message };
+                        }
+                    }
+                    var dispatchPayloadFromByTriggerError = ValidateDispatchPayloadFromByTrigger(runtimeNodes, layoutWiringKind);
                     if (dispatchPayloadFromByTriggerError is not null)
                         return normalized with { Ok = false, Valid = false, Message = dispatchPayloadFromByTriggerError };
+                    var dispatchTargetRefByTriggerError = ValidateDispatchTargetRefByTrigger(runtimeNodes, layoutWiringKind);
+                    if (dispatchTargetRefByTriggerError is not null)
+                        return normalized with { Ok = false, Valid = false, Message = dispatchTargetRefByTriggerError };
+
+                    var referencedManifestIds = ExtractDispatchTargetRefByTriggerManifestIds(runtimeNodes);
+                    if (referencedManifestIds.Count > 0)
+                    {
+                        var manifestAuthorizationError = await ValidateDispatchTargetRefByTriggerManifestAuthorizationAsync(referencedManifestIds, ct);
+                        if (manifestAuthorizationError is not null)
+                            return normalized with { Ok = false, Valid = false, Message = manifestAuthorizationError };
+                    }
                 }
             }
 

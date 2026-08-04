@@ -2533,6 +2533,40 @@ Deno.test("UiBuilderAdmin: event authoring uses SSOT trigger/target vocabulary n
   assertFalse(eventPanelSrc.includes("+ External instance"));
 });
 
+Deno.test("NodeEventAuthoringPanel: admin_runtime dispatch override is authored via DB-derived candidates, not a hardcoded action list (round 17)", async () => {
+  const eventPanelSrc = await Deno.readTextFile(
+    new URL("../components/NodeEventAuthoringPanel.tsx", import.meta.url),
+  );
+  const uiBuilderSrc = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  const hooksSrc = await Deno.readTextFile(
+    new URL("../lib/uiBuilderEventAuthoringHooks.ts", import.meta.url),
+  );
+
+  // The candidate source is a backend admin action (manifest/dispatcher_mapping derived), never a
+  // frontend-hardcoded per-surface action enum such as enum_dictionary:create_group literals.
+  assert(hooksSrc.includes("useAdminRuntimeTargetRefAuthoringCandidates"));
+  assert(hooksSrc.includes("list_admin_runtime_target_ref_authoring_candidates"));
+  assertFalse(hooksSrc.includes("enum_dictionary"), "candidate source must not hardcode a surface-specific action name");
+
+  assert(eventPanelSrc.includes("useAdminRuntimeTargetRefAuthoringCandidates"));
+  assert(eventPanelSrc.includes("UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_SECTION_TITLE"));
+  assert(eventPanelSrc.includes("UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_SELECT"));
+  assert(eventPanelSrc.includes("onCommitDispatchOverrides"));
+  // The trigger axis reuses the SAME closed trigger vocabulary as external port/instance operation
+  // rows, not a separate ad hoc trigger list for this override.
+  assert(eventPanelSrc.includes("runtimeInteractionTriggerOptions(triggerOptions)"));
+  assertFalse(eventPanelSrc.includes("enum_dictionary"), "panel must not hardcode a surface-specific action name");
+  assertFalse(eventPanelSrc.includes("create_group"), "panel must not hardcode a surface-specific action name");
+
+  // Wired into UiBuilderAdmin's node inspector call site, reading/writing the SAME DraftNode
+  // fields round 16 already made round-trip-safe.
+  assert(uiBuilderSrc.includes("dispatchTargetRefByTrigger={selectedNode.dispatchTargetRefByTrigger}"));
+  assert(uiBuilderSrc.includes("dispatchPayloadFromByTrigger={selectedNode.dispatchPayloadFromByTrigger}"));
+  assert(uiBuilderSrc.includes("onCommitDispatchOverrides="));
+});
+
 Deno.test("HubNavigationAdmin: destination picker uses page label not raw hub id", async () => {
   const src = await Deno.readTextFile(
     new URL("../islands/HubNavigationAdmin.tsx", import.meta.url),

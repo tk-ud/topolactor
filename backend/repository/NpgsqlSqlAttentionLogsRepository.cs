@@ -523,11 +523,11 @@ SELECT diff_id, physical_table_id, physical_table_name, record_id, operation_kin
 INSERT INTO logs.diff (
     source_set_id, basis_window, physical_table_id, physical_table_name,
     record_id, operation_kind, before_state_or_diff_json, after_state_or_diff_json,
-    observed_at, actor_or_source, archive_policy
+    observed_at, actor_or_source, archive_policy, changed_fields_json
 ) VALUES (
     @source_set_id, @basis_window, @physical_table_id, @physical_table_name,
     @record_id, @operation_kind, @before_state_or_diff_json::jsonb, @after_state_or_diff_json::jsonb,
-    @observed_at, @actor_or_source, @archive_policy
+    @observed_at, @actor_or_source, @archive_policy, @changed_fields_json::jsonb
 )";
 
         await using var conn = new NpgsqlConnection(_connectionString);
@@ -545,6 +545,7 @@ INSERT INTO logs.diff (
         cmd.Parameters.AddWithValue("observed_at", request.ObservedAt);
         cmd.Parameters.AddWithValue("actor_or_source", (object?)request.ActorOrSource ?? DBNull.Value);
         cmd.Parameters.AddWithValue("archive_policy", request.ArchivePolicy);
+        cmd.Parameters.AddWithValue("changed_fields_json", request.ChangedFieldsJson ?? "{}");
 
         await cmd.ExecuteNonQueryAsync(ct);
     }

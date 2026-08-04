@@ -70,6 +70,18 @@ export type LiveNodeValueTracker = {
    * (SSE refresh / node reconciliation boundary).
    */
   reconcile(currentNodeIds: readonly string[]): void;
+  /**
+   * Drops EVERY tracked value, bound or unbound (round 29). A settled write's
+   * canonical reread makes the DB the sole authority for everything the
+   * surface currently displays — not just the fields seedTrackerFromPropBindingsValue
+   * happens to re-seed (propBindings-bound fields). A typed value in a field with NO
+   * propBindings (e.g. a still-open create/update form's free-typed input) would
+   * otherwise survive reconcile()+seed unchanged (reconcile only drops nodes ABSENT
+   * from the new layout; seed only ever ADDS/overwrites propBindings-bound nodeIds) and
+   * could be resent stale on a LATER, unrelated write. Call before reconcile()+seed on
+   * canonical_reread; never on a passive refresh, where an in-progress edit must survive.
+   */
+  clear(): void;
 };
 
 export function createLiveNodeValueTracker(): LiveNodeValueTracker {
@@ -88,5 +100,74 @@ export function createLiveNodeValueTracker(): LiveNodeValueTracker {
         if (!keep.has(key)) delete store[key];
       }
     },
+    clear() {
+      for (const key of Object.keys(store)) {
+        delete store[key];
+      }
+    },
   };
 }
+
+/**
+ * form_input/search_input propBindings.value pre-fill (admin-write-surface-selection-
+ * context-and-mode-composition-gap Bundle, .agent/tasks/todo.md) resolves an initial
+ * displayed value from emission.data via the SAME generic resolvePropBindings path
+ * table/card_list/json_viewer already use (propBindingResolver.ts
+ * COMPONENT_ARRAY_PROP_CAPABILITIES / acceptsNonArrayResolvedValue). That resolution only
+ * affects what renderEmission() puts in a node's rendered `value` PROP; it does not, by
+ * itself, teach liveNodeValueTracker about that value — node:<nodeId>.value payloadFrom
+ * resolution (payloadFromResolver.ts, used by preview/confirm buttons) reads ONLY the
+ * tracker, which otherwise only gets values from actual onChange keystrokes
+ * (renderEmission.ts's onNodeValueChange wiring). Without this seeding step, a user who
+ * accepts a pre-filled value without editing it would still fail dispatch with
+ * PAYLOAD_FROM_NODE_NOT_FOUND on Preview/Confirm.
+ *
+ * By default, only seeds a nodeId that has NO existing tracked value — never overwrites
+ * a value the user has already started editing during a passive background refresh
+ * (initial mount / SSE refresh call sites, which pass no options and keep this
+ * untouched-only behavior).
+ *
+ * options.forceOverwrite (PR #600 review round 12): an explicit, user-triggered
+ * re-Load of a DIFFERENT record (adopting a node's own admin_runtime dispatch result,
+ * see ProjectionShell.tsx's onRuntimeDispatchResult handler) is NOT a passive refresh —
+ * it must overwrite a still-tracked stale value from an earlier Load, otherwise the
+ * displayed pre-fill and the tracker's dispatch-payload authority diverge (the field
+ * SHOWS the newly loaded record's value via propBindings, but Preview/Confirm would
+ * still dispatch the PREVIOUS record's stale tracked value). Pass true only from that
+ * explicit-adoption boundary; the passive-refresh call sites must keep the untouched-
+ * only default so an in-progress edit during a background SSE refresh is never clobbered.
+ *
+ * Call once per fresh emission (alongside reconcile()), never on every unrelated
+ * re-render, so it can't fight a keystroke that landed the same tick.
+ */
+export function seedTrackerFromPropBindingsValue(
+  tracker: LiveNodeValueTracker,
+  layoutNodes: readonly LayoutNodeForValueSeeding[],
+  emissionData: Record<string, unknown>,
+  resolveRuntimeDataPath: (
+    data: Record<string, unknown>,
+    source: string,
+  ) => unknown,
+  options?: { forceOverwrite?: boolean },
+): void {
+  const forceOverwrite = options?.forceOverwrite ?? false;
+  const tracked = tracker.snapshot();
+  for (const node of layoutNodes) {
+    if (!node.nodeId || node.componentKind !== "form_input/search_input") continue;
+    if (
+      !forceOverwrite &&
+      Object.prototype.hasOwnProperty.call(tracked, node.nodeId)
+    ) continue;
+    const binding = node.propBindings?.value;
+    if (!binding || typeof binding.source !== "string") continue;
+    const resolved = resolveRuntimeDataPath(emissionData, binding.source);
+    if (typeof resolved === "string") tracker.set(node.nodeId, resolved);
+  }
+}
+
+/** Minimal shape seedTrackerFromPropBindingsValue needs from a LayoutNode (api/dispatch.ts). */
+export type LayoutNodeForValueSeeding = {
+  nodeId?: string;
+  componentKind?: string;
+  propBindings?: Record<string, { source?: string }> | null;
+};

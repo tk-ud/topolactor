@@ -606,6 +606,160 @@ public class LayoutSchemaStructuralCompositionTests
     }
 
     [Fact]
+    public void ParseRecords_ModalRecordMissingComponentKind_ReturnsInvalid_NeverSkipped()
+    {
+        const string json = """
+        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_modal","key":"m1","label":"m1","sourceReactPath":"$.test.m1","sourceYamlRefs":["ref"],"knownGapRefs":[]}}]}
+        """;
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(LayoutSchemaTensorComposer.ParseRecords(json));
+    }
+
+    [Theory]
+    [InlineData("disclosure/drawer")]
+    [InlineData("disclosure/dialog")]
+    [InlineData("safety_guard/apply_confirm_dialog")]
+    [InlineData("banana")]
+    public void ParseRecords_ModalRecordWithAnyOtherNonEmptyComponentKind_ReturnsInvalid_NeverSkipped(string wrongKind)
+    {
+        // Round 25: exact-match fail-close, not merely non-empty. Modal is fixed to the single
+        // literal componentKind "disclosure/modal" (docs/design/react-schema-topology-seed-
+        // translator-ssot.yaml react_schema_contract.allowed_node_kinds.Modal) -- this translator/
+        // composer has no Drawer/Dialog/other container kind support today, so any other value,
+        // including a real backend-recognized disclosure kind ahead of its own support landing, is
+        // a real authoring defect, not a silently-accepted "close enough" kind.
+        var json = "{\"records\":[{\"type\":\"topology_ui_seed_record\",\"parentKey\":null,\"record\":{\"recordType\":\"topology_ui_modal\",\"key\":\"m1\",\"componentKind\":\"" +
+            wrongKind +
+            "\",\"label\":\"m1\",\"sourceReactPath\":\"$.test.m1\",\"sourceYamlRefs\":[\"ref\"],\"knownGapRefs\":[]}}]}";
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(LayoutSchemaTensorComposer.ParseRecords(json));
+    }
+
+    [Fact]
+    public void ComposeLayoutSchemaWithTensor_ModalRecord_ComponentKindComesFromRecordItself_NeverARegistryLookup()
+    {
+        const string json = """
+        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_modal","key":"m1","componentKind":"disclosure/modal","label":"m1","sourceReactPath":"$.test.m1","sourceYamlRefs":["ref"],"knownGapRefs":[]}}]}
+        """;
+        var records = ParseValidRows(json);
+
+        // A registry-backed component_key lookup is never required for Modal -- an empty
+        // componentKeyToId/componentIdToKind map still resolves componentKind correctly, unlike
+        // Field/Table/Action which would leave componentKind null without a matching entry.
+        var requiredKeys = LayoutSchemaTensorComposer.RequiredComponentKeys(records);
+        Assert.Empty(requiredKeys);
+
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records, new Dictionary<string, string>(), new Dictionary<string, string>(), new Dictionary<string, string>());
+
+        var modal = Assert.Single(composed);
+        Assert.Equal("catalog_component", modal.NodeKind);
+        Assert.Equal("disclosure/modal", modal.ComponentKind);
+        // ComponentId is the Modal's own resolved NodeId (round 25 fix) -- never null:
+        // adaptComponentDataHub fails closed (RUNTIME_COMPONENT_ADAPTER_MISSING_COMPONENT_ID) on an
+        // empty componentId before componentKind is even inspected, which would have silently
+        // turned every Modal into a render-time error instead of a working dialog.
+        Assert.Equal("m1", modal.ComponentId);
+    }
+
+    [Fact]
+    public void ComposeLayoutSchemaWithTensor_ModalWithConfirmAndCancelActionChildren_ChildrenAttachToModalAsParent_InteractionsMergeByModalScopedKey()
+    {
+        // A Modal can be a parent of further catalog leaves (unlike every other catalog leaf so
+        // far) -- its Confirm/Cancel Action children resolve ParentNodeId to the Modal's own
+        // resolved NodeId, and their runtimeInteractions merge via "{modalNodeId}::{childKey}",
+        // exactly the same generic parent-scoped merge every other Action/Form pairing uses.
+        const string json = """
+        {
+          "records": [
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_modal","key":"confirm_modal","componentKind":"disclosure/modal","label":"Confirm","sourceReactPath":"$.test.modal","sourceYamlRefs":["ref"],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":"confirm_modal","record":{"recordType":"topology_ui_action","key":"confirm_button","label":"Confirm","sourceReactPath":"$.test.confirm","sourceYamlRefs":["ref"],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":"confirm_modal","record":{"recordType":"topology_ui_action","key":"cancel_button","label":"Cancel","sourceReactPath":"$.test.cancel","sourceYamlRefs":["ref"],"knownGapRefs":[]}}
+          ]
+        }
+        """;
+        var records = ParseValidRows(json);
+
+        const string confirmInteractions = """[{"trigger":"click","actionType":"closeModal","targetNodeId":"confirm_modal","statePath":"open","sourceActionKey":"confirm_button"}]""";
+        const string cancelInteractions = """[{"trigger":"click","actionType":"closeModal","targetNodeId":"confirm_modal","statePath":"open","sourceActionKey":"cancel_button"}]""";
+
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records,
+            interactionsBySourceActionKey: new Dictionary<string, string>
+            {
+                ["confirm_modal::confirm_button"] = confirmInteractions,
+                ["confirm_modal::cancel_button"] = cancelInteractions,
+            },
+            componentKeyToId: new Dictionary<string, string>(),
+            componentIdToKind: new Dictionary<string, string>());
+
+        var modal = Assert.Single(composed, n => n.NodeId == "confirm_modal");
+        Assert.Null(modal.ParentNodeId);
+        Assert.Equal("disclosure/modal", modal.ComponentKind);
+        Assert.Equal("confirm_modal", modal.ComponentId);
+
+        var confirm = Assert.Single(composed, n => n.NodeId == "confirm_button");
+        Assert.Equal("confirm_modal", confirm.ParentNodeId);
+        Assert.Equal(confirmInteractions, confirm.RuntimeInteractionsJson);
+
+        var cancel = Assert.Single(composed, n => n.NodeId == "cancel_button");
+        Assert.Equal("confirm_modal", cancel.ParentNodeId);
+        Assert.Equal(cancelInteractions, cancel.RuntimeInteractionsJson);
+    }
+
+    [Fact]
+    public void ComposeLayoutSchemaWithTensor_ModalOwnRuntimeInteractions_MergeByItsOwnParentScopedKey_SameAsAnyOtherCatalogLeaf()
+    {
+        // The Modal itself is a catalog_component leaf, so its OWN runtimeInteractions (e.g. the
+        // self-close-on-toggle interaction the translator always emits) merge exactly like any
+        // other leaf: "{modal's OWN resolved parentNodeId}::{modal's OWN key}".
+        const string json = """
+        {
+          "records": [
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_section","key":"sec1","label":"Section","sourceReactPath":"$.test.sec1","sourceYamlRefs":["ref"],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":"sec1","record":{"recordType":"topology_ui_modal","key":"confirm_modal","componentKind":"disclosure/modal","label":"Confirm","sourceReactPath":"$.test.modal","sourceYamlRefs":["ref"],"knownGapRefs":[]}}
+          ]
+        }
+        """;
+        var records = ParseValidRows(json);
+        const string selfCloseInteractions = """[{"trigger":"toggle","actionType":"closeModal","targetNodeId":"confirm_modal","statePath":"open","sourceActionKey":"confirm_modal"}]""";
+
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records,
+            interactionsBySourceActionKey: new Dictionary<string, string>
+            {
+                ["sec1::confirm_modal"] = selfCloseInteractions,
+            },
+            componentKeyToId: new Dictionary<string, string>(),
+            componentIdToKind: new Dictionary<string, string>());
+
+        var modal = Assert.Single(composed, n => n.NodeId == "confirm_modal");
+        Assert.Equal("sec1", modal.ParentNodeId);
+        Assert.Equal(selfCloseInteractions, modal.RuntimeInteractionsJson);
+    }
+
+    [Fact]
+    public void ComposeLayoutSchemaWithTensor_ModalRecord_NodeLocalDataMergesByModalNodeId_SamePathAsAnyOtherCatalogLeaf()
+    {
+        const string json = """
+        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_modal","key":"confirm_modal","componentKind":"disclosure/modal","label":"Confirm","sourceReactPath":"$.test.modal","sourceYamlRefs":["ref"],"knownGapRefs":[]}}]}
+        """;
+        var records = ParseValidRows(json);
+        const string propsJson = """{"title":"Delete group","body":"This cannot be undone."}""";
+
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records,
+            new Dictionary<string, string>(),
+            new Dictionary<string, string>(),
+            new Dictionary<string, string>(),
+            nodeLocalDataByNodeId: new Dictionary<string, LayoutSchemaTensorComposer.NodeLocalData>
+            {
+                ["confirm_modal"] = new LayoutSchemaTensorComposer.NodeLocalData(propsJson, null, null),
+            });
+
+        var modal = Assert.Single(composed);
+        Assert.Equal(propsJson, modal.PropsJson);
+    }
+
+    [Fact]
     public void ParseRecords_UnresolvedRecordMissingKnownGapRefs_ReturnsInvalid_NeverSkipped()
     {
         const string json = """
@@ -992,5 +1146,69 @@ public class LayoutSchemaStructuralCompositionTests
         // share its NodeId — only catalog_component leaves are eligible.
         var section = Assert.Single(composed, n => n.NodeId == "sec1");
         Assert.Null(section.DispatchPayloadFromByTriggerJson);
+    }
+
+    // ─── dispatchTargetRefByTrigger: a node-level admin_runtime dispatch TARGET override
+    // field, merged by exact tensor NodeId through the SAME NodeLocalData mechanism as
+    // propsJson/stateJson/propBindings/dispatchPayloadFromByTrigger ──────────────────
+
+    [Fact]
+    public void BuildNodeLocalDataByNodeId_TensorNodeWithDispatchTargetRefByTrigger_IsKeptByExactNodeId()
+    {
+        var tensorNodes = new List<LayoutNodeRecord>
+        {
+            new(NodeId: "create_submit_button", NodeKind: "catalog_component", HtmlTag: null,
+                ComponentKey: null, ComponentId: null, ParentNodeId: null,
+                SlotKey: null, OrderIndex: 0, X: 0, Y: 0, Width: null, Height: null,
+                LayoutClassRefs: null,
+                DispatchTargetRefByTriggerJson: """{"click":"manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:create_group"}"""),
+        };
+        var result = LayoutSchemaTensorComposer.BuildNodeLocalDataByNodeId(tensorNodes);
+        Assert.True(result.TryGetValue("create_submit_button", out var data));
+        Assert.Contains("create_group", data.DispatchTargetRefByTriggerJson);
+        Assert.Null(data.PropsJson);
+        Assert.Null(data.DispatchPayloadFromByTriggerJson);
+    }
+
+    [Fact]
+    public void ComposeLayoutSchemaWithTensor_CatalogLeafMatchingTensorNodeId_MergesDispatchTargetRefByTrigger()
+    {
+        var records = ParseValidRows(CategoryRecordsJson);
+        var componentKeyToId = new Dictionary<string, string>
+        {
+            ["select.template"] = "00000000-0000-0000-0001-000000000012",
+            ["button.primitive"] = "00000000-0000-0000-0001-000000000010",
+        };
+        var componentIdToKind = new Dictionary<string, string>
+        {
+            ["00000000-0000-0000-0001-000000000012"] = "form_input/select",
+            ["00000000-0000-0000-0001-000000000010"] = "action/button",
+        };
+        var nodeLocalDataByNodeId = new Dictionary<string, LayoutSchemaTensorComposer.NodeLocalData>
+        {
+            ["action1"] = new(
+                PropsJson: null,
+                StateJson: null,
+                PropBindingsJson: null,
+                DispatchPayloadFromByTriggerJson: null,
+                DispatchTargetRefByTriggerJson: """{"click":"manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:create_group"}"""),
+        };
+
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records,
+            interactionsBySourceActionKey: new Dictionary<string, string>(),
+            componentKeyToId,
+            componentIdToKind,
+            nodeLocalDataByNodeId);
+
+        var action = Assert.Single(composed, n => n.NodeId == "action1");
+        Assert.Equal(
+            """{"click":"manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:create_group"}""",
+            action.DispatchTargetRefByTriggerJson);
+
+        // A structural_node never receives node-local data even when a tensor entry happens to
+        // share its NodeId — only catalog_component leaves are eligible.
+        var section = Assert.Single(composed, n => n.NodeId == "sec1");
+        Assert.Null(section.DispatchTargetRefByTriggerJson);
     }
 }

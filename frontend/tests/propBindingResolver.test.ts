@@ -361,6 +361,49 @@ Deno.test("resolvePropBindings: emission.data → data prop for json viewer", ()
   }
 });
 
+Deno.test("resolvePropBindings: emission.data.preview.groupName → value prop for search_input pre-fill", () => {
+  const base = {};
+  const data = { preview: { groupName: "demo_status", indexNum: 1 } };
+  const result = resolvePropBindings(
+    base,
+    { value: { source: "emission.data.preview.groupName" } },
+    "form_input/search_input",
+    data,
+  );
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.props.value, "demo_status");
+  }
+});
+
+Deno.test("resolvePropBindings: search_input value binding leaves prop absent when source path is missing", () => {
+  const base = {};
+  const data = { preview: {} };
+  const result = resolvePropBindings(
+    base,
+    { value: { source: "emission.data.preview.groupName" } },
+    "form_input/search_input",
+    data,
+  );
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals("value" in result.props, false);
+  }
+});
+
+Deno.test("validatePropBindingsStructure: search_input accepts value target", () => {
+  const errors = validatePropBindingsStructure(
+    { value: { source: "emission.data.preview.groupName" } },
+    "form_input/search_input",
+  );
+  assertEquals(errors, []);
+});
+
+Deno.test("validatePropBindingTarget: search_input rejects unknown prop", () => {
+  const error = validatePropBindingTarget("form_input/search_input", "items");
+  assertEquals(typeof error, "string");
+});
+
 Deno.test("validatePropBindingsStructure: json viewer accepts emission.data root", () => {
   const errs = validatePropBindingsStructure(
     { data: { source: "emission.data" } },

@@ -879,36 +879,14 @@ public class NpgsqlManifestRepository : ManifestRepository
         return result;
     }
 
+    // MatchesAxes moved to the shared DispatcherMappingAxisAuthority (round 17 hardening) so
+    // ManifestDispatcher's target_ref admin_runtime authorization reuses identical semantics
+    // instead of a parallel duplicate implementation.
     private static bool MatchesAxes(
         IReadOnlyList<JsonElement> topology,
         string? role,
         string? target,
         string? layer,
-        string? action)
-    {
-        foreach (var entry in topology)
-        {
-            if (entry.ValueKind != JsonValueKind.Object)
-                continue;
-
-            if (!entry.TryGetProperty("type", out var typeEl) ||
-                !string.Equals(typeEl.GetString(), "dispatcher_mapping", StringComparison.Ordinal))
-                continue;
-
-            if (!AxisMatches(entry, "role", role)) continue;
-            if (!AxisMatches(entry, "target", target)) continue;
-            if (!AxisMatches(entry, "layer", layer)) continue;
-            if (!AxisMatches(entry, "action", action)) continue;
-
-            return true;
-        }
-        return false;
-    }
-
-    private static bool AxisMatches(JsonElement entry, string propName, string? value)
-    {
-        if (value is null) return true;
-        if (!entry.TryGetProperty(propName, out var prop)) return false;
-        return string.Equals(prop.GetString(), value, StringComparison.OrdinalIgnoreCase);
-    }
+        string? action) =>
+        DispatcherMappingAxisAuthority.MatchesAxes(topology, role, target, layer, action);
 }

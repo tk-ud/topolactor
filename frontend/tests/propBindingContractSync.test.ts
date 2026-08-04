@@ -36,6 +36,7 @@ const SSOT_COMPONENT_ARRAY_PROP_CAPABILITIES: Record<string, string[]> = {
   "form_input/checkbox":               ["options"],
   "form_input/radio_group":            ["options"],
   "form_input/checkbox_group":         ["options"],
+  "form_input/search_input":           ["value"],
   "table_op/faceted_filter_bar":       ["filters"],
   "table_op/column_filter":            ["options"],
   "table_op/column_visibility_editor": ["columns"],

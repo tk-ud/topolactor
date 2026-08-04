@@ -1,6 +1,13 @@
 import { useState } from "preact/hooks";
 import { JSX } from "preact";
 import {
+  UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_ADD,
+  UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_ADD_COMMIT,
+  UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_EMPTY_HINT,
+  UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_NOT_ADMIN_RUNTIME_LAYOUT,
+  UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_SECTION_HINT,
+  UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_SECTION_TITLE,
+  UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_SELECT,
   UX_EXTERNAL_INTEGRATION_SECTION_HINT,
   UX_EXTERNAL_INTEGRATION_SECTION_TITLE,
   UX_EXTERNAL_PORT_EMPTY_HINT,
@@ -39,6 +46,7 @@ import {
   runtimeInteractionTriggerOptions,
 } from "../lib/runtimeInteractionAuthoring.ts";
 import {
+  useAdminRuntimeTargetRefAuthoringCandidates,
   useExternalPortAuthoringCandidates,
   useInstanceOperationAuthoringCandidates,
   validatePayloadFromEntries,
@@ -102,6 +110,31 @@ type Props = {
   /** side_effect_cycle_policy: full draft node list + trigger source for write-target filtering. */
   sourceNodeId?: string;
   allNodes?: readonly WiringNode[];
+  /**
+   * Round 18: this layout's OWN package-wiring wiringKind (re-fetched from the same persisted
+   * authority PackageWiringEditor reads, via useEffectivePackageWiringKind at the caller) — the
+   * admin_runtime dispatch-override section below is only offered when this equals
+   * "admin_runtime". Undefined/null while loading or when the caller doesn't wire it (in which
+   * case the section stays hidden fail-closed, never optimistically shown).
+   * SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml admin_runtime_target_ref_override_contract
+   * applicability.
+   */
+  effectiveWiringKind?: string | null;
+  /**
+   * Node-level admin_runtime dispatch overrides (round 17: NEW authoring, not just round-trip
+   * preservation). Both keyed by trigger — distinct from runtimeInteractions[], which is why they
+   * are committed via their own callback rather than onCommit above.
+   * SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml admin_runtime_target_ref_override_contract.
+   */
+  dispatchTargetRefByTrigger?: Record<string, string>;
+  dispatchPayloadFromByTrigger?: Record<string, Record<string, string>>;
+  onCommitDispatchOverrides?: (
+    next: {
+      targetRefByTrigger?: Record<string, string>;
+      payloadFromByTrigger?: Record<string, Record<string, string>>;
+    },
+    label: string,
+  ) => void;
 };
 
 type StagingKind = "external" | "instance";
@@ -129,7 +162,12 @@ export default function NodeEventAuthoringPanel({
   onCommitStateJson,
   sourceNodeId,
   allNodes,
+  effectiveWiringKind,
+  dispatchTargetRefByTrigger,
+  dispatchPayloadFromByTrigger,
+  onCommitDispatchOverrides,
 }: Props): JSX.Element {
+  const isAdminRuntimeLayout = effectiveWiringKind === "admin_runtime";
   // side_effect_cycle_policy: selectable_write_targets =
   // all_write_targets - dependency_closure(trigger_source).
   const selectableTargetIds = sourceNodeId && allNodes
@@ -151,6 +189,142 @@ export default function NodeEventAuthoringPanel({
     useExternalPortAuthoringCandidates(needsExternalCandidates);
   const { candidates: instanceOperationCandidates, error: instanceOperationCandidateError } =
     useInstanceOperationAuthoringCandidates(needsInstanceCandidates);
+
+  // ─── admin_runtime dispatch override authoring (round 17: NEW authoring; round 18: gated on
+  // the layout's OWN wiring_kind, not shown/editable as a valid draft on non-admin_runtime
+  // layouts) ─────────────────────────────────────────────────────────────────────────────────
+  const overrideTriggers = Array.from(new Set([
+    ...Object.keys(dispatchTargetRefByTrigger ?? {}),
+    ...Object.keys(dispatchPayloadFromByTrigger ?? {}),
+  ]));
+  // effectiveWiringKind undefined means the caller didn't wire round 18's gate at all (e.g. an
+  // older/test caller) -- fall back to round 17's presence-only gate rather than hiding
+  // unconditionally. When the caller DOES provide it, editing requires isAdminRuntimeLayout;
+  // already-authored overrideTriggers (only ever persisted on an admin_runtime layout, per the
+  // backend's own save-time fail-close) still render, read-only, with a reason if this ever
+  // disagrees.
+  const wiringKindKnown = effectiveWiringKind !== undefined;
+  const showOverrideSection = Boolean(onCommitDispatchOverrides) &&
+    (!wiringKindKnown || isAdminRuntimeLayout || overrideTriggers.length > 0);
+  const overrideEditingDisabled = wiringKindKnown && !isAdminRuntimeLayout;
+  const [overrideStaging, setOverrideStaging] = useState<
+    { trigger: string; targetRef: string; payloadFrom: Record<string, string> } | null
+  >(null);
+  const { candidates: adminRuntimeTargetRefCandidates, error: adminRuntimeTargetRefCandidateError } =
+    useAdminRuntimeTargetRefAuthoringCandidates(
+      !overrideEditingDisabled && (overrideStaging !== null || overrideTriggers.length > 0),
+    );
+
+  const commitOverrides = (
+    nextTargetRefByTrigger: Record<string, string>,
+    nextPayloadFromByTrigger: Record<string, Record<string, string>>,
+    label: string,
+  ) => {
+    onCommitDispatchOverrides?.(
+      {
+        targetRefByTrigger: Object.keys(nextTargetRefByTrigger).length > 0 ? nextTargetRefByTrigger : undefined,
+        payloadFromByTrigger: Object.keys(nextPayloadFromByTrigger).length > 0 ? nextPayloadFromByTrigger : undefined,
+      },
+      label,
+    );
+  };
+
+  const removeOverride = (trigger: string) => {
+    const nextTargetRef = { ...(dispatchTargetRefByTrigger ?? {}) };
+    delete nextTargetRef[trigger];
+    const nextPayloadFrom = { ...(dispatchPayloadFromByTrigger ?? {}) };
+    delete nextPayloadFrom[trigger];
+    commitOverrides(nextTargetRef, nextPayloadFrom, "管理操作の上書きを削除");
+  };
+
+  const updateOverridePayloadFrom = (trigger: string, payloadFrom: Record<string, string>) => {
+    const nextPayloadFrom = { ...(dispatchPayloadFromByTrigger ?? {}) };
+    if (Object.keys(payloadFrom).length > 0) {
+      nextPayloadFrom[trigger] = payloadFrom;
+    } else {
+      delete nextPayloadFrom[trigger];
+    }
+    commitOverrides(dispatchTargetRefByTrigger ?? {}, nextPayloadFrom, "管理操作のデータスコープを更新");
+  };
+
+  const commitOverrideStaging = () => {
+    if (!overrideStaging || !overrideStaging.targetRef.trim()) return;
+    const nextTargetRef = { ...(dispatchTargetRefByTrigger ?? {}), [overrideStaging.trigger]: overrideStaging.targetRef };
+    const nextPayloadFrom = { ...(dispatchPayloadFromByTrigger ?? {}) };
+    if (Object.keys(overrideStaging.payloadFrom).length > 0) {
+      nextPayloadFrom[overrideStaging.trigger] = overrideStaging.payloadFrom;
+    }
+    commitOverrides(nextTargetRef, nextPayloadFrom, "管理操作の上書きを追加");
+    setOverrideStaging(null);
+  };
+
+  const renderOverridePayloadFrom = (
+    payloadFrom: Record<string, string>,
+    onChange: (next: Record<string, string>) => void,
+  ) => {
+    const entries = Object.entries(payloadFrom);
+    const errors = validatePayloadFromEntries(entries.map(([field, source]) => ({ field, source })));
+    return (
+      <fieldset class="flex flex-col gap-1">
+        <legend class="text-[0.65rem] font-semibold text-slate-800">
+          データスコープ（payloadFrom）
+        </legend>
+        {errors.length > 0 && (
+          <div class="rounded border border-amber-200 bg-amber-50 p-1">
+            {errors.map((err, ei) => <p key={ei} class="text-[0.55rem] text-amber-800">{err}</p>)}
+          </div>
+        )}
+        {entries.map(([field, source], pi) => (
+          <div key={pi} class="flex items-center gap-1">
+            <input
+              class="input-mono flex-1 px-1 py-0.5 text-[0.6rem]"
+              value={field}
+              placeholder="フィールド名"
+              onBlur={(e) => {
+                const newField = (e.target as HTMLInputElement).value.trim();
+                if (newField === field) return;
+                const next: Record<string, string> = {};
+                entries.forEach(([f, s], idx) => { next[idx === pi ? newField : f] = s; });
+                if (newField) onChange(next);
+              }}
+            />
+            <span class="text-slate-400">→</span>
+            <input
+              class={`input-mono flex-1 px-1 py-0.5 text-[0.6rem] ${
+                parsePayloadFromSource(source).kind === "unresolved_ref" ? "border-amber-400 bg-amber-50" : ""
+              }`}
+              value={source}
+              placeholder="node:<nodeId>.value"
+              onInput={(e) => {
+                const newSource = (e.target as HTMLInputElement).value;
+                const next: Record<string, string> = {};
+                entries.forEach(([f, s], idx) => { next[f] = idx === pi ? newSource : s; });
+                onChange(next);
+              }}
+            />
+            <button
+              type="button"
+              class="text-[0.55rem] text-red-400 hover:underline"
+              onClick={() => {
+                const next: Record<string, string> = {};
+                entries.forEach(([f, s], idx) => { if (idx !== pi) next[f] = s; });
+                onChange(next);
+              }}
+            >
+              削除
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          class="self-start text-[0.6rem] text-indigo-600 hover:underline"
+          onClick={() => onChange({ ...payloadFrom, "": "" })}
+        >
+          + フィールドを追加
+        </button>
+      </fieldset>
+    );
+  };
 
   const updateAt = (index: number, patch: Partial<NodeEventWiring>) => {
     const next = interactions.map((w, i) => i === index ? { ...w, ...patch } : w);
@@ -770,6 +944,148 @@ export default function NodeEventAuthoringPanel({
           <p class="text-[0.65rem] text-amber-800">{UX_RUNTIME_INTERACTION_NO_OVERLAY_TARGETS}</p>
         )}
       </div>
+      {showOverrideSection && (
+        <fieldset class="mt-2 rounded border border-purple-200 bg-purple-50/40 p-2 space-y-2">
+          <legend class="text-[0.68rem] font-semibold text-purple-900">
+            {UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_SECTION_TITLE}
+          </legend>
+          <p class="text-[0.58rem] text-purple-800">{UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_SECTION_HINT}</p>
+          {overrideEditingDisabled && (
+            <p class="rounded border border-amber-300 bg-amber-50 px-1.5 py-1 text-[0.6rem] text-amber-900">
+              {UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_NOT_ADMIN_RUNTIME_LAYOUT}
+            </p>
+          )}
+          {overrideTriggers.map((trigger) => {
+            const targetRef = dispatchTargetRefByTrigger?.[trigger] ?? "";
+            const payloadFrom = dispatchPayloadFromByTrigger?.[trigger] ?? {};
+            const selectedCandidate = adminRuntimeTargetRefCandidates.find((c) => c.targetRef === targetRef);
+            return (
+              <div key={trigger} class="rounded border border-purple-100 bg-white p-2 space-y-2 text-[0.65rem]">
+                <p class="font-medium text-purple-900">
+                  {UX_TRIGGER_UI_LABEL}: {trigger}
+                </p>
+                <label class="block">
+                  {UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_SELECT}
+                  {adminRuntimeTargetRefCandidateError && (
+                    <p class="mt-0.5 text-[0.55rem] text-amber-700">{adminRuntimeTargetRefCandidateError}</p>
+                  )}
+                  <select
+                    class="input mt-0.5 w-full px-1 py-0.5 text-xs"
+                    value={targetRef}
+                    disabled={overrideEditingDisabled}
+                    onChange={(e) => {
+                      const nextTargetRef = { ...(dispatchTargetRefByTrigger ?? {}) };
+                      const value = (e.target as HTMLSelectElement).value;
+                      if (value) nextTargetRef[trigger] = value;
+                      else delete nextTargetRef[trigger];
+                      commitOverrides(nextTargetRef, dispatchPayloadFromByTrigger ?? {}, "管理操作の上書き先を変更");
+                    }}
+                  >
+                    <option value="">— 選択してください —</option>
+                    {adminRuntimeTargetRefCandidates.map((c) => (
+                      <option key={c.targetRef} value={c.targetRef}>
+                        {c.manifestKey ? `${c.manifestKey} (${c.layer}:${c.action})` : `${c.layer}:${c.action}`}
+                      </option>
+                    ))}
+                  </select>
+                  {!adminRuntimeTargetRefCandidateError && adminRuntimeTargetRefCandidates.length === 0 && (
+                    <p class="mt-0.5 text-[0.55rem] text-amber-700">{UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_EMPTY_HINT}</p>
+                  )}
+                </label>
+                {selectedCandidate && (
+                  <p class="rounded border border-purple-100 bg-purple-50 px-1.5 py-1 text-[0.58rem] text-purple-800">
+                    manifest: {selectedCandidate.manifestId}
+                  </p>
+                )}
+                {!overrideEditingDisabled &&
+                  renderOverridePayloadFrom(payloadFrom, (next) => updateOverridePayloadFrom(trigger, next))}
+                <div class="flex justify-end">
+                  <button
+                    type="button"
+                    class="text-[0.6rem] text-red-500"
+                    disabled={overrideEditingDisabled}
+                    onClick={() => removeOverride(trigger)}
+                  >
+                    削除
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {!overrideEditingDisabled && overrideStaging && (
+            <div class="rounded border border-purple-100 bg-white p-2 space-y-2 text-[0.65rem]">
+              <label class="block">
+                {UX_TRIGGER_UI_LABEL}
+                <select
+                  class="input mt-0.5 w-full px-1 py-0.5 text-xs"
+                  value={overrideStaging.trigger}
+                  onChange={(e) =>
+                    setOverrideStaging((s) => s ? { ...s, trigger: (e.target as HTMLSelectElement).value } : s)}
+                >
+                  {runtimeInteractionTriggerOptions(triggerOptions).map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label class="block">
+                {UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_SELECT}
+                {adminRuntimeTargetRefCandidateError && (
+                  <p class="mt-0.5 text-[0.55rem] text-amber-700">{adminRuntimeTargetRefCandidateError}</p>
+                )}
+                <select
+                  class="input mt-0.5 w-full px-1 py-0.5 text-xs"
+                  value={overrideStaging.targetRef}
+                  onChange={(e) =>
+                    setOverrideStaging((s) =>
+                      s ? { ...s, targetRef: (e.target as HTMLSelectElement).value } : s)}
+                >
+                  <option value="">— 選択してください —</option>
+                  {adminRuntimeTargetRefCandidates.map((c) => (
+                    <option key={c.targetRef} value={c.targetRef}>
+                      {c.manifestKey ? `${c.manifestKey} (${c.layer}:${c.action})` : `${c.layer}:${c.action}`}
+                    </option>
+                  ))}
+                </select>
+                {!adminRuntimeTargetRefCandidateError && adminRuntimeTargetRefCandidates.length === 0 && (
+                  <p class="mt-0.5 text-[0.55rem] text-amber-700">{UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_EMPTY_HINT}</p>
+                )}
+              </label>
+              {renderOverridePayloadFrom(
+                overrideStaging.payloadFrom,
+                (next) => setOverrideStaging((s) => s ? { ...s, payloadFrom: next } : s),
+              )}
+              <div class="flex justify-end gap-2">
+                <button type="button" class="btn-secondary text-[0.65rem]" onClick={() => setOverrideStaging(null)}>
+                  {UX_RUNTIME_INTERACTION_STAGING_CANCEL}
+                </button>
+                <button
+                  type="button"
+                  class="btn-primary text-[0.65rem]"
+                  disabled={!overrideStaging.targetRef.trim()}
+                  onClick={commitOverrideStaging}
+                >
+                  {UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_ADD_COMMIT}
+                </button>
+              </div>
+            </div>
+          )}
+          {!overrideEditingDisabled && (
+            <button
+              type="button"
+              class="btn-secondary text-xs"
+              disabled={overrideStaging !== null}
+              onClick={() =>
+                setOverrideStaging({
+                  trigger: runtimeInteractionTriggerOptions(triggerOptions)[0]?.value ?? "click",
+                  targetRef: "",
+                  payloadFrom: {},
+                })}
+            >
+              {UX_ADMIN_RUNTIME_OPERATION_OVERRIDE_ADD}
+            </button>
+          )}
+        </fieldset>
+      )}
     </section>
   );
 }

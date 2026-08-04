@@ -649,11 +649,24 @@ ON CONFLICT (manifest_id) DO NOTHING;
 
 
 -- ---------------------------------------------------------------------------
--- hub_navigation dispatch manifests (IDs 77-7b)
+-- hub_navigation dispatch manifests (IDs 77-7c)
 -- Registered for hub_navigation layer: list_manifests / get_hub_relations /
--- create / update / deprecate.
+-- create / update / deprecate / reorder.
 -- Required by AdminRuntime hub_navigation:* switch cases.
 -- Silent MANIFEST_NOT_FOUND failure occurs at runtime without these records.
+--
+-- identity_selector_read (round 19): declared ONLY on list_manifests/get_hub_relations's
+-- own dispatcher_mapping entry -- the SSOT-owned classification
+-- ManifestDispatcher.IsBareManifestNavigationReadTargetRefAsync reads (via
+-- DispatcherMappingAxisAuthority.IsDeclaredIdentitySelectorRead) instead of a
+-- hardcoded action-name allowlist in runtime code. Marks these two actions as
+-- read-only and manifest-identity-agnostic (both read their real target from
+-- payload.topologyManifestId, never from which manifest resolved a target_ref),
+-- safe to reach via a bare "runtime_mapping only" manifest used purely as a
+-- navigation-context selector. create/update/deprecate/reorder deliberately have
+-- no such field -- they mutate hubs.hub_relations and must never be reachable
+-- through a bare manifest's target_ref, only through their own authored
+-- dispatcher_mapping/capability_requirement.
 -- ---------------------------------------------------------------------------
 INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
 VALUES
@@ -661,7 +674,7 @@ VALUES
         '00000000-0000-0000-0000-000000000077',
         NULL,
         ARRAY[
-            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"hub_navigation","action":"list_manifests"}'::jsonb,
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"hub_navigation","action":"list_manifests","identity_selector_read":true}'::jsonb,
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
         ]::jsonb[],
@@ -671,7 +684,7 @@ VALUES
         '00000000-0000-0000-0000-000000000078',
         NULL,
         ARRAY[
-            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"hub_navigation","action":"get_hub_relations"}'::jsonb,
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"hub_navigation","action":"get_hub_relations","identity_selector_read":true}'::jsonb,
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
         ]::jsonb[],
@@ -3530,34 +3543,45 @@ ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index)
 -- enum_table.
 --
 -- The WRITE side (create_item/update_item/delete_item/create_group/
--- update_group/delete_group/set_group_items -- all already
--- production-dispatcher-mapped on the backend) remains unwired, but the
--- blocking reason has changed and is now more precise than "no lane exists":
--- the transport lane itself works (proven for list_groups, which needs no
--- payload). What blocks a WRITE dispatch is that no production-proven
--- mechanism exists to capture a free-typed field value (e.g. a new group's
--- name) or an extracted event path into a dispatch payload:
--- frontend/runtime/uiEventEffectRunner.ts's UI_STATE_UPDATE_OPEN_ACTIONS maps
--- every ui_state_update actionType (including localStateMutation) to a fixed
--- boolean, never an authored/typed value; frontend/runtime/
--- payloadFromResolver.ts's node:<nodeId>.value resolution depends on
--- payloadFromNodeValues, which frontend/islands/ProjectionShell.tsx never
--- populates when calling renderEmission() in production (grep-confirmed zero
--- references) -- so this is not admin-enum-specific, it blocks ANY surface's
--- production use of payloadFrom node: references today, including the
--- existing credential-management cd004 dispatchInstanceOperation wiring's own
--- node: payloadFrom entries. Precise, actionable gap record (not a vague
--- "TODO: wire writes"): docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
--- lane_storage_boundary.known_gaps
--- admin_runtime_layer_action_dispatch_lane_not_yet_defined
--- .remaining_write_payload_capture_gap, and
--- .agent/tasks/todo.md admin-runtime-operation-dispatch-lane-determination
--- Bundle. explicit_confirm remains the only mutation-adjacent interaction
--- wired here (enum_confirm_button's internal_instance_wiring
+-- update_group/delete_group/set_group_items) is now real and dispatched, but
+-- NOT from this manifest's own UI nodes -- component_wiring_execution_lane's
+-- wiringKind/target_ref (Lane 2) is a per-wiring-row (whole-layout) binding,
+-- not per-node (proven by this manifest's own read-circuit wiring row, where
+-- enum_search/enum_group_filter/enum_table all inherit the SAME
+-- list_groups target_ref uniformly), and docs/design/admin-uibuilder-ui-
+-- structure-wiring-ssot.yaml lane_storage_boundary
+-- remaining_write_payload_capture_gap already settled (2026-07-23) that the
+-- correct composition is "a single-purpose write layout, exactly like the
+-- read layout above" -- not a per-node target_ref override (never
+-- introduced). Each of the 7 write actions therefore has its OWN dedicated
+-- single-purpose manifest below this block
+-- (00000000-0000-0000-0000-0000000ae210/ae220/ae230/ae240/ae250/ae260/ae270),
+-- each with its own preview_button (dispatchPayloadFromByTrigger
+-- dryRun:literal:true) and confirm_button (confirmed:literal:true) sharing
+-- that layout's own admin_runtime target_ref -- reachable today via explicit
+-- ?manifest=<id> selection like ae200 itself, and provably reachable via
+-- hub_navigation:create from ae200
+-- (AdminEnumHubRelationUiProjectionLiveDbTests.cs
+-- DispatchAsync_AdminEnumManagementManifest_HubNavigationCreate_
+-- ToCreateGroupWriteManifest_ResolutionChainReflectsIt, the representative
+-- pattern for all 7 -- no hub_relations seed rows are authored here, same
+-- discipline as ae200 itself). Backend mutation_confirmation_contract
+-- (preview_dictionary_delta / validate_against_enum_authority /
+-- explicit_confirm / write / diff_log, payload.dryRun/payload.confirmed) is
+-- implemented for all 7 in backend/runtime/AdminRuntimeMasterRoster.cs -- see
+-- docs/design/enum-dictionary-ssot.yaml fail_close.mutation_confirmation_contract_gate
+-- and .agent/tasks/todo.md admin-enum subBundle 実装記録 (2026-07-27 追記)
+-- for the full record. explicit_confirm ALSO remains wired here on THIS
+-- manifest's own enum_confirm_button (internal_instance_wiring
 -- localStateMutation opening local confirm state, no backend dispatch by
--- definition) -- the enum_write_dispatch_gap Validation record below is kept,
--- reworded to point at this precise successor gap rather than the resolved
--- transport gap.
+-- definition) -- the enum_write_dispatch_gap Validation record below is kept
+-- historically but the gap it names no longer applies to the 7 dedicated
+-- write manifests below (only to THIS manifest's own nodes, which stay
+-- read/confirm-state-only by design -- single-purpose layout, not a
+-- multi-operation one). Honestly still open: hardcoded
+-- frontend/routes/admin/enums.tsx / AdminEnumsRoster.tsx retirement has NOT
+-- happened -- the 7 new manifests are separate bare single-purpose screens,
+-- not a UX-parity replacement for AdminEnumsRoster's one polished roster page.
 -- =============================================================================
 
 -- Hub owning the admin-enum-management topology_manifest. Never a
@@ -3576,6 +3600,7 @@ VALUES (
     NULL,
     ARRAY[
         '{"type":"hub_grouping","manifestKey":"admin.enum.management.projection","bundle":"admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type":"dispatcher_mapping","role":"admin","target":"manifest","layer":"enum_dictionary","action":"list_groups"}'::jsonb,
         '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
         '{"type":"ui_projection","packageIds":["00000000-0000-0000-0000-0000000ae203"],"layoutId":"00000000-0000-0000-0000-0000000ae204","wiringId":"00000000-0000-0000-0000-0000000ae205","tensorId":"00000000-0000-0000-0000-0000000ae206"}'::jsonb
     ]::jsonb[],
@@ -3634,15 +3659,92 @@ ON CONFLICT (package_id) DO UPDATE
 -- topology_ui_seed_record records[], adopted directly (see header comment).
 -- Category enum_dictionary > Section enum_dictionary_roster >
 -- Field enum_search / Field enum_group_filter / Table enum_table /
--- Form enum_confirm_form (Field enum_form + Action enum_confirm_button) +
--- Validation enum_write_dispatch_gap (documents the write-step gap, see
--- header comment).
+-- Form enum_confirm_form (Field enum_form + Action enum_confirm_button) /
+-- Form enum_create_group_form (Field enum_create_group_name_input + Action
+-- enum_create_group_button) / Action enum_delete_group_button (opens the
+-- Modal below, no direct write -- round 24, replaces the round 20
+-- enum_delete_group_form/enum_delete_group_confirm_input design, see below) /
+-- Modal enum_delete_group_confirm_modal (Action enum_delete_group_confirm_button
+-- + Action enum_delete_group_cancel_button) + Validation enum_write_dispatch_gap
+-- (documents the write-step gap, see header comment).
+--
+-- enum_create_group_form (round 19, admin-write-surface-selection-context-and-
+-- mode-composition-gap Bundle): the FIRST of the 9 write/read operations
+-- (create_group) wired directly into ae200's own single-surface layout via
+-- the admin_runtime_dispatch_override_wiring lane
+-- (.agent/tests/fixtures/react-schema-topology-seed-translator/
+-- admin-enum-ae200.input.json / admin-enum-ae200.topology-seed.input.json --
+-- these three records and the matching tensor node below are the DIRECT,
+-- unedited generate-react-schema -> generate-topology-seed output for this
+-- addition, adopted verbatim). Its Action's eventBinding.targetRef
+-- ("manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group")
+-- is ae210's OWN dedicated create_group manifest -- clicking this button
+-- dispatches enum_dictionary:create_group under ae210's own
+-- dispatcher_mapping/capability_requirement authority exactly as if the
+-- button lived on ae210's own single-purpose screen (see
+-- admin-uibuilder-ui-structure-wiring-ssot.yaml
+-- admin_runtime_target_ref_override_contract).
+--
+-- delete_group (round 20, same Bundle): the SECOND operation wired in, and
+-- the first one that needs an EXISTING record's identity rather than fresh
+-- user input. enum_table's row-select event now ALSO writes `value: row`
+-- into its own emitBoundEvent payload (runtimeComponentFactory.ts
+-- tableFactory) -- the exact same universal Lane 3 node-value-tracking branch
+-- every input/select-family component already relies on
+-- (`"value" in payload` -> onNodeValueChange), just supplying the key a table
+-- select event previously never carried. That tracked row object is then
+-- addressed via payloadFromResolver.ts's new node:<id>.value.<field>
+-- dotted-path extension (node:enum_table.value.groupId) -- a payloadFrom
+-- source form that did not exist before round 20; owning SSOT:
+-- docs/design/ui-builder-preset-ecosystem-ssot.yaml
+-- payloadFrom_resolver_contract.recognized_source_patterns.node_value_path.
+--
+-- delete_group confirm dialog (round 24, admin-enum subBundle, mutation-
+-- confirmation-workflow): round 20/21's delete_group_button dispatched the
+-- real write DIRECTLY on click, with a decorative, never-read
+-- enum_delete_group_confirm_input field wired to nothing -- an audited
+-- correctness gap (a live confirmed:literal:true write with no actual
+-- confirmation step, and a displayed-but-unused confirmation input). Fixed
+-- by wiring the mutation-confirmation-workflow using the SAME format
+-- admin/uibuilder's own NodeEventAuthoringPanel.tsx authoring flow and
+-- backend/repository/NpgsqlUiTopologyRepository.cs ValidateRuntimeInteractions
+-- actually persist/validate for an overlay (disclosure/modal +
+-- openModal/closeModal/toggleModal actionTypes with targetNodeId/statePath),
+-- NOT the older internal_instance_wiring/localStateMutation/ui-local: shape
+-- (verified NOT persistable for an active-topology layout -- see
+-- docs/design/react-schema-topology-seed-translator-ssot.yaml
+-- wiring_lane_contract.lanes.disclosure_state_wiring for the full
+-- investigation). enum_delete_group_button now only opens
+-- enum_delete_group_confirm_modal (no write, no payloadFrom at all);
+-- enum_delete_group_confirm_button carries BOTH the SAME
+-- dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger override
+-- round 20/21 already established (groupId still re-resolved fresh from
+-- node:enum_table.value.groupId at confirm-click time -- never a captured/
+-- stale selection, and emitBoundEvent fails the whole click closed with no
+-- write and no modal-close if that resolution fails) AND an additional
+-- closeModal runtimeInteractions[] entry on the same click
+-- (secondaryDisclosureActionType, wiring_lane_contract.lanes
+-- .disclosure_state_wiring.secondary_combination); enum_delete_group_cancel_button
+-- only closes the modal, sending no write. The unused confirm-input field is
+-- retired rather than left displayed-but-ignored. .agent/scripts/
+-- react_schema_topology_seed_translator.py DSL extension for Modal/
+-- disclosure_state_wiring, and backend/repository/LayoutSchemaTensorComposer.cs
+-- recognizing topology_ui_modal, were both added this round to make this the
+-- direct, unedited generate-react-schema -> generate-topology-seed output
+-- (.agent/tests/fixtures/react-schema-topology-seed-translator/
+-- admin-enum-ae200.input.json / admin-enum-ae200.topology-seed.input.json),
+-- not a hand-authored shape.
+--
+-- The remaining 5 operations (update_group/create_item/update_item/
+-- delete_item/set_group_items -- get_group/list_groups already served by this
+-- layout's own default target_ref) are NOT yet wired into this surface -- see
+-- enum_write_dispatch_gap's updated label below and .agent/tasks/todo.md.
 INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind, layout_schema_json, status)
 VALUES (
     '00000000-0000-0000-0000-0000000ae204',
     'admin.enum.management.projection.layout',
     'fixed_form_projection',
-    '{"records":[{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"admin_enum_management_projection","record":{"recordType":"topology_ui_category","key":"enum_dictionary","label":"Enum dictionary","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum"],"sourceReactPath":"$.root.children[0]","knownGapRefs":[],"categoryKey":"enum_dictionary","sectionKeys":["enum_dictionary_roster"]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary","record":{"recordType":"topology_ui_section","key":"enum_dictionary_roster","label":"Enum groups and items","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract"],"sourceReactPath":"$.root.children[0].children[0]","knownGapRefs":[],"sectionKey":"enum_dictionary_roster","sectionKind":"enum_group_and_item_management_projection","childKeys":["enum_search","enum_group_filter","enum_table","enum_confirm_form","enum_write_dispatch_gap"]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_field","key":"enum_search","label":"Enum search","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.component_tree"],"sourceReactPath":"$.root.children[0].children[0].children[0]","knownGapRefs":[],"fieldKey":"enum_search","control":"form_input/search_input","required":false,"validationRefs":[]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_field","key":"enum_group_filter","label":"Group filter","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.component_tree"],"sourceReactPath":"$.root.children[0].children[0].children[1]","knownGapRefs":[],"fieldKey":"enum_group_filter","control":"form_input/select","required":false,"validationRefs":[]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_table","key":"enum_table","label":"Enum groups and items table","sourceYamlRefs":["enum-dictionary-ssot.yaml#canonical_tables"],"sourceReactPath":"$.root.children[0].children[0].children[2]","knownGapRefs":[],"tableKey":"enum_table","source":"enum.groups","display":"table","columnKeys":[]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_form","key":"enum_confirm_form","label":"Enum group or item edit and confirm","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[3]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","formKey":"enum_confirm_form","target":"enum.groups","mode":"edit","fieldKeys":["enum_form"],"actionKeys":["enum_confirm_button"]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_confirm_form","record":{"recordType":"topology_ui_field","key":"enum_form","label":"Enum group or item edit fields","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.component_tree"],"sourceReactPath":"$.root.children[0].children[0].children[3].children[0]","knownGapRefs":[],"fieldKey":"enum_form","control":"form_input/form_field","required":false,"validationRefs":[]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_confirm_form","record":{"recordType":"topology_ui_action","key":"enum_confirm_button","label":"Confirm changes","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[3].children[1]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","actionKey":"enum_confirm_button","actionRef":"ui-local:enum_confirm_button.open_confirm","eventBinding":{"trigger":"click","wiringLane":"internal_instance_wiring","targetRef":"ui-local:enum_confirm_button.open_confirm","authority":"draft_or_projection_only"},"runtimeInteractions":[{"trigger":"click","actionType":"localStateMutation","payloadFrom":{},"sourceActionKey":"enum_confirm_button","targetRef":"ui-local:enum_confirm_button.open_confirm"}]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_validation","key":"enum_write_dispatch_gap","label":"Write dispatch pending","sourceYamlRefs":["react-schema-topology-seed-translator-ssot.yaml#declared_seed_surface_catalog.known_declared_surfaces.admin_enum_management_projection.known_gaps"],"sourceReactPath":"$.root.children[0].children[0].children[4]","knownGapRefs":[],"validationKey":"enum_write_dispatch_gap","rule":"admin_runtime_write_dispatch_payload_capture_not_yet_implemented","severity":"warning"}}]}'::jsonb,
+    '{"records":[{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"admin_enum_management_projection","record":{"recordType":"topology_ui_category","key":"enum_dictionary","label":"Enum dictionary","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum"],"sourceReactPath":"$.root.children[0]","knownGapRefs":[],"categoryKey":"enum_dictionary","sectionKeys":["enum_dictionary_roster"]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary","record":{"recordType":"topology_ui_section","key":"enum_dictionary_roster","label":"Enum groups and items","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract"],"sourceReactPath":"$.root.children[0].children[0]","knownGapRefs":[],"sectionKey":"enum_dictionary_roster","sectionKind":"enum_group_and_item_management_projection","childKeys":["enum_search","enum_group_filter","enum_table","enum_confirm_form","enum_create_group_name_input","enum_create_group_button","enum_create_group_confirm_modal","enum_update_group_name_input","enum_update_group_button","enum_update_group_confirm_modal","enum_delete_group_button","enum_delete_group_confirm_modal","enum_create_item_name_input","enum_create_item_button","enum_create_item_confirm_modal","enum_update_item_index_input","enum_update_item_name_input","enum_update_item_button","enum_update_item_confirm_modal","enum_delete_item_index_input","enum_delete_item_button","enum_delete_item_confirm_modal","enum_set_group_items_input","enum_set_group_items_button","enum_set_group_items_confirm_modal","enum_write_dispatch_gap"]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_field","key":"enum_search","label":"Enum search","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.component_tree"],"sourceReactPath":"$.root.children[0].children[0].children[0]","knownGapRefs":[],"fieldKey":"enum_search","control":"form_input/search_input","required":false,"validationRefs":[]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_field","key":"enum_group_filter","label":"Group filter","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.component_tree"],"sourceReactPath":"$.root.children[0].children[0].children[1]","knownGapRefs":[],"fieldKey":"enum_group_filter","control":"form_input/select","required":false,"validationRefs":[]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_table","key":"enum_table","label":"Enum groups and items table","sourceYamlRefs":["enum-dictionary-ssot.yaml#canonical_tables"],"sourceReactPath":"$.root.children[0].children[0].children[2]","knownGapRefs":[],"tableKey":"enum_table","source":"enum.groups","display":"table","columnKeys":[]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_form","key":"enum_confirm_form","label":"Enum group or item edit and confirm","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[3]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","formKey":"enum_confirm_form","target":"enum.groups","mode":"edit","fieldKeys":["enum_form"],"actionKeys":["enum_confirm_button"]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_confirm_form","record":{"recordType":"topology_ui_field","key":"enum_form","label":"Enum group or item edit fields","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.component_tree"],"sourceReactPath":"$.root.children[0].children[0].children[3].children[0]","knownGapRefs":[],"fieldKey":"enum_form","control":"form_input/form_field","required":false,"validationRefs":[]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_confirm_form","record":{"recordType":"topology_ui_action","key":"enum_confirm_button","label":"Confirm changes","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[3].children[1]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","actionKey":"enum_confirm_button","actionRef":"ui-local:enum_confirm_button.open_confirm","eventBinding":{"trigger":"click","wiringLane":"internal_instance_wiring","targetRef":"ui-local:enum_confirm_button.open_confirm","authority":"draft_or_projection_only"},"runtimeInteractions":[{"trigger":"click","actionType":"localStateMutation","payloadFrom":{},"sourceActionKey":"enum_confirm_button","targetRef":"ui-local:enum_confirm_button.open_confirm"}]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_field","key":"enum_create_group_name_input","label":"Group name","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.component_tree"],"sourceReactPath":"$.root.children[0].children[0].children[4]","knownGapRefs":[],"fieldKey":"enum_create_group_name_input","control":"form_input/form_field","required":true,"validationRefs":[]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_action","key":"enum_create_group_button","label":"Create group","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[5]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","actionKey":"enum_create_group_button","actionRef":"ui-local:enum_create_group_confirm_modal.open","eventBinding":{"trigger":"click","wiringLane":"disclosure_state_wiring","targetRef":"ui-local:enum_create_group_confirm_modal.open","authority":"draft_or_projection_only","disclosureActionType":"openModal","disclosureTargetNodeId":"enum_create_group_confirm_modal","disclosureStatePath":"open"},"runtimeInteractions":[{"trigger":"click","actionType":"openModal","targetNodeId":"enum_create_group_confirm_modal","statePath":"open","sourceActionKey":"enum_create_group_button"}]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_modal","key":"enum_create_group_confirm_modal","label":"Create group confirmation dialog","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[6]","knownGapRefs":[],"modalKey":"enum_create_group_confirm_modal","componentKind":"disclosure/modal","title":"Create group","body":"Create a new enum group with the entered name.","runtimeInteractions":[{"trigger":"toggle","actionType":"closeModal","targetNodeId":"enum_create_group_confirm_modal","statePath":"open","sourceActionKey":"enum_create_group_confirm_modal"}],"childKeys":["enum_create_group_confirm_button","enum_create_group_cancel_button"]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_create_group_confirm_modal","record":{"recordType":"topology_ui_action","key":"enum_create_group_confirm_button","label":"Create","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[6].children[0]","knownGapRefs":[],"authorityMarker":"draft_apply_not_execution_authority","actionKey":"enum_create_group_confirm_button","actionRef":"manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group","eventBinding":{"trigger":"click","wiringLane":"admin_runtime_dispatch_override_wiring","targetRef":"manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group","authority":"draft_apply_not_execution_authority","payloadFrom":{"groupName":"node:enum_create_group_name_input.value","confirmed":"literal:true"}},"runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_create_group_confirm_modal","statePath":"open","sourceActionKey":"enum_create_group_confirm_button"}],"adminRuntimeDispatchOverride":{"trigger":"click","targetRef":"manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group","payloadFrom":{"groupName":"node:enum_create_group_name_input.value","confirmed":"literal:true"},"sourceActionKey":"enum_create_group_confirm_button"}}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_create_group_confirm_modal","record":{"recordType":"topology_ui_action","key":"enum_create_group_cancel_button","label":"Cancel","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[6].children[1]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","actionKey":"enum_create_group_cancel_button","actionRef":"ui-local:enum_create_group_confirm_modal.close","eventBinding":{"trigger":"click","wiringLane":"disclosure_state_wiring","targetRef":"ui-local:enum_create_group_confirm_modal.open","authority":"draft_or_projection_only","disclosureActionType":"closeModal","disclosureTargetNodeId":"enum_create_group_confirm_modal","disclosureStatePath":"open"},"runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_create_group_confirm_modal","statePath":"open","sourceActionKey":"enum_create_group_cancel_button"}]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_field","key":"enum_update_group_name_input","label":"New group name","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.component_tree"],"sourceReactPath":"$.root.children[0].children[0].children[7]","knownGapRefs":[],"fieldKey":"enum_update_group_name_input","control":"form_input/form_field","required":true,"validationRefs":[]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_action","key":"enum_update_group_button","label":"Update selected group","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[8]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","actionKey":"enum_update_group_button","actionRef":"ui-local:enum_update_group_confirm_modal.open","eventBinding":{"trigger":"click","wiringLane":"disclosure_state_wiring","targetRef":"ui-local:enum_update_group_confirm_modal.open","authority":"draft_or_projection_only","disclosureActionType":"openModal","disclosureTargetNodeId":"enum_update_group_confirm_modal","disclosureStatePath":"open"},"runtimeInteractions":[{"trigger":"click","actionType":"openModal","targetNodeId":"enum_update_group_confirm_modal","statePath":"open","sourceActionKey":"enum_update_group_button"}]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_modal","key":"enum_update_group_confirm_modal","label":"Update group confirmation dialog","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[9]","knownGapRefs":[],"modalKey":"enum_update_group_confirm_modal","componentKind":"disclosure/modal","title":"Update group","body":"Rename the selected enum group to the entered name.","runtimeInteractions":[{"trigger":"toggle","actionType":"closeModal","targetNodeId":"enum_update_group_confirm_modal","statePath":"open","sourceActionKey":"enum_update_group_confirm_modal"}],"childKeys":["enum_update_group_confirm_button","enum_update_group_cancel_button"]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_update_group_confirm_modal","record":{"recordType":"topology_ui_action","key":"enum_update_group_confirm_button","label":"Update","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[9].children[0]","knownGapRefs":[],"authorityMarker":"draft_apply_not_execution_authority","actionKey":"enum_update_group_confirm_button","actionRef":"manifest:00000000-0000-0000-0000-0000000ae220:enum_dictionary:update_group","eventBinding":{"trigger":"click","wiringLane":"admin_runtime_dispatch_override_wiring","targetRef":"manifest:00000000-0000-0000-0000-0000000ae220:enum_dictionary:update_group","authority":"draft_apply_not_execution_authority","payloadFrom":{"groupId":"node:enum_table.value.groupId","groupName":"node:enum_update_group_name_input.value","confirmed":"literal:true"}},"runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_update_group_confirm_modal","statePath":"open","sourceActionKey":"enum_update_group_confirm_button"}],"adminRuntimeDispatchOverride":{"trigger":"click","targetRef":"manifest:00000000-0000-0000-0000-0000000ae220:enum_dictionary:update_group","payloadFrom":{"groupId":"node:enum_table.value.groupId","groupName":"node:enum_update_group_name_input.value","confirmed":"literal:true"},"sourceActionKey":"enum_update_group_confirm_button"}}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_update_group_confirm_modal","record":{"recordType":"topology_ui_action","key":"enum_update_group_cancel_button","label":"Cancel","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[9].children[1]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","actionKey":"enum_update_group_cancel_button","actionRef":"ui-local:enum_update_group_confirm_modal.close","eventBinding":{"trigger":"click","wiringLane":"disclosure_state_wiring","targetRef":"ui-local:enum_update_group_confirm_modal.open","authority":"draft_or_projection_only","disclosureActionType":"closeModal","disclosureTargetNodeId":"enum_update_group_confirm_modal","disclosureStatePath":"open"},"runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_update_group_confirm_modal","statePath":"open","sourceActionKey":"enum_update_group_cancel_button"}]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_action","key":"enum_delete_group_button","label":"Delete selected group","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[10]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","actionKey":"enum_delete_group_button","actionRef":"ui-local:enum_delete_group_confirm_modal.open","eventBinding":{"trigger":"click","wiringLane":"disclosure_state_wiring","targetRef":"ui-local:enum_delete_group_confirm_modal.open","authority":"draft_or_projection_only","disclosureActionType":"openModal","disclosureTargetNodeId":"enum_delete_group_confirm_modal","disclosureStatePath":"open"},"runtimeInteractions":[{"trigger":"click","actionType":"openModal","targetNodeId":"enum_delete_group_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_group_button"}]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_modal","key":"enum_delete_group_confirm_modal","label":"Delete group confirmation dialog","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[11]","knownGapRefs":[],"modalKey":"enum_delete_group_confirm_modal","componentKind":"disclosure/modal","title":"Delete group","body":"This will permanently delete the selected enum group and its items. This cannot be undone.","runtimeInteractions":[{"trigger":"toggle","actionType":"closeModal","targetNodeId":"enum_delete_group_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_group_confirm_modal"}],"childKeys":["enum_delete_group_confirm_button","enum_delete_group_cancel_button"]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_delete_group_confirm_modal","record":{"recordType":"topology_ui_action","key":"enum_delete_group_confirm_button","label":"Delete","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[11].children[0]","knownGapRefs":[],"authorityMarker":"draft_apply_not_execution_authority","actionKey":"enum_delete_group_confirm_button","actionRef":"manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group","eventBinding":{"trigger":"click","wiringLane":"admin_runtime_dispatch_override_wiring","targetRef":"manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group","authority":"draft_apply_not_execution_authority","payloadFrom":{"groupId":"node:enum_table.value.groupId","confirmed":"literal:true"}},"runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_delete_group_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_group_confirm_button"}],"adminRuntimeDispatchOverride":{"trigger":"click","targetRef":"manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group","payloadFrom":{"groupId":"node:enum_table.value.groupId","confirmed":"literal:true"},"sourceActionKey":"enum_delete_group_confirm_button"}}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_delete_group_confirm_modal","record":{"recordType":"topology_ui_action","key":"enum_delete_group_cancel_button","label":"Cancel","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[11].children[1]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","actionKey":"enum_delete_group_cancel_button","actionRef":"ui-local:enum_delete_group_confirm_modal.close","eventBinding":{"trigger":"click","wiringLane":"disclosure_state_wiring","targetRef":"ui-local:enum_delete_group_confirm_modal.open","authority":"draft_or_projection_only","disclosureActionType":"closeModal","disclosureTargetNodeId":"enum_delete_group_confirm_modal","disclosureStatePath":"open"},"runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_delete_group_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_group_cancel_button"}]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_field","key":"enum_create_item_name_input","label":"Item name","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.component_tree"],"sourceReactPath":"$.root.children[0].children[0].children[12]","knownGapRefs":[],"fieldKey":"enum_create_item_name_input","control":"form_input/form_field","required":true,"validationRefs":[]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_action","key":"enum_create_item_button","label":"Create item","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[13]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","actionKey":"enum_create_item_button","actionRef":"ui-local:enum_create_item_confirm_modal.open","eventBinding":{"trigger":"click","wiringLane":"disclosure_state_wiring","targetRef":"ui-local:enum_create_item_confirm_modal.open","authority":"draft_or_projection_only","disclosureActionType":"openModal","disclosureTargetNodeId":"enum_create_item_confirm_modal","disclosureStatePath":"open"},"runtimeInteractions":[{"trigger":"click","actionType":"openModal","targetNodeId":"enum_create_item_confirm_modal","statePath":"open","sourceActionKey":"enum_create_item_button"}]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_modal","key":"enum_create_item_confirm_modal","label":"Create item confirmation dialog","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[14]","knownGapRefs":[],"modalKey":"enum_create_item_confirm_modal","componentKind":"disclosure/modal","title":"Create item","body":"Create a new enum item with the entered name.","runtimeInteractions":[{"trigger":"toggle","actionType":"closeModal","targetNodeId":"enum_create_item_confirm_modal","statePath":"open","sourceActionKey":"enum_create_item_confirm_modal"}],"childKeys":["enum_create_item_confirm_button","enum_create_item_cancel_button"]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_create_item_confirm_modal","record":{"recordType":"topology_ui_action","key":"enum_create_item_confirm_button","label":"Create","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[14].children[0]","knownGapRefs":[],"authorityMarker":"draft_apply_not_execution_authority","actionKey":"enum_create_item_confirm_button","actionRef":"manifest:00000000-0000-0000-0000-0000000ae240:enum_dictionary:create_item","eventBinding":{"trigger":"click","wiringLane":"admin_runtime_dispatch_override_wiring","targetRef":"manifest:00000000-0000-0000-0000-0000000ae240:enum_dictionary:create_item","authority":"draft_apply_not_execution_authority","payloadFrom":{"name":"node:enum_create_item_name_input.value","confirmed":"literal:true"}},"runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_create_item_confirm_modal","statePath":"open","sourceActionKey":"enum_create_item_confirm_button"}],"adminRuntimeDispatchOverride":{"trigger":"click","targetRef":"manifest:00000000-0000-0000-0000-0000000ae240:enum_dictionary:create_item","payloadFrom":{"name":"node:enum_create_item_name_input.value","confirmed":"literal:true"},"sourceActionKey":"enum_create_item_confirm_button"}}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_create_item_confirm_modal","record":{"recordType":"topology_ui_action","key":"enum_create_item_cancel_button","label":"Cancel","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[14].children[1]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","actionKey":"enum_create_item_cancel_button","actionRef":"ui-local:enum_create_item_confirm_modal.close","eventBinding":{"trigger":"click","wiringLane":"disclosure_state_wiring","targetRef":"ui-local:enum_create_item_confirm_modal.open","authority":"draft_or_projection_only","disclosureActionType":"closeModal","disclosureTargetNodeId":"enum_create_item_confirm_modal","disclosureStatePath":"open"},"runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_create_item_confirm_modal","statePath":"open","sourceActionKey":"enum_create_item_cancel_button"}]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_field","key":"enum_update_item_index_input","label":"Item index","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.component_tree"],"sourceReactPath":"$.root.children[0].children[0].children[15]","knownGapRefs":[],"fieldKey":"enum_update_item_index_input","control":"form_input/form_field","required":true,"validationRefs":[]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_field","key":"enum_update_item_name_input","label":"New item name","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.component_tree"],"sourceReactPath":"$.root.children[0].children[0].children[16]","knownGapRefs":[],"fieldKey":"enum_update_item_name_input","control":"form_input/form_field","required":true,"validationRefs":[]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_action","key":"enum_update_item_button","label":"Update item","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[17]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","actionKey":"enum_update_item_button","actionRef":"ui-local:enum_update_item_confirm_modal.open","eventBinding":{"trigger":"click","wiringLane":"disclosure_state_wiring","targetRef":"ui-local:enum_update_item_confirm_modal.open","authority":"draft_or_projection_only","disclosureActionType":"openModal","disclosureTargetNodeId":"enum_update_item_confirm_modal","disclosureStatePath":"open"},"runtimeInteractions":[{"trigger":"click","actionType":"openModal","targetNodeId":"enum_update_item_confirm_modal","statePath":"open","sourceActionKey":"enum_update_item_button"}]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_modal","key":"enum_update_item_confirm_modal","label":"Update item confirmation dialog","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[18]","knownGapRefs":[],"modalKey":"enum_update_item_confirm_modal","componentKind":"disclosure/modal","title":"Update item","body":"Rename the enum item at the entered index to the entered name.","runtimeInteractions":[{"trigger":"toggle","actionType":"closeModal","targetNodeId":"enum_update_item_confirm_modal","statePath":"open","sourceActionKey":"enum_update_item_confirm_modal"}],"childKeys":["enum_update_item_confirm_button","enum_update_item_cancel_button"]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_update_item_confirm_modal","record":{"recordType":"topology_ui_action","key":"enum_update_item_confirm_button","label":"Update","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[18].children[0]","knownGapRefs":[],"authorityMarker":"draft_apply_not_execution_authority","actionKey":"enum_update_item_confirm_button","actionRef":"manifest:00000000-0000-0000-0000-0000000ae250:enum_dictionary:update_item","eventBinding":{"trigger":"click","wiringLane":"admin_runtime_dispatch_override_wiring","targetRef":"manifest:00000000-0000-0000-0000-0000000ae250:enum_dictionary:update_item","authority":"draft_apply_not_execution_authority","payloadFrom":{"indexNum":"node:enum_update_item_index_input.value","name":"node:enum_update_item_name_input.value","confirmed":"literal:true"}},"runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_update_item_confirm_modal","statePath":"open","sourceActionKey":"enum_update_item_confirm_button"}],"adminRuntimeDispatchOverride":{"trigger":"click","targetRef":"manifest:00000000-0000-0000-0000-0000000ae250:enum_dictionary:update_item","payloadFrom":{"indexNum":"node:enum_update_item_index_input.value","name":"node:enum_update_item_name_input.value","confirmed":"literal:true"},"sourceActionKey":"enum_update_item_confirm_button"}}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_update_item_confirm_modal","record":{"recordType":"topology_ui_action","key":"enum_update_item_cancel_button","label":"Cancel","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[18].children[1]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","actionKey":"enum_update_item_cancel_button","actionRef":"ui-local:enum_update_item_confirm_modal.close","eventBinding":{"trigger":"click","wiringLane":"disclosure_state_wiring","targetRef":"ui-local:enum_update_item_confirm_modal.open","authority":"draft_or_projection_only","disclosureActionType":"closeModal","disclosureTargetNodeId":"enum_update_item_confirm_modal","disclosureStatePath":"open"},"runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_update_item_confirm_modal","statePath":"open","sourceActionKey":"enum_update_item_cancel_button"}]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_field","key":"enum_delete_item_index_input","label":"Item index to delete","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.component_tree"],"sourceReactPath":"$.root.children[0].children[0].children[19]","knownGapRefs":[],"fieldKey":"enum_delete_item_index_input","control":"form_input/form_field","required":true,"validationRefs":[]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_action","key":"enum_delete_item_button","label":"Delete item","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[20]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","actionKey":"enum_delete_item_button","actionRef":"ui-local:enum_delete_item_confirm_modal.open","eventBinding":{"trigger":"click","wiringLane":"disclosure_state_wiring","targetRef":"ui-local:enum_delete_item_confirm_modal.open","authority":"draft_or_projection_only","disclosureActionType":"openModal","disclosureTargetNodeId":"enum_delete_item_confirm_modal","disclosureStatePath":"open"},"runtimeInteractions":[{"trigger":"click","actionType":"openModal","targetNodeId":"enum_delete_item_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_item_button"}]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_modal","key":"enum_delete_item_confirm_modal","label":"Delete item confirmation dialog","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[21]","knownGapRefs":[],"modalKey":"enum_delete_item_confirm_modal","componentKind":"disclosure/modal","title":"Delete item","body":"This will permanently delete the enum item at the entered index. This cannot be undone.","runtimeInteractions":[{"trigger":"toggle","actionType":"closeModal","targetNodeId":"enum_delete_item_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_item_confirm_modal"}],"childKeys":["enum_delete_item_confirm_button","enum_delete_item_cancel_button"]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_delete_item_confirm_modal","record":{"recordType":"topology_ui_action","key":"enum_delete_item_confirm_button","label":"Delete","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[21].children[0]","knownGapRefs":[],"authorityMarker":"draft_apply_not_execution_authority","actionKey":"enum_delete_item_confirm_button","actionRef":"manifest:00000000-0000-0000-0000-0000000ae260:enum_dictionary:delete_item","eventBinding":{"trigger":"click","wiringLane":"admin_runtime_dispatch_override_wiring","targetRef":"manifest:00000000-0000-0000-0000-0000000ae260:enum_dictionary:delete_item","authority":"draft_apply_not_execution_authority","payloadFrom":{"indexNum":"node:enum_delete_item_index_input.value","confirmed":"literal:true"}},"runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_delete_item_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_item_confirm_button"}],"adminRuntimeDispatchOverride":{"trigger":"click","targetRef":"manifest:00000000-0000-0000-0000-0000000ae260:enum_dictionary:delete_item","payloadFrom":{"indexNum":"node:enum_delete_item_index_input.value","confirmed":"literal:true"},"sourceActionKey":"enum_delete_item_confirm_button"}}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_delete_item_confirm_modal","record":{"recordType":"topology_ui_action","key":"enum_delete_item_cancel_button","label":"Cancel","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[21].children[1]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","actionKey":"enum_delete_item_cancel_button","actionRef":"ui-local:enum_delete_item_confirm_modal.close","eventBinding":{"trigger":"click","wiringLane":"disclosure_state_wiring","targetRef":"ui-local:enum_delete_item_confirm_modal.open","authority":"draft_or_projection_only","disclosureActionType":"closeModal","disclosureTargetNodeId":"enum_delete_item_confirm_modal","disclosureStatePath":"open"},"runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_delete_item_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_item_cancel_button"}]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_field","key":"enum_set_group_items_input","label":"Item indexes (comma-separated)","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.component_tree"],"sourceReactPath":"$.root.children[0].children[0].children[22]","knownGapRefs":[],"fieldKey":"enum_set_group_items_input","control":"form_input/form_field","required":true,"validationRefs":[]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_action","key":"enum_set_group_items_button","label":"Set selected group''s items","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[23]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","actionKey":"enum_set_group_items_button","actionRef":"ui-local:enum_set_group_items_confirm_modal.open","eventBinding":{"trigger":"click","wiringLane":"disclosure_state_wiring","targetRef":"ui-local:enum_set_group_items_confirm_modal.open","authority":"draft_or_projection_only","disclosureActionType":"openModal","disclosureTargetNodeId":"enum_set_group_items_confirm_modal","disclosureStatePath":"open"},"runtimeInteractions":[{"trigger":"click","actionType":"openModal","targetNodeId":"enum_set_group_items_confirm_modal","statePath":"open","sourceActionKey":"enum_set_group_items_button"}]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_modal","key":"enum_set_group_items_confirm_modal","label":"Set group items confirmation dialog","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[24]","knownGapRefs":[],"modalKey":"enum_set_group_items_confirm_modal","componentKind":"disclosure/modal","title":"Set group items","body":"Replace the selected group''s item membership with the entered indexes.","runtimeInteractions":[{"trigger":"toggle","actionType":"closeModal","targetNodeId":"enum_set_group_items_confirm_modal","statePath":"open","sourceActionKey":"enum_set_group_items_confirm_modal"}],"childKeys":["enum_set_group_items_confirm_button","enum_set_group_items_cancel_button"]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_set_group_items_confirm_modal","record":{"recordType":"topology_ui_action","key":"enum_set_group_items_confirm_button","label":"Set items","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[24].children[0]","knownGapRefs":[],"authorityMarker":"draft_apply_not_execution_authority","actionKey":"enum_set_group_items_confirm_button","actionRef":"manifest:00000000-0000-0000-0000-0000000ae270:enum_dictionary:set_group_items","eventBinding":{"trigger":"click","wiringLane":"admin_runtime_dispatch_override_wiring","targetRef":"manifest:00000000-0000-0000-0000-0000000ae270:enum_dictionary:set_group_items","authority":"draft_apply_not_execution_authority","payloadFrom":{"groupId":"node:enum_table.value.groupId","enumIndexNums":"node:enum_set_group_items_input.value","confirmed":"literal:true"}},"runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_set_group_items_confirm_modal","statePath":"open","sourceActionKey":"enum_set_group_items_confirm_button"}],"adminRuntimeDispatchOverride":{"trigger":"click","targetRef":"manifest:00000000-0000-0000-0000-0000000ae270:enum_dictionary:set_group_items","payloadFrom":{"groupId":"node:enum_table.value.groupId","enumIndexNums":"node:enum_set_group_items_input.value","confirmed":"literal:true"},"sourceActionKey":"enum_set_group_items_confirm_button"}}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_set_group_items_confirm_modal","record":{"recordType":"topology_ui_action","key":"enum_set_group_items_cancel_button","label":"Cancel","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[24].children[1]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","actionKey":"enum_set_group_items_cancel_button","actionRef":"ui-local:enum_set_group_items_confirm_modal.close","eventBinding":{"trigger":"click","wiringLane":"disclosure_state_wiring","targetRef":"ui-local:enum_set_group_items_confirm_modal.open","authority":"draft_or_projection_only","disclosureActionType":"closeModal","disclosureTargetNodeId":"enum_set_group_items_confirm_modal","disclosureStatePath":"open"},"runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_set_group_items_confirm_modal","statePath":"open","sourceActionKey":"enum_set_group_items_cancel_button"}]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_validation","key":"enum_write_dispatch_gap","label":"All 7 enum_dictionary write actions (create_group/update_group/delete_group/create_item/update_item/delete_item/set_group_items) are now wired into this single surface via admin_runtime_dispatch_override_wiring to their own dedicated per-action manifests (ae210/ae220/ae230/ae240/ae250/ae260/ae270), each gated behind its own disclosure/modal explicit-confirm dialog (open only via its own button, no write on cancel/backdrop-close, confirm dispatches the SAME override as before with group-identity fields (groupId) re-resolved fresh from enum_table own tracked selected-row value node:enum_table.value.groupId at confirm time -- never a captured/stale selection -- and fails closed with no write and no modal-close if that resolution fails); item-identity fields (indexNum) for update_item/delete_item/set_group_items are entered as typed values, matching the same manual-identity entry pattern already established by each operation own dedicated single-purpose write manifest -- no items browse/list UI exists in this surface or Bundle (would require either a new list_items backend action or the cross-manifest response-adoption generic contract still explicitly deferred since round 17/18/21, and is not fabricated here). group-items membership is entered as a comma-separated indexNum list, matching the existing backend CSV-string enumIndexNums contract.","sourceYamlRefs":["react-schema-topology-seed-translator-ssot.yaml#declared_seed_surface_catalog.known_declared_surfaces.admin_enum_management_projection.known_gaps"],"sourceReactPath":"$.root.children[0].children[0].children[25]","knownGapRefs":[],"validationKey":"enum_write_dispatch_gap","rule":"admin_runtime_write_target_fully_resolved_via_this_surface_manual_item_identity_entry","severity":"resolved"}}]}'::jsonb,
     'active'
 )
 ON CONFLICT (layout_id) DO UPDATE
@@ -3713,10 +3815,75 @@ ON CONFLICT (wiring_id) DO UPDATE
 --    OWNING FORM's own record key (not the leaf enum_confirm_button --
 --    BuildInteractionsBySourceActionKey/ResolveInteractionsMergeKey), carrying
 --    enum_confirm_button's one real interaction tagged by sourceActionKey.
+-- 3. enum_create_group_button (round 19): dispatchTargetRefByTrigger/
+--    dispatchPayloadFromByTrigger merge target, nodeId matches the LEAF
+--    Action's OWN resolved record key directly (NOT the owning form, unlike
+--    #2 above) -- LayoutSchemaTensorComposer.Compose merges these two fields
+--    via a plain NodeId match against a catalog leaf
+--    (nodeLocalDataByNodeId), never via BuildInteractionsBySourceActionKey's
+--    sourceActionKey scoping that only applies to runtimeInteractionsJson. A
+--    live-DB round trip caught the translator originally keying this
+--    override by the owning form's nodeId (a topology_ui_form record, which
+--    Compose classifies as structural, so its isCatalogLeaf-gated merge
+--    silently never attached the override to anything) -- fixed in
+--    .agent/scripts/react_schema_topology_seed_translator.py's tensor-node
+--    emission (round 19). "click" carries groupName from
+--    enum_create_group_name_input's own DOM value and a literal
+--    confirmed:true, dispatched to ae210's own enum_dictionary:create_group
+--    under ae210's own dispatcher_mapping/capability_requirement authority
+--    (see comment above components_layout_design INSERT).
+-- 4. enum_delete_group_confirm_button (round 20, retargeted round 24 from
+--    enum_delete_group_button): same dispatchTargetRefByTrigger/
+--    dispatchPayloadFromByTrigger merge as #3, keyed by its own leaf record
+--    key. Its payloadFrom.groupId ("node:enum_table.value.groupId") is the
+--    first payloadFrom source in this codebase to read a DIFFERENT node's
+--    tracked value by field, not just a form input's own .value -- see
+--    frontend/runtime/payloadFromResolver.ts's node:<id>.value.<path>
+--    extension and runtimeComponentFactory.ts tableFactory's onRowClick
+--    (round 20, owning SSOT: ui-builder-preset-ecosystem-ssot.yaml
+--    payloadFrom_resolver_contract.recognized_source_patterns.node_value_path).
+--    round 24 also gives it a SECOND, independent runtimeInteractions[]
+--    entry (closeModal, targeting enum_delete_group_confirm_modal) on the
+--    same "click" trigger -- dispatchTargetRefByTrigger/
+--    dispatchPayloadFromByTrigger and runtimeInteractions[] are separate
+--    node-local fields (see #3's own note), so both apply independently to
+--    the same click.
+-- 5. enum_delete_group_button (round 24): no longer carries
+--    dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger at all -- it
+--    only opens enum_delete_group_confirm_modal (runtimeInteractions[]
+--    openModal), the real write moved to #4 above.
+-- 6. enum_dictionary_roster / enum_delete_group_confirm_modal /
+--    enum_delete_group_cancel_button (round 24, propsJson shape corrected
+--    round 25): the Section-scoped self-close-on-toggle interaction (backend/
+--    repository/LayoutSchemaTensorComposer.cs Compose merges a catalog leaf's
+--    OWN runtimeInteractions by "{leaf's resolved ParentNodeId}::{leaf's own
+--    key}" -- for the Modal leaf that parent is the Section, hence this
+--    tensor entry's nodeId is "enum_dictionary_roster", not the Modal's own
+--    key), the Modal's own propsJson, and the Cancel button's closeModal-only
+--    interaction, respectively. enum_delete_group_confirm_modal's propsJson
+--    MUST nest title/body/open under a "data" object and set "open":false
+--    explicitly -- frontend/runtime/renderEmission.ts mergeNodeLocalProps does
+--    a SHALLOW top-level merge of propsJson onto the componentKind's default
+--    props, and frontend/runtime/layoutComponentPreview.ts's
+--    "disclosure/modal" default is {data:{open:true,title:"Modal",
+--    body:"プレビュー"}} -- a flat top-level {title,body} propsJson (round
+--    24's original, uncorrected shape) would add new top-level keys while
+--    leaving that default's own nested `data` (still open:true) completely
+--    untouched, so modalFactory (which reads props.data when present) would
+--    silently keep showing the placeholder open by default with the wrong
+--    title/body, never this node's authored content. Caught by a real
+--    ProjectionShell DOM mount test (round 25), not by any Composer/live-DB
+--    proof alone -- see frontend/tests/
+--    projectionShellAdminRuntimeWritePayloadCapture.test.ts's confirm-modal
+--    scenarios.
 -- componentId/componentKind for every leaf (enum_search/enum_group_filter/
--- enum_table/enum_form/enum_confirm_button) resolve from
--- components_layout_design.records[] above via the existing
--- ui_component_registry preset catalog.
+-- enum_table/enum_form/enum_confirm_button/enum_create_group_name_input/
+-- enum_create_group_button/enum_delete_group_button/
+-- enum_delete_group_confirm_modal/enum_delete_group_confirm_button/
+-- enum_delete_group_cancel_button) resolve from components_layout_design.records[]
+-- above via the existing ui_component_registry preset catalog (Modal's
+-- componentKind is the record's own literal value, never a registry lookup --
+-- see LayoutSchemaTensorComposer.cs's ModalRecordType handling).
 INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
 VALUES (
     '00000000-0000-0000-0000-0000000ae206',
@@ -3726,10 +3893,929 @@ VALUES (
     '00000000-0000-0000-0000-0000000ae205',
     'default',
     0,
-    '{"nodes":[{"nodeId":"enum_table","nodeKind":"catalog_component","propsJson":"{\"table\":null,\"columns\":[{\"key\":\"groupName\",\"header\":\"Group name\"},{\"key\":\"indexNum\",\"header\":\"Index\"},{\"key\":\"groupId\",\"header\":\"Group ID\"}]}","propBindings":{"rows":{"source":"emission.data"}}},{"nodeId":"enum_confirm_form","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"localStateMutation","payloadFrom":{},"sourceActionKey":"enum_confirm_button","targetRef":"ui-local:enum_confirm_button.open_confirm"}]}]}'::jsonb
+    '{"nodes":[{"nodeId":"enum_table","nodeKind":"catalog_component","propsJson":"{\"table\":null,\"columns\":[{\"key\":\"groupName\",\"header\":\"Group name\"},{\"key\":\"indexNum\",\"header\":\"Index\"},{\"key\":\"groupId\",\"header\":\"Group ID\"}]}","propBindings":{"rows":{"source":"emission.data"}}},{"nodeId":"enum_confirm_form","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"localStateMutation","payloadFrom":{},"sourceActionKey":"enum_confirm_button","targetRef":"ui-local:enum_confirm_button.open_confirm"}]},{"nodeId":"enum_dictionary_roster","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"openModal","targetNodeId":"enum_create_group_confirm_modal","statePath":"open","sourceActionKey":"enum_create_group_button"},{"trigger":"toggle","actionType":"closeModal","targetNodeId":"enum_create_group_confirm_modal","statePath":"open","sourceActionKey":"enum_create_group_confirm_modal"},{"trigger":"click","actionType":"openModal","targetNodeId":"enum_update_group_confirm_modal","statePath":"open","sourceActionKey":"enum_update_group_button"},{"trigger":"toggle","actionType":"closeModal","targetNodeId":"enum_update_group_confirm_modal","statePath":"open","sourceActionKey":"enum_update_group_confirm_modal"},{"trigger":"click","actionType":"openModal","targetNodeId":"enum_delete_group_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_group_button"},{"trigger":"toggle","actionType":"closeModal","targetNodeId":"enum_delete_group_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_group_confirm_modal"},{"trigger":"click","actionType":"openModal","targetNodeId":"enum_create_item_confirm_modal","statePath":"open","sourceActionKey":"enum_create_item_button"},{"trigger":"toggle","actionType":"closeModal","targetNodeId":"enum_create_item_confirm_modal","statePath":"open","sourceActionKey":"enum_create_item_confirm_modal"},{"trigger":"click","actionType":"openModal","targetNodeId":"enum_update_item_confirm_modal","statePath":"open","sourceActionKey":"enum_update_item_button"},{"trigger":"toggle","actionType":"closeModal","targetNodeId":"enum_update_item_confirm_modal","statePath":"open","sourceActionKey":"enum_update_item_confirm_modal"},{"trigger":"click","actionType":"openModal","targetNodeId":"enum_delete_item_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_item_button"},{"trigger":"toggle","actionType":"closeModal","targetNodeId":"enum_delete_item_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_item_confirm_modal"},{"trigger":"click","actionType":"openModal","targetNodeId":"enum_set_group_items_confirm_modal","statePath":"open","sourceActionKey":"enum_set_group_items_button"},{"trigger":"toggle","actionType":"closeModal","targetNodeId":"enum_set_group_items_confirm_modal","statePath":"open","sourceActionKey":"enum_set_group_items_confirm_modal"}]},{"nodeId":"enum_create_group_confirm_modal","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_create_group_confirm_modal","statePath":"open","sourceActionKey":"enum_create_group_confirm_button"},{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_create_group_confirm_modal","statePath":"open","sourceActionKey":"enum_create_group_cancel_button"}],"propsJson":"{\"data\": {\"open\": false, \"title\": \"Create group\", \"body\": \"Create a new enum group with the entered name.\"}}"},{"nodeId":"enum_create_group_confirm_button","nodeKind":"catalog_component","runtimeInteractions":[],"dispatchTargetRefByTrigger":{"click":"manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group"},"dispatchPayloadFromByTrigger":{"click":{"groupName":"node:enum_create_group_name_input.value","confirmed":"literal:true"}}},{"nodeId":"enum_update_group_confirm_modal","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_update_group_confirm_modal","statePath":"open","sourceActionKey":"enum_update_group_confirm_button"},{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_update_group_confirm_modal","statePath":"open","sourceActionKey":"enum_update_group_cancel_button"}],"propsJson":"{\"data\": {\"open\": false, \"title\": \"Update group\", \"body\": \"Rename the selected enum group to the entered name.\"}}"},{"nodeId":"enum_update_group_confirm_button","nodeKind":"catalog_component","runtimeInteractions":[],"dispatchTargetRefByTrigger":{"click":"manifest:00000000-0000-0000-0000-0000000ae220:enum_dictionary:update_group"},"dispatchPayloadFromByTrigger":{"click":{"groupId":"node:enum_table.value.groupId","groupName":"node:enum_update_group_name_input.value","confirmed":"literal:true"}}},{"nodeId":"enum_delete_group_confirm_modal","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_delete_group_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_group_confirm_button"},{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_delete_group_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_group_cancel_button"}],"propsJson":"{\"data\": {\"open\": false, \"title\": \"Delete group\", \"body\": \"This will permanently delete the selected enum group and its items. This cannot be undone.\"}}"},{"nodeId":"enum_delete_group_confirm_button","nodeKind":"catalog_component","runtimeInteractions":[],"dispatchTargetRefByTrigger":{"click":"manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group"},"dispatchPayloadFromByTrigger":{"click":{"groupId":"node:enum_table.value.groupId","confirmed":"literal:true"}}},{"nodeId":"enum_create_item_confirm_modal","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_create_item_confirm_modal","statePath":"open","sourceActionKey":"enum_create_item_confirm_button"},{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_create_item_confirm_modal","statePath":"open","sourceActionKey":"enum_create_item_cancel_button"}],"propsJson":"{\"data\": {\"open\": false, \"title\": \"Create item\", \"body\": \"Create a new enum item with the entered name.\"}}"},{"nodeId":"enum_create_item_confirm_button","nodeKind":"catalog_component","runtimeInteractions":[],"dispatchTargetRefByTrigger":{"click":"manifest:00000000-0000-0000-0000-0000000ae240:enum_dictionary:create_item"},"dispatchPayloadFromByTrigger":{"click":{"name":"node:enum_create_item_name_input.value","confirmed":"literal:true"}}},{"nodeId":"enum_update_item_confirm_modal","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_update_item_confirm_modal","statePath":"open","sourceActionKey":"enum_update_item_confirm_button"},{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_update_item_confirm_modal","statePath":"open","sourceActionKey":"enum_update_item_cancel_button"}],"propsJson":"{\"data\": {\"open\": false, \"title\": \"Update item\", \"body\": \"Rename the enum item at the entered index to the entered name.\"}}"},{"nodeId":"enum_update_item_confirm_button","nodeKind":"catalog_component","runtimeInteractions":[],"dispatchTargetRefByTrigger":{"click":"manifest:00000000-0000-0000-0000-0000000ae250:enum_dictionary:update_item"},"dispatchPayloadFromByTrigger":{"click":{"indexNum":"node:enum_update_item_index_input.value","name":"node:enum_update_item_name_input.value","confirmed":"literal:true"}}},{"nodeId":"enum_delete_item_confirm_modal","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_delete_item_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_item_confirm_button"},{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_delete_item_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_item_cancel_button"}],"propsJson":"{\"data\": {\"open\": false, \"title\": \"Delete item\", \"body\": \"This will permanently delete the enum item at the entered index. This cannot be undone.\"}}"},{"nodeId":"enum_delete_item_confirm_button","nodeKind":"catalog_component","runtimeInteractions":[],"dispatchTargetRefByTrigger":{"click":"manifest:00000000-0000-0000-0000-0000000ae260:enum_dictionary:delete_item"},"dispatchPayloadFromByTrigger":{"click":{"indexNum":"node:enum_delete_item_index_input.value","confirmed":"literal:true"}}},{"nodeId":"enum_set_group_items_confirm_modal","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_set_group_items_confirm_modal","statePath":"open","sourceActionKey":"enum_set_group_items_confirm_button"},{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_set_group_items_confirm_modal","statePath":"open","sourceActionKey":"enum_set_group_items_cancel_button"}],"propsJson":"{\"data\": {\"open\": false, \"title\": \"Set group items\", \"body\": \"Replace the selected group''s item membership with the entered indexes.\"}}"},{"nodeId":"enum_set_group_items_confirm_button","nodeKind":"catalog_component","runtimeInteractions":[],"dispatchTargetRefByTrigger":{"click":"manifest:00000000-0000-0000-0000-0000000ae270:enum_dictionary:set_group_items"},"dispatchPayloadFromByTrigger":{"click":{"groupId":"node:enum_table.value.groupId","enumIndexNums":"node:enum_set_group_items_input.value","confirmed":"literal:true"}}}]}'::jsonb
 )
 ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
     SET layout_patch_json = EXCLUDED.layout_patch_json;
+
+-- =============================================================================
+-- admin-surface-topology-seed-conversion: admin-enum subBundle -- write-side
+-- single-purpose write layouts (2026-07-27, PR #600 review round 2 correction).
+--
+-- docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml lane_storage_boundary
+-- remaining_write_payload_capture_gap already settled this design question
+-- (2026-07-23): "a single-purpose write layout, exactly like the read layout
+-- above, is a safe and sufficient composition -- no per-node extension needed".
+-- component_wiring_execution_lane's wiringKind/target_ref is a per-wiring-row
+-- (whole-layout) binding, not per-node (proven by ae205 above, where enum_search/
+-- enum_group_filter/enum_table all inherit the SAME list_groups target_ref
+-- uniformly) -- so each of the 7 enum_dictionary write actions gets its OWN
+-- dedicated hub/manifest/layout/wiring/tensor below, each single-purpose (layout =
+-- 1 canonical admin_runtime action), reusing the exact same Lane 2 mechanism ae200's
+-- own read circuit already proves, plus the node-level dispatchPayloadFromByTrigger
+-- field (round 6-8 of admin-runtime-operation-dispatch-lane-determination) for
+-- typed-value payload capture. No new component kind, action type, runtime lane, or
+-- payload resolver -- only more instances of already-registered search_input.alias
+-- (form_input/search_input, the only catalog component whose generic factory wires
+-- a real onChange -> node-value-tracked event; form_field.template's generic factory
+-- renders a static empty span, verified in frontend/runtime/runtimeComponentFactory.ts
+-- formFieldFactory, so it cannot capture a typed value today) and button.primitive.
+--
+-- Each of the 7 owns its OWN dedicated hub (not one shared hub): hubs.topology_
+-- manifests.LoadHubNavigationSequenceAsync (NpgsqlContentBundleRepository.cs) only
+-- resolves a hub_relations row's target manifest when exactly one ACTIVE topology_
+-- manifests row exists for that related_hub_id (HAVING COUNT(*) = 1) -- a shared hub
+-- across multiple active manifests would resolve to NULL (ambiguous), making every
+-- one of these 7 unreachable via hub_relations navigation. One hub per manifest, the
+-- same discipline every other manifest in this file already follows.
+--
+-- Each layout carries two Action nodes sharing the SAME layout-wide wiringKind/
+-- target_ref (the operation itself): preview_button (dispatchPayloadFromByTrigger
+-- carries dryRun:literal:true -- preview_dictionary_delta/validate_against_enum_
+-- authority, non-mutating) and confirm_button (confirmed:literal:true -- explicit_
+-- confirm -> write -> diff_log via the existing AdminMasterRosterAudit.AppendAsync,
+-- unchanged). cancel is simply never clicking confirm_button. Field nodes
+-- (search_input.alias) also inherit the SAME layout-wide Lane 2 binding on their own
+-- change trigger (no dispatchPayloadFromByTrigger of their own) -- their raw event-
+-- time payload ({value:...}) does not match the action's expected request shape, so
+-- every keystroke harmlessly fails ENUM_*_PAYLOAD_REQUIRED without persisting, the
+-- exact same accepted tradeoff already documented for ae200's read circuit ("wasteful,
+-- not incorrect") -- not a new risk this Bundle introduces.
+--
+-- All 7 also stay reachable via explicit ?manifest=<id> selection like ae200 itself;
+-- no hub_relations seed rows are authored here -- that remains an ordinary /admin/
+-- manifests admin/runtime action (hub_navigation:create), proven end to end by
+-- AdminEnumHubRelationUiProjectionLiveDbTests.cs, same discipline as ae200 itself and
+-- every other subBundle manifest in this file).
+-- =============================================================================
+
+-- single-purpose write layout: enum_dictionary:create_group
+INSERT INTO hubs.hub (hub_id, relation)
+VALUES ('00000000-0000-0000-0000-0000000ae211', '{"description": "admin_enum_management_write_create_group", "system": true}'::jsonb)
+ON CONFLICT (hub_id) DO NOTHING;
+
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae210',
+    NULL,
+    ARRAY[
+        '{"type": "hub_grouping", "manifestKey": "admin.enum.management.write.create_group", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "dispatcher_mapping", "role": "admin", "target": "manifest", "layer": "enum_dictionary", "action": "create_group"}'::jsonb,
+        '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
+        '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae213"], "layoutId": "00000000-0000-0000-0000-0000000ae214", "wiringId": "00000000-0000-0000-0000-0000000ae215", "tensorId": "00000000-0000-0000-0000-0000000ae216"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO UPDATE
+    SET topology = EXCLUDED.topology,
+        status   = EXCLUDED.status;
+
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+SELECT
+    m.manifest_id,
+    '00000000-0000-0000-0000-0000000ae211'::uuid,
+    'admin.enum.management.write.create_group',
+    m.status,
+    to_jsonb(m.topology)
+FROM manifest m
+WHERE m.manifest_id = '00000000-0000-0000-0000-0000000ae210'
+ON CONFLICT (topology_manifest_id) DO UPDATE
+    SET hub_id         = EXCLUDED.hub_id,
+        manifest_key   = EXCLUDED.manifest_key,
+        status         = EXCLUDED.status,
+        topology_jsonb = EXCLUDED.topology_jsonb,
+        updated_at     = now();
+
+INSERT INTO topology.ui_component_package (package_id, package_key, package_kind, package_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae212',
+    'admin.enum.management.write.create_group.component_group_bundle',
+    'fixed_form_projection',
+    '{"seedKey": "admin.enum.management.write.create_group", "surface": "admin.enum.management.write.create_group", "categoryKeys": ["enum_dictionary"]}'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET package_schema_json = EXCLUDED.package_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.components_package_design (package_id, name, layout, state)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae213',
+    'admin.enum.management.write.create_group.package',
+    '[]'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET layout = EXCLUDED.layout,
+        state = EXCLUDED.state;
+
+INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind, layout_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae214',
+    'admin.enum.management.write.create_group.layout',
+    'ui_builder_canvas',
+    '{"records":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (layout_id) DO UPDATE
+    SET layout_schema_json = EXCLUDED.layout_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_wiring_registry (wiring_id, wiring_key, wiring_kind, target_surface, target_ref, wiring_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae215',
+    'admin.enum.management.write.create_group.wiring',
+    'admin_runtime',
+    'manifest',
+    'manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group',
+    '{"actions":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (wiring_id) DO UPDATE
+    SET wiring_kind = EXCLUDED.wiring_kind,
+        target_surface = EXCLUDED.target_surface,
+        target_ref = EXCLUDED.target_ref,
+        wiring_schema_json = EXCLUDED.wiring_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae216',
+    'admin#enum_management_write_create_group',
+    '00000000-0000-0000-0000-0000000ae212',
+    '00000000-0000-0000-0000-0000000ae214',
+    '00000000-0000-0000-0000-0000000ae215',
+    'default',
+    0,
+    '{"nodes": [{"nodeId": "group_name_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 0}, {"nodeId": "preview_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 1, "propsJson": "{\"label\": \"Preview\"}", "dispatchPayloadFromByTrigger": {"click": {"groupName": "node:group_name_field.value", "dryRun": "literal:true"}}}, {"nodeId": "confirm_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 2, "propsJson": "{\"label\": \"Confirm & write\"}", "dispatchPayloadFromByTrigger": {"click": {"groupName": "node:group_name_field.value", "confirmed": "literal:true"}}}]}'::jsonb
+)
+ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
+    SET layout_patch_json = EXCLUDED.layout_patch_json;
+
+-- single-purpose write layout: enum_dictionary:update_group
+INSERT INTO hubs.hub (hub_id, relation)
+VALUES ('00000000-0000-0000-0000-0000000ae221', '{"description": "admin_enum_management_write_update_group", "system": true}'::jsonb)
+ON CONFLICT (hub_id) DO NOTHING;
+
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae220',
+    NULL,
+    ARRAY[
+        '{"type": "hub_grouping", "manifestKey": "admin.enum.management.write.update_group", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "dispatcher_mapping", "role": "admin", "target": "manifest", "layer": "enum_dictionary", "action": "update_group"}'::jsonb,
+        '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
+        '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae223"], "layoutId": "00000000-0000-0000-0000-0000000ae224", "wiringId": "00000000-0000-0000-0000-0000000ae225", "tensorId": "00000000-0000-0000-0000-0000000ae226"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO UPDATE
+    SET topology = EXCLUDED.topology,
+        status   = EXCLUDED.status;
+
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+SELECT
+    m.manifest_id,
+    '00000000-0000-0000-0000-0000000ae221'::uuid,
+    'admin.enum.management.write.update_group',
+    m.status,
+    to_jsonb(m.topology)
+FROM manifest m
+WHERE m.manifest_id = '00000000-0000-0000-0000-0000000ae220'
+ON CONFLICT (topology_manifest_id) DO UPDATE
+    SET hub_id         = EXCLUDED.hub_id,
+        manifest_key   = EXCLUDED.manifest_key,
+        status         = EXCLUDED.status,
+        topology_jsonb = EXCLUDED.topology_jsonb,
+        updated_at     = now();
+
+INSERT INTO topology.ui_component_package (package_id, package_key, package_kind, package_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae222',
+    'admin.enum.management.write.update_group.component_group_bundle',
+    'fixed_form_projection',
+    '{"seedKey": "admin.enum.management.write.update_group", "surface": "admin.enum.management.write.update_group", "categoryKeys": ["enum_dictionary"]}'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET package_schema_json = EXCLUDED.package_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.components_package_design (package_id, name, layout, state)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae223',
+    'admin.enum.management.write.update_group.package',
+    '[]'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET layout = EXCLUDED.layout,
+        state = EXCLUDED.state;
+
+INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind, layout_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae224',
+    'admin.enum.management.write.update_group.layout',
+    'ui_builder_canvas',
+    '{"records":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (layout_id) DO UPDATE
+    SET layout_schema_json = EXCLUDED.layout_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_wiring_registry (wiring_id, wiring_key, wiring_kind, target_surface, target_ref, wiring_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae225',
+    'admin.enum.management.write.update_group.wiring',
+    'admin_runtime',
+    'manifest',
+    'manifest:00000000-0000-0000-0000-0000000ae220:enum_dictionary:update_group',
+    '{"actions":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (wiring_id) DO UPDATE
+    SET wiring_kind = EXCLUDED.wiring_kind,
+        target_surface = EXCLUDED.target_surface,
+        target_ref = EXCLUDED.target_ref,
+        wiring_schema_json = EXCLUDED.wiring_schema_json,
+        status = EXCLUDED.status;
+
+-- Pre-fill (2026-07-28, PR #600 review round 10-11): load_button dispatches update_group's
+-- OWN canonical action (dryRun=true, groupId only -- groupName deliberately omitted so
+-- DataEnumDictionaryUpdateGroupAsync's request.GroupName?.Trim() ?? before.GroupName falls
+-- back to the real current value) purely to populate emission.data.preview.groupName --
+-- no separate read/get action, no new carrier, still exactly one canonical admin_runtime
+-- action for this layout. group_name_field's propBindings.value pre-fills its displayed
+-- value from that response (frontend/runtime/propBindingResolver.ts
+-- COMPONENT_ARRAY_PROP_CAPABILITIES["form_input/search_input"], a generic capability
+-- extension, not admin-enum-specific) -- ProjectionShell.tsx's
+-- seedTrackerFromPropBindingsValue additionally seeds liveNodeValueTracker with that same
+-- value so an unedited pre-filled value still resolves for preview_button/confirm_button's
+-- own node:group_name_field.value payloadFrom (without this, an untouched pre-fill would
+-- fail PAYLOAD_FROM_NODE_NOT_FOUND on Preview/Confirm). Carrying groupId itself from
+-- ae200's row selection remains the unresolved part of
+-- admin-write-surface-selection-context-and-mode-composition-gap (.agent/tasks/todo.md) --
+-- this pass only removes the NEED to already know the group's current name once its id is
+-- known, whether typed manually (today) or eventually auto-carried.
+INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae226',
+    'admin#enum_management_write_update_group',
+    '00000000-0000-0000-0000-0000000ae222',
+    '00000000-0000-0000-0000-0000000ae224',
+    '00000000-0000-0000-0000-0000000ae225',
+    'default',
+    0,
+    '{"nodes": [{"nodeId": "group_id_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 0}, {"nodeId": "load_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 1, "propsJson": "{\"label\": \"Load current values\"}", "dispatchPayloadFromByTrigger": {"click": {"groupId": "node:group_id_field.value", "dryRun": "literal:true"}}}, {"nodeId": "group_name_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 2, "propBindings": {"value": {"source": "emission.data.preview.groupName"}}}, {"nodeId": "preview_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 3, "propsJson": "{\"label\": \"Preview\"}", "dispatchPayloadFromByTrigger": {"click": {"groupId": "node:group_id_field.value", "groupName": "node:group_name_field.value", "dryRun": "literal:true"}}}, {"nodeId": "confirm_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 4, "propsJson": "{\"label\": \"Confirm & write\"}", "dispatchPayloadFromByTrigger": {"click": {"groupId": "node:group_id_field.value", "groupName": "node:group_name_field.value", "confirmed": "literal:true"}}}]}'::jsonb
+)
+ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
+    SET layout_patch_json = EXCLUDED.layout_patch_json;
+
+-- single-purpose write layout: enum_dictionary:delete_group
+INSERT INTO hubs.hub (hub_id, relation)
+VALUES ('00000000-0000-0000-0000-0000000ae231', '{"description": "admin_enum_management_write_delete_group", "system": true}'::jsonb)
+ON CONFLICT (hub_id) DO NOTHING;
+
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae230',
+    NULL,
+    ARRAY[
+        '{"type": "hub_grouping", "manifestKey": "admin.enum.management.write.delete_group", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "dispatcher_mapping", "role": "admin", "target": "manifest", "layer": "enum_dictionary", "action": "delete_group"}'::jsonb,
+        '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
+        '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae233"], "layoutId": "00000000-0000-0000-0000-0000000ae234", "wiringId": "00000000-0000-0000-0000-0000000ae235", "tensorId": "00000000-0000-0000-0000-0000000ae236"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO UPDATE
+    SET topology = EXCLUDED.topology,
+        status   = EXCLUDED.status;
+
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+SELECT
+    m.manifest_id,
+    '00000000-0000-0000-0000-0000000ae231'::uuid,
+    'admin.enum.management.write.delete_group',
+    m.status,
+    to_jsonb(m.topology)
+FROM manifest m
+WHERE m.manifest_id = '00000000-0000-0000-0000-0000000ae230'
+ON CONFLICT (topology_manifest_id) DO UPDATE
+    SET hub_id         = EXCLUDED.hub_id,
+        manifest_key   = EXCLUDED.manifest_key,
+        status         = EXCLUDED.status,
+        topology_jsonb = EXCLUDED.topology_jsonb,
+        updated_at     = now();
+
+INSERT INTO topology.ui_component_package (package_id, package_key, package_kind, package_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae232',
+    'admin.enum.management.write.delete_group.component_group_bundle',
+    'fixed_form_projection',
+    '{"seedKey": "admin.enum.management.write.delete_group", "surface": "admin.enum.management.write.delete_group", "categoryKeys": ["enum_dictionary"]}'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET package_schema_json = EXCLUDED.package_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.components_package_design (package_id, name, layout, state)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae233',
+    'admin.enum.management.write.delete_group.package',
+    '[]'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET layout = EXCLUDED.layout,
+        state = EXCLUDED.state;
+
+INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind, layout_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae234',
+    'admin.enum.management.write.delete_group.layout',
+    'ui_builder_canvas',
+    '{"records":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (layout_id) DO UPDATE
+    SET layout_schema_json = EXCLUDED.layout_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_wiring_registry (wiring_id, wiring_key, wiring_kind, target_surface, target_ref, wiring_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae235',
+    'admin.enum.management.write.delete_group.wiring',
+    'admin_runtime',
+    'manifest',
+    'manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group',
+    '{"actions":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (wiring_id) DO UPDATE
+    SET wiring_kind = EXCLUDED.wiring_kind,
+        target_surface = EXCLUDED.target_surface,
+        target_ref = EXCLUDED.target_ref,
+        wiring_schema_json = EXCLUDED.wiring_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae236',
+    'admin#enum_management_write_delete_group',
+    '00000000-0000-0000-0000-0000000ae232',
+    '00000000-0000-0000-0000-0000000ae234',
+    '00000000-0000-0000-0000-0000000ae235',
+    'default',
+    0,
+    '{"nodes": [{"nodeId": "group_id_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 0}, {"nodeId": "preview_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 1, "propsJson": "{\"label\": \"Preview\"}", "dispatchPayloadFromByTrigger": {"click": {"groupId": "node:group_id_field.value", "dryRun": "literal:true"}}}, {"nodeId": "confirm_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 2, "propsJson": "{\"label\": \"Confirm & write\"}", "dispatchPayloadFromByTrigger": {"click": {"groupId": "node:group_id_field.value", "confirmed": "literal:true"}}}]}'::jsonb
+)
+ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
+    SET layout_patch_json = EXCLUDED.layout_patch_json;
+
+-- single-purpose write layout: enum_dictionary:create_item
+INSERT INTO hubs.hub (hub_id, relation)
+VALUES ('00000000-0000-0000-0000-0000000ae241', '{"description": "admin_enum_management_write_create_item", "system": true}'::jsonb)
+ON CONFLICT (hub_id) DO NOTHING;
+
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae240',
+    NULL,
+    ARRAY[
+        '{"type": "hub_grouping", "manifestKey": "admin.enum.management.write.create_item", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "dispatcher_mapping", "role": "admin", "target": "manifest", "layer": "enum_dictionary", "action": "create_item"}'::jsonb,
+        '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
+        '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae243"], "layoutId": "00000000-0000-0000-0000-0000000ae244", "wiringId": "00000000-0000-0000-0000-0000000ae245", "tensorId": "00000000-0000-0000-0000-0000000ae246"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO UPDATE
+    SET topology = EXCLUDED.topology,
+        status   = EXCLUDED.status;
+
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+SELECT
+    m.manifest_id,
+    '00000000-0000-0000-0000-0000000ae241'::uuid,
+    'admin.enum.management.write.create_item',
+    m.status,
+    to_jsonb(m.topology)
+FROM manifest m
+WHERE m.manifest_id = '00000000-0000-0000-0000-0000000ae240'
+ON CONFLICT (topology_manifest_id) DO UPDATE
+    SET hub_id         = EXCLUDED.hub_id,
+        manifest_key   = EXCLUDED.manifest_key,
+        status         = EXCLUDED.status,
+        topology_jsonb = EXCLUDED.topology_jsonb,
+        updated_at     = now();
+
+INSERT INTO topology.ui_component_package (package_id, package_key, package_kind, package_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae242',
+    'admin.enum.management.write.create_item.component_group_bundle',
+    'fixed_form_projection',
+    '{"seedKey": "admin.enum.management.write.create_item", "surface": "admin.enum.management.write.create_item", "categoryKeys": ["enum_dictionary"]}'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET package_schema_json = EXCLUDED.package_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.components_package_design (package_id, name, layout, state)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae243',
+    'admin.enum.management.write.create_item.package',
+    '[]'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET layout = EXCLUDED.layout,
+        state = EXCLUDED.state;
+
+INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind, layout_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae244',
+    'admin.enum.management.write.create_item.layout',
+    'ui_builder_canvas',
+    '{"records":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (layout_id) DO UPDATE
+    SET layout_schema_json = EXCLUDED.layout_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_wiring_registry (wiring_id, wiring_key, wiring_kind, target_surface, target_ref, wiring_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae245',
+    'admin.enum.management.write.create_item.wiring',
+    'admin_runtime',
+    'manifest',
+    'manifest:00000000-0000-0000-0000-0000000ae240:enum_dictionary:create_item',
+    '{"actions":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (wiring_id) DO UPDATE
+    SET wiring_kind = EXCLUDED.wiring_kind,
+        target_surface = EXCLUDED.target_surface,
+        target_ref = EXCLUDED.target_ref,
+        wiring_schema_json = EXCLUDED.wiring_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae246',
+    'admin#enum_management_write_create_item',
+    '00000000-0000-0000-0000-0000000ae242',
+    '00000000-0000-0000-0000-0000000ae244',
+    '00000000-0000-0000-0000-0000000ae245',
+    'default',
+    0,
+    '{"nodes": [{"nodeId": "item_name_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 0}, {"nodeId": "preview_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 1, "propsJson": "{\"label\": \"Preview\"}", "dispatchPayloadFromByTrigger": {"click": {"name": "node:item_name_field.value", "dryRun": "literal:true"}}}, {"nodeId": "confirm_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 2, "propsJson": "{\"label\": \"Confirm & write\"}", "dispatchPayloadFromByTrigger": {"click": {"name": "node:item_name_field.value", "confirmed": "literal:true"}}}]}'::jsonb
+)
+ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
+    SET layout_patch_json = EXCLUDED.layout_patch_json;
+
+-- single-purpose write layout: enum_dictionary:update_item
+INSERT INTO hubs.hub (hub_id, relation)
+VALUES ('00000000-0000-0000-0000-0000000ae251', '{"description": "admin_enum_management_write_update_item", "system": true}'::jsonb)
+ON CONFLICT (hub_id) DO NOTHING;
+
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae250',
+    NULL,
+    ARRAY[
+        '{"type": "hub_grouping", "manifestKey": "admin.enum.management.write.update_item", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "dispatcher_mapping", "role": "admin", "target": "manifest", "layer": "enum_dictionary", "action": "update_item"}'::jsonb,
+        '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
+        '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae253"], "layoutId": "00000000-0000-0000-0000-0000000ae254", "wiringId": "00000000-0000-0000-0000-0000000ae255", "tensorId": "00000000-0000-0000-0000-0000000ae256"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO UPDATE
+    SET topology = EXCLUDED.topology,
+        status   = EXCLUDED.status;
+
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+SELECT
+    m.manifest_id,
+    '00000000-0000-0000-0000-0000000ae251'::uuid,
+    'admin.enum.management.write.update_item',
+    m.status,
+    to_jsonb(m.topology)
+FROM manifest m
+WHERE m.manifest_id = '00000000-0000-0000-0000-0000000ae250'
+ON CONFLICT (topology_manifest_id) DO UPDATE
+    SET hub_id         = EXCLUDED.hub_id,
+        manifest_key   = EXCLUDED.manifest_key,
+        status         = EXCLUDED.status,
+        topology_jsonb = EXCLUDED.topology_jsonb,
+        updated_at     = now();
+
+INSERT INTO topology.ui_component_package (package_id, package_key, package_kind, package_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae252',
+    'admin.enum.management.write.update_item.component_group_bundle',
+    'fixed_form_projection',
+    '{"seedKey": "admin.enum.management.write.update_item", "surface": "admin.enum.management.write.update_item", "categoryKeys": ["enum_dictionary"]}'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET package_schema_json = EXCLUDED.package_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.components_package_design (package_id, name, layout, state)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae253',
+    'admin.enum.management.write.update_item.package',
+    '[]'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET layout = EXCLUDED.layout,
+        state = EXCLUDED.state;
+
+INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind, layout_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae254',
+    'admin.enum.management.write.update_item.layout',
+    'ui_builder_canvas',
+    '{"records":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (layout_id) DO UPDATE
+    SET layout_schema_json = EXCLUDED.layout_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_wiring_registry (wiring_id, wiring_key, wiring_kind, target_surface, target_ref, wiring_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae255',
+    'admin.enum.management.write.update_item.wiring',
+    'admin_runtime',
+    'manifest',
+    'manifest:00000000-0000-0000-0000-0000000ae250:enum_dictionary:update_item',
+    '{"actions":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (wiring_id) DO UPDATE
+    SET wiring_kind = EXCLUDED.wiring_kind,
+        target_surface = EXCLUDED.target_surface,
+        target_ref = EXCLUDED.target_ref,
+        wiring_schema_json = EXCLUDED.wiring_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae256',
+    'admin#enum_management_write_update_item',
+    '00000000-0000-0000-0000-0000000ae252',
+    '00000000-0000-0000-0000-0000000ae254',
+    '00000000-0000-0000-0000-0000000ae255',
+    'default',
+    0,
+    '{"nodes": [{"nodeId": "item_index_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 0}, {"nodeId": "item_name_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 1}, {"nodeId": "preview_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 2, "propsJson": "{\"label\": \"Preview\"}", "dispatchPayloadFromByTrigger": {"click": {"indexNum": "node:item_index_field.value", "name": "node:item_name_field.value", "dryRun": "literal:true"}}}, {"nodeId": "confirm_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 3, "propsJson": "{\"label\": \"Confirm & write\"}", "dispatchPayloadFromByTrigger": {"click": {"indexNum": "node:item_index_field.value", "name": "node:item_name_field.value", "confirmed": "literal:true"}}}]}'::jsonb
+)
+ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
+    SET layout_patch_json = EXCLUDED.layout_patch_json;
+
+-- single-purpose write layout: enum_dictionary:delete_item
+INSERT INTO hubs.hub (hub_id, relation)
+VALUES ('00000000-0000-0000-0000-0000000ae261', '{"description": "admin_enum_management_write_delete_item", "system": true}'::jsonb)
+ON CONFLICT (hub_id) DO NOTHING;
+
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae260',
+    NULL,
+    ARRAY[
+        '{"type": "hub_grouping", "manifestKey": "admin.enum.management.write.delete_item", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "dispatcher_mapping", "role": "admin", "target": "manifest", "layer": "enum_dictionary", "action": "delete_item"}'::jsonb,
+        '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
+        '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae263"], "layoutId": "00000000-0000-0000-0000-0000000ae264", "wiringId": "00000000-0000-0000-0000-0000000ae265", "tensorId": "00000000-0000-0000-0000-0000000ae266"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO UPDATE
+    SET topology = EXCLUDED.topology,
+        status   = EXCLUDED.status;
+
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+SELECT
+    m.manifest_id,
+    '00000000-0000-0000-0000-0000000ae261'::uuid,
+    'admin.enum.management.write.delete_item',
+    m.status,
+    to_jsonb(m.topology)
+FROM manifest m
+WHERE m.manifest_id = '00000000-0000-0000-0000-0000000ae260'
+ON CONFLICT (topology_manifest_id) DO UPDATE
+    SET hub_id         = EXCLUDED.hub_id,
+        manifest_key   = EXCLUDED.manifest_key,
+        status         = EXCLUDED.status,
+        topology_jsonb = EXCLUDED.topology_jsonb,
+        updated_at     = now();
+
+INSERT INTO topology.ui_component_package (package_id, package_key, package_kind, package_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae262',
+    'admin.enum.management.write.delete_item.component_group_bundle',
+    'fixed_form_projection',
+    '{"seedKey": "admin.enum.management.write.delete_item", "surface": "admin.enum.management.write.delete_item", "categoryKeys": ["enum_dictionary"]}'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET package_schema_json = EXCLUDED.package_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.components_package_design (package_id, name, layout, state)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae263',
+    'admin.enum.management.write.delete_item.package',
+    '[]'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET layout = EXCLUDED.layout,
+        state = EXCLUDED.state;
+
+INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind, layout_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae264',
+    'admin.enum.management.write.delete_item.layout',
+    'ui_builder_canvas',
+    '{"records":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (layout_id) DO UPDATE
+    SET layout_schema_json = EXCLUDED.layout_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_wiring_registry (wiring_id, wiring_key, wiring_kind, target_surface, target_ref, wiring_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae265',
+    'admin.enum.management.write.delete_item.wiring',
+    'admin_runtime',
+    'manifest',
+    'manifest:00000000-0000-0000-0000-0000000ae260:enum_dictionary:delete_item',
+    '{"actions":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (wiring_id) DO UPDATE
+    SET wiring_kind = EXCLUDED.wiring_kind,
+        target_surface = EXCLUDED.target_surface,
+        target_ref = EXCLUDED.target_ref,
+        wiring_schema_json = EXCLUDED.wiring_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae266',
+    'admin#enum_management_write_delete_item',
+    '00000000-0000-0000-0000-0000000ae262',
+    '00000000-0000-0000-0000-0000000ae264',
+    '00000000-0000-0000-0000-0000000ae265',
+    'default',
+    0,
+    '{"nodes": [{"nodeId": "item_index_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 0}, {"nodeId": "preview_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 1, "propsJson": "{\"label\": \"Preview\"}", "dispatchPayloadFromByTrigger": {"click": {"indexNum": "node:item_index_field.value", "dryRun": "literal:true"}}}, {"nodeId": "confirm_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 2, "propsJson": "{\"label\": \"Confirm & write\"}", "dispatchPayloadFromByTrigger": {"click": {"indexNum": "node:item_index_field.value", "confirmed": "literal:true"}}}]}'::jsonb
+)
+ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
+    SET layout_patch_json = EXCLUDED.layout_patch_json;
+
+-- single-purpose write layout: enum_dictionary:set_group_items
+INSERT INTO hubs.hub (hub_id, relation)
+VALUES ('00000000-0000-0000-0000-0000000ae271', '{"description": "admin_enum_management_write_set_group_items", "system": true}'::jsonb)
+ON CONFLICT (hub_id) DO NOTHING;
+
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae270',
+    NULL,
+    ARRAY[
+        '{"type": "hub_grouping", "manifestKey": "admin.enum.management.write.set_group_items", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "dispatcher_mapping", "role": "admin", "target": "manifest", "layer": "enum_dictionary", "action": "set_group_items"}'::jsonb,
+        '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
+        '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae273"], "layoutId": "00000000-0000-0000-0000-0000000ae274", "wiringId": "00000000-0000-0000-0000-0000000ae275", "tensorId": "00000000-0000-0000-0000-0000000ae276"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO UPDATE
+    SET topology = EXCLUDED.topology,
+        status   = EXCLUDED.status;
+
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+SELECT
+    m.manifest_id,
+    '00000000-0000-0000-0000-0000000ae271'::uuid,
+    'admin.enum.management.write.set_group_items',
+    m.status,
+    to_jsonb(m.topology)
+FROM manifest m
+WHERE m.manifest_id = '00000000-0000-0000-0000-0000000ae270'
+ON CONFLICT (topology_manifest_id) DO UPDATE
+    SET hub_id         = EXCLUDED.hub_id,
+        manifest_key   = EXCLUDED.manifest_key,
+        status         = EXCLUDED.status,
+        topology_jsonb = EXCLUDED.topology_jsonb,
+        updated_at     = now();
+
+INSERT INTO topology.ui_component_package (package_id, package_key, package_kind, package_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae272',
+    'admin.enum.management.write.set_group_items.component_group_bundle',
+    'fixed_form_projection',
+    '{"seedKey": "admin.enum.management.write.set_group_items", "surface": "admin.enum.management.write.set_group_items", "categoryKeys": ["enum_dictionary"]}'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET package_schema_json = EXCLUDED.package_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.components_package_design (package_id, name, layout, state)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae273',
+    'admin.enum.management.write.set_group_items.package',
+    '[]'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET layout = EXCLUDED.layout,
+        state = EXCLUDED.state;
+
+INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind, layout_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae274',
+    'admin.enum.management.write.set_group_items.layout',
+    'ui_builder_canvas',
+    '{"records":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (layout_id) DO UPDATE
+    SET layout_schema_json = EXCLUDED.layout_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_wiring_registry (wiring_id, wiring_key, wiring_kind, target_surface, target_ref, wiring_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae275',
+    'admin.enum.management.write.set_group_items.wiring',
+    'admin_runtime',
+    'manifest',
+    'manifest:00000000-0000-0000-0000-0000000ae270:enum_dictionary:set_group_items',
+    '{"actions":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (wiring_id) DO UPDATE
+    SET wiring_kind = EXCLUDED.wiring_kind,
+        target_surface = EXCLUDED.target_surface,
+        target_ref = EXCLUDED.target_ref,
+        wiring_schema_json = EXCLUDED.wiring_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae276',
+    'admin#enum_management_write_set_group_items',
+    '00000000-0000-0000-0000-0000000ae272',
+    '00000000-0000-0000-0000-0000000ae274',
+    '00000000-0000-0000-0000-0000000ae275',
+    'default',
+    0,
+    '{"nodes": [{"nodeId": "group_id_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 0}, {"nodeId": "items_csv_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 1}, {"nodeId": "preview_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 2, "propsJson": "{\"label\": \"Preview\"}", "dispatchPayloadFromByTrigger": {"click": {"groupId": "node:group_id_field.value", "enumIndexNums": "node:items_csv_field.value", "dryRun": "literal:true"}}}, {"nodeId": "confirm_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 3, "propsJson": "{\"label\": \"Confirm & write\"}", "dispatchPayloadFromByTrigger": {"click": {"groupId": "node:group_id_field.value", "enumIndexNums": "node:items_csv_field.value", "confirmed": "literal:true"}}}]}'::jsonb
+)
+ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
+    SET layout_patch_json = EXCLUDED.layout_patch_json;
+
+-- =============================================================================
+-- admin-surface-topology-seed-conversion: admin-enum subBundle -- single-purpose
+-- READ-DETAIL layout for enum_dictionary:get_group (2026-07-27, PR #600 review
+-- round 9 correction). enum_dictionary:get_group is an existing, already-
+-- dispatcher-registered, already-tested admin_runtime action (AdminRuntime.cs
+-- DataEnumDictionaryGetGroupAsync, live-DB-proven by
+-- AdminEnumHubRelationUiProjectionLiveDbTests.cs) that had never been wired into
+-- any manifest/layout -- an "existing contract, unconnected in production" gap,
+-- not a missing mechanism. Same single-purpose-manifest pattern as ae210-ae270
+-- (layout = 1 canonical admin_runtime action); no per-node target override, no
+-- new component kind/actionType/lane, no change to enum_dictionary:list_groups's
+-- response shape (so AdminEnumsRoster.tsx / adminApi.ts, which still consume that
+-- shape directly, are unaffected). groupId is entered directly (same pattern
+-- ae210-ae270's own identity fields already use) -- carrying the row's identity
+-- here automatically from ae200's enum_table selection remains the acknowledged,
+-- unresolved gap in admin-write-surface-selection-context-and-mode-composition-gap
+-- (.agent/tasks/todo.md); this manifest does not solve that, it makes get_group
+-- itself production-reachable so that gap has something real to eventually land
+-- on to. group_detail_json renders the full EnumDictionaryGroupDetailDto
+-- (groupName/indexNum/items) via the same json_viewer.template + propBindings
+-- pattern every other manifest in this file already uses for its own debug/detail
+-- panel. Honest limitation carried over unchanged from DataEnumDictionaryGetGroupAsync
+-- (pre-existing, not touched by this pass): a group with zero items returns
+-- ENUM_GROUP_ITEMS_EMPTY rather than an empty detail -- this manifest surfaces
+-- that behavior as-is, does not work around it.
+-- =============================================================================
+
+INSERT INTO hubs.hub (hub_id, relation)
+VALUES ('00000000-0000-0000-0000-0000000ae281', '{"description": "admin_enum_management_read_get_group", "system": true}'::jsonb)
+ON CONFLICT (hub_id) DO NOTHING;
+
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae280',
+    NULL,
+    ARRAY[
+        '{"type": "hub_grouping", "manifestKey": "admin.enum.management.read.get_group", "bundle": "admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type": "dispatcher_mapping", "role": "admin", "target": "manifest", "layer": "enum_dictionary", "action": "get_group"}'::jsonb,
+        '{"type": "runtime_mapping", "runtime_destination": "admin_runtime"}'::jsonb,
+        '{"type": "ui_projection", "packageIds": ["00000000-0000-0000-0000-0000000ae283"], "layoutId": "00000000-0000-0000-0000-0000000ae284", "wiringId": "00000000-0000-0000-0000-0000000ae285", "tensorId": "00000000-0000-0000-0000-0000000ae286"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO UPDATE
+    SET topology = EXCLUDED.topology,
+        status   = EXCLUDED.status;
+
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+SELECT
+    m.manifest_id,
+    '00000000-0000-0000-0000-0000000ae281'::uuid,
+    'admin.enum.management.read.get_group',
+    m.status,
+    to_jsonb(m.topology)
+FROM manifest m
+WHERE m.manifest_id = '00000000-0000-0000-0000-0000000ae280'
+ON CONFLICT (topology_manifest_id) DO UPDATE
+    SET hub_id         = EXCLUDED.hub_id,
+        manifest_key   = EXCLUDED.manifest_key,
+        status         = EXCLUDED.status,
+        topology_jsonb = EXCLUDED.topology_jsonb,
+        updated_at     = now();
+
+INSERT INTO topology.ui_component_package (package_id, package_key, package_kind, package_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae282',
+    'admin.enum.management.read.get_group.component_group_bundle',
+    'fixed_form_projection',
+    '{"seedKey": "admin.enum.management.read.get_group", "surface": "admin.enum.management.read.get_group", "categoryKeys": ["enum_dictionary"]}'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET package_schema_json = EXCLUDED.package_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.components_package_design (package_id, name, layout, state)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae283',
+    'admin.enum.management.read.get_group.package',
+    '[]'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET layout = EXCLUDED.layout,
+        state = EXCLUDED.state;
+
+INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind, layout_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae284',
+    'admin.enum.management.read.get_group.layout',
+    'ui_builder_canvas',
+    '{"records":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (layout_id) DO UPDATE
+    SET layout_schema_json = EXCLUDED.layout_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_wiring_registry (wiring_id, wiring_key, wiring_kind, target_surface, target_ref, wiring_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae285',
+    'admin.enum.management.read.get_group.wiring',
+    'admin_runtime',
+    'manifest',
+    'manifest:00000000-0000-0000-0000-0000000ae280:enum_dictionary:get_group',
+    '{"actions":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (wiring_id) DO UPDATE
+    SET wiring_kind = EXCLUDED.wiring_kind,
+        target_surface = EXCLUDED.target_surface,
+        target_ref = EXCLUDED.target_ref,
+        wiring_schema_json = EXCLUDED.wiring_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae286',
+    'admin#enum_management_read_get_group',
+    '00000000-0000-0000-0000-0000000ae282',
+    '00000000-0000-0000-0000-0000000ae284',
+    '00000000-0000-0000-0000-0000000ae285',
+    'default',
+    0,
+    '{"nodes": [{"nodeId": "group_id_field", "nodeKind": "catalog_component", "componentKey": "search_input.alias", "parentNodeId": null, "slotKey": "default", "orderIndex": 0}, {"nodeId": "load_button", "nodeKind": "catalog_component", "componentKey": "button.primitive", "parentNodeId": null, "slotKey": "default", "orderIndex": 1, "propsJson": "{\"label\": \"Load group detail\"}", "dispatchPayloadFromByTrigger": {"click": {"groupId": "node:group_id_field.value"}}}, {"nodeId": "group_detail_json", "nodeKind": "catalog_component", "componentKey": "json_viewer.template", "parentNodeId": null, "slotKey": "default", "orderIndex": 2, "propBindings": {"data": {"source": "emission.data"}}}]}'::jsonb
+)
+ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
+    SET layout_patch_json = EXCLUDED.layout_patch_json;
+
 
 -- Representative existing cron absorption: log retention.
 -- The former RetentionScheduler BackgroundService is absorbed into the scheduler

@@ -28,7 +28,13 @@ CREATE TABLE IF NOT EXISTS logs.diff (
     after_state_or_diff_json   JSONB       NOT NULL DEFAULT '{}'::jsonb,
     observed_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
     actor_or_source            TEXT,
-    archive_policy             TEXT        NOT NULL DEFAULT 'required'
+    archive_policy             TEXT        NOT NULL DEFAULT 'required',
+    -- Additive generic audit envelope, beyond the required_identity_fields floor (see
+    -- docs/design/sql-attention-logs-ssot.yaml layers.logs_signal_sources.initial_sources.logs.diff).
+    -- Shape: {"schemaVersion":1,"changedFields":[{"name":str,"type":str,"before":any,"after":any},...]}.
+    -- Written by AdminMasterRosterAudit.AppendAsync; other logs.diff writers (e.g. RuntimeExecutor's
+    -- generic append) leave this at its default empty envelope.
+    changed_fields_json        JSONB       NOT NULL DEFAULT '{}'::jsonb
 );
 
 COMMENT ON TABLE logs.diff IS

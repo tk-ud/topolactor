@@ -298,6 +298,19 @@ layers:
           - observed_at
           - actor_or_source
           - archive_policy
+        optional_extension_fields:
+          - field: changed_fields_json
+            note: >-
+              A floor list, not a closed-world contract forbidding additional columns (2026-07-27
+              PR #600 review correction -- a prior round incorrectly read the absence of
+              changed_fields from the floor list above as a direct SSOT-vs-SSOT conflict with
+              admin-master-roster-management-ssot.yaml's changed_fields requirement; that
+              requirement is a sync gap, not a contract violation). changed_fields_json is a
+              generic JSONB envelope column, additive to this floor, written only by
+              AdminMasterRosterAudit.AppendAsync (source_set_id=admin_master_roster) -- other
+              logs.diff writers (e.g. RuntimeExecutor's generic append) leave it at its default
+              empty envelope. See docs/design/admin-master-roster-management-ssot.yaml
+              logs_diff_admin_projection.physical_mapping.changed_fields for the full contract.
         read_boundary:
           repository_method: LoadPhysicalRecordHistoryAsync(tableId, recordId, ct)
           admin_runtime_action: physical_record:list_history

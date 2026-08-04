@@ -1,4 +1,5 @@
 import type {
+  DispatchResponse,
   Emission,
   LayoutNode as EmissionLayoutNode,
 } from "../api/dispatch.ts";
@@ -6,6 +7,7 @@ import type { ComponentRegistry } from "../registry/componentRegistry.ts";
 import {
   adaptComponentDataHub,
   type RuntimeComponentSpec,
+  type RuntimeDispatchResultContext,
   type RuntimeGuardedStateStore,
 } from "./runtimeComponentAdapter.ts";
 import { renderRuntimeComponent } from "./runtimePrimitiveRenderer.ts";
@@ -62,6 +64,18 @@ export type RenderEmissionOptions = {
    * behavior unchanged.
    */
   onNodeValueChange?: (nodeId: string, value: unknown) => void;
+  /**
+   * Fires with a node's own settled admin_runtime dispatch result (this node's
+   * nodeId + the DispatchResponse). Absent by default (no-op) — callers that
+   * never wire this in keep today's fire-and-forget behavior unchanged. See
+   * ComponentDataHub.onRuntimeDispatchResult / emitBoundEvent
+   * (runtimeComponentFactory.ts) for where the result comes from.
+   */
+  onRuntimeDispatchResult?: (
+    nodeId: string,
+    result: DispatchResponse,
+    context: RuntimeDispatchResultContext,
+  ) => void;
 };
 
 export type ComponentSpec = {
@@ -550,26 +564,151 @@ function buildAdminRuntimePayloadFromByTrigger(
   return { ok: true, byTrigger };
 }
 
+export type AdminRuntimeTargetRefOverrideByTriggerResult =
+  | { ok: true; byTrigger: Record<string, RuntimeDispatchSpec> }
+  | { ok: false; error: string };
+
+/**
+ * Reads a node's OWN dispatchTargetRefByTrigger field — { trigger: "manifest:<uuid>:<layer>:<action>" } —
+ * a per-node, per-trigger admin_runtime dispatch TARGET override, independent of the layout's own
+ * uniform wiringKind="admin_runtime"/targetRef (which NpgsqlTopologyRepository.LoadLayoutNodesAsync
+ * applies unconditionally to every non-structural node from the layout's single ui_wiring_registry
+ * row). This is the SAME "per-trigger authored target, independent of the shared wiring row" pattern
+ * dispatchExternalPort/dispatchInstanceOperation already use (wiring.portTargetRef /
+ * wiring.instanceTargetRef, read directly off the node's own runtimeInteractions[] entry in
+ * buildExternalPortEventBinding below) — this field applies that existing, precedented pattern to
+ * admin_runtime, letting a single per-screen layout host nodes for MULTIPLE admin_runtime operations
+ * (e.g. a create-modal's own submit button dispatching enum_dictionary:create_group while the rest of
+ * the SAME layout keeps dispatching enum_dictionary:list_groups) without any new component kind,
+ * actionType, runtime lane, or payload resolver, and without changing the layout's own default/
+ * fallback target for every node that does NOT author this field.
+ *
+ * Value shape and validation mirror parseAdminRuntimeLayerAction's own requirement exactly — each
+ * per-trigger value must be the SAME "manifest:<uuid>:<layer>:<action>" ManifestDispatcher-resolvable
+ * target_ref shape node.targetRef itself uses (never a bare "<layer>:<action>"). Trigger key
+ * normalization/collision/support rules mirror buildAdminRuntimePayloadFromByTrigger exactly (same
+ * error-code vocabulary) so authors and the backend persistence-boundary validator
+ * (NpgsqlUiTopologyRepository.ValidateDispatchTargetRefByTrigger) agree on the same accept/reject
+ * decisions for the same inputs. A present-but-malformed value fails the WHOLE node closed, never
+ * silently skipped.
+ */
+function buildAdminRuntimeTargetRefOverrideByTrigger(
+  rawByTrigger: unknown,
+  targetSurface: string | null | undefined,
+): AdminRuntimeTargetRefOverrideByTriggerResult {
+  if (rawByTrigger === undefined || rawByTrigger === null) {
+    return { ok: true, byTrigger: {} };
+  }
+  if (typeof rawByTrigger !== "object" || Array.isArray(rawByTrigger)) {
+    return {
+      ok: false,
+      error:
+        `RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_MUST_BE_OBJECT: dispatchTargetRefByTrigger must be an object`,
+    };
+  }
+  const surface = targetSurface?.trim();
+  const byTrigger: Record<string, RuntimeDispatchSpec> = {};
+  for (const [rawTrigger, targetRefRaw] of Object.entries(rawByTrigger)) {
+    const trigger = normalizeAuthoredEventType(rawTrigger);
+    if (!trigger) {
+      return {
+        ok: false,
+        error:
+          `RUNTIME_INTERACTION_TRIGGER_REQUIRED: dispatchTargetRefByTrigger has an unrecognized trigger key "${rawTrigger}"`,
+      };
+    }
+    if (
+      !(COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS as readonly string[]).includes(
+        trigger,
+      )
+    ) {
+      return {
+        ok: false,
+        error:
+          `RUNTIME_INTERACTION_TRIGGER_UNSUPPORTED: dispatchTargetRefByTrigger trigger "${rawTrigger}" normalizes to "${trigger}", which component_wiring_execution_lane does not bind (supported: ${
+            COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS.join(", ")
+          })`,
+      };
+    }
+    if (Object.prototype.hasOwnProperty.call(byTrigger, trigger)) {
+      return {
+        ok: false,
+        error:
+          `RUNTIME_INTERACTION_TRIGGER_CONFLICT_AFTER_NORMALIZATION: dispatchTargetRefByTrigger has more than one raw trigger key normalizing to "${trigger}"`,
+      };
+    }
+    if (typeof targetRefRaw !== "string" || !targetRefRaw.trim()) {
+      return {
+        ok: false,
+        error:
+          `RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_VALUE_MUST_BE_STRING: dispatchTargetRefByTrigger entry for trigger "${trigger}" is not a non-empty string`,
+      };
+    }
+    const targetRef = targetRefRaw.trim();
+    const parsed = parseAdminRuntimeLayerAction(targetRef);
+    if (!parsed) {
+      return {
+        ok: false,
+        error:
+          `RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_TARGET_REF_INVALID: dispatchTargetRefByTrigger entry for trigger "${trigger}" is not a valid "manifest:<uuid>:<layer>:<action>" target_ref`,
+      };
+    }
+    if (!surface) {
+      return {
+        ok: false,
+        error:
+          `RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_TARGET_SURFACE_MISSING: dispatchTargetRefByTrigger entry for trigger "${trigger}" requires the node's own targetSurface`,
+      };
+    }
+    // wiringKey/wiringId are intentionally OMITTED here (unlike buildRuntimeDispatchSpec's base
+    // spec, which carries the layout's own uniform ui_wiring_registry row identity). Carrying the
+    // layout's wiringKey/wiringId over into an override dispatch would be actively misleading —
+    // they identify the layout's OWN wiring row, not the different manifest/layer/action this
+    // override actually targets, and no backend consumer reads request.wiring_key/wiring_id at the
+    // top request level today (confirmed via full grep of ManifestDispatcher/OperationVectorResolver/
+    // AdminRuntimeDispatchAdapter — they are forwarded but never read there; the persisted audit
+    // trail, AdminMasterRosterAudit's actor/target_table/target_id/operation/before/after/
+    // changed_fields, is populated server-side keyed by layer:action and is entirely independent of
+    // whatever wiring_key/wiring_id the frontend happens to send). No override-specific identity is
+    // fabricated in their place.
+    byTrigger[trigger] = {
+      operationType: parsed.action,
+      target: surface,
+      layer: parsed.layer,
+      action: parsed.action,
+      targetRef,
+    };
+  }
+  return { ok: true, byTrigger };
+}
+
 /**
  * Builds an eventBinding for a catalog_component node from its RuntimeDispatchSpec.
  * Populates standard triggers (click, change, select, submit, toggle) each carrying
  * the full runtimeDispatch spec so emitBoundEvent fires both log and dispatch lanes.
- * Returns empty object when spec is null/absent (log lane only). payloadFromByTrigger
- * (built by buildAdminRuntimePayloadFromByTrigger) attaches a per-trigger payloadFrom
- * map onto that trigger's own spec copy — absent for triggers with no authored entry.
+ * Returns empty object when spec is null/absent AND no trigger has its own
+ * targetRefOverrideByTrigger entry (log lane only). payloadFromByTrigger (built by
+ * buildAdminRuntimePayloadFromByTrigger) attaches a per-trigger payloadFrom map onto
+ * that trigger's own spec copy — absent for triggers with no authored entry.
+ * targetRefOverrideByTrigger (built by buildAdminRuntimeTargetRefOverrideByTrigger)
+ * REPLACES that trigger's spec entirely with a different admin_runtime layer:action
+ * target — absent for triggers with no authored override, which keep using spec
+ * (the layout's own uniform target) unchanged.
  */
 export function buildCatalogComponentEventBinding(
   spec: RuntimeDispatchSpec | null,
   payloadFromByTrigger: Record<string, Record<string, string>> = {},
+  targetRefOverrideByTrigger: Record<string, RuntimeDispatchSpec> = {},
 ): Record<string, unknown> {
-  if (!spec) return {};
   const triggers = COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS;
   const binding: Record<string, unknown> = {};
   for (const trigger of triggers) {
+    const triggerSpec = targetRefOverrideByTrigger[trigger] ?? spec;
+    if (!triggerSpec) continue;
     const payloadFrom = payloadFromByTrigger[trigger];
     binding[trigger] = {
       eventType: trigger,
-      runtimeDispatch: payloadFrom ? { ...spec, payloadFrom } : spec,
+      runtimeDispatch: payloadFrom ? { ...triggerSpec, payloadFrom } : triggerSpec,
     };
   }
   return binding;
@@ -1195,10 +1334,24 @@ export function renderEmission(
         );
         // dispatchPayloadFromByTrigger validation is fail-closed for the whole node —
         // never silently skipped/filtered (SSOT remaining_write_payload_capture_gap
-        // negative-case contract).
+        // negative-case contract). Additionally fail-closed (not silently ignored) when
+        // authored on a non-admin_runtime node — same reasoning as dispatchTargetRefByTrigger
+        // below (a node's own wiringKind is uniformly inherited from the layout's single
+        // ui_wiring_registry row, never authored per-node, so this is the only point where
+        // "this binding belongs to an admin_runtime layout" can be checked).
+        const hasDispatchPayloadFromByTrigger = node.dispatchPayloadFromByTrigger !== undefined &&
+          node.dispatchPayloadFromByTrigger !== null;
         const adminRuntimePayloadFrom = previewMode ||
             isNavigationWiringKind(nodeWiringKind)
           ? { ok: true as const, byTrigger: {} }
+          : hasDispatchPayloadFromByTrigger && nodeWiringKind !== "admin_runtime"
+          ? {
+            ok: false as const,
+            error:
+              `RUNTIME_INTERACTION_DISPATCH_PAYLOAD_FROM_BY_TRIGGER_REQUIRES_ADMIN_RUNTIME_WIRING: dispatchPayloadFromByTrigger is only valid on a wiringKind="admin_runtime" node (this node's wiringKind is "${
+                nodeWiringKind || "(absent)"
+              }")`,
+          }
           : buildAdminRuntimePayloadFromByTrigger(
             node.dispatchPayloadFromByTrigger,
           );
@@ -1213,6 +1366,42 @@ export function renderEmission(
             ...layoutFields,
           };
         }
+        // dispatchTargetRefByTrigger validation is fail-closed for the whole node —
+        // same discipline as dispatchPayloadFromByTrigger above. Additionally fail-closed
+        // (not silently ignored) when authored on a non-admin_runtime node: a node's own
+        // wiringKind is uniformly inherited from the layout's single ui_wiring_registry row
+        // (NpgsqlTopologyRepository.LoadLayoutNodesAsync), never authored per-node, so this is
+        // the only point where "this override belongs to an admin_runtime layout" can be
+        // checked — silently no-op'ing it here would let an author believe an authored
+        // override is active when it never took effect.
+        const hasDispatchTargetRefByTrigger = node.dispatchTargetRefByTrigger !== undefined &&
+          node.dispatchTargetRefByTrigger !== null;
+        const adminRuntimeTargetRefOverride = previewMode ||
+            isNavigationWiringKind(nodeWiringKind)
+          ? { ok: true as const, byTrigger: {} }
+          : hasDispatchTargetRefByTrigger && nodeWiringKind !== "admin_runtime"
+          ? {
+            ok: false as const,
+            error:
+              `RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_REQUIRES_ADMIN_RUNTIME_WIRING: dispatchTargetRefByTrigger is only valid on a wiringKind="admin_runtime" node (this node's wiringKind is "${
+                nodeWiringKind || "(absent)"
+              }")`,
+          }
+          : buildAdminRuntimeTargetRefOverrideByTrigger(
+            node.dispatchTargetRefByTrigger,
+            node.targetSurface,
+          );
+        if (!adminRuntimeTargetRefOverride.ok) {
+          return {
+            componentId: node.componentId,
+            componentType: "error",
+            def: {
+              error: adminRuntimeTargetRefOverride.error,
+              componentId: node.componentId,
+            },
+            ...layoutFields,
+          };
+        }
         const baseEventBinding = previewMode
           ? buildPreviewInertEventBinding()
           : isNavigationWiringKind(nodeWiringKind)
@@ -1220,6 +1409,7 @@ export function renderEmission(
           : buildCatalogComponentEventBinding(
             buildRuntimeDispatchSpec(node),
             adminRuntimePayloadFrom.byTrigger,
+            adminRuntimeTargetRefOverride.byTrigger,
           );
         const rawLocalInteractions = node.runtimeInteractions ??
           propsWithDesign.eventWirings;
@@ -1323,6 +1513,10 @@ export function renderEmission(
           onNodeValueChange: (options?.onNodeValueChange && node.nodeId)
             ? (value: unknown) =>
               options.onNodeValueChange!(node.nodeId!, value)
+            : undefined,
+          onRuntimeDispatchResult: (options?.onRuntimeDispatchResult && node.nodeId)
+            ? (result: DispatchResponse, context: RuntimeDispatchResultContext) =>
+              options.onRuntimeDispatchResult!(node.nodeId!, result, context)
             : undefined,
           design: hubDesign,
         };

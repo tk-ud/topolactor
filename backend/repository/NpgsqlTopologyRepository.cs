@@ -614,6 +614,9 @@ public class NpgsqlTopologyRepository : TopologyRepository
                 string? dispatchPayloadFromByTriggerJson = null;
                 if (node.TryGetProperty("dispatchPayloadFromByTrigger", out var dpfbt) && dpfbt.ValueKind == JsonValueKind.Object)
                     dispatchPayloadFromByTriggerJson = dpfbt.GetRawText();
+                string? dispatchTargetRefByTriggerJson = null;
+                if (node.TryGetProperty("dispatchTargetRefByTrigger", out var dtrbt) && dtrbt.ValueKind == JsonValueKind.Object)
+                    dispatchTargetRefByTriggerJson = dtrbt.GetRawText();
 
                 result.Add(new LayoutNodeRecord(
                     NodeId: nodeId!,
@@ -634,6 +637,7 @@ public class NpgsqlTopologyRepository : TopologyRepository
                     PropBindingsJson: propBindingsJson,
                     RuntimeInteractionsJson: runtimeInteractionsJson,
                     DispatchPayloadFromByTriggerJson: dispatchPayloadFromByTriggerJson,
+                    DispatchTargetRefByTriggerJson: dispatchTargetRefByTriggerJson,
                     WidthMode: widthMode,
                     HeightMode: heightMode
                 ));

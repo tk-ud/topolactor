@@ -40,6 +40,7 @@ public static class ManifestTopologyValidator
         JsonElement? dispatcherEntry = null;
         JsonElement? runtimeEntry = null;
         JsonElement? projectionEntry = null;
+        var dispatcherMappingCount = 0;
 
         foreach (var entry in topology)
         {
@@ -62,6 +63,7 @@ public static class ManifestTopologyValidator
             {
                 case "dispatcher_mapping":
                     dispatcherEntry = entry;
+                    dispatcherMappingCount++;
                     break;
                 case "runtime_mapping":
                     runtimeEntry = entry;
@@ -70,6 +72,23 @@ public static class ManifestTopologyValidator
                     projectionEntry = entry;
                     break;
             }
+        }
+
+        // Round 19: a manifest topology must declare at most one dispatcher_mapping entry.
+        // Without this, save-time validation silently reports the LAST entry in array order (the
+        // "dispatcherEntry = entry" assignment above has no duplicate guard) as if it were the only
+        // one, discarding the first entry's role/axes with no signal to the author, and leaving
+        // dispatch-time authorization (DispatcherMappingAxisAuthority.FindDeclaredRole/
+        // IsDeclaredIdentitySelectorRead/MatchesAxes) dependent on JSONB array order for any
+        // (layer, action) the duplicates happen to share. Rejected outright, agreeing or not --
+        // authoring two entries for the intent of applying to different (layer, action) values is
+        // not a case this validator's single-entry summary model (ManifestTopologySummary.
+        // DispatcherMapping) represents anyway.
+        if (dispatcherMappingCount > 1)
+        {
+            errors.Add(new ValidationError(
+                "MANIFEST_TOPOLOGY_DUPLICATE_DISPATCHER_MAPPING",
+                $"topology must declare at most one dispatcher_mapping entry, found {dispatcherMappingCount}."));
         }
 
         AdminManifestDispatcherMappingDto? dispatcherDto = null;

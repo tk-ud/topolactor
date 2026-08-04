@@ -149,6 +149,35 @@ public class AdminRuntimePackageWiringTests
         Assert.False(first.TryGetProperty("password", out _));
     }
 
+    [Fact]
+    public async Task ExecuteDataAsync_ListAdminRuntimeTargetRefAuthoringCandidates_ReturnsDbDerivedCandidateShape()
+    {
+        var manifestId = Guid.NewGuid();
+        var candidate = new AdminRuntimeTargetRefAuthoringCandidateDto(
+            ManifestId: manifestId.ToString(),
+            ManifestKey: "admin.enum.management.write.create_group",
+            Layer: "enum_dictionary",
+            Action: "create_group",
+            TargetRef: $"manifest:{manifestId}:enum_dictionary:create_group");
+        var runtime = CreateRuntime(new WiringStubUiTopologyRepository(null, adminRuntimeTargetRefCandidates: new[] { candidate }));
+
+        var vector = new OperationVector(
+            "admin", "ui_topology", "list_admin_runtime_target_ref_authoring_candidates", null, "admin",
+            null,
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+
+        Assert.Null(error);
+        Assert.NotNull(data);
+        var first = data!.Value.GetProperty("candidates")[0];
+        Assert.Equal(manifestId.ToString(), first.GetProperty("manifestId").GetString());
+        Assert.Equal("admin.enum.management.write.create_group", first.GetProperty("manifestKey").GetString());
+        Assert.Equal("enum_dictionary", first.GetProperty("layer").GetString());
+        Assert.Equal("create_group", first.GetProperty("action").GetString());
+        Assert.Equal($"manifest:{manifestId}:enum_dictionary:create_group", first.GetProperty("targetRef").GetString());
+    }
+
     // ─── Manifest surface wiring key validation ───────────────────────────────
 
     [Fact]
@@ -581,22 +610,28 @@ public class AdminRuntimePackageWiringTests
         private readonly AdminPackageWiringDto? _afterUpdate;
         private readonly ValidationError? _updateError;
         private readonly IReadOnlyList<ExternalPortAuthoringCandidateDto> _candidates;
+        private readonly IReadOnlyList<AdminRuntimeTargetRefAuthoringCandidateDto> _adminRuntimeTargetRefCandidates;
 
         public WiringStubUiTopologyRepository(
             AdminPackageWiringDto? wiring,
             AdminPackageWiringDto? afterUpdate = null,
             ValidationError? updateError = null,
-            IReadOnlyList<ExternalPortAuthoringCandidateDto>? candidates = null)
+            IReadOnlyList<ExternalPortAuthoringCandidateDto>? candidates = null,
+            IReadOnlyList<AdminRuntimeTargetRefAuthoringCandidateDto>? adminRuntimeTargetRefCandidates = null)
             : base(NullLogger<UiTopologyRepository>.Instance, "test-double")
         {
             _wiring = wiring;
             _afterUpdate = afterUpdate ?? wiring;
             _updateError = updateError;
             _candidates = candidates ?? Array.Empty<ExternalPortAuthoringCandidateDto>();
+            _adminRuntimeTargetRefCandidates = adminRuntimeTargetRefCandidates ?? Array.Empty<AdminRuntimeTargetRefAuthoringCandidateDto>();
         }
 
         public override Task<IReadOnlyList<ExternalPortAuthoringCandidateDto>> ListExternalPortAuthoringCandidatesAsync(CancellationToken ct = default)
             => Task.FromResult(_candidates);
+
+        public override Task<IReadOnlyList<AdminRuntimeTargetRefAuthoringCandidateDto>> ListAdminRuntimeTargetRefAuthoringCandidatesAsync(CancellationToken ct = default)
+            => Task.FromResult(_adminRuntimeTargetRefCandidates);
 
         public override Task<AdminPackageWiringDto?> GetPackageWiringAsync(Guid packageId, CancellationToken ct = default)
             => Task.FromResult(_wiring);

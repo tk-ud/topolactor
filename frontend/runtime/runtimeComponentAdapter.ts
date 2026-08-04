@@ -1,5 +1,7 @@
+import type { VNode } from "preact";
 import type { ComponentDataHub } from "./projectionConstructor.ts";
 import type { RuntimeTopologyComponentProps } from "../components/runtimeContract.ts";
+import type { DispatchResponse } from "../api/dispatch.ts";
 import {
   ensureRuntimeComponentRegistryInitialized,
   hasRuntimeComponentFactory,
@@ -13,6 +15,19 @@ type NormalizedDesign = {
   style?: string;
   state?: "default" | "loading" | "success" | "error";
   topologyLayoutClassRefs?: string[];
+};
+
+/**
+ * Round 29: identity context accompanying a settled admin_runtime dispatch result —
+ * carries the authored target_ref (dispatchTargetRefByTrigger / RuntimeDispatchSpec.targetRef)
+ * that was ACTUALLY dispatched, so a caller can confirm a settled response really did land on
+ * the manifest that was targeted, rather than inferring "this must be an ordinary cross-manifest
+ * child response" merely because its manifestId differs from whatever the caller currently has
+ * adopted. See ProjectionShell.tsx's handleRuntimeDispatchResult.
+ */
+export type RuntimeDispatchResultContext = {
+  /** The dispatchSpec.targetRef that was actually sent, if any (e.g. "manifest:<uuid>:<wiringKey>"). */
+  targetRef?: string;
 };
 
 export type RuntimeComponentSpec = {
@@ -52,6 +67,20 @@ export type RuntimeComponentSpec = {
   payloadFromNodeValues?: Record<string, unknown>;
   /** Fires with this node's own latest scalar value on a value-bearing trigger (change/input/select). */
   onNodeValueChange?: (value: unknown) => void;
+  /** Fires with the settled result of this node's own admin_runtime dispatch. See ComponentDataHub. */
+  onRuntimeDispatchResult?: (
+    result: DispatchResponse,
+    context: RuntimeDispatchResultContext,
+  ) => void;
+  /**
+   * Round 25: the REAL nested schema children (e.g. a Modal's Confirm/Cancel Action children),
+   * as already-rendered VNodes — populated by components/LayoutProjectionTree.tsx's
+   * renderRuntimeComponent() call, never by adaptComponentDataHub (which has no notion of the
+   * schema tree's parent/child structure). Only present when
+   * RuntimeComponentFactory.acceptsAuthoredChildren is true for this componentKind and this node
+   * has at least one real child in the composed layout tree.
+   */
+  authoredChildren?: VNode[];
 };
 
 /** Raw projection-local state store (read/write, no guard). Wrapped by RuntimeGuardedStateStore. */
@@ -218,6 +247,7 @@ export function adaptComponentDataHub(hub: ComponentDataHub): AdaptResult {
       localStateStore: hub.localStateStore,
       payloadFromNodeValues: hub.payloadFromNodeValues,
       onNodeValueChange: hub.onNodeValueChange,
+      onRuntimeDispatchResult: hub.onRuntimeDispatchResult,
       className,
       design,
     },

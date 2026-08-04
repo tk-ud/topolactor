@@ -409,7 +409,12 @@ public record LogsDiffAppendRequest(
     string AfterStateOrDiffJson,
     DateTimeOffset ObservedAt,
     string? ActorOrSource,
-    string ArchivePolicy
+    string ArchivePolicy,
+    // Optional generic JSONB audit envelope: {"schemaVersion":1,"changedFields":[{"name","type","before","after"},...]}.
+    // Additive column beyond sql-attention-logs-ssot.yaml's required_identity_fields floor list — see
+    // docs/design/admin-master-roster-management-ssot.yaml logs_diff_admin_projection.physical_mapping.changed_fields.
+    // Null/omitted callers (e.g. RuntimeExecutor's generic append) simply do not populate this envelope.
+    string? ChangedFieldsJson = null
 );
 
 /// <summary>

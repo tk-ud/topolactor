@@ -4,6 +4,20 @@ using Topolactor.Schema;
 namespace Topolactor.Repository;
 
 /// <summary>
+/// Authorization facts for a dispatchTargetRefByTrigger-referenced manifest, checked at the
+/// layout_patch persistence boundary. Exists=false means the manifest_id does not exist at all
+/// (IsActive/IsAdminRuntimeDestination are meaningless in that case). Mirrors the SAME two facts
+/// ManifestDispatcher itself would otherwise only discover at dispatch time (manifest existence
+/// via LoadByIdAsync, runtime_destination via ExtractRuntimeDestination) -- this surfaces them at
+/// author/save time instead. Does not check capability_requirement (role) -- that is a per-request
+/// fact, not statically checkable against an authored layout_patch.
+/// </summary>
+public record AdminRuntimeManifestAuthorizationResult(
+    bool Exists,
+    bool IsActive,
+    bool IsAdminRuntimeDestination);
+
+/// <summary>
 /// Repository for ui_topology_tables: ui_component_bucket and the
 /// package-generation pipeline tables defined in db/ui_topology_tables.sql.
 ///
@@ -268,6 +282,48 @@ public class UiTopologyRepository
         CancellationToken ct = default)
     {
         throw new NotImplementedException("UiTopologyRepository.ListInstanceOperationAuthoringCandidatesAsync must be overridden.");
+    }
+
+    /// <summary>
+    /// Lists every (active admin_runtime manifest, dispatcher_mapping layer/action) pair as an
+    /// authorable dispatchTargetRefByTrigger candidate — the UI Builder authoring-side counterpart
+    /// to ListExternalPortAuthoringCandidatesAsync/ListInstanceOperationAuthoringCandidatesAsync.
+    /// A manifest with N dispatcher_mapping entries yields N candidates (one targetRef per
+    /// layer/action pair it declares). Derived purely from manifest/dispatcher_mapping DB state —
+    /// no per-surface (e.g. enum_dictionary) hardcoding.
+    /// </summary>
+    public virtual Task<IReadOnlyList<AdminRuntimeTargetRefAuthoringCandidateDto>> ListAdminRuntimeTargetRefAuthoringCandidatesAsync(
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException("UiTopologyRepository.ListAdminRuntimeTargetRefAuthoringCandidatesAsync must be overridden.");
+    }
+
+    /// <summary>
+    /// Loads the wiring_kind currently bound to layoutId (topology.ui_topology_tensor ->
+    /// topology.ui_wiring_registry). Null when no tensor row exists yet or wiring_kind is null.
+    /// Used by ValidateLayoutPatchAsync to gate the admin_runtime-only
+    /// dispatchPayloadFromByTrigger/dispatchTargetRefByTrigger node-level fields. Virtual so unit
+    /// tests can stub this without a live database — mirrors
+    /// ListInstanceOperationAuthoringCandidatesAsync's own test-doubling pattern.
+    /// </summary>
+    public virtual Task<string?> LoadWiringKindForLayoutAsync(
+        Guid layoutId, CancellationToken ct = default)
+    {
+        throw new NotImplementedException("UiTopologyRepository.LoadWiringKindForLayoutAsync must be overridden.");
+    }
+
+    /// <summary>
+    /// Loads existence/active-status/runtime_destination authorization facts for a
+    /// dispatchTargetRefByTrigger-referenced manifest_id (public.manifest, status +
+    /// topology[runtime_mapping].runtime_destination -- the SAME facts ManifestDispatcher's
+    /// LoadByIdAsync + ExtractRuntimeDestination check at dispatch time, surfaced here at
+    /// layout_patch save time instead). Virtual so unit tests can stub this without a live
+    /// database -- mirrors LoadWiringKindForLayoutAsync's own test-doubling pattern.
+    /// </summary>
+    public virtual Task<AdminRuntimeManifestAuthorizationResult> LoadAdminRuntimeManifestAuthorizationAsync(
+        Guid manifestId, CancellationToken ct = default)
+    {
+        throw new NotImplementedException("UiTopologyRepository.LoadAdminRuntimeManifestAuthorizationAsync must be overridden.");
     }
 
     public virtual Task<AdminPackageWiringDto?> GetPackageWiringAsync(

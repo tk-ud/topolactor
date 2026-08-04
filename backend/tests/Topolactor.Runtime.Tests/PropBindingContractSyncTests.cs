@@ -34,6 +34,7 @@ public class PropBindingContractSyncTests
             ["form_input/checkbox"]              = new HashSet<string> { "options" },
             ["form_input/radio_group"]           = new HashSet<string> { "options" },
             ["form_input/checkbox_group"]        = new HashSet<string> { "options" },
+            ["form_input/search_input"]          = new HashSet<string> { "value" },
             ["table_op/faceted_filter_bar"]      = new HashSet<string> { "filters" },
             ["table_op/column_filter"]           = new HashSet<string> { "options" },
             ["table_op/column_visibility_editor"] = new HashSet<string> { "columns" },

@@ -7,6 +7,9 @@
  * - no DB/API persistence judgment
  */
 
+import type { DispatchResponse } from "../api/dispatch.ts";
+import type { RuntimeDispatchResultContext } from "./runtimeComponentAdapter.ts";
+
 export type ProjectionFieldKind =
   | "text"
   | "number"
@@ -67,6 +70,19 @@ export type ComponentDataHub = {
    * caller backs payloadFromNodeValues with — see liveNodeValueTracker.ts.
    */
   onNodeValueChange?: (value: unknown) => void;
+  /**
+   * Fires with the settled result of THIS node's own component_wiring_execution_lane
+   * (admin_runtime) dispatch, once the FIFO queue resolves it — previously the
+   * result was void-discarded at the emitBoundEvent call site (fire-and-forget),
+   * so no admin_runtime dispatch's own response ever reached rendered state; the
+   * caller decides whether/how to adopt it (see ProjectionShell.tsx). Absent by
+   * default (no-op) — callers that never wire this in keep today's behavior
+   * unchanged. Never fires for previewMode / non-runtimeDispatch bindings.
+   */
+  onRuntimeDispatchResult?: (
+    result: DispatchResponse,
+    context: RuntimeDispatchResultContext,
+  ) => void;
 };
 
 type RuntimeTopologyComponentProps = JsonObject & {

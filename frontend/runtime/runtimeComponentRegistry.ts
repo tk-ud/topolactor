@@ -20,6 +20,18 @@ export function hasRuntimeComponentFactory(componentKind: string): boolean {
   return registry.has(componentKind);
 }
 
+/**
+ * Round 25: true when componentKind's registered factory declares
+ * RuntimeComponentFactory.acceptsAuthoredChildren — i.e. it embeds real schema children itself
+ * (e.g. Modal's Confirm/Cancel Actions as a footer) rather than the caller
+ * (components/LayoutProjectionTree.tsx) rendering them as trailing DOM siblings. False (the
+ * existing behavior) for every componentKind that hasn't opted in, including when the kind is
+ * unregistered entirely.
+ */
+export function componentAcceptsAuthoredChildren(componentKind: string): boolean {
+  return registry.get(componentKind)?.acceptsAuthoredChildren === true;
+}
+
 export function listRuntimeComponentKinds(): string[] {
   return [...registry.keys()];
 }

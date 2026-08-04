@@ -65,8 +65,10 @@ public sealed class InMemoryEnumDictionaryRepository : EnumDictionaryRepository
     public override Task<EnumDictionaryGroupDto> CreateGroupAsync(
         string groupName, int? indexNum, CancellationToken ct = default)
     {
+        var idx = indexNum ?? (_groups.Count == 0 ? 1 : _groups.Values.Max(g => g.IndexNum) + 1);
+        if (_groups.Values.Any(g => g.IndexNum == idx))
+            throw new InvalidOperationException("ENUM_GROUP_INDEX_CONFLICT");
         var id = Guid.NewGuid();
-        var idx = indexNum ?? _groups.Count + 1;
         var detail = new EnumDictionaryGroupDetailDto(id, idx, groupName, [], []);
         _groups[id] = detail;
         return Task.FromResult(new EnumDictionaryGroupDto(id, idx, groupName));
@@ -78,6 +80,8 @@ public sealed class InMemoryEnumDictionaryRepository : EnumDictionaryRepository
         if (!_groups.TryGetValue(groupId, out var existing)) return Task.FromResult<EnumDictionaryGroupDto?>(null);
         var name = groupName ?? existing.GroupName;
         var idx = indexNum ?? existing.IndexNum;
+        if (idx != existing.IndexNum && _groups.Values.Any(g => g.GroupId != groupId && g.IndexNum == idx))
+            throw new InvalidOperationException("ENUM_GROUP_INDEX_CONFLICT");
         _groups[groupId] = existing with { GroupName = name, IndexNum = idx };
         return Task.FromResult<EnumDictionaryGroupDto?>(new EnumDictionaryGroupDto(groupId, idx, name));
     }
@@ -89,9 +93,18 @@ public sealed class InMemoryEnumDictionaryRepository : EnumDictionaryRepository
         string name, int? indexNum, CancellationToken ct = default)
     {
         var idx = indexNum ?? (_itemsByIndex.Count == 0 ? 1 : _itemsByIndex.Keys.Max() + 1);
+        if (_itemsByIndex.ContainsKey(idx))
+            throw new InvalidOperationException("ENUM_ITEM_INDEX_CONFLICT");
         _itemsByIndex[idx] = name;
         return Task.FromResult(new EnumDictionaryItemDto(idx, name));
     }
+
+    public override Task<EnumDictionaryItemDto?> GetItemAsync(
+        int indexNum, CancellationToken ct = default) =>
+        Task.FromResult(
+            _itemsByIndex.TryGetValue(indexNum, out var name)
+                ? new EnumDictionaryItemDto(indexNum, name)
+                : null);
 
     public override Task<EnumDictionaryItemDto?> UpdateItemAsync(
         int indexNum, string? name, int? newIndexNum, CancellationToken ct = default)
@@ -100,6 +113,10 @@ public sealed class InMemoryEnumDictionaryRepository : EnumDictionaryRepository
             return Task.FromResult<EnumDictionaryItemDto?>(null);
         if (newIndexNum.HasValue && newIndexNum.Value != indexNum)
         {
+            if (_itemsByIndex.ContainsKey(newIndexNum.Value))
+                throw new InvalidOperationException("ENUM_ITEM_INDEX_CONFLICT");
+            if (_groups.Values.Any(g => g.ItemsIndexNums.Contains(indexNum)))
+                throw new InvalidOperationException("ENUM_ITEM_IN_USE");
             _itemsByIndex.Remove(indexNum);
             indexNum = newIndexNum.Value;
             _itemsByIndex[indexNum] = name ?? existingName;
@@ -112,8 +129,16 @@ public sealed class InMemoryEnumDictionaryRepository : EnumDictionaryRepository
         return Task.FromResult<EnumDictionaryItemDto?>(new EnumDictionaryItemDto(indexNum, _itemsByIndex[indexNum]));
     }
 
-    public override Task<bool> DeleteItemAsync(int indexNum, CancellationToken ct = default) =>
-        Task.FromResult(_itemsByIndex.Remove(indexNum));
+    public override Task<bool> DeleteItemAsync(int indexNum, CancellationToken ct = default)
+    {
+        if (_groups.Values.Any(g => g.ItemsIndexNums.Contains(indexNum)))
+            throw new InvalidOperationException("ENUM_ITEM_IN_USE");
+        return Task.FromResult(_itemsByIndex.Remove(indexNum));
+    }
+
+    public override Task<bool> IsItemReferencedInGroupsAsync(
+        int indexNum, CancellationToken ct = default) =>
+        Task.FromResult(_groups.Values.Any(g => g.ItemsIndexNums.Contains(indexNum)));
 
     public override Task<EnumDictionaryGroupDetailDto?> SetGroupItemsAsync(
         Guid groupId, IReadOnlyList<int> enumIndexNums, CancellationToken ct = default)

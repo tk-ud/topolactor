@@ -69,6 +69,185 @@ public record CloneReplacementMergeResult(
 );
 
 /// <summary>
+/// Shared dispatcher_mapping axis-matching authority. Extracted from
+/// NpgsqlManifestRepository so that both the axes-based resolution path
+/// (ResolveActiveManifestAsync, CountActiveAxisConflictsAsync) and any other
+/// caller that needs to verify a SPECIFIC already-resolved manifest's own
+/// dispatcher_mapping entries against a set of axes (e.g. ManifestDispatcher's
+/// target_ref admin_runtime layer/action authorization — round 17 hardening)
+/// use the exact same matching semantics. A null axis value is a wildcard
+/// (matches any); a non-null axis value requires an exact case-insensitive
+/// match against a dispatcher_mapping entry's own field.
+/// </summary>
+public static class DispatcherMappingAxisAuthority
+{
+    public static bool MatchesAxes(
+        IReadOnlyList<JsonElement> topology,
+        string? role,
+        string? target,
+        string? layer,
+        string? action)
+    {
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind != JsonValueKind.Object)
+                continue;
+
+            if (!entry.TryGetProperty("type", out var typeEl) ||
+                !string.Equals(typeEl.GetString(), "dispatcher_mapping", StringComparison.Ordinal))
+                continue;
+
+            if (!AxisMatches(entry, "role", role)) continue;
+            if (!AxisMatches(entry, "target", target)) continue;
+            if (!AxisMatches(entry, "layer", layer)) continue;
+            if (!AxisMatches(entry, "action", action)) continue;
+
+            return true;
+        }
+        return false;
+    }
+
+    private static bool AxisMatches(JsonElement entry, string propName, string? value)
+    {
+        if (value is null) return true;
+        if (!entry.TryGetProperty(propName, out var prop)) return false;
+        return string.Equals(prop.GetString(), value, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Round 18: finds the dispatcher_mapping entry for (layer, action) — role/target wildcarded,
+    /// mirroring MatchesAxes' own existence check — and returns ITS OWN declared role value (null
+    /// when the entry has no role field, i.e. that layer/action is role-wildcard by the manifest
+    /// author's own declaration). Deliberately separate from MatchesAxes: that method's AxisMatches
+    /// treats a null QUERY value as "don't care" (correct for ResolveActiveManifestAsync's optional
+    /// filter semantics), which is the wrong direction for authorization — comparing a REQUEST's
+    /// role against a declared requirement must never treat a missing/null request role as
+    /// automatically satisfying a declared role. Callers compare the returned declared role against
+    /// the request's own role with plain equality (null declared role = wildcard passes; non-null
+    /// declared role requires an exact, non-null request role match).
+    /// </summary>
+    public static string? FindDeclaredRole(
+        IReadOnlyList<JsonElement> topology, string layer, string action)
+    {
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind != JsonValueKind.Object) continue;
+            if (!entry.TryGetProperty("type", out var typeEl) ||
+                !string.Equals(typeEl.GetString(), "dispatcher_mapping", StringComparison.Ordinal))
+                continue;
+            if (!AxisMatches(entry, "layer", layer)) continue;
+            if (!AxisMatches(entry, "action", action)) continue;
+
+            return entry.TryGetProperty("role", out var roleEl) && roleEl.ValueKind == JsonValueKind.String
+                ? roleEl.GetString()
+                : null;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Round 19: true when the topology's dispatcher_mapping entry for (layer, action) declares
+    /// itself, via its OWN "identity_selector_read": true field, as a read-only,
+    /// manifest-identity-agnostic operation safe to reach via a bare "runtime_mapping only"
+    /// manifest's target_ref (see ManifestDispatcher.IsBareManifestNavigationReadTargetRefAsync).
+    /// This is the SSOT-owned classification authority: the seed/manifest author declares it
+    /// per-entry (db/seed_empty.sql), not a closed action-name allowlist hardcoded in runtime code
+    /// -- adding a new identity-selector-compatible read action means authoring this field on its
+    /// own dispatcher_mapping entry, never editing ManifestDispatcher.cs. False when no matching
+    /// entry exists or the field is absent/not literally true (default-closed, never inferred).
+    /// </summary>
+    public static bool IsDeclaredIdentitySelectorRead(
+        IReadOnlyList<JsonElement> topology, string layer, string action)
+    {
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind != JsonValueKind.Object) continue;
+            if (!entry.TryGetProperty("type", out var typeEl) ||
+                !string.Equals(typeEl.GetString(), "dispatcher_mapping", StringComparison.Ordinal))
+                continue;
+            if (!AxisMatches(entry, "layer", layer)) continue;
+            if (!AxisMatches(entry, "action", action)) continue;
+
+            return entry.TryGetProperty("identity_selector_read", out var flagEl) &&
+                flagEl.ValueKind == JsonValueKind.True;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Round 19: true when the topology contains 2+ dispatcher_mapping entries for the SAME
+    /// (layer, action) whose declared role and/or identity_selector_read values disagree -- i.e.
+    /// authorization for this exact operation would otherwise depend on JSONB array order (which
+    /// entry FindDeclaredRole/IsDeclaredIdentitySelectorRead happens to see first), an undefined,
+    /// unauditable authority. Save-time validation (ManifestTopologyValidator.Validate) rejects ANY
+    /// duplicate dispatcher_mapping entry in a manifest topology outright, agreeing or not -- this
+    /// runtime check is defense-in-depth against topology that reached the DB outside that boundary
+    /// (hand-authored seed SQL, a future write path). Two entries that fully agree are not flagged
+    /// here (no ambiguity to fail closed on), even though save-time validation still rejects them as
+    /// redundant.
+    /// </summary>
+    public static bool HasConflictingDispatcherMappingEntries(
+        IReadOnlyList<JsonElement> topology, string layer, string action)
+    {
+        string? firstRole = null;
+        bool? firstIdentitySelectorRead = null;
+        var matchCount = 0;
+
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind != JsonValueKind.Object) continue;
+            if (!entry.TryGetProperty("type", out var typeEl) ||
+                !string.Equals(typeEl.GetString(), "dispatcher_mapping", StringComparison.Ordinal))
+                continue;
+            if (!AxisMatches(entry, "layer", layer)) continue;
+            if (!AxisMatches(entry, "action", action)) continue;
+
+            var role = entry.TryGetProperty("role", out var roleEl) && roleEl.ValueKind == JsonValueKind.String
+                ? roleEl.GetString()
+                : null;
+            var identitySelectorRead = entry.TryGetProperty("identity_selector_read", out var flagEl) &&
+                flagEl.ValueKind == JsonValueKind.True;
+
+            matchCount++;
+            if (matchCount == 1)
+            {
+                firstRole = role;
+                firstIdentitySelectorRead = identitySelectorRead;
+                continue;
+            }
+
+            if (!string.Equals(firstRole, role, StringComparison.OrdinalIgnoreCase) ||
+                firstIdentitySelectorRead != identitySelectorRead)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Round 18: true when the topology declares AT LEAST ONE dispatcher_mapping entry, regardless
+    /// of its axis values. Distinguishes an authored, operation-scoped manifest (e.g. ae210,
+    /// scoped to create_group) — which always has one — from a deliberately bare
+    /// "runtime_mapping only" manifest that makes no operation-scope claim whatsoever (used purely
+    /// as an identity/context selector for target_ref, e.g. the hub_navigation:get_hub_relations
+    /// navigation-enrichment convention in ManifestDispatcher.IsBareManifestNavigationReadTargetRefAsync).
+    /// </summary>
+    public static bool HasAnyDispatcherMapping(IReadOnlyList<JsonElement> topology)
+    {
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind != JsonValueKind.Object) continue;
+            if (entry.TryGetProperty("type", out var typeEl) &&
+                string.Equals(typeEl.GetString(), "dispatcher_mapping", StringComparison.Ordinal))
+                return true;
+        }
+        return false;
+    }
+}
+
+/// <summary>
 /// Abstract manifest repository. Resolves active manifests by dispatcher axes
 /// (role, target, layer, action) from the manifest table.
 ///

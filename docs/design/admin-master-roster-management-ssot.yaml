@@ -110,13 +110,51 @@ admin_master_roster_management_ssot:
       - changed_fields
       - timestamp
     physical_mapping:
-      actor: actor_or_source and JSON envelope
-      target_table: physical_table_name and JSON envelope
+      actor: actor_or_source
+      target_table: physical_table_name
       target_id: record_id
       operation: operation_kind
       before: before_state_or_diff_json
       after: after_state_or_diff_json
-      changed_fields: JSON envelope array
+      changed_fields: >-
+        logs.diff.changed_fields_json (generic JSONB envelope column, additive beyond
+        sql-attention-logs-ssot.yaml's required_identity_fields floor -- the existing identity
+        columns, source_set_id/physical_table_id/record_id/operation_kind etc., remain the row
+        authority; changed_fields_json is purely an additive envelope carrying ONLY changed_fields,
+        never a duplicate copy of actor/target_table/target_id/operation -- those already have
+        their own dedicated physical columns above and are never also written into this JSONB
+        envelope). Shape:
+        {"schemaVersion":1,"changedFields":[{"name","type","before","after"},...]}.
+        Resolved 2026-07-27 (PR #600 review, admin-master-roster-audit-envelope-contract-gap
+        Bundle) -- AdminMasterRosterAudit.AppendAsync previously built this envelope but never
+        passed it to AppendLogsDiffAsync (dead code), and logs.diff had no column for it; both
+        are now implemented and used by all 10 existing AppendAsync call sites (enum_dictionary's
+        7 write actions, auth_users:create/update/delete). See AuditChangedField
+        (backend/runtime/AdminMasterRosterAudit.cs), AdminMasterRosterAuditTests.cs (unit proof of
+        the envelope shape), and AdminEnumHubRelationUiProjectionLiveDbTests.cs's per-action
+        GetChangedField assertions (live-Postgres persistence proof for the 7 enum_dictionary
+        actions).
+        2026-07-28 (PR #600 review round 12/13) -- one wording correction, one open question
+        confirmed still open: (1) round 12 added an inline ALTER TABLE ... ADD COLUMN IF NOT
+        EXISTS to db/sql_attention_logs_tables.sql plus an upgrade-from-existing-schema test,
+        reasoning that changed_fields_json needed a migration path for an already-deployed
+        database. Round 13 corrected this: per db/README.md, this repo's only supported DB
+        operational procedure is `docker compose -v` fresh-volume bootstrap -- db/migrations/ and
+        db/patches/ are retired, and db/legacy_utils/ is reserved for genuine legacy-shape
+        migrations (structural renames/type changes on existing deployments), not ordinary
+        additive columns. There is no supported "existing DB predating this column" scenario for
+        changed_fields_json to migrate -- the column living only in CREATE TABLE IF NOT EXISTS is
+        correct as-is. The ALTER TABLE statement and the upgrade-simulation test were reverted.
+        (2) whether changedFields should list ALL physically-changed columns vs. only
+        action-specific "audited" fields is NOT uniquely derivable from the existing 10 call
+        sites: auth_users:update includes a field only when the incoming request payload carried
+        it (request-presence-conditional, see AdminRuntimeMasterRoster.cs
+        DataAuthUsersUpdateAsync), while enum_dictionary:update_group unconditionally includes
+        both group_name and index_num regardless of whether the request supplied them or the
+        value actually differed (fixed-field-list). These are two different, already-coexisting
+        conventions, not one canonical rule -- still open, reported to the owner rather than
+        unified by guessing which one is "correct" (no code change made for this point pending an
+        owner decision).
       timestamp: observed_at
 
   admin_runtime_actions:

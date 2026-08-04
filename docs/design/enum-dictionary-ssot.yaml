@@ -55,7 +55,34 @@ enum_dictionary_ssot:
       - ENUM_GROUP_NOT_FOUND
       - ENUM_GROUP_ITEMS_EMPTY
       - ENUM_GROUP_ID_MALFORMED
+      - ENUM_GROUP_WRITE_NOT_CONFIRMED
+      - ENUM_ITEM_WRITE_NOT_CONFIRMED
+      - ENUM_GROUP_INDEX_CONFLICT
+      - ENUM_ITEM_INDEX_CONFLICT
+      - ENUM_ITEM_IN_USE
+      - ENUM_GROUP_ITEMS_DUPLICATE_MEMBERSHIP
     rule: unresolved_enum_group_reference_must_blocking_error_not_silent_fallback
+    validation_parity_rule: >-
+      2026-07-27 (PR #600 review round 2): dryRun (preview) and confirmed (write) must run the
+      identical validation gate set for every action -- existence (GetGroupDetailAsync/
+      GetItemAsync), conflict (index_num uniqueness), and in-use (IsGroupReferencedInManifestsAsync/
+      IsItemReferencedInGroupsAsync) checks all run BEFORE the dryRun/confirmed branch, never only
+      on the write path. ENUM_ITEM_IN_USE mirrors ENUM_GROUP_IN_USE's existing role for
+      delete_item (enum.group_items.enum_index_num REFERENCES enum.items(index_num), db/
+      enum_tables.sql). ENUM_GROUP_ITEMS_DUPLICATE_MEMBERSHIP catches duplicate values within a
+      single set_group_items enumIndexNums array before persistence.
+    mutation_confirmation_contract_gate: >-
+      admin_runtime_actions.enum_dictionary_write group ops (create_group/update_group/
+      delete_group/update_group_members->set_group_items) and item ops
+      (create_item/update_item/delete_item) require payload.confirmed=true before the actual
+      mutation runs -- mirrors the existing team_markdown:saved_view:update payload.dryRun/
+      payload.confirmed contract (backend/runtime/AdminRuntime.TeamMarkdown.cs), not a new
+      confirmation mechanism. payload.dryRun=true runs the identical validation gates and returns
+      a non-mutating preview (preview_dictionary_delta/validate_against_enum_authority); the write
+      step re-runs the same validation every time and never trusts a prior dryRun call. Both flags
+      accept either the JSON boolean literal or the JSON string "true" (own-property, ordinal
+      case-insensitive) because docs/design/ui-builder-preset-ecosystem-ssot.yaml
+      payloadFrom_resolver_contract's literal: source always resolves to a JS string.
 
   projection_read_model:
     initial_strategy: join_enum_groups_and_group_items_at_read_time
@@ -94,15 +121,20 @@ enum_dictionary_ssot:
 
   admin_hub_relation_navigation:
     ref: docs/design/admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract
-    status: blocked_pending_seed_catalog
+    status: resolved
     note: >-
-      admin-surface-topology-seed-conversion Bundle. enum_dictionary has no target manifest an
-      admin hub relation could resolve to yet: hub relation resolution requires a real per-screen
-      ui_projection manifest for enum_dictionary (React-like Schema -> translator -> topology UI
-      seed -> seed registration), which does not exist yet — only per-action dispatcher_mapping
-      manifests exist today (all 9 enum_dictionary:* actions, already production-mapped and
-      unaffected by this Bundle). Authoring the relation itself (source manifest selection,
-      sequence position) is not the blocker — that mechanism already exists via /admin/manifests
-      (docs/design/admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract) — the
-      blocker is purely the absence of a target. The route itself is unaffected and is not retired
-      by this precondition; only hub-reachability is deferred.
+      admin-surface-topology-seed-conversion admin-enum subBundle. Resolved 2026-07-22: manifest
+      00000000-0000-0000-0000-0000000ae200 (admin.enum.management.projection) is a real
+      per-screen ui_projection manifest (React-like Schema -> translator -> topology UI seed ->
+      seed registration), so enum_dictionary now has a target manifest an admin hub relation can
+      resolve to. Navigation authoring/resolution proven end to end via the existing
+      /admin/manifests hub_navigation:create authority (never a raw SQL insert) in
+      backend/tests/Topolactor.Integration.Tests/AdminEnumHubRelationUiProjectionLiveDbTests.cs.
+      2026-07-27: the 7 enum_dictionary write actions each gained their own dedicated
+      single-purpose write manifest (00000000-0000-0000-0000-0000000ae210/ae220/ae230/ae240/
+      ae250/ae260/ae270), each independently navigable from ae200 via the same hub_navigation:
+      create authority (proven representatively for the create_group manifest; the other 6 reuse
+      the identical, already-proven mechanism). This id no longer gates admin-enum; see
+      docs/design/admin-normal-surface-projection-seed-ssot.yaml design_blocking
+      target_surface_manifest_readiness.subbundle_status.admin-enum for the still-authoritative
+      per-Bundle tracking record.

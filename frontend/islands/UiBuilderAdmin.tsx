@@ -213,6 +213,7 @@ import {
 
 import { queueAdminClientCommand, type ScheduledCommandResult } from "../runtime/frontendScheduler.ts";
 import type { ValidationError } from "../api/dispatch.ts";
+import { useEffectivePackageWiringKind } from "../lib/uiBuilderEventAuthoringHooks.ts";
 
 /** Canvas workspace contract marker (SSOT: admin-console-workflow-ssot.yaml §canvas_workspace_contract). */
 export const UI_BUILDER_WORKSPACE_MODE = "canvas_workspace_v2" as const;
@@ -315,6 +316,18 @@ type DraftNode = {
   propBindings?: Record<string, PropBindingDraft>;
   /** Canonical runtime UI interaction contract. Legacy propsJson.eventWirings is fallback only. */
   runtimeInteractions?: ComponentEventWiring[];
+  /**
+   * Node-local admin_runtime dispatch payload binding — { trigger: { field: source } }.
+   * wiring_kind="admin_runtime" nodes only. SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
+   * admin_runtime_payload_binding_contract.
+   */
+  dispatchPayloadFromByTrigger?: Record<string, Record<string, string>>;
+  /**
+   * Node-local admin_runtime dispatch TARGET override — { trigger: "manifest:<uuid>:<layer>:<action>" }.
+   * wiring_kind="admin_runtime" nodes only. SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
+   * admin_runtime_target_ref_override_contract.
+   */
+  dispatchTargetRefByTrigger?: Record<string, string>;
 };
 
 /** Draft-time prop binding descriptor stored in DraftNode. */
@@ -1818,7 +1831,12 @@ function AuthoringSuggestAssistPanel({
   );
 }
 
-function LayoutRightDock({
+/**
+ * Round 19: exported (was module-private) so nodeEventAuthoringPanelWiringKindSync.test.tsx can
+ * mount the PRODUCTION component directly -- real PackageWiringEditor save flow driving real
+ * NodeEventAuthoringPanel gating -- rather than re-testing the gate through a hand-rolled stand-in.
+ */
+export function LayoutRightDock({
   draftNodes,
   selectedNodeId,
   selectedNodeIds,
@@ -1878,6 +1896,27 @@ function LayoutRightDock({
   /** Increment to open design inspector accordion after layout apply handoff. */
   designHandoffKey?: number;
 }): JSX.Element {
+  // Round 18: the admin_runtime operation-override authoring section (NodeEventAuthoringPanel)
+  // must only be offered when this layout's OWN package wiring is actually
+  // wiring_kind="admin_runtime" -- re-fetched from the same persisted authority
+  // PackageWiringEditor itself reads (ui_topology:get_package_wiring), not a frontend-only guess.
+  const { wiringKind: fetchedWiringKind } = useEffectivePackageWiringKind(packageId);
+  // Round 19: useEffectivePackageWiringKind only re-fetches on packageId CHANGE -- a save inside
+  // the SAME package's PackageWiringEditor (rendered as a sibling panel below, via
+  // PackageConnectionPanel) previously left this gate showing the stale pre-save wiringKind until
+  // an unrelated packageId change/remount happened to re-fetch it. onSiblingWiringSaved captures
+  // the fresh AdminPackageWiringRow PackageWiringEditor's own save handler already produces
+  // (handleSaveWiring's `refreshed`), scoped to the CURRENT packageId so switching packages doesn't
+  // carry a stale override forward.
+  const [wiringSaveOverride, setWiringSaveOverride] = useState<
+    { packageId: string; wiringKind: string } | null
+  >(null);
+  const onSiblingWiringSaved = (wiring: AdminPackageWiringRow) => {
+    setWiringSaveOverride({ packageId, wiringKind: wiring.wiringKind });
+  };
+  const effectiveWiringKind = wiringSaveOverride?.packageId === packageId
+    ? wiringSaveOverride.wiringKind
+    : fetchedWiringKind;
   return (
     <aside
       class="layout-right-dock flex w-full flex-col gap-2"
@@ -1904,6 +1943,7 @@ function LayoutRightDock({
           selectedPackageId={packageId}
           routeCandidates={routeCandidates}
           topologyRouteKey={topologyRouteKey}
+          onWiringSaved={onSiblingWiringSaved}
         />
       </Accordion>
 
@@ -1959,6 +1999,17 @@ function LayoutRightDock({
                 onCommitNode?.({ stateJson: nextStateJson }, label)}
               sourceNodeId={selectedNode.nodeId}
               allNodes={draftNodes}
+              effectiveWiringKind={effectiveWiringKind}
+              dispatchTargetRefByTrigger={selectedNode.dispatchTargetRefByTrigger}
+              dispatchPayloadFromByTrigger={selectedNode.dispatchPayloadFromByTrigger}
+              onCommitDispatchOverrides={(next, label) =>
+                onCommitNode?.(
+                  {
+                    dispatchTargetRefByTrigger: next.targetRefByTrigger,
+                    dispatchPayloadFromByTrigger: next.payloadFromByTrigger,
+                  },
+                  label,
+                )}
             />
           </Accordion>
           <Accordion
@@ -7780,10 +7831,15 @@ function PackageConnectionPanel({
   selectedPackageId,
   routeCandidates,
   topologyRouteKey,
+  onWiringSaved,
 }: {
   selectedPackageId: string;
   routeCandidates?: string[];
   topologyRouteKey?: string;
+  /** Round 19: forwarded to PackageWiringEditor so a save is visible to sibling panels
+   * (NodeEventAuthoringPanel's admin_runtime override gate) without waiting for a packageId
+   * change / remount to re-fetch the same persisted wiring authority. */
+  onWiringSaved?: (wiring: AdminPackageWiringRow) => void;
 }): JSX.Element {
   const [packageComponents, setPackageComponents] = useState<
     AdminPackageComponentRow[]
@@ -7847,6 +7903,7 @@ function PackageConnectionPanel({
               packageComponents={packageComponents}
               routeCandidates={routeCandidates}
               topologyRouteKey={topologyRouteKey}
+              onWiringSaved={onWiringSaved}
             />
           </div>
         </details>
