@@ -479,27 +479,30 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
     [Theory]
     [InlineData(
         "enum_create_group", "manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group",
-        "node:enum_create_group_name_input.value")]
+        new[] { "groupName" }, new[] { "node:enum_create_group_name_input.value" })]
     [InlineData(
         "enum_update_group", "manifest:00000000-0000-0000-0000-0000000ae220:enum_dictionary:update_group",
-        "node:enum_table.value.groupId")]
+        new[] { "groupId", "groupName" },
+        new[] { "node:enum_table.value.groupId", "node:enum_update_group_name_input.value" })]
     [InlineData(
         "enum_delete_group", "manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group",
-        "node:enum_table.value.groupId")]
+        new[] { "groupId" }, new[] { "node:enum_table.value.groupId" })]
     [InlineData(
         "enum_create_item", "manifest:00000000-0000-0000-0000-0000000ae240:enum_dictionary:create_item",
-        "node:enum_create_item_name_input.value")]
+        new[] { "name" }, new[] { "node:enum_create_item_name_input.value" })]
     [InlineData(
         "enum_update_item", "manifest:00000000-0000-0000-0000-0000000ae250:enum_dictionary:update_item",
-        "node:enum_update_item_index_input.value")]
+        new[] { "indexNum", "name" },
+        new[] { "node:enum_update_item_index_input.value", "node:enum_update_item_name_input.value" })]
     [InlineData(
         "enum_delete_item", "manifest:00000000-0000-0000-0000-0000000ae260:enum_dictionary:delete_item",
-        "node:enum_delete_item_index_input.value")]
+        new[] { "indexNum" }, new[] { "node:enum_delete_item_index_input.value" })]
     [InlineData(
         "enum_set_group_items", "manifest:00000000-0000-0000-0000-0000000ae270:enum_dictionary:set_group_items",
-        "node:enum_table.value.groupId")]
+        new[] { "groupId", "enumIndexNums" },
+        new[] { "node:enum_table.value.groupId", "node:enum_set_group_items_input.value" })]
     public async Task DispatchAsync_AdminEnumManagementManifest_EachWriteActionEmbeddedBehindOwnConfirmModal_StructurallyResolves(
-        string prefix, string expectedTargetRef, string expectedFieldSource)
+        string prefix, string expectedTargetRef, string[] expectedFieldKeys, string[] expectedFieldSources)
     {
         var cs = GetConnectionString();
         if (cs is null) return;
@@ -516,15 +519,15 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         Assert.True(entryResponse.Success, string.Join(";", entryResponse.Errors.Select(e => e.Code + ":" + e.Message)));
         var nodes = entryResponse.Emission!.LayoutNodes!;
 
+        Assert.Equal(expectedFieldKeys.Length, expectedFieldSources.Length);
+
         var openButton = Assert.Single(nodes, n => n.NodeId == $"{prefix}_button");
         Assert.NotNull(openButton.DispatchTargetRefByTrigger);
         Assert.Contains(expectedTargetRef, openButton.DispatchTargetRefByTrigger!.Value.GetRawText());
         Assert.NotNull(openButton.DispatchPayloadFromByTrigger);
-        var openPayloadFromText = openButton.DispatchPayloadFromByTrigger!.Value.GetRawText();
-        Assert.Contains(expectedFieldSource, openPayloadFromText);
-        Assert.Contains("\"dryRun\"", openPayloadFromText);
-        Assert.Contains("literal:true", openPayloadFromText);
-        Assert.DoesNotContain("confirmed", openPayloadFromText);
+        var openClick = openButton.DispatchPayloadFromByTrigger!.Value.GetProperty("click");
+        Assert.Equal("literal:true", openClick.GetProperty("dryRun").GetString());
+        Assert.False(openClick.TryGetProperty("confirmed", out _));
         Assert.NotNull(openButton.RuntimeInteractions);
         Assert.Contains("openModal", openButton.RuntimeInteractions!.Value.GetRawText());
 
@@ -537,9 +540,29 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         Assert.NotNull(confirmButton.DispatchTargetRefByTrigger);
         Assert.Contains(expectedTargetRef, confirmButton.DispatchTargetRefByTrigger!.Value.GetRawText());
         Assert.NotNull(confirmButton.DispatchPayloadFromByTrigger);
-        Assert.Contains("literal:true", confirmButton.DispatchPayloadFromByTrigger!.Value.GetRawText());
+        var confirmClick = confirmButton.DispatchPayloadFromByTrigger!.Value.GetProperty("click");
+        Assert.Equal("literal:true", confirmClick.GetProperty("confirmed").GetString());
+        Assert.False(confirmClick.TryGetProperty("dryRun", out _));
         Assert.NotNull(confirmButton.RuntimeInteractions);
         Assert.Contains("closeModal", confirmButton.RuntimeInteractions!.Value.GetRawText());
+
+        // Full business-field key/source-set parity between the preview and confirm payloadFrom --
+        // the SAME key set + node source on both buttons (only dryRun/confirmed differ), and NO
+        // other keys beyond dryRun/confirmed/these -- mirroring
+        // DispatchAsync_EnumDictionaryWriteManifest_ResolvesSinglePurposeLayout_WithDistinctPreviewAndConfirmPayloads's
+        // rigor, now against THIS surface's own ae200-embedded preview/confirm button pair rather
+        // than the dedicated per-action write manifest's own preview_button/confirm_button.
+        for (var i = 0; i < expectedFieldKeys.Length; i++)
+        {
+            Assert.Equal(expectedFieldSources[i], openClick.GetProperty(expectedFieldKeys[i]).GetString());
+            Assert.Equal(expectedFieldSources[i], confirmClick.GetProperty(expectedFieldKeys[i]).GetString());
+        }
+        var expectedOpenKeys = expectedFieldKeys.Append("dryRun").OrderBy(k => k, StringComparer.Ordinal).ToArray();
+        var actualOpenKeys = openClick.EnumerateObject().Select(p => p.Name).OrderBy(k => k, StringComparer.Ordinal).ToArray();
+        Assert.Equal(expectedOpenKeys, actualOpenKeys);
+        var expectedConfirmKeys = expectedFieldKeys.Append("confirmed").OrderBy(k => k, StringComparer.Ordinal).ToArray();
+        var actualConfirmKeys = confirmClick.EnumerateObject().Select(p => p.Name).OrderBy(k => k, StringComparer.Ordinal).ToArray();
+        Assert.Equal(expectedConfirmKeys, actualConfirmKeys);
 
         var cancelButton = Assert.Single(nodes, n => n.NodeId == $"{prefix}_cancel_button");
         Assert.Null(cancelButton.DispatchTargetRefByTrigger);

@@ -442,6 +442,7 @@ react_schema_topology_seed_translator_ssot:
       - action_or_step_without_wiringLane
       - form_without_fields
       - mutation_action_not_owned_by_a_form
+      - section_owned_admin_runtime_action_without_dryrun_openmodal_confirm_pairing
       - field_without_label
       - node_without_label
       - node_without_source_yaml_refs
@@ -1189,6 +1190,32 @@ react_schema_topology_seed_translator_ssot:
           adminRuntimeDispatchOverride candidate (build_admin_runtime_dispatch_override_candidate in
           .agent/scripts/react_schema_topology_seed_translator.py) and merged into that SAME tensor
           node's own dispatchTargetRefByTrigger / dispatchPayloadFromByTrigger maps, keyed by trigger.
+        section_owned_dryrun_preview_pairing: >-
+          preview-gap round (2026-08-04). react_schema_contract.prohibited_features'
+          mutation_action_not_owned_by_a_form rule (VALID_ACTION_OWNER_NODE_KINDS = Form/Workflow/
+          Modal in .agent/scripts/react_schema_topology_seed_translator.py) additionally permits a
+          Section to directly own an Action via SECTION_OWNABLE_ACTION_LANES when that Action's own
+          wiringLane is disclosure_state_wiring OR (this round's addition)
+          admin_runtime_dispatch_override_wiring -- the SAME structural role a
+          disclosure_state_wiring open-trigger button already occupied there -- but ONLY as a
+          non-mutating dryRun preview trigger, never a bare ungated mutation. This is a fail-close
+          structural check (validate_admin_runtime_preview_action_pairing in
+          .agent/scripts/react_schema_topology_seed_translator.py), not lane-name allowlist
+          membership alone: a Section-owned use of this lane MUST pair with a
+          secondaryDisclosureActionType=openModal (never closeModal/toggleModal -- ruleId
+          ADMIN_RUNTIME_PREVIEW_ACTION_SECONDARY_OPEN_MODAL_REQUIRED when missing/wrong type), MUST
+          declare payloadFrom.dryRun="literal:true" (ADMIN_RUNTIME_PREVIEW_ACTION_DRYRUN_REQUIRED)
+          and MUST NOT declare a "confirmed" payloadFrom key
+          (ADMIN_RUNTIME_PREVIEW_ACTION_CONFIRMED_NOT_ALLOWED), and the Modal it opens MUST contain
+          exactly one child Action on this SAME lane (the Confirm button --
+          ADMIN_RUNTIME_PREVIEW_ACTION_CONFIRM_TARGET_AMBIGUOUS when zero or more than one) whose
+          own target_ref (ADMIN_RUNTIME_PREVIEW_ACTION_TARGET_REF_MISMATCH) and business-field
+          payloadFrom set -- every key except dryRun on the preview side / confirmed on the confirm
+          side -- (ADMIN_RUNTIME_PREVIEW_ACTION_PAYLOAD_FIELDS_MISMATCH) are IDENTICAL to the
+          preview Action's own. examples above (enum_group_create_preview /
+          enum_group_create_confirm) are exactly this pairing -- a preview that resolved a different
+          manifest/layer/action/field set than its own Confirm would silently ship a UI that
+          previews one write and executes another.
       disclosure_state_wiring:
         meaning: >-
           UI-local overlay disclosure state (open/close/toggle) for a disclosure/modal target

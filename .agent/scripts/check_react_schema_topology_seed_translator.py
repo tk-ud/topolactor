@@ -32,6 +32,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL = REPO_ROOT / ".agent" / "tools" / "react-schema-topology-seed-translator"
 FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "credential-management-0092.input.json"
 TOPOLOGY_SEED_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "credential-management-0092.topology-seed.input.json"
+ADMIN_ENUM_AE200_TOPOLOGY_SEED_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "admin-enum-ae200.topology-seed.input.json"
 CRUD_SCHEMA_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "physical-search-crud-aggregate.react-schema.json"
 CRUD_TOPOLOGY_SEED_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "physical-search-crud-aggregate.topology-seed.input.json"
 AGENT_TMP_DIR = REPO_ROOT / ".agent" / "tmp"
@@ -1968,6 +1969,220 @@ def main():
         expect(
             "107. validate_disclosure_targets positive control: a supported actionType (openModal) with a targetNodeId resolving to an actual Modal node produces zero errors, proving 104-106 fail for the right reason and not because every input fails",
             valid_target_errors == [],
+        )
+
+        # 108-116: validate_admin_runtime_preview_action_pairing negative-boundary proof
+        # (preview-gap round). This proves the FULL safety shape of a Section-owned
+        # admin_runtime_dispatch_override_wiring Action is checked, not merely that the lane
+        # name is a member of SECTION_OWNABLE_ACTION_LANES -- each case below isolates exactly
+        # one violated invariant against an otherwise-valid preview/confirm pairing built from
+        # hand-crafted nodes (a well-formed CLI input cannot organically produce most of these
+        # defects), so a passing test proves the check actually distinguishes the specific
+        # violation, not that every input is rejected.
+        def build_preview_confirm_pair(
+            preview_payload_from=None,
+            confirm_payload_from=None,
+            secondary=("openModal", "confirm_modal"),
+            confirm_target_ref="manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group",
+            confirm_count=1,
+        ):
+            preview_target_ref = "manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group"
+            if preview_payload_from is None:
+                preview_payload_from = {"groupName": "node:name_input.value", "dryRun": "literal:true"}
+            if confirm_payload_from is None:
+                confirm_payload_from = {"groupName": "node:name_input.value", "confirmed": "literal:true"}
+            confirm_actions = [
+                {
+                    "kind": "Action",
+                    "key": f"confirm_btn_{i}",
+                    "eventBinding": {
+                        "wiringLane": "admin_runtime_dispatch_override_wiring",
+                        "targetRef": confirm_target_ref,
+                        "payloadFrom": confirm_payload_from,
+                    },
+                }
+                for i in range(confirm_count)
+            ]
+            modal_node = {"kind": "Modal", "key": "confirm_modal", "children": confirm_actions}
+            preview_action = {
+                "kind": "Action",
+                "key": "open_btn",
+                "_path": "$.test.open_btn",
+                "eventBinding": {
+                    "wiringLane": "admin_runtime_dispatch_override_wiring",
+                    "targetRef": preview_target_ref,
+                    "payloadFrom": preview_payload_from,
+                },
+            }
+            if secondary is not None:
+                action_type, target_node_id = secondary
+                preview_action["secondaryDisclosureAction"] = {
+                    "actionType": action_type, "targetNodeId": target_node_id,
+                }
+            nodes_by_key = {"confirm_modal": modal_node}
+            for c in confirm_actions:
+                nodes_by_key[c["key"]] = c
+            section_parent = {"kind": "Section", "key": "section1"}
+            return preview_action, nodes_by_key, section_parent
+
+        def run_pairing_check(preview_action, nodes_by_key, section_parent):
+            errs = []
+            translator_impl.validate_admin_runtime_preview_action_pairing(
+                preview_action, nodes_by_key, errs, parent=section_parent,
+            )
+            return [e["ruleId"] for e in errs]
+
+        missing_dryrun_action, missing_dryrun_nodes, missing_dryrun_parent = build_preview_confirm_pair(
+            preview_payload_from={"groupName": "node:name_input.value"},
+        )
+        expect(
+            "108. validate_admin_runtime_preview_action_pairing rejects a Section-owned preview Action whose payloadFrom omits dryRun via ADMIN_RUNTIME_PREVIEW_ACTION_DRYRUN_REQUIRED",
+            "ADMIN_RUNTIME_PREVIEW_ACTION_DRYRUN_REQUIRED"
+            in run_pairing_check(missing_dryrun_action, missing_dryrun_nodes, missing_dryrun_parent),
+        )
+
+        confirmed_present_action, confirmed_present_nodes, confirmed_present_parent = build_preview_confirm_pair(
+            preview_payload_from={
+                "groupName": "node:name_input.value", "dryRun": "literal:true", "confirmed": "literal:true",
+            },
+        )
+        expect(
+            "109. validate_admin_runtime_preview_action_pairing rejects a Section-owned preview Action whose payloadFrom ALSO declares confirmed via ADMIN_RUNTIME_PREVIEW_ACTION_CONFIRMED_NOT_ALLOWED",
+            "ADMIN_RUNTIME_PREVIEW_ACTION_CONFIRMED_NOT_ALLOWED"
+            in run_pairing_check(confirmed_present_action, confirmed_present_nodes, confirmed_present_parent),
+        )
+
+        missing_secondary_action, missing_secondary_nodes, missing_secondary_parent = build_preview_confirm_pair(
+            secondary=None,
+        )
+        expect(
+            "110. validate_admin_runtime_preview_action_pairing rejects a Section-owned admin_runtime Action with NO secondaryDisclosureAction at all via ADMIN_RUNTIME_PREVIEW_ACTION_SECONDARY_OPEN_MODAL_REQUIRED (never a silently-accepted bare mutation)",
+            "ADMIN_RUNTIME_PREVIEW_ACTION_SECONDARY_OPEN_MODAL_REQUIRED"
+            in run_pairing_check(missing_secondary_action, missing_secondary_nodes, missing_secondary_parent),
+        )
+
+        wrong_secondary_action, wrong_secondary_nodes, wrong_secondary_parent = build_preview_confirm_pair(
+            secondary=("closeModal", "confirm_modal"),
+        )
+        expect(
+            "111. validate_admin_runtime_preview_action_pairing rejects a Section-owned admin_runtime Action whose secondaryDisclosureActionType is closeModal (not openModal) via ADMIN_RUNTIME_PREVIEW_ACTION_SECONDARY_OPEN_MODAL_REQUIRED",
+            "ADMIN_RUNTIME_PREVIEW_ACTION_SECONDARY_OPEN_MODAL_REQUIRED"
+            in run_pairing_check(wrong_secondary_action, wrong_secondary_nodes, wrong_secondary_parent),
+        )
+
+        # secondaryDisclosureAction target existence/kind is validate_disclosure_targets' own
+        # authority (104-107 above), never duplicated in validate_admin_runtime_preview_action_pairing
+        # -- proven here specifically THROUGH the secondaryDisclosureAction path (104-107 only
+        # exercised the PRIMARY disclosureActionType path), since _disclosure_target_checks_for_node
+        # yields from both independently.
+        missing_target_secondary_errors = []
+        translator_impl.validate_disclosure_targets(
+            {
+                "_path": "$.test.open_btn_missing_target", "key": "open_btn_missing_target",
+                "secondaryDisclosureAction": {"actionType": "openModal", "targetNodeId": None},
+            },
+            {}, missing_target_secondary_errors,
+        )
+        expect(
+            "112. validate_disclosure_targets rejects a secondaryDisclosureAction (the preview button's own Modal-opening secondary) with a missing targetNodeId via DISCLOSURE_TARGET_NODE_REQUIRED, same authority as the primary disclosureActionType path",
+            "DISCLOSURE_TARGET_NODE_REQUIRED" in [e["ruleId"] for e in missing_target_secondary_errors],
+        )
+
+        wrong_kind_secondary_errors = []
+        translator_impl.validate_disclosure_targets(
+            {
+                "_path": "$.test.open_btn_wrong_kind_target", "key": "open_btn_wrong_kind_target",
+                "secondaryDisclosureAction": {"actionType": "openModal", "targetNodeId": "not_a_modal"},
+            },
+            {"not_a_modal": "Section"}, wrong_kind_secondary_errors,
+        )
+        expect(
+            "113. validate_disclosure_targets rejects a secondaryDisclosureAction targeting a real node of the wrong kind (Section, not Modal) via DISCLOSURE_TARGET_KIND_MISMATCH, same authority as the primary disclosureActionType path",
+            "DISCLOSURE_TARGET_KIND_MISMATCH" in [e["ruleId"] for e in wrong_kind_secondary_errors],
+        )
+
+        target_ref_mismatch_action, target_ref_mismatch_nodes, target_ref_mismatch_parent = build_preview_confirm_pair(
+            confirm_target_ref="manifest:00000000-0000-0000-0000-0000000ae999:enum_dictionary:some_other_action",
+        )
+        expect(
+            "114. validate_admin_runtime_preview_action_pairing rejects a preview Action whose target_ref differs from its Modal's own Confirm button's target_ref via ADMIN_RUNTIME_PREVIEW_ACTION_TARGET_REF_MISMATCH (preview and confirm resolving different manifests/actions is a real authoring defect, not cosmetic)",
+            "ADMIN_RUNTIME_PREVIEW_ACTION_TARGET_REF_MISMATCH"
+            in run_pairing_check(target_ref_mismatch_action, target_ref_mismatch_nodes, target_ref_mismatch_parent),
+        )
+
+        payload_mismatch_action, payload_mismatch_nodes, payload_mismatch_parent = build_preview_confirm_pair(
+            confirm_payload_from={"groupName": "node:a_DIFFERENT_input.value", "confirmed": "literal:true"},
+        )
+        expect(
+            "115. validate_admin_runtime_preview_action_pairing rejects a preview Action whose business-field payloadFrom differs from its Modal's own Confirm button's business-field payloadFrom via ADMIN_RUNTIME_PREVIEW_ACTION_PAYLOAD_FIELDS_MISMATCH",
+            "ADMIN_RUNTIME_PREVIEW_ACTION_PAYLOAD_FIELDS_MISMATCH"
+            in run_pairing_check(payload_mismatch_action, payload_mismatch_nodes, payload_mismatch_parent),
+        )
+
+        ambiguous_confirm_action, ambiguous_confirm_nodes, ambiguous_confirm_parent = build_preview_confirm_pair(
+            confirm_count=2,
+        )
+        expect(
+            "116. validate_admin_runtime_preview_action_pairing rejects a preview Action whose target Modal contains TWO admin_runtime_dispatch_override_wiring children via ADMIN_RUNTIME_PREVIEW_ACTION_CONFIRM_TARGET_AMBIGUOUS (never silently pairing against the first match)",
+            "ADMIN_RUNTIME_PREVIEW_ACTION_CONFIRM_TARGET_AMBIGUOUS"
+            in run_pairing_check(ambiguous_confirm_action, ambiguous_confirm_nodes, ambiguous_confirm_parent),
+        )
+
+        no_confirm_action, no_confirm_nodes, no_confirm_parent = build_preview_confirm_pair(confirm_count=0)
+        expect(
+            "117. validate_admin_runtime_preview_action_pairing rejects a preview Action whose target Modal contains ZERO admin_runtime_dispatch_override_wiring children via ADMIN_RUNTIME_PREVIEW_ACTION_CONFIRM_TARGET_AMBIGUOUS",
+            "ADMIN_RUNTIME_PREVIEW_ACTION_CONFIRM_TARGET_AMBIGUOUS"
+            in run_pairing_check(no_confirm_action, no_confirm_nodes, no_confirm_parent),
+        )
+
+        valid_pair_action, valid_pair_nodes, valid_pair_parent = build_preview_confirm_pair()
+        expect(
+            "118. validate_admin_runtime_preview_action_pairing positive control: a fully-matching dryRun preview + openModal secondary + single same-target_ref/same-fields Confirm produces zero errors, proving 108-117 fail for the right reason and not because every input fails",
+            run_pairing_check(valid_pair_action, valid_pair_nodes, valid_pair_parent) == [],
+        )
+
+        not_section_owned_action, not_section_owned_nodes, _ = build_preview_confirm_pair(
+            preview_payload_from={"groupName": "node:name_input.value"},
+        )
+        expect(
+            "119. validate_admin_runtime_preview_action_pairing does not apply this rule at all to a Modal-owned (not Section-owned) admin_runtime_dispatch_override_wiring Action -- the real Confirm button itself, which legitimately has no dryRun/openModal pairing of its own",
+            run_pairing_check(not_section_owned_action, not_section_owned_nodes, {"kind": "Modal", "key": "some_modal"}) == [],
+        )
+
+        # 120-123: canonical-generation regression guard for the REAL admin-enum-ae200 fixture
+        # (preview-gap round) -- proves generate-topology-seed alone (no manual extraction/merge
+        # from a previously-hand-patched db/seed_empty.sql) reproduces enum_table's own
+        # propsJson/propBindings and every *_confirm_modal's own propsJson, and that the new
+        # Section-owned preview Action pairing check (108-119 above) passes cleanly against the
+        # real fixture, not just hand-built unit nodes.
+        proc_ae200, doc_ae200 = run_generate_topology_seed(ADMIN_ENUM_AE200_TOPOLOGY_SEED_FIXTURE)
+        expect(
+            "120. real admin-enum-ae200 fixture's generate-topology-seed run reports gateStatus == pass",
+            doc_ae200 is not None and doc_ae200.get("gateStatus") == "pass",
+        )
+        ae200_tensor_nodes = (
+            dig(doc_ae200, "adoptionCandidates", "tensorAdoptionCandidates")[0]["layoutPatchJson"]["nodes"]
+            if doc_ae200 and dig(doc_ae200, "adoptionCandidates", "tensorAdoptionCandidates")
+            else []
+        )
+        ae200_nodes_by_id = {n["nodeId"]: n for n in ae200_tensor_nodes}
+        expect(
+            "121. real admin-enum-ae200 fixture's generate-topology-seed run alone (no post-generation manual patch) produces enum_table's own propsJson (columns) and propBindings (rows: emission.data) -- the content round 30 could only reproduce by hand-extracting it from the previous seed",
+            "enum_table" in ae200_nodes_by_id
+            and ae200_nodes_by_id["enum_table"].get("propsJson") is not None
+            and "groupName" in ae200_nodes_by_id["enum_table"]["propsJson"]
+            and ae200_nodes_by_id["enum_table"].get("propBindings") == {"rows": {"source": "emission.data"}},
+        )
+        ae200_modal_ids = [nid for nid in ae200_nodes_by_id if nid.endswith("_confirm_modal")]
+        expect(
+            "122. real admin-enum-ae200 fixture's generate-topology-seed run alone produces propsJson (open/title/body) for all 7 *_confirm_modal nodes -- the content round 30 could only reproduce by hand-extracting it from the previous seed",
+            len(ae200_modal_ids) == 7
+            and all(ae200_nodes_by_id[nid].get("propsJson") is not None for nid in ae200_modal_ids)
+            and all('"open": false' in ae200_nodes_by_id[nid]["propsJson"] for nid in ae200_modal_ids),
+        )
+        expect(
+            "123. real admin-enum-ae200 fixture's generate-topology-seed run reports zero validationErrors, proving the new Section-owned preview-pairing check (108-119) passes cleanly against production content, not only hand-built unit-test nodes",
+            doc_ae200 is not None and doc_ae200.get("validationErrors") == [],
         )
 
     print()

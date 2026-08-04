@@ -1325,8 +1325,20 @@ function enumDeleteGroupConfirmModalLayoutNodes(rows: Record<string, unknown>[])
       componentKind: "action/button",
       componentKey: "button.primitive",
       orderIndex: 1,
-      // No wiringKind/targetRef/dispatch fields at all — the visible trigger carries no write
-      // authority of its own; it can only open the modal (round 25).
+      // preview-gap round: the visible trigger now dispatches a non-mutating dryRun preview to
+      // the SAME ae230 target the Confirm button writes to (groupId re-resolved fresh from
+      // enum_table's own tracked selected-row value) -- the modal only opens once that preview
+      // settles successfully (deferred openModal below), matching real db/seed_empty.sql shape.
+      wiringKind: "admin_runtime",
+      targetSurface: "manifest",
+      targetRef: `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:list_groups`,
+      dispatchTargetRefByTrigger: { click: AE230_DELETE_GROUP_TARGET_REF },
+      dispatchPayloadFromByTrigger: {
+        click: {
+          groupId: "node:enum_table.value.groupId",
+          dryRun: "literal:true",
+        },
+      },
       runtimeInteractions: [
         {
           trigger: "click",
@@ -1497,8 +1509,21 @@ Deno.test(
         "Cancel must not exist in the DOM while the modal is closed",
       );
 
+      // preview-gap round: delete_group's preview ALSO needs groupId, so a row must be
+      // selected before Delete can resolve its payloadFrom and dispatch at all. Selecting a
+      // row itself re-issues enum_table's own admin_runtime list_groups read (a SEPARATE
+      // dispatch from the preview below) — wait for it to land first.
+      const rowsForOpen = () =>
+        Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
+      await waitFor(() => rowsForOpen().length === 1);
+      simulateRowClick(rowsForOpen()[0]);
+      await waitFor(() => scenario.capturedDispatchBodies.length >= 2);
+      const dispatchCountAfterRowSelect = scenario.capturedDispatchBodies.length;
+
       simulateClick(deleteButtonEl!);
-      await flushUpdates();
+      // preview-gap round: Delete now dispatches a non-mutating dryRun preview before the modal
+      // opens (this scenario's fallback mock response succeeds it) — wait for the async open.
+      await waitFor(() => queryDialog(container) !== null);
 
       assertExists(queryDialog(container), "Delete must open the modal");
       assertExists(
@@ -1511,8 +1536,15 @@ Deno.test(
       );
       assertEquals(
         scenario.capturedDispatchBodies.length,
-        1,
-        "opening the modal must send no write dispatch — only the initial entry dispatch so far",
+        dispatchCountAfterRowSelect + 1,
+        "opening the modal must send exactly one non-mutating dryRun preview dispatch (never a write) beyond the row-select's own dispatch",
+      );
+      assertEquals(
+        (scenario.capturedDispatchBodies[dispatchCountAfterRowSelect]
+          .payload as Record<string, unknown> | undefined)
+          ?.dryRun,
+        "true",
+        "the dispatch that opened the modal must be a dryRun preview, not a write",
       );
     } finally {
       globalThis.fetch = originalFetch;
@@ -1571,12 +1603,22 @@ Deno.test(
         return deleteButtonEl !== null;
       });
 
-      // --- Cancel: open, cancel, no write, closes ---
-      simulateClick(deleteButtonEl!);
+      // preview-gap round: delete_group's preview ALSO needs groupId, so a row must be
+      // selected before Delete can resolve its payloadFrom and dispatch at all.
+      const rowsForFirstOpen = () =>
+        Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
+      await waitFor(() => rowsForFirstOpen().length === 2);
+      simulateRowClick(rowsForFirstOpen()[0]);
       await flushUpdates();
+
+      // --- Cancel: open (preview-gated), cancel, no write, closes ---
+      simulateClick(deleteButtonEl!);
+      // preview-gap round: Delete now dispatches a dryRun preview before the modal opens.
+      await waitFor(() => queryDialog(container) !== null);
       assertExists(queryDialog(container), "Delete must open the modal");
       const cancelButtonEl = queryCancelButton(container);
       assertExists(cancelButtonEl, "Cancel must be present while open");
+      const dispatchCountAfterFirstOpen = scenario.capturedDispatchBodies.length;
       simulateClick(cancelButtonEl!);
       await flushUpdates();
       assert(queryDialog(container) === null, "Cancel must close the modal");
@@ -1586,14 +1628,15 @@ Deno.test(
       );
       assertEquals(
         scenario.capturedDispatchBodies.length,
-        1,
-        "Cancel must never send a write dispatch — only the initial entry dispatch so far",
+        dispatchCountAfterFirstOpen,
+        "Cancel must never send a write dispatch beyond what opening the modal already dispatched (the preview)",
       );
 
-      // --- Reopen, select the SECOND row, Confirm: fresh groupId, gated close ---
+      // --- Reopen (a fresh preview), select the SECOND row, Confirm: fresh groupId, gated close ---
       simulateClick(deleteButtonEl!);
-      await flushUpdates();
+      await waitFor(() => queryDialog(container) !== null);
       assertExists(queryDialog(container), "Delete must be able to reopen the modal");
+      const dispatchCountAfterReopen = scenario.capturedDispatchBodies.length;
 
       const rows = () =>
         Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
@@ -1602,16 +1645,17 @@ Deno.test(
       await flushUpdates();
 
       // enum_table's OWN admin_runtime binding re-issues the layout's uniform list_groups read on
-      // select (same as the round 20 row-select test above) — capturedDispatchBodies[1] is THAT
-      // reissue, not the Confirm dispatch.
-      await waitFor(() => scenario.capturedDispatchBodies.length >= 2);
+      // select (same as the round 20 row-select test above) — this reissue is a SEPARATE dispatch
+      // from both the preview above and the Confirm dispatch below.
+      await waitFor(() => scenario.capturedDispatchBodies.length >= dispatchCountAfterReopen + 1);
 
       const confirmButtonEl = queryConfirmButton(container);
       assertExists(confirmButtonEl, "Confirm must still be present after selecting a row");
+      const dispatchCountBeforeConfirm = scenario.capturedDispatchBodies.length;
       simulateClick(confirmButtonEl!);
 
-      await waitFor(() => scenario.capturedDispatchBodies.length >= 3);
-      const confirmDispatchBody = scenario.capturedDispatchBodies[2];
+      await waitFor(() => scenario.capturedDispatchBodies.length >= dispatchCountBeforeConfirm + 1);
+      const confirmDispatchBody = scenario.capturedDispatchBodies[dispatchCountBeforeConfirm];
       assertEquals(confirmDispatchBody.layer, "enum_dictionary");
       assertEquals(confirmDispatchBody.action, "delete_group");
       const confirmPayload = confirmDispatchBody.payload as Record<string, unknown>;
@@ -1640,7 +1684,7 @@ Deno.test(
 );
 
 Deno.test(
-  "ProjectionShell (real mount): delete_group's confirm modal — Confirm with no row selected fails closed (no dispatch, modal stays open); a backend failure result never closes the modal either",
+  "ProjectionShell (real mount): delete_group's confirm modal — Delete with no row selected fails closed BEFORE the preview even dispatches (payloadFrom resolution, no network call, modal never opens); once open, a backend failure on Confirm never closes the modal either",
   async () => {
     ensureRuntimeComponentRegistryInitialized();
     schedulerTestOnly.resetCommandQueue();
@@ -1652,10 +1696,10 @@ Deno.test(
       FakeEventSource;
     const originalFetch = globalThis.fetch;
 
-    // Second real dispatch (the confirm click after a row IS selected) settles as a genuine
-    // backend failure — never a network/queue rejection — proving a failed write is not
-    // mistaken for success.
-    const scenario = buildMockScenario((callIndex) => {
+    // preview-gap round: the preview dispatch (dryRun) always succeeds in this scenario so the
+    // modal can open; the CONFIRMED write dispatch settles as a genuine backend failure — never
+    // a network/queue rejection — proving a failed write is not mistaken for success.
+    const scenario = buildMockScenario((callIndex, body) => {
       if (callIndex === 1) {
         return {
           success: true,
@@ -1668,6 +1712,10 @@ Deno.test(
             ]),
           },
         };
+      }
+      const payload = (body.payload ?? {}) as Record<string, unknown>;
+      if (payload.dryRun === "true") {
+        return { success: true, emission: { manifestId: "00000000-0000-0000-0000-0000000ae230", data: { ok: true } } };
       }
       return {
         success: false,
@@ -1688,35 +1736,36 @@ Deno.test(
         return deleteButtonEl !== null;
       });
 
-      // --- No selection: Confirm click fails closed ---
+      // --- No selection: Delete click itself fails closed -- the preview ALSO needs groupId,
+      // so payloadFrom resolution fails before any network call, and the modal never opens. ---
       simulateClick(deleteButtonEl!);
-      await flushUpdates();
-      const confirmButtonNoSelection = queryConfirmButton(container);
-      assertExists(confirmButtonNoSelection, "Confirm must be present after opening");
-      simulateClick(confirmButtonNoSelection!);
       for (let i = 0; i < 10; i++) await flushUpdates();
 
       assertEquals(
         scenario.capturedDispatchBodies.length,
         1,
-        "a Confirm click with no selection must fail close (PAYLOAD_FROM_NODE_NOT_FOUND) — no second dispatch",
+        "Delete with no row selected must fail close (PAYLOAD_FROM_NODE_NOT_FOUND) on the preview itself — no dispatch at all",
       );
-      assertExists(
-        queryDialog(container),
-        "the modal must remain open when the payloadFrom resolution failed — never silently closed",
+      assert(
+        queryDialog(container) === null,
+        "the modal must never open when the preview's own payloadFrom resolution failed",
       );
 
-      // --- Select a row, Confirm, backend responds success:false ---
+      // --- Select a row, Delete (preview succeeds, modal opens), Confirm, backend responds success:false ---
       const rows = () =>
         Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
       await waitFor(() => rows().length === 1);
       simulateRowClick(rows()[0]);
       await flushUpdates();
 
+      simulateClick(deleteButtonEl!);
+      await waitFor(() => queryDialog(container) !== null);
+
       const confirmButtonEl = queryConfirmButton(container);
-      assertExists(confirmButtonEl, "Confirm must still be present");
+      assertExists(confirmButtonEl, "Confirm must be present once the preview opened the modal");
+      const dispatchCountBeforeConfirm = scenario.capturedDispatchBodies.length;
       simulateClick(confirmButtonEl!);
-      await waitFor(() => scenario.capturedDispatchBodies.length >= 2);
+      await waitFor(() => scenario.capturedDispatchBodies.length >= dispatchCountBeforeConfirm + 1);
 
       // Give the async .then() chain every chance to run before asserting nothing closed.
       for (let i = 0; i < 10; i++) await flushUpdates();
@@ -1825,13 +1874,24 @@ Deno.test(
         return deleteButtonEl !== null;
       });
 
-      simulateClick(deleteButtonEl!);
-      await flushUpdates();
+      // preview-gap round: Delete's own preview also needs the selected row's groupId, so select
+      // FIRST, then click Delete — its preview dispatch (also layer=enum_dictionary/
+      // action=delete_group, so it ALSO receives the child-manifest canary response below) must
+      // settle as a no-op (context.dryRun) before the modal opens, never adopted, never
+      // redispatching ae200's own identity on its own.
       const rows = () =>
         Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
       await waitFor(() => rows().length === 1);
       simulateRowClick(rows()[0]);
       await flushUpdates();
+
+      simulateClick(deleteButtonEl!);
+      await waitFor(() => queryDialog(container) !== null);
+      assertEquals(
+        redispatchCount,
+        0,
+        "the preview's own settled success (even with a cross-manifest canary emission) must never trigger ae200's canonical redispatch",
+      );
 
       const confirmButtonEl = queryConfirmButton(container);
       assertExists(confirmButtonEl, "Confirm must be present");
@@ -1938,13 +1998,18 @@ Deno.test(
         return deleteButtonEl !== null;
       });
 
-      simulateClick(deleteButtonEl!);
-      await flushUpdates();
+      // preview-gap round: select the row FIRST -- Delete's own preview also needs groupId. Its
+      // preview dispatch also matches layer=enum_dictionary/action=delete_group above (settling
+      // as a harmless no-op canary success per context.dryRun), so it does not disturb this
+      // test's own screen_list/Search-keyed redispatch-failure scenario.
       const rows = () =>
         Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
       await waitFor(() => rows().length === 1);
       simulateRowClick(rows()[0]);
       await flushUpdates();
+
+      simulateClick(deleteButtonEl!);
+      await waitFor(() => queryDialog(container) !== null);
 
       const confirmButtonEl = queryConfirmButton(container);
       assertExists(confirmButtonEl, "Confirm must be present");
@@ -1968,14 +2033,18 @@ Deno.test(
         "a failed redispatch must retain the old DOM rather than blank it — the group row must still be present",
       );
 
-      // The write itself is never resent because its OWN reread failed.
-      const deleteGroupDispatches = scenario.capturedDispatchBodies.filter(
-        (b) => b.layer === "enum_dictionary" && b.action === "delete_group",
+      // The CONFIRMED write itself is never resent because its OWN reread failed -- exactly one
+      // confirmed:true dispatch total (the preview's own dryRun:true dispatch to the same
+      // layer/action is a separate, expected call and is excluded here).
+      const confirmedDeleteGroupDispatches = scenario.capturedDispatchBodies.filter(
+        (b) =>
+          b.layer === "enum_dictionary" && b.action === "delete_group" &&
+          (b.payload as Record<string, unknown> | undefined)?.confirmed === "true",
       );
       assertEquals(
-        deleteGroupDispatches.length,
+        confirmedDeleteGroupDispatches.length,
         1,
-        "a failed canonical reread must never cause the settled write to be resent",
+        "a failed canonical reread must never cause the settled CONFIRMED write to be resent",
       );
 
       // The modal still closes — closing is driven by the WRITE's own settled result
@@ -2083,13 +2152,14 @@ Deno.test(
         );
         return deleteButtonEl !== null;
       });
-      simulateClick(deleteButtonEl!);
-      await flushUpdates();
+      // preview-gap round: select the row FIRST -- Delete's own preview also needs groupId.
       const rows = () =>
         Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
       await waitFor(() => rows().length === 1);
       simulateRowClick(rows()[0]);
       await flushUpdates();
+      simulateClick(deleteButtonEl!);
+      await waitFor(() => queryDialog(container) !== null);
       const confirmButtonEl = queryConfirmButton(container);
       assertExists(confirmButtonEl, "Confirm must be present");
       simulateClick(confirmButtonEl!);
@@ -2132,6 +2202,11 @@ interface ConfirmModalScenarioConfig {
   readonly targetRef: string;
   /** Typed input fields the user fills before opening/confirming, keyed by nodeId -> value typed. */
   readonly typedFields: Record<string, string>;
+  /** A->B fresh-value proof: NEW values typed into the SAME nodes (a strict superset of
+   * typedFields' keys) AFTER a preview has already succeeded and the modal is open, but BEFORE
+   * Confirm is clicked -- proving Confirm re-resolves fresh at click time rather than reusing
+   * whatever the preview saw. Empty for scenarios with no typed fields (e.g. delete_group). */
+  readonly freshConfirmTypedFields: Record<string, string>;
   /** Whether the operation reads the selected enum_table row's groupId (update_group/set_group_items). */
   readonly needsSelectedGroupRow: boolean;
   /** Keys expected in the Confirm dispatch payload besides "confirmed". */
@@ -2147,6 +2222,7 @@ const CONFIRM_MODAL_SCENARIOS: readonly ConfirmModalScenarioConfig[] = [
     targetRef:
       "manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group",
     typedFields: { enum_create_group_name_input: "Widgets" },
+    freshConfirmTypedFields: { enum_create_group_name_input: "Widgets-B" },
     needsSelectedGroupRow: false,
     expectedPayloadKeys: ["groupName"],
   },
@@ -2158,8 +2234,21 @@ const CONFIRM_MODAL_SCENARIOS: readonly ConfirmModalScenarioConfig[] = [
     targetRef:
       "manifest:00000000-0000-0000-0000-0000000ae220:enum_dictionary:update_group",
     typedFields: { enum_update_group_name_input: "Widgets Renamed" },
+    freshConfirmTypedFields: { enum_update_group_name_input: "Widgets Renamed-B" },
     needsSelectedGroupRow: true,
     expectedPayloadKeys: ["groupId", "groupName"],
+  },
+  {
+    label: "delete_group",
+    prefix: "enum_delete_group",
+    title: "Delete group",
+    body:
+      "This will permanently delete the selected enum group. This cannot be undone.",
+    targetRef: AE230_DELETE_GROUP_TARGET_REF,
+    typedFields: {},
+    freshConfirmTypedFields: {},
+    needsSelectedGroupRow: true,
+    expectedPayloadKeys: ["groupId"],
   },
   {
     label: "create_item",
@@ -2169,6 +2258,7 @@ const CONFIRM_MODAL_SCENARIOS: readonly ConfirmModalScenarioConfig[] = [
     targetRef:
       "manifest:00000000-0000-0000-0000-0000000ae240:enum_dictionary:create_item",
     typedFields: { enum_create_item_name_input: "small" },
+    freshConfirmTypedFields: { enum_create_item_name_input: "small-B" },
     needsSelectedGroupRow: false,
     expectedPayloadKeys: ["name"],
   },
@@ -2183,6 +2273,10 @@ const CONFIRM_MODAL_SCENARIOS: readonly ConfirmModalScenarioConfig[] = [
       enum_update_item_index_input: "3",
       enum_update_item_name_input: "medium",
     },
+    freshConfirmTypedFields: {
+      enum_update_item_index_input: "4",
+      enum_update_item_name_input: "medium-B",
+    },
     needsSelectedGroupRow: false,
     expectedPayloadKeys: ["indexNum", "name"],
   },
@@ -2195,6 +2289,7 @@ const CONFIRM_MODAL_SCENARIOS: readonly ConfirmModalScenarioConfig[] = [
     targetRef:
       "manifest:00000000-0000-0000-0000-0000000ae260:enum_dictionary:delete_item",
     typedFields: { enum_delete_item_index_input: "3" },
+    freshConfirmTypedFields: { enum_delete_item_index_input: "4" },
     needsSelectedGroupRow: false,
     expectedPayloadKeys: ["indexNum"],
   },
@@ -2206,6 +2301,7 @@ const CONFIRM_MODAL_SCENARIOS: readonly ConfirmModalScenarioConfig[] = [
     targetRef:
       "manifest:00000000-0000-0000-0000-0000000ae270:enum_dictionary:set_group_items",
     typedFields: { enum_set_group_items_input: "1,2,3" },
+    freshConfirmTypedFields: { enum_set_group_items_input: "4,5,6" },
     needsSelectedGroupRow: true,
     expectedPayloadKeys: ["groupId", "enumIndexNums"],
   },
@@ -2440,6 +2536,7 @@ for (const config of CONFIRM_MODAL_SCENARIOS) {
               projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
               layoutNodes: buildConfirmModalLayoutNodes(config, [
                 { groupId: "row-uuid-1", groupName: "Alpha" },
+                { groupId: "row-uuid-2", groupName: "Beta" },
               ]),
             },
           };
@@ -2579,6 +2676,34 @@ for (const config of CONFIRM_MODAL_SCENARIOS) {
             `no canonical reread triggered by preview success`,
         );
 
+        // Retry-retention proof: this SUCCEEDED retry's own dispatch payload (not just the
+        // earlier failed attempt's) must directly carry the SAME typed values/selection that
+        // were retained across the failure -- proving retention survives an actual retry, not
+        // merely that resolution succeeds once.
+        const retryPreviewPayload = payloadOf(
+          scenario.capturedDispatchBodies[scenario.capturedDispatchBodies.length - 1],
+        );
+        for (const [nodeId, value] of Object.entries(config.typedFields)) {
+          const key = Object.entries(fieldSources).find(
+            ([, source]) => source === `node:${nodeId}.value`,
+          )?.[0];
+          assertExists(key, `${config.label}'s ${nodeId} must map to a preview payload field`);
+          assertEquals(
+            retryPreviewPayload[key!],
+            value,
+            `${config.label}'s ${nodeId} typed value must still be RETAINED and carried directly ` +
+              `by the retried preview's own dispatch payload (not merely the failed attempt's)`,
+          );
+        }
+        if (config.needsSelectedGroupRow) {
+          assertEquals(
+            retryPreviewPayload.groupId,
+            "row-uuid-1",
+            `${config.label}'s selected row must still be RETAINED and carried directly by the ` +
+              `retried preview's own dispatch payload`,
+          );
+        }
+
         const confirmButtonEl = queryConfirmButtonFor(container, config.prefix);
         const cancelButtonEl = queryCancelButtonFor(container, config.prefix);
         assertExists(confirmButtonEl, `${config.label}'s Confirm must be nested inside the open modal`);
@@ -2607,6 +2732,29 @@ for (const config of CONFIRM_MODAL_SCENARIOS) {
           `${config.label}'s modal must reopen on a fresh successful preview`,
         );
 
+        // A -> B fresh-value proof: the preview above just resolved against value/selection A.
+        // NOW change the typed fields to B (and/or reselect a DIFFERENT row) while the modal is
+        // already open, BEFORE clicking Confirm -- proving Confirm re-resolves fresh at click
+        // time from the LATEST node values, rather than replaying whatever the preview captured.
+        for (const [nodeId, valueB] of Object.entries(config.freshConfirmTypedFields)) {
+          const inputEl = container.querySelector(
+            `[data-node-id="${nodeId}"] input`,
+          ) as HTMLInputElement | null;
+          assertExists(inputEl, `${config.label}'s ${nodeId} input must still render while reopened`);
+          simulateInput(inputEl!, valueB);
+        }
+        if (config.needsSelectedGroupRow) {
+          const rowsForFreshSelect = Array.from(
+            container.querySelectorAll("tbody tr"),
+          ) as HTMLTableRowElement[];
+          assertExists(
+            rowsForFreshSelect[1],
+            `${config.label} needs a SECOND selectable row for the A->B fresh-selection proof`,
+          );
+          simulateRowClick(rowsForFreshSelect[1]);
+          await flushUpdates();
+        }
+
         const confirmAgainEl = queryConfirmButtonFor(container, config.prefix);
         assertExists(confirmAgainEl, `${config.label}'s Confirm must still be present after reopening`);
         simulateClick(confirmAgainEl!);
@@ -2633,6 +2781,28 @@ for (const config of CONFIRM_MODAL_SCENARIOS) {
           assertExists(
             confirmPayload[key],
             `${config.label}'s Confirm dispatch payload must carry '${key}'`,
+          );
+        }
+        // A -> B fresh-value proof (continued): the Confirm payload must carry the NEW (B)
+        // values typed after the preview settled, never the stale (A) values the preview saw.
+        for (const [nodeId, valueB] of Object.entries(config.freshConfirmTypedFields)) {
+          const key = Object.entries(fieldSources).find(
+            ([, source]) => source === `node:${nodeId}.value`,
+          )?.[0];
+          assertExists(key, `${config.label}'s ${nodeId} must map to a confirm payload field`);
+          assertEquals(
+            confirmPayload[key!],
+            valueB,
+            `${config.label}'s Confirm payload must carry the FRESH (B) value for ${nodeId}, ` +
+              `re-resolved at click time -- not the (A) value the earlier preview saw`,
+          );
+        }
+        if (config.needsSelectedGroupRow) {
+          assertEquals(
+            confirmPayload.groupId,
+            "row-uuid-2",
+            `${config.label}'s Confirm payload must carry the FRESHLY re-selected (B) row's ` +
+              `groupId, re-resolved at click time -- not the (A) row the earlier preview saw`,
           );
         }
 
@@ -2712,13 +2882,18 @@ Deno.test(
         );
         return deleteButtonEl !== null;
       });
-      simulateClick(deleteButtonEl!);
-      await flushUpdates();
+      // preview-gap round: select the row FIRST -- Delete's own preview also needs groupId. Its
+      // preview dispatch ALSO matches layer=enum_dictionary/action=delete_group above (so it
+      // ALSO receives the same wrong-manifest response) -- opening still proceeds because the
+      // deferred openModal mutation gates purely on result.success (true here), independent of
+      // handleRuntimeDispatchResult's own identity classification.
       const rows = () =>
         Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
       await waitFor(() => rows().length === 1);
       simulateRowClick(rows()[0]);
       await flushUpdates();
+      simulateClick(deleteButtonEl!);
+      await waitFor(() => queryDialog(container) !== null);
 
       const confirmButtonEl = queryConfirmButton(container);
       assertExists(confirmButtonEl, "Confirm must be present");
@@ -2878,13 +3053,14 @@ Deno.test(
         );
         return deleteButtonEl !== null;
       });
-      simulateClick(deleteButtonEl!);
-      await flushUpdates();
+      // preview-gap round: select the row FIRST -- Delete's own preview also needs groupId.
       const rows = () =>
         Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
       await waitFor(() => rows().length === 1);
       simulateRowClick(rows()[0]);
       await flushUpdates();
+      simulateClick(deleteButtonEl!);
+      await waitFor(() => queryDialog(container) !== null);
       const confirmButtonEl = queryConfirmButton(container);
       assertExists(confirmButtonEl, "Confirm must be present");
       simulateClick(confirmButtonEl!);
@@ -3043,13 +3219,16 @@ Deno.test(
         );
         return deleteButtonEl !== null;
       });
-      simulateClick(deleteButtonEl!);
-      await flushUpdates();
+      // preview-gap round: select the row FIRST -- Delete's own preview also needs groupId. Its
+      // preview dispatch targets enum_dictionary/delete_group, never screen_list/Search, so it
+      // does not disturb this test's own searchCallsSeen counting below.
       const rows = () =>
         Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
       await waitFor(() => rows().length === 1);
       simulateRowClick(rows()[0]);
       await flushUpdates();
+      simulateClick(deleteButtonEl!);
+      await waitFor(() => queryDialog(container) !== null);
       const confirmButtonEl = queryConfirmButton(container);
       assertExists(confirmButtonEl, "Confirm must be present");
       simulateClick(confirmButtonEl!);

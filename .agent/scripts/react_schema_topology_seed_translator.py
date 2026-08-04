@@ -416,6 +416,28 @@ def parse_payload_from(raw):
     return result
 
 
+def parse_columns(raw):
+    """`key:Header,key2:Header 2` -> [{"key": key, "header": Header}, ...], order preserved.
+
+    preview-gap round: promotes a Table's display column list from a hand-patched
+    tensor-only propsJson addition (previously invisible to canonical generation) into an
+    authorable DSL attribute, so `generate-topology-seed` alone reproduces it -- see
+    split_flat_records_into_adoption_candidates' topology_ui_table branch, which projects this
+    into the tensor node's own propsJson.columns."""
+    result = []
+    if not raw:
+        return result
+    for pair in raw.split(","):
+        pair = pair.strip()
+        if not pair:
+            continue
+        key, sep, header = pair.partition(":")
+        if not sep:
+            continue
+        result.append({"key": key.strip(), "header": header.strip()})
+    return result
+
+
 def build_node(kind, attrs, source_refs, known_gaps):
     node_kind = UNIT_TO_NODE_KIND[kind]
     key = attrs.get("key")
@@ -450,6 +472,7 @@ def build_node(kind, attrs, source_refs, known_gaps):
     if kind == "table":
         node["source"] = attrs.get("source", "")
         node["display"] = attrs.get("display", "")
+        node["displayColumns"] = parse_columns(attrs.get("displayColumns"))
     if kind == "workflow":
         node["steps"] = []
     if kind == "modal":
@@ -1025,6 +1048,117 @@ def validate_disclosure_targets(node, kinds_by_key, errors, path="$.root"):
         validate_disclosure_targets(c, kinds_by_key, errors, path)
 
 
+def collect_nodes_by_key(node, out):
+    """Maps every node's key -> the FULL node dict (not just its kind -- contrast
+    collect_node_kinds_by_key), across the whole tree, same traversal. Used by
+    validate_admin_runtime_preview_action_pairing to cross-reference a Section-owned preview
+    Action against the Confirm Action inside the Modal it opens."""
+    key = node.get("key")
+    if key:
+        out[key] = node
+    for c in node.get("children") or []:
+        collect_nodes_by_key(c, out)
+
+
+def validate_admin_runtime_preview_action_pairing(node, nodes_by_key, errors, path="$.root", parent=None):
+    """SECTION_OWNABLE_ACTION_LANES admits admin_runtime_dispatch_override_wiring directly under a
+    Section ONLY as a dryRun preview trigger paired with a Modal-opening secondaryDisclosureAction
+    -- never as a bare, ungated mutation (see that constant's own comment). Lane MEMBERSHIP alone
+    (checked by validate_structural_node) does not enforce this; this is the fail-close check that
+    the full safety shape actually holds for every Section-owned use of the lane:
+      1. secondaryDisclosureAction exists with actionType=="openModal" specifically (never
+         closeModal/toggleModal -- a preview trigger only ever OPENS a confirm surface).
+      2. eventBinding.payloadFrom declares dryRun="literal:true" and never a "confirmed" key --
+         a preview must never carry write-confirmation authority.
+      3. The targeted Modal contains EXACTLY ONE child Action whose own wiringLane is also
+         admin_runtime_dispatch_override_wiring (the Confirm button) to pair against -- zero or
+         more than one is a blocking authoring error, never silently picking one.
+      4. That Confirm button's target_ref and business-field payloadFrom (every payloadFrom key
+         except "confirmed") are IDENTICAL to the preview Action's own target_ref and
+         business-field payloadFrom (every payloadFrom key except "dryRun") -- a preview that
+         resolves a DIFFERENT manifest/layer/action or field set than what Confirm will actually
+         write is a genuine authoring defect, not a cosmetic mismatch.
+    Runs only for a Section-owned use of this lane (parent_kind == "Section"); the Confirm button
+    itself (Modal-owned, same lane) is unaffected -- its own secondaryDisclosureAction is
+    closeModal, never openModal, so it never reaches this rule's target-Modal cross-check, and it
+    is never itself Section-owned. The target Modal's own existence/kind is already checked
+    generically by validate_disclosure_targets (DISCLOSURE_TARGET_NODE_REQUIRED /
+    DISCLOSURE_TARGET_KIND_MISMATCH) -- not duplicated here; this function only proceeds to the
+    Confirm cross-check once a real Modal node is resolved.
+    """
+    if node.get("kind") == "Action":
+        eb = node.get("eventBinding") or {}
+        parent_kind = parent.get("kind") if parent else None
+        if isinstance(eb, dict) and eb.get("wiringLane") == "admin_runtime_dispatch_override_wiring" and parent_kind == "Section":
+            node_path = node.get("_path", path)
+            key = node.get("key")
+            payload_from = eb.get("payloadFrom") or {}
+            secondary = node.get("secondaryDisclosureAction")
+            if not secondary or secondary.get("actionType") != "openModal":
+                errors.append(err(
+                    "ADMIN_RUNTIME_PREVIEW_ACTION_SECONDARY_OPEN_MODAL_REQUIRED", node_path, "blocking",
+                    f"Action '{key}' uses admin_runtime_dispatch_override_wiring directly under a "
+                    f"Section (SECTION_OWNABLE_ACTION_LANES) but does not pair it with a "
+                    f"secondaryDisclosureActionType=openModal -- a Section-owned admin_runtime Action "
+                    f"is only a legal preview trigger, never a bare mutation with no confirm gate",
+                ))
+            if payload_from.get("dryRun") != "literal:true":
+                errors.append(err(
+                    "ADMIN_RUNTIME_PREVIEW_ACTION_DRYRUN_REQUIRED", node_path, "blocking",
+                    f"Action '{key}' is Section-owned admin_runtime_dispatch_override_wiring (a preview "
+                    f"trigger) but its own payloadFrom does not declare dryRun=literal:true",
+                ))
+            if "confirmed" in payload_from:
+                errors.append(err(
+                    "ADMIN_RUNTIME_PREVIEW_ACTION_CONFIRMED_NOT_ALLOWED", node_path, "blocking",
+                    f"Action '{key}' is Section-owned admin_runtime_dispatch_override_wiring (a preview "
+                    f"trigger) but its own payloadFrom declares 'confirmed' -- a preview must never carry "
+                    f"write-confirmation authority",
+                ))
+            if secondary and secondary.get("actionType") == "openModal":
+                modal_node = nodes_by_key.get(secondary.get("targetNodeId"))
+                if modal_node is not None and modal_node.get("kind") == "Modal":
+                    confirm_actions = [
+                        c for c in modal_node.get("children") or []
+                        if c.get("kind") == "Action"
+                        and (c.get("eventBinding") or {}).get("wiringLane") == "admin_runtime_dispatch_override_wiring"
+                    ]
+                    if len(confirm_actions) != 1:
+                        errors.append(err(
+                            "ADMIN_RUNTIME_PREVIEW_ACTION_CONFIRM_TARGET_AMBIGUOUS", node_path, "blocking",
+                            f"Action '{key}' opens Modal '{modal_node.get('key')}', which must contain "
+                            f"exactly one admin_runtime_dispatch_override_wiring child Action (the "
+                            f"Confirm button) to pair against, found {len(confirm_actions)}",
+                        ))
+                    else:
+                        confirm_action = confirm_actions[0]
+                        confirm_eb = confirm_action.get("eventBinding") or {}
+                        confirm_payload_from = confirm_eb.get("payloadFrom") or {}
+                        if eb.get("targetRef") != confirm_eb.get("targetRef"):
+                            errors.append(err(
+                                "ADMIN_RUNTIME_PREVIEW_ACTION_TARGET_REF_MISMATCH", node_path, "blocking",
+                                f"Action '{key}' previews target_ref '{eb.get('targetRef')}' but its "
+                                f"Modal's Confirm button '{confirm_action.get('key')}' writes to "
+                                f"target_ref '{confirm_eb.get('targetRef')}' -- preview and confirm must "
+                                f"resolve the SAME manifest/layer/action",
+                            ))
+                        preview_business_fields = {k: v for k, v in payload_from.items() if k != "dryRun"}
+                        confirm_business_fields = {
+                            k: v for k, v in confirm_payload_from.items() if k != "confirmed"
+                        }
+                        if preview_business_fields != confirm_business_fields:
+                            errors.append(err(
+                                "ADMIN_RUNTIME_PREVIEW_ACTION_PAYLOAD_FIELDS_MISMATCH", node_path, "blocking",
+                                f"Action '{key}' previews business fields "
+                                f"{sorted(preview_business_fields.items())} but its Modal's Confirm "
+                                f"button '{confirm_action.get('key')}' writes business fields "
+                                f"{sorted(confirm_business_fields.items())} -- preview and confirm must "
+                                f"resolve the SAME fields from the SAME sources",
+                            ))
+    for c in node.get("children") or []:
+        validate_admin_runtime_preview_action_pairing(c, nodes_by_key, errors, path, parent=node)
+
+
 # ---------------------------------------------------------------------------
 # react_schema -> topology_ui_seed conversion (generate_topology_ui_seed mode)
 # ---------------------------------------------------------------------------
@@ -1046,7 +1180,7 @@ KIND_SPECIFIC_CONSUMED_KEYS = {
     "Section": {"sectionKind"},
     "Form": {"target", "mode", "fields", "actions"},
     "Field": {"control", "required"},
-    "Table": {"source", "display"},
+    "Table": {"source", "display", "displayColumns"},
     "Workflow": {"steps"},
     "Modal": {"componentKind", "title", "body"},
     "Step": {"eventBinding", "actionRef", "runtimeInteractions", "idempotencyPolicy", "lifecycleDispatchConfirmed", "debounceMs", "secondaryDisclosureAction"},
@@ -1120,6 +1254,12 @@ def convert_node_to_seed_record(node, schema_to_seed_map, target_surface, loss_e
         record["source"] = node.get("source", "")
         record["display"] = node.get("display", "")
         record["columns"] = converted_children
+        # preview-gap round: distinct from "columns" above (structural PropBinding/Field child
+        # records, always empty today -- Table is a LEAF_UNIT, never a CONTAINER_UNIT, so the
+        # markup grammar cannot populate it). displayColumns is the authored
+        # key:Header,key2:Header2 attribute list -- see parse_columns and
+        # split_flat_records_into_adoption_candidates' topology_ui_table branch.
+        record["displayColumns"] = node.get("displayColumns") or []
     elif react_kind == "Workflow":
         record["workflowKey"] = record["key"]
         record["steps"] = [c for c in converted_children if c["recordType"] == "topology_ui_workflow_step"]
@@ -1548,6 +1688,45 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                     "nodeKind": "catalog_component",
                     "runtimeInteractions": list(modal_interactions),
                 })
+            # preview-gap round: the Modal's own display props (open/title/body) -- unlike
+            # runtimeInteractions above (owned by the PARENT per Compose's
+            # "{parentNodeId}::{sourceActionKey}" lookup), propsJson is matched by
+            # NodeLocalData against the LEAF's own resolved nodeId directly (same convention
+            # dispatchTargetRefByTrigger already established, round 19's own fix comment), so
+            # this is a SEPARATE tensor node entry keyed at the Modal's own this_resolved_key,
+            # not owning_form_key. Previously this content existed only as a hand-patched
+            # addition to db/seed_empty.sql itself (round 20), invisible to
+            # generate-topology-seed -- every regeneration silently dropped it until a caller
+            # noticed and re-patched it by hand. title/body are optional per
+            # react_schema_contract (a Modal with neither still gets open:false).
+            modal_props_data = {"open": False}
+            if record.get("title"):
+                modal_props_data["title"] = record["title"]
+            if record.get("body"):
+                modal_props_data["body"] = record["body"]
+            tensor_nodes.append({
+                "nodeId": this_resolved_key,
+                "nodeKind": "catalog_component",
+                "runtimeInteractions": [],
+                "propsJson": json.dumps({"data": modal_props_data}),
+            })
+
+        if record_type == "topology_ui_table" and record.get("displayColumns"):
+            # preview-gap round: promotes the Table's static display shape (columns list, the
+            # emission.data-bound rows propBinding every admin_runtime read-circuit table this
+            # translator emits shares -- round 23's own LayoutSchemaTensorComposer
+            # BuildNodeLocalDataByNodeId merge is what actually consumes this at Compose time)
+            # from a hand-patched db/seed_empty.sql-only addition (round 14) into canonical
+            # generation. Same NodeLocalData-by-own-nodeId convention as the Modal propsJson
+            # above -- a Table is never itself a Form/Section owner, so this is always keyed at
+            # its own this_resolved_key, never an owning_form_key lookup.
+            tensor_nodes.append({
+                "nodeId": this_resolved_key,
+                "nodeKind": "catalog_component",
+                "runtimeInteractions": [],
+                "propsJson": json.dumps({"table": None, "columns": record["displayColumns"]}),
+                "propBindings": {"rows": {"source": "emission.data"}},
+            })
 
         if record_type in ("topology_ui_action", "topology_ui_workflow_step"):
             event_binding = record.get("eventBinding") or {}
@@ -1663,6 +1842,8 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                     "runtimeInteractions": [],
                     "dispatchTargetRefByTrigger": {},
                     "dispatchPayloadFromByTrigger": {},
+                    "propsJson": None,
+                    "propBindings": None,
                 }
                 order.append(nid)
                 override_source_action_keys_by_node[nid] = []
@@ -1675,6 +1856,15 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                     if override.get("payloadFrom"):
                         merged[nid]["dispatchPayloadFromByTrigger"][trigger] = override["payloadFrom"]
                     override_source_action_keys_by_node[nid].append(override.get("sourceActionKey"))
+            # propsJson/propBindings (Modal display state, Table columns/rows binding) are
+            # per-nodeId, single-owner content -- never contributed by more than one tensor_nodes
+            # entry for the same nodeId today (a Modal's own entry and a Table's own entry are
+            # always distinct nodeIds), so first-write-wins with no merge policy needed beyond
+            # "don't overwrite an already-set value with a later None".
+            if node.get("propsJson") is not None and merged[nid]["propsJson"] is None:
+                merged[nid]["propsJson"] = node["propsJson"]
+            if node.get("propBindings") is not None and merged[nid]["propBindings"] is None:
+                merged[nid]["propBindings"] = node["propBindings"]
 
         def _clean_tensor_node(n):
             out = {"nodeId": n["nodeId"], "nodeKind": n["nodeKind"], "runtimeInteractions": n["runtimeInteractions"]}
@@ -1682,6 +1872,10 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                 out["dispatchTargetRefByTrigger"] = n["dispatchTargetRefByTrigger"]
             if n["dispatchPayloadFromByTrigger"]:
                 out["dispatchPayloadFromByTrigger"] = n["dispatchPayloadFromByTrigger"]
+            if n["propsJson"] is not None:
+                out["propsJson"] = n["propsJson"]
+            if n["propBindings"] is not None:
+                out["propBindings"] = n["propBindings"]
             return out
 
         tensor_candidates.append({
@@ -2172,6 +2366,9 @@ def cmd_generate_react_schema(args):
         kinds_by_key = {}
         collect_node_kinds_by_key(root_node, kinds_by_key)
         validate_disclosure_targets(root_node, kinds_by_key, tree_errors)
+        nodes_by_key = {}
+        collect_nodes_by_key(root_node, nodes_by_key)
+        validate_admin_runtime_preview_action_pairing(root_node, nodes_by_key, tree_errors)
         output["validationErrors"].extend(tree_errors)
 
     source_refs = envelope.get("sourceYamlRefs") or []
@@ -2314,6 +2511,9 @@ def cmd_generate_topology_seed(args):
     kinds_by_key = {}
     collect_node_kinds_by_key(root_node, kinds_by_key)
     validate_disclosure_targets(root_node, kinds_by_key, tree_errors)
+    nodes_by_key = {}
+    collect_nodes_by_key(root_node, nodes_by_key)
+    validate_admin_runtime_preview_action_pairing(root_node, nodes_by_key, tree_errors)
     output["validationErrors"].extend(tree_errors)
 
     schema_to_seed_map = dig(ssot_root, "exchange_mapping", "schema_to_seed_record_mapping") or {}
