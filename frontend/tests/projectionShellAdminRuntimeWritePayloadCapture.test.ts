@@ -1738,3 +1738,402 @@ Deno.test(
     }
   },
 );
+
+// ─────────────────────────────────────────────────────────────────────────
+// Round 26: shared scenario contract, generalized across the 6 write actions
+// newly embedded into ae200's single surface behind their own disclosure/modal
+// (create_group's own single-click confirmed:true NG-axis violation fixed;
+// update_group/create_item/update_item/delete_item/set_group_items newly
+// embedded) -- one config table + one shared test body per round 26's own
+// instruction not to duplicate per-operation test bodies. Each config
+// describes the fields a real admin would type (if any), the group-row value
+// (if the operation needs the currently-selected group's identity), and the
+// expected dispatch target/payload the Confirm click must produce.
+// ─────────────────────────────────────────────────────────────────────────
+
+interface ConfirmModalScenarioConfig {
+  readonly label: string;
+  readonly prefix: string;
+  readonly title: string;
+  readonly body: string;
+  readonly targetRef: string;
+  /** Typed input fields the user fills before opening/confirming, keyed by nodeId -> value typed. */
+  readonly typedFields: Record<string, string>;
+  /** Whether the operation reads the selected enum_table row's groupId (update_group/set_group_items). */
+  readonly needsSelectedGroupRow: boolean;
+  /** Keys expected in the Confirm dispatch payload besides "confirmed". */
+  readonly expectedPayloadKeys: readonly string[];
+}
+
+const CONFIRM_MODAL_SCENARIOS: readonly ConfirmModalScenarioConfig[] = [
+  {
+    label: "create_group",
+    prefix: "enum_create_group",
+    title: "Create group",
+    body: "Create a new enum group with the entered name.",
+    targetRef:
+      "manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group",
+    typedFields: { enum_create_group_name_input: "Widgets" },
+    needsSelectedGroupRow: false,
+    expectedPayloadKeys: ["groupName"],
+  },
+  {
+    label: "update_group",
+    prefix: "enum_update_group",
+    title: "Update group",
+    body: "Rename the selected enum group to the entered name.",
+    targetRef:
+      "manifest:00000000-0000-0000-0000-0000000ae220:enum_dictionary:update_group",
+    typedFields: { enum_update_group_name_input: "Widgets Renamed" },
+    needsSelectedGroupRow: true,
+    expectedPayloadKeys: ["groupId", "groupName"],
+  },
+  {
+    label: "create_item",
+    prefix: "enum_create_item",
+    title: "Create item",
+    body: "Create a new enum item with the entered name.",
+    targetRef:
+      "manifest:00000000-0000-0000-0000-0000000ae240:enum_dictionary:create_item",
+    typedFields: { enum_create_item_name_input: "small" },
+    needsSelectedGroupRow: false,
+    expectedPayloadKeys: ["name"],
+  },
+  {
+    label: "update_item",
+    prefix: "enum_update_item",
+    title: "Update item",
+    body: "Rename the enum item at the entered index to the entered name.",
+    targetRef:
+      "manifest:00000000-0000-0000-0000-0000000ae250:enum_dictionary:update_item",
+    typedFields: {
+      enum_update_item_index_input: "3",
+      enum_update_item_name_input: "medium",
+    },
+    needsSelectedGroupRow: false,
+    expectedPayloadKeys: ["indexNum", "name"],
+  },
+  {
+    label: "delete_item",
+    prefix: "enum_delete_item",
+    title: "Delete item",
+    body:
+      "This will permanently delete the enum item at the entered index. This cannot be undone.",
+    targetRef:
+      "manifest:00000000-0000-0000-0000-0000000ae260:enum_dictionary:delete_item",
+    typedFields: { enum_delete_item_index_input: "3" },
+    needsSelectedGroupRow: false,
+    expectedPayloadKeys: ["indexNum"],
+  },
+  {
+    label: "set_group_items",
+    prefix: "enum_set_group_items",
+    title: "Set group items",
+    body: "Replace the selected group's item membership with the entered indexes.",
+    targetRef:
+      "manifest:00000000-0000-0000-0000-0000000ae270:enum_dictionary:set_group_items",
+    typedFields: { enum_set_group_items_input: "1,2,3" },
+    needsSelectedGroupRow: true,
+    expectedPayloadKeys: ["groupId", "enumIndexNums"],
+  },
+];
+
+function buildConfirmModalLayoutNodes(
+  config: ConfirmModalScenarioConfig,
+  rows: Record<string, unknown>[],
+) {
+  const { prefix, title, body, targetRef, typedFields } = config;
+  const modalKey = `${prefix}_confirm_modal`;
+
+  const nodes: Record<string, unknown>[] = [
+    {
+      nodeId: "enum_table",
+      nodeKind: "catalog_component",
+      componentId: "comp-enum-table-001",
+      componentKind: "data_display/table",
+      componentKey: "table.primitive",
+      orderIndex: 0,
+      wiringKind: "admin_runtime",
+      targetSurface: "manifest",
+      targetRef: `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:list_groups`,
+      propsJson: JSON.stringify({
+        table: null,
+        columns: [
+          { key: "groupId", header: "Group ID" },
+          { key: "groupName", header: "Group name" },
+        ],
+        rows,
+      }),
+    },
+  ];
+
+  let orderIndex = 1;
+  for (const nodeId of Object.keys(typedFields)) {
+    nodes.push({
+      nodeId,
+      nodeKind: "catalog_component",
+      componentId: `comp-${nodeId}-001`,
+      componentKind: "form_input/input",
+      componentKey: "form_field.primitive",
+      orderIndex: orderIndex++,
+      // inputFactory's requireBinding(spec,"change") fails the whole render closed without a
+      // "change" trigger binding -- same pattern as the existing node-group-id-input scenario
+      // above (a harmless setState targeting the modal, predeclared automatically).
+      runtimeInteractions: inputChangeSetStateInteraction(`${prefix}_confirm_modal`),
+    });
+  }
+
+  nodes.push({
+    nodeId: `${prefix}_button`,
+    nodeKind: "catalog_component",
+    componentId: `comp-${prefix}-button-001`,
+    componentKind: "action/button",
+    componentKey: "button.primitive",
+    orderIndex: orderIndex++,
+    runtimeInteractions: [
+      {
+        trigger: "click",
+        actionType: "openModal",
+        targetNodeId: modalKey,
+        statePath: "open",
+      },
+    ],
+  });
+
+  nodes.push({
+    nodeId: modalKey,
+    nodeKind: "catalog_component",
+    componentId: modalKey,
+    componentKind: "disclosure/modal",
+    componentKey: "modal.template",
+    orderIndex: orderIndex++,
+    propsJson: JSON.stringify({ data: { open: false, title, body } }),
+    runtimeInteractions: [
+      {
+        trigger: "toggle",
+        actionType: "closeModal",
+        targetNodeId: modalKey,
+        statePath: "open",
+      },
+    ],
+  });
+
+  const dispatchPayloadFrom: Record<string, string> = {};
+  for (const key of config.expectedPayloadKeys) {
+    if (key === "groupId") {
+      dispatchPayloadFrom[key] = "node:enum_table.value.groupId";
+    } else {
+      // typed-field keys map 1:1, in declared order, onto this scenario's own field nodeIds.
+      const fieldNodeId = Object.keys(typedFields)[
+        config.expectedPayloadKeys.filter((k) => k !== "groupId").indexOf(key)
+      ];
+      dispatchPayloadFrom[key] = `node:${fieldNodeId}.value`;
+    }
+  }
+  dispatchPayloadFrom["confirmed"] = "literal:true";
+
+  nodes.push({
+    nodeId: `${prefix}_confirm_button`,
+    nodeKind: "catalog_component",
+    componentId: `comp-${prefix}-confirm-button-001`,
+    componentKind: "action/button",
+    componentKey: "button.primitive",
+    orderIndex: 0,
+    parentNodeId: modalKey,
+    wiringKind: "admin_runtime",
+    targetSurface: "manifest",
+    targetRef: `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:list_groups`,
+    dispatchTargetRefByTrigger: { click: targetRef },
+    dispatchPayloadFromByTrigger: { click: dispatchPayloadFrom },
+    runtimeInteractions: [
+      {
+        trigger: "click",
+        actionType: "closeModal",
+        targetNodeId: modalKey,
+        statePath: "open",
+      },
+    ],
+  });
+
+  nodes.push({
+    nodeId: `${prefix}_cancel_button`,
+    nodeKind: "catalog_component",
+    componentId: `comp-${prefix}-cancel-button-001`,
+    componentKind: "action/button",
+    componentKey: "button.primitive",
+    orderIndex: 1,
+    parentNodeId: modalKey,
+    runtimeInteractions: [
+      {
+        trigger: "click",
+        actionType: "closeModal",
+        targetNodeId: modalKey,
+        statePath: "open",
+      },
+    ],
+  });
+
+  return nodes;
+}
+
+function queryOpenButtonFor(container: Element, prefix: string) {
+  return container.querySelector(
+    `[data-node-id="${prefix}_button"] button`,
+  ) as HTMLButtonElement | null;
+}
+
+function queryModalFor(container: Element) {
+  return container.querySelector('[role="dialog"]');
+}
+
+function queryConfirmButtonFor(container: Element, prefix: string) {
+  return container.querySelector(
+    `[data-node-id="${prefix}_confirm_button"] button`,
+  ) as HTMLButtonElement | null;
+}
+
+function queryCancelButtonFor(container: Element, prefix: string) {
+  return container.querySelector(
+    `[data-node-id="${prefix}_cancel_button"] button`,
+  ) as HTMLButtonElement | null;
+}
+
+for (const config of CONFIRM_MODAL_SCENARIOS) {
+  Deno.test(
+    `ProjectionShell (real mount, round 26 shared scenario): ${config.label}'s ae200-embedded confirm modal — closed by default, DOM-absent when closed, opens on click, Cancel closes with no write, Confirm dispatches the exact expected payload and closes only after backend success`,
+    async () => {
+      ensureRuntimeComponentRegistryInitialized();
+      schedulerTestOnly.resetCommandQueue();
+      FakeEventSource.instances = [];
+      const { container, cleanup } = setupDom();
+      const originalEventSource =
+        (globalThis as unknown as { EventSource?: unknown }).EventSource;
+      (globalThis as unknown as { EventSource: unknown }).EventSource =
+        FakeEventSource;
+      const originalFetch = globalThis.fetch;
+
+      const scenario = buildMockScenario((callIndex) => {
+        if (callIndex === 1) {
+          return {
+            success: true,
+            emission: {
+              manifestId: ADMIN_ENUM_MANIFEST_ID,
+              layoutId: `layout-ae200-round26-${config.label}-scenario`,
+              projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+              layoutNodes: buildConfirmModalLayoutNodes(config, [
+                { groupId: "row-uuid-1", groupName: "Alpha" },
+              ]),
+            },
+          };
+        }
+        return { success: true, errors: [] };
+      });
+      globalThis.fetch = scenario.fetch;
+
+      try {
+        globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+        render(h(ProjectionShell, {}), container);
+
+        let openButtonEl: HTMLButtonElement | null = null;
+        await waitFor(() => {
+          openButtonEl = queryOpenButtonFor(container, config.prefix);
+          return openButtonEl !== null;
+        });
+        assertExists(openButtonEl, `${config.label}'s open trigger must render`);
+
+        // Closed by default: Confirm/Cancel/dialog genuinely absent from the DOM.
+        assert(
+          queryModalFor(container) === null,
+          `${config.label}'s modal must not be in the DOM before opening`,
+        );
+        assert(
+          queryConfirmButtonFor(container, config.prefix) === null,
+          `${config.label}'s Confirm must not be in the DOM before opening`,
+        );
+        assert(
+          queryCancelButtonFor(container, config.prefix) === null,
+          `${config.label}'s Cancel must not be in the DOM before opening`,
+        );
+
+        // Open.
+        simulateClick(openButtonEl!);
+        await flushUpdates();
+        assertExists(
+          queryModalFor(container),
+          `${config.label}'s modal must open`,
+        );
+        const confirmButtonEl = queryConfirmButtonFor(container, config.prefix);
+        const cancelButtonEl = queryCancelButtonFor(container, config.prefix);
+        assertExists(confirmButtonEl, `${config.label}'s Confirm must be nested inside the open modal`);
+        assertExists(cancelButtonEl, `${config.label}'s Cancel must be nested inside the open modal`);
+
+        // Cancel: no dispatch, modal closes.
+        simulateClick(cancelButtonEl!);
+        await flushUpdates();
+        assert(
+          queryModalFor(container) === null,
+          `${config.label}'s modal must close on Cancel`,
+        );
+        assertEquals(
+          scenario.capturedDispatchBodies.length,
+          1,
+          `Cancel must never dispatch for ${config.label} -- only the initial entry dispatch so far`,
+        );
+
+        // Reopen, fill fields, select the row if needed, then Confirm.
+        simulateClick(queryOpenButtonFor(container, config.prefix)!);
+        await flushUpdates();
+        for (const [nodeId, value] of Object.entries(config.typedFields)) {
+          const inputEl = container.querySelector(
+            `[data-node-id="${nodeId}"] input`,
+          ) as HTMLInputElement | null;
+          assertExists(inputEl, `${config.label}'s ${nodeId} input must render`);
+          simulateInput(inputEl!, value);
+        }
+        if (config.needsSelectedGroupRow) {
+          const rowEl = container.querySelector(
+            "tbody tr",
+          ) as HTMLTableRowElement | null;
+          assertExists(rowEl, `${config.label} needs a selectable group row`);
+          simulateRowClick(rowEl!);
+          await flushUpdates();
+        }
+
+        const confirmAgainEl = queryConfirmButtonFor(container, config.prefix);
+        assertExists(confirmAgainEl, `${config.label}'s Confirm must still be present after reopening`);
+        simulateClick(confirmAgainEl!);
+        function payloadOf(b: Record<string, unknown>) {
+          return (b.payload ?? {}) as Record<string, unknown>;
+        }
+        await waitFor(() =>
+          scenario.capturedDispatchBodies.some((b) =>
+            payloadOf(b).target_ref === config.targetRef
+          )
+        );
+        const confirmBody = scenario.capturedDispatchBodies.find((b) =>
+          payloadOf(b).target_ref === config.targetRef
+        ) as Record<string, unknown>;
+        assertExists(confirmBody, `${config.label}'s Confirm dispatch must target ${config.targetRef}`);
+        assertEquals(confirmBody.layer, "enum_dictionary");
+        const confirmPayload = payloadOf(confirmBody);
+        assertEquals(confirmPayload.confirmed, "true");
+        for (const key of config.expectedPayloadKeys) {
+          assertExists(
+            confirmPayload[key],
+            `${config.label}'s Confirm dispatch payload must carry '${key}'`,
+          );
+        }
+
+        // Backend success (default mock response after call index 1) closes the modal.
+        await waitFor(() => queryModalFor(container) === null);
+      } finally {
+        globalThis.fetch = originalFetch;
+        (globalThis as unknown as { EventSource: unknown }).EventSource =
+          originalEventSource;
+        schedulerTestOnly.resetCommandQueue();
+        render(null, container);
+        cleanup();
+      }
+    },
+  );
+}

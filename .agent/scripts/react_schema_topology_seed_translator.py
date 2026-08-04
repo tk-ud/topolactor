@@ -1515,6 +1515,32 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
             # a second primary-bucket assignment.
             layout_records.append(wrapper)
 
+        if record_type == "topology_ui_modal":
+            # modal_self_close_invariant continued (see convert_node_to_seed_record's Modal
+            # branch, which sets record["runtimeInteractions"] to a toggle->closeModal entry
+            # sourceActionKey'd to the modal's own key): that entry must be projected into
+            # tensorAdoptionCandidates the SAME way an Action/Step's runtimeInteractions are
+            # (below), scoped by the modal's OWNING parent's resolved identity -- Compose looks
+            # up a leaf's runtimeInteractions via "{itsResolvedParentNodeId}::{itsOwnKey}", and a
+            # Modal is itself such a leaf when composing its parent Section/Form. Without this
+            # branch the toggle entry was silently dropped at this stage (never read from any
+            # record_type other than topology_ui_action/topology_ui_workflow_step above), so
+            # EVERY translator-generated Modal would fail modalFactory's
+            # requireBinding(spec, "toggle") in real production despite validating clean and
+            # despite a hand-built DOM-mock test appearing to prove it worked (round 26 finding).
+            modal_interactions = record.get("runtimeInteractions") or []
+            if modal_interactions:
+                owning_form_key = (
+                    last_resolved_key_by_raw_key.get(wrapper.get("parentKey"), wrapper.get("parentKey"))
+                    if wrapper.get("parentKey") is not None
+                    else this_resolved_key
+                )
+                tensor_nodes.append({
+                    "nodeId": owning_form_key,
+                    "nodeKind": "catalog_component",
+                    "runtimeInteractions": list(modal_interactions),
+                })
+
         if record_type in ("topology_ui_action", "topology_ui_workflow_step"):
             event_binding = record.get("eventBinding") or {}
             # Derived wiring projection, collected here and aggregated into a
