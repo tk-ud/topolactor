@@ -16,6 +16,7 @@
 // admin_runtime_payload_binding_contract.
 
 import {
+  assert,
   assertEquals,
   assertExists,
 } from "https://deno.land/std@0.208.0/assert/mod.ts";
@@ -1259,6 +1260,473 @@ Deno.test(
         scenario.capturedDispatchBodies.length,
         1,
         "a click referencing an unselected table's tracked value must fail close (PAYLOAD_FROM_NODE_NOT_FOUND) with no second dispatch — never a silent undefined/null groupId sent to the backend",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource =
+        originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
+      render(null, container);
+      cleanup();
+    }
+  },
+);
+
+// ─── Round 25: delete_group's confirm dialog — production DOM containment +
+// result-gated close proof (real db/seed_empty.sql ae200
+// enum_delete_group_button/enum_delete_group_confirm_modal/
+// enum_delete_group_confirm_button/enum_delete_group_cancel_button shape).
+//
+// Mounts the REAL ProjectionShell + LayoutProjectionTree + disclosure/modal +
+// action/button components. Proves:
+//   1. Confirm/Cancel are genuinely ABSENT from the DOM while closed (not merely
+//      hidden) — components/LayoutProjectionTree.tsx embeds them inside the
+//      Modal's own rendered subtree (its footer) via the generic
+//      acceptsAuthoredChildren capability, and Modal.tsx returns null entirely
+//      when closed, taking that whole subtree out of the DOM with it.
+//   2. Delete opens the modal (no write); Cancel closes it (no write); Confirm
+//      resolves groupId FRESH from enum_table's own tracked selected-row value
+//      at click time.
+//   3. A confirm click with no selection fails closed (no dispatch, modal stays
+//      open) — resolvePayloadFrom's existing fail-close behavior.
+//   4. The confirm dispatch's own localStateMutation (closeModal) is gated on
+//      the dispatch actually SETTLING successfully — enqueue alone must not
+//      close the modal ahead of the real backend result.
+// ───────────────────────────────────────────────────────────────────────────
+
+const AE230_DELETE_GROUP_TARGET_REF =
+  "manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group";
+
+function enumDeleteGroupConfirmModalLayoutNodes(rows: Record<string, unknown>[]) {
+  return [
+    {
+      nodeId: "enum_table",
+      nodeKind: "catalog_component",
+      componentId: "comp-enum-table-001",
+      componentKind: "data_display/table",
+      componentKey: "table.primitive",
+      orderIndex: 0,
+      wiringKind: "admin_runtime",
+      targetSurface: "manifest",
+      targetRef: `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:list_groups`,
+      propsJson: JSON.stringify({
+        table: null,
+        columns: [
+          { key: "groupId", header: "Group ID" },
+          { key: "groupName", header: "Group name" },
+        ],
+        rows,
+      }),
+    },
+    {
+      nodeId: "enum_delete_group_button",
+      nodeKind: "catalog_component",
+      componentId: "comp-delete-group-button-001",
+      componentKind: "action/button",
+      componentKey: "button.primitive",
+      orderIndex: 1,
+      // No wiringKind/targetRef/dispatch fields at all — the visible trigger carries no write
+      // authority of its own; it can only open the modal (round 25).
+      runtimeInteractions: [
+        {
+          trigger: "click",
+          actionType: "openModal",
+          targetNodeId: "enum_delete_group_confirm_modal",
+          statePath: "open",
+        },
+      ],
+    },
+    {
+      nodeId: "enum_delete_group_confirm_modal",
+      nodeKind: "catalog_component",
+      // componentId is this node's own resolved NodeId (round 25 fix) — required non-empty by
+      // adaptComponentDataHub, never a ui_component_registry id (Modal is a built-in primitive).
+      componentId: "enum_delete_group_confirm_modal",
+      componentKind: "disclosure/modal",
+      componentKey: "modal.template",
+      orderIndex: 2,
+      // Round 25 finding: buildLayoutPreviewPlaceholderProps's "disclosure/modal" default is
+      // { data: { open: true, title: "Modal", body: "プレビュー" } } (open:true — a UI-Builder
+      // CANVAS-preview convenience, so an author can see the modal while designing). renderEmission
+      // mergeNodeLocalProps does a SHALLOW top-level merge of propsJson onto props — a flat
+      // { title, body } here would add new TOP-LEVEL keys while leaving that default's OWN nested
+      // `data` object (still holding open:true) completely untouched, so modalFactory (which reads
+      // props.data when it is an object) would keep reading the untouched placeholder, never this
+      // flat title/body. propsJson must itself supply the WHOLE `data` object, closed with
+      // open:false, exactly like every other disclosure/modal seed record needs to.
+      propsJson: JSON.stringify({
+        data: {
+          open: false,
+          title: "Delete group",
+          body:
+            "This will permanently delete the selected enum group and its items. This cannot be undone.",
+        },
+      }),
+      // Self-close-on-toggle — modalFactory's requireBinding(spec, "toggle") fails the whole
+      // render closed without this (the native backdrop/✕-close affordance).
+      runtimeInteractions: [
+        {
+          trigger: "toggle",
+          actionType: "closeModal",
+          targetNodeId: "enum_delete_group_confirm_modal",
+          statePath: "open",
+        },
+      ],
+    },
+    {
+      nodeId: "enum_delete_group_confirm_button",
+      nodeKind: "catalog_component",
+      componentId: "comp-confirm-button-001",
+      componentKind: "action/button",
+      componentKey: "button.primitive",
+      orderIndex: 0,
+      parentNodeId: "enum_delete_group_confirm_modal",
+      wiringKind: "admin_runtime",
+      targetSurface: "manifest",
+      targetRef: `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:list_groups`,
+      dispatchTargetRefByTrigger: { click: AE230_DELETE_GROUP_TARGET_REF },
+      dispatchPayloadFromByTrigger: {
+        click: {
+          groupId: "node:enum_table.value.groupId",
+          confirmed: "literal:true",
+        },
+      },
+      // Secondary disclosure action (round 24/25): closes the SAME modal on the SAME click,
+      // gated on the dispatch above actually settling successfully (round 25 fix).
+      runtimeInteractions: [
+        {
+          trigger: "click",
+          actionType: "closeModal",
+          targetNodeId: "enum_delete_group_confirm_modal",
+          statePath: "open",
+        },
+      ],
+    },
+    {
+      nodeId: "enum_delete_group_cancel_button",
+      nodeKind: "catalog_component",
+      componentId: "comp-cancel-button-001",
+      componentKind: "action/button",
+      componentKey: "button.primitive",
+      orderIndex: 1,
+      parentNodeId: "enum_delete_group_confirm_modal",
+      // No dispatch fields at all — Cancel sends no write, ever.
+      runtimeInteractions: [
+        {
+          trigger: "click",
+          actionType: "closeModal",
+          targetNodeId: "enum_delete_group_confirm_modal",
+          statePath: "open",
+        },
+      ],
+    },
+  ];
+}
+
+function queryDialog(container: Element) {
+  return container.querySelector('[role="dialog"]');
+}
+
+function queryConfirmButton(container: Element) {
+  return container.querySelector(
+    '[data-node-id="enum_delete_group_confirm_button"] button',
+  ) as HTMLButtonElement | null;
+}
+
+function queryCancelButton(container: Element) {
+  return container.querySelector(
+    '[data-node-id="enum_delete_group_cancel_button"] button',
+  ) as HTMLButtonElement | null;
+}
+
+Deno.test(
+  "ProjectionShell (real mount): delete_group's confirm modal — closed by default, Confirm/Cancel are genuinely absent from the DOM (not merely hidden), and Delete opens it",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource =
+      FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    const scenario = buildMockScenario((callIndex) => {
+      if (callIndex === 1) {
+        return {
+          success: true,
+          emission: {
+            manifestId: ADMIN_ENUM_MANIFEST_ID,
+            layoutId: "layout-ae200-confirm-modal-containment-scenario",
+            projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+            layoutNodes: enumDeleteGroupConfirmModalLayoutNodes([
+              { groupId: "row-uuid-1", groupName: "Alpha" },
+            ]),
+          },
+        };
+      }
+      return { success: true, errors: [] };
+    });
+    globalThis.fetch = scenario.fetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+      render(h(ProjectionShell, {}), container);
+
+      let deleteButtonEl: HTMLButtonElement | null = null;
+      await waitFor(() => {
+        deleteButtonEl = container.querySelector(
+          '[data-node-id="enum_delete_group_button"] button',
+        );
+        return deleteButtonEl !== null;
+      });
+      assertExists(deleteButtonEl, "the Delete trigger button must have rendered");
+
+      // Closed by default: no dialog role, and Confirm/Cancel are not anywhere in the DOM.
+      // Boolean assertions (not assertEquals) — assertEquals's failure-path diff formatter can
+      // hang attempting to serialize a live (happy-dom) DOM Element with circular parent/child
+      // references; a plain boolean comparison never needs to format the element at all.
+      assert(queryDialog(container) === null, "modal must be closed by default");
+      assert(
+        queryConfirmButton(container) === null,
+        "Confirm must not exist in the DOM while the modal is closed",
+      );
+      assert(
+        queryCancelButton(container) === null,
+        "Cancel must not exist in the DOM while the modal is closed",
+      );
+
+      simulateClick(deleteButtonEl!);
+      await flushUpdates();
+
+      assertExists(queryDialog(container), "Delete must open the modal");
+      assertExists(
+        queryConfirmButton(container),
+        "Confirm must now exist, nested inside the open modal",
+      );
+      assertExists(
+        queryCancelButton(container),
+        "Cancel must now exist, nested inside the open modal",
+      );
+      assertEquals(
+        scenario.capturedDispatchBodies.length,
+        1,
+        "opening the modal must send no write dispatch — only the initial entry dispatch so far",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource =
+        originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
+      render(null, container);
+      cleanup();
+    }
+  },
+);
+
+Deno.test(
+  "ProjectionShell (real mount): delete_group's confirm modal — Cancel sends no write and closes; reopening then Confirming resolves groupId fresh from the selected row and stays gated on backend success",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource =
+      FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    const scenario = buildMockScenario((callIndex) => {
+      if (callIndex === 1) {
+        return {
+          success: true,
+          emission: {
+            manifestId: ADMIN_ENUM_MANIFEST_ID,
+            layoutId: "layout-ae200-confirm-modal-result-gating-scenario",
+            projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+            layoutNodes: enumDeleteGroupConfirmModalLayoutNodes([
+              { groupId: "row-uuid-1", groupName: "Alpha" },
+              { groupId: "row-uuid-2", groupName: "Beta" },
+            ]),
+          },
+        };
+      }
+      // The confirm dispatch (only dispatch after the initial entry — row selects reuse
+      // enum_table's own tracked value locally, no server round trip in this scenario).
+      return { success: true, errors: [] };
+    });
+    globalThis.fetch = scenario.fetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+      render(h(ProjectionShell, {}), container);
+
+      let deleteButtonEl: HTMLButtonElement | null = null;
+      await waitFor(() => {
+        deleteButtonEl = container.querySelector(
+          '[data-node-id="enum_delete_group_button"] button',
+        );
+        return deleteButtonEl !== null;
+      });
+
+      // --- Cancel: open, cancel, no write, closes ---
+      simulateClick(deleteButtonEl!);
+      await flushUpdates();
+      assertExists(queryDialog(container), "Delete must open the modal");
+      const cancelButtonEl = queryCancelButton(container);
+      assertExists(cancelButtonEl, "Cancel must be present while open");
+      simulateClick(cancelButtonEl!);
+      await flushUpdates();
+      assert(queryDialog(container) === null, "Cancel must close the modal");
+      assert(
+        queryConfirmButton(container) === null,
+        "Confirm must be gone from the DOM again after Cancel closes the modal",
+      );
+      assertEquals(
+        scenario.capturedDispatchBodies.length,
+        1,
+        "Cancel must never send a write dispatch — only the initial entry dispatch so far",
+      );
+
+      // --- Reopen, select the SECOND row, Confirm: fresh groupId, gated close ---
+      simulateClick(deleteButtonEl!);
+      await flushUpdates();
+      assertExists(queryDialog(container), "Delete must be able to reopen the modal");
+
+      const rows = () =>
+        Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
+      await waitFor(() => rows().length === 2);
+      simulateRowClick(rows()[1]);
+      await flushUpdates();
+
+      // enum_table's OWN admin_runtime binding re-issues the layout's uniform list_groups read on
+      // select (same as the round 20 row-select test above) — capturedDispatchBodies[1] is THAT
+      // reissue, not the Confirm dispatch.
+      await waitFor(() => scenario.capturedDispatchBodies.length >= 2);
+
+      const confirmButtonEl = queryConfirmButton(container);
+      assertExists(confirmButtonEl, "Confirm must still be present after selecting a row");
+      simulateClick(confirmButtonEl!);
+
+      await waitFor(() => scenario.capturedDispatchBodies.length >= 3);
+      const confirmDispatchBody = scenario.capturedDispatchBodies[2];
+      assertEquals(confirmDispatchBody.layer, "enum_dictionary");
+      assertEquals(confirmDispatchBody.action, "delete_group");
+      const confirmPayload = confirmDispatchBody.payload as Record<string, unknown>;
+      assertEquals(confirmPayload.target_ref, AE230_DELETE_GROUP_TARGET_REF);
+      // The SELECTED (second) row's own groupId, resolved fresh at click time.
+      assertEquals(confirmPayload.groupId, "row-uuid-2");
+      assertEquals(confirmPayload.confirmed, "true");
+
+      // The modal must close only AFTER the dispatch settles successfully — never merely on
+      // enqueue. Await the async .then() chain (dispatchRuntimeComponentCommandAndForwardResult)
+      // to actually run before asserting the closed state.
+      await waitFor(() => queryDialog(container) === null);
+      assert(
+        queryConfirmButton(container) === null,
+        "Confirm must be gone from the DOM once the modal has closed on successful settlement",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource =
+        originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
+      render(null, container);
+      cleanup();
+    }
+  },
+);
+
+Deno.test(
+  "ProjectionShell (real mount): delete_group's confirm modal — Confirm with no row selected fails closed (no dispatch, modal stays open); a backend failure result never closes the modal either",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource =
+      FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    // Second real dispatch (the confirm click after a row IS selected) settles as a genuine
+    // backend failure — never a network/queue rejection — proving a failed write is not
+    // mistaken for success.
+    const scenario = buildMockScenario((callIndex) => {
+      if (callIndex === 1) {
+        return {
+          success: true,
+          emission: {
+            manifestId: ADMIN_ENUM_MANIFEST_ID,
+            layoutId: "layout-ae200-confirm-modal-failure-scenario",
+            projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+            layoutNodes: enumDeleteGroupConfirmModalLayoutNodes([
+              { groupId: "row-uuid-1", groupName: "Alpha" },
+            ]),
+          },
+        };
+      }
+      return {
+        success: false,
+        errors: [{ code: "ENUM_GROUP_REFERENCED", message: "group is referenced" }],
+      };
+    });
+    globalThis.fetch = scenario.fetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+      render(h(ProjectionShell, {}), container);
+
+      let deleteButtonEl: HTMLButtonElement | null = null;
+      await waitFor(() => {
+        deleteButtonEl = container.querySelector(
+          '[data-node-id="enum_delete_group_button"] button',
+        );
+        return deleteButtonEl !== null;
+      });
+
+      // --- No selection: Confirm click fails closed ---
+      simulateClick(deleteButtonEl!);
+      await flushUpdates();
+      const confirmButtonNoSelection = queryConfirmButton(container);
+      assertExists(confirmButtonNoSelection, "Confirm must be present after opening");
+      simulateClick(confirmButtonNoSelection!);
+      for (let i = 0; i < 10; i++) await flushUpdates();
+
+      assertEquals(
+        scenario.capturedDispatchBodies.length,
+        1,
+        "a Confirm click with no selection must fail close (PAYLOAD_FROM_NODE_NOT_FOUND) — no second dispatch",
+      );
+      assertExists(
+        queryDialog(container),
+        "the modal must remain open when the payloadFrom resolution failed — never silently closed",
+      );
+
+      // --- Select a row, Confirm, backend responds success:false ---
+      const rows = () =>
+        Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
+      await waitFor(() => rows().length === 1);
+      simulateRowClick(rows()[0]);
+      await flushUpdates();
+
+      const confirmButtonEl = queryConfirmButton(container);
+      assertExists(confirmButtonEl, "Confirm must still be present");
+      simulateClick(confirmButtonEl!);
+      await waitFor(() => scenario.capturedDispatchBodies.length >= 2);
+
+      // Give the async .then() chain every chance to run before asserting nothing closed.
+      for (let i = 0; i < 10; i++) await flushUpdates();
+      assertExists(
+        queryDialog(container),
+        "a backend failure result must never close the modal — a failed write is not completion",
+      );
+      assertExists(
+        queryConfirmButton(container),
+        "Confirm must still be present after a failed write — the user can retry or cancel",
       );
     } finally {
       globalThis.fetch = originalFetch;

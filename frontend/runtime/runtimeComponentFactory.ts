@@ -1,4 +1,4 @@
-import { h, type JSX, type VNode } from "preact";
+import { Fragment, h, type JSX, type VNode } from "preact";
 import { Modal } from "../components/Modal.tsx";
 import { Button } from "../components/Button.tsx";
 import { Card } from "../components/Card.tsx";
@@ -122,6 +122,7 @@ import {
   type RuntimeDispatchSpec,
 } from "./frontendScheduler.ts";
 import type { RuntimeComponentSpec } from "./runtimeComponentAdapter.ts";
+import type { DispatchResponse } from "../api/dispatch.ts";
 import { resolvePayloadFrom } from "./payloadFromResolver.ts";
 import { applyGuardedLocalStateMutation } from "./uiEventEffectRunner.ts";
 import {
@@ -416,12 +417,25 @@ function isPreviewMode(spec: RuntimeComponentSpec): boolean {
  * is logged, not re-thrown -- this call site has no synchronous caller left to
  * propagate it to by the time the promise settles.
  */
+/**
+ * onSettled (round 25): fires ONLY after the real dispatch settles, with the settled
+ * DispatchResponse — used by emitBoundEvent to gate a same-trigger localStateMutation (e.g.
+ * closeModal) on actual backend result rather than on enqueue. Generic hook, not modal/enum
+ * specific: any caller combining a runtimeDispatch with a localStateMutation on the same
+ * trigger gets this same result-gated ordering. A rejected promise (queue-level failure, not a
+ * normal {success:false} response) never fires onSettled — the mutation stays un-applied,
+ * matching the existing "no synchronous caller left to propagate to" console.error-only handling.
+ */
 function dispatchRuntimeComponentCommandAndForwardResult(
   spec: RuntimeComponentSpec,
   dispatchSpec: Parameters<typeof enqueueRuntimeComponentCommand>[0],
+  onSettled?: (result: DispatchResponse) => void,
 ): void {
   enqueueRuntimeComponentCommand(dispatchSpec)
-    .then((result) => spec.onRuntimeDispatchResult?.(result))
+    .then((result) => {
+      spec.onRuntimeDispatchResult?.(result);
+      onSettled?.(result);
+    })
     .catch((err) => {
       console.error(
         "[runtimeComponentFactory] admin_runtime dispatch queue rejected:",
@@ -485,6 +499,32 @@ function emitBoundEvent(
     payload: { ...binding.payload, ...payload },
   });
   if (!logResult.ok) return logResult;
+  // Round 25: when this SAME trigger carries BOTH a runtimeDispatch and a localStateMutation
+  // (e.g. a Confirm button that both writes and closes its own modal), the localStateMutation
+  // must not apply until the dispatch actually SETTLES successfully — applying it unconditionally
+  // right after enqueue would close/complete the confirmation UI even when the backend later
+  // fails (auth, validation, domain conflict, missing record), misrepresenting a failed write as
+  // done. Deferred via dispatchRuntimeComponentCommandAndForwardResult's onSettled below; the
+  // synchronous branch further down is skipped in that case. A trigger with ONLY a
+  // localStateMutation (e.g. Cancel, which has no dispatch to wait for) is unaffected — it still
+  // applies synchronously, exactly as before.
+  const deferLocalStateMutationToDispatchSuccess = Boolean(
+    binding.runtimeDispatch && binding.localStateMutation,
+  );
+  const applyDeferredLocalStateMutationOnSuccess = (result: DispatchResponse) => {
+    if (!result.success) return;
+    if (!binding.localStateMutation || !spec.localStateStore) return;
+    const mutationResult = applyGuardedLocalStateMutation(
+      spec.localStateStore,
+      binding.localStateMutation,
+    );
+    if (!mutationResult.ok) {
+      console.error(
+        "[runtimeComponentFactory] deferred localStateMutation failed after successful dispatch:",
+        mutationResult.error,
+      );
+    }
+  };
   // Lane 2: component_wiring_execution_lane — runtime dispatch (when configured).
   // Fire-and-forget: the FIFO queue in frontendScheduler handles ordering and error propagation.
   // Event-time payload (the caller's form/field values, same argument Lane 1's
@@ -512,15 +552,24 @@ function emitBoundEvent(
       if (!resolved.ok) {
         return { ok: false, error: resolved.errors.join("; ") };
       }
-      dispatchRuntimeComponentCommandAndForwardResult(spec, {
-        ...binding.runtimeDispatch,
-        payload: resolved.payload,
-      });
+      dispatchRuntimeComponentCommandAndForwardResult(
+        spec,
+        { ...binding.runtimeDispatch, payload: resolved.payload },
+        deferLocalStateMutationToDispatchSuccess
+          ? applyDeferredLocalStateMutationOnSuccess
+          : undefined,
+      );
     } else {
-      dispatchRuntimeComponentCommandAndForwardResult(spec, {
-        ...binding.runtimeDispatch,
-        payload: { ...binding.runtimeDispatch.payload, ...binding.payload, ...payload },
-      });
+      dispatchRuntimeComponentCommandAndForwardResult(
+        spec,
+        {
+          ...binding.runtimeDispatch,
+          payload: { ...binding.runtimeDispatch.payload, ...binding.payload, ...payload },
+        },
+        deferLocalStateMutationToDispatchSuccess
+          ? applyDeferredLocalStateMutationOnSuccess
+          : undefined,
+      );
     }
   }
   // Lane 2 (external_port): Design Inspector-authored dispatchExternalPort.
@@ -616,7 +665,12 @@ function emitBoundEvent(
   // (applyGuardedLocalStateMutation) — there is no direct store.set() here, so
   // mutation authority is not duplicated across the event and lifecycle paths.
   // An undeclared target (e.g. a stale/deleted-node reference) fails close.
-  if (binding.localStateMutation) {
+  // deferLocalStateMutationToDispatchSuccess (round 25): when this trigger ALSO carries a
+  // runtimeDispatch, the mutation above was already deferred to
+  // applyDeferredLocalStateMutationOnSuccess (fires only once that dispatch settles
+  // successfully) — applying it here too, synchronously and unconditionally, would close/complete
+  // a Confirm-style action before its write is even known to have succeeded.
+  if (binding.localStateMutation && !deferLocalStateMutationToDispatchSuccess) {
     if (!spec.localStateStore) {
       return {
         ok: false,
@@ -3148,6 +3202,15 @@ function modalFactory(spec: RuntimeComponentSpec): RenderResult {
     : props;
   const bindingCheck = requireBinding(spec, "toggle");
   if (!bindingCheck.ok) return bindingCheck;
+  // Round 25 (admin-enum subBundle, Modal DOM containment): authoredChildren are the REAL nested
+  // schema children (e.g. Confirm/Cancel Action buttons) — rendered into Modal's own existing
+  // `footer` slot so they are only ever present in the DOM while this Modal's own `open` is true
+  // (Modal.tsx returns null entirely when closed, taking its whole subtree — including footer —
+  // out of the DOM with it). Falls back to no footer when this Modal has no authored children
+  // (e.g. a draft/intake-only preset instance), never inventing placeholder content.
+  const authoredFooter = spec.authoredChildren?.length
+    ? h(Fragment, null, ...spec.authoredChildren)
+    : undefined;
   return {
     ok: true,
     node: h(Modal, {
@@ -3161,6 +3224,7 @@ function modalFactory(spec: RuntimeComponentSpec): RenderResult {
         if (!r.ok) throw new Error(r.error);
       },
       children: h("div", null, (data.body as string | undefined) ?? ""),
+      footer: authoredFooter,
     }),
   };
 }
@@ -3594,7 +3658,11 @@ export const RUNTIME_COMPONENT_FACTORIES: RuntimeComponentFactory[] = [
     render: documentCanvasTemplateEditorFactory,
   },
   { componentKinds: ["layout/box"], render: boxFactory },
-  { componentKinds: ["disclosure/modal"], render: modalFactory },
+  {
+    componentKinds: ["disclosure/modal"],
+    render: modalFactory,
+    acceptsAuthoredChildren: true,
+  },
   { componentKinds: ["form_input/select"], render: selectFactory },
   { componentKinds: ["form_input/checkbox"], render: checkboxFactory },
   { componentKinds: ["display/badge"], render: badgeFactory },

@@ -3853,14 +3853,29 @@ ON CONFLICT (wiring_id) DO UPDATE
 --    only opens enum_delete_group_confirm_modal (runtimeInteractions[]
 --    openModal), the real write moved to #4 above.
 -- 6. enum_dictionary_roster / enum_delete_group_confirm_modal /
---    enum_delete_group_cancel_button (round 24): the Section-scoped
---    self-close-on-toggle interaction (backend/repository/
---    LayoutSchemaTensorComposer.cs Compose merges a catalog leaf's OWN
---    runtimeInteractions by "{leaf's resolved ParentNodeId}::{leaf's own
+--    enum_delete_group_cancel_button (round 24, propsJson shape corrected
+--    round 25): the Section-scoped self-close-on-toggle interaction (backend/
+--    repository/LayoutSchemaTensorComposer.cs Compose merges a catalog leaf's
+--    OWN runtimeInteractions by "{leaf's resolved ParentNodeId}::{leaf's own
 --    key}" -- for the Modal leaf that parent is the Section, hence this
 --    tensor entry's nodeId is "enum_dictionary_roster", not the Modal's own
---    key), the Modal's own propsJson (title/body), and the Cancel button's
---    closeModal-only interaction, respectively.
+--    key), the Modal's own propsJson, and the Cancel button's closeModal-only
+--    interaction, respectively. enum_delete_group_confirm_modal's propsJson
+--    MUST nest title/body/open under a "data" object and set "open":false
+--    explicitly -- frontend/runtime/renderEmission.ts mergeNodeLocalProps does
+--    a SHALLOW top-level merge of propsJson onto the componentKind's default
+--    props, and frontend/runtime/layoutComponentPreview.ts's
+--    "disclosure/modal" default is {data:{open:true,title:"Modal",
+--    body:"プレビュー"}} -- a flat top-level {title,body} propsJson (round
+--    24's original, uncorrected shape) would add new top-level keys while
+--    leaving that default's own nested `data` (still open:true) completely
+--    untouched, so modalFactory (which reads props.data when present) would
+--    silently keep showing the placeholder open by default with the wrong
+--    title/body, never this node's authored content. Caught by a real
+--    ProjectionShell DOM mount test (round 25), not by any Composer/live-DB
+--    proof alone -- see frontend/tests/
+--    projectionShellAdminRuntimeWritePayloadCapture.test.ts's confirm-modal
+--    scenarios.
 -- componentId/componentKind for every leaf (enum_search/enum_group_filter/
 -- enum_table/enum_form/enum_confirm_button/enum_create_group_name_input/
 -- enum_create_group_button/enum_delete_group_button/
@@ -3878,7 +3893,7 @@ VALUES (
     '00000000-0000-0000-0000-0000000ae205',
     'default',
     0,
-    '{"nodes":[{"nodeId":"enum_table","nodeKind":"catalog_component","propsJson":"{\"table\":null,\"columns\":[{\"key\":\"groupName\",\"header\":\"Group name\"},{\"key\":\"indexNum\",\"header\":\"Index\"},{\"key\":\"groupId\",\"header\":\"Group ID\"}]}","propBindings":{"rows":{"source":"emission.data"}}},{"nodeId":"enum_confirm_form","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"localStateMutation","payloadFrom":{},"sourceActionKey":"enum_confirm_button","targetRef":"ui-local:enum_confirm_button.open_confirm"}]},{"nodeId":"enum_create_group_button","nodeKind":"catalog_component","dispatchTargetRefByTrigger":{"click":"manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group"},"dispatchPayloadFromByTrigger":{"click":{"groupName":"node:enum_create_group_name_input.value","confirmed":"literal:true"}}},{"nodeId":"enum_delete_group_button","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"openModal","targetNodeId":"enum_delete_group_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_group_button"}]},{"nodeId":"enum_dictionary_roster","nodeKind":"structural_node","runtimeInteractions":[{"trigger":"toggle","actionType":"closeModal","targetNodeId":"enum_delete_group_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_group_confirm_modal"}]},{"nodeId":"enum_delete_group_confirm_modal","nodeKind":"catalog_component","propsJson":"{\"title\": \"Delete group\", \"body\": \"This will permanently delete the selected enum group and its items. This cannot be undone.\"}"},{"nodeId":"enum_delete_group_confirm_button","nodeKind":"catalog_component","dispatchTargetRefByTrigger":{"click":"manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group"},"dispatchPayloadFromByTrigger":{"click":{"groupId":"node:enum_table.value.groupId","confirmed":"literal:true"}},"runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_delete_group_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_group_confirm_button"}]},{"nodeId":"enum_delete_group_cancel_button","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_delete_group_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_group_cancel_button"}]}]}'::jsonb
+    '{"nodes":[{"nodeId":"enum_table","nodeKind":"catalog_component","propsJson":"{\"table\":null,\"columns\":[{\"key\":\"groupName\",\"header\":\"Group name\"},{\"key\":\"indexNum\",\"header\":\"Index\"},{\"key\":\"groupId\",\"header\":\"Group ID\"}]}","propBindings":{"rows":{"source":"emission.data"}}},{"nodeId":"enum_confirm_form","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"localStateMutation","payloadFrom":{},"sourceActionKey":"enum_confirm_button","targetRef":"ui-local:enum_confirm_button.open_confirm"}]},{"nodeId":"enum_create_group_button","nodeKind":"catalog_component","dispatchTargetRefByTrigger":{"click":"manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group"},"dispatchPayloadFromByTrigger":{"click":{"groupName":"node:enum_create_group_name_input.value","confirmed":"literal:true"}}},{"nodeId":"enum_delete_group_button","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"openModal","targetNodeId":"enum_delete_group_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_group_button"}]},{"nodeId":"enum_dictionary_roster","nodeKind":"structural_node","runtimeInteractions":[{"trigger":"toggle","actionType":"closeModal","targetNodeId":"enum_delete_group_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_group_confirm_modal"}]},{"nodeId":"enum_delete_group_confirm_modal","nodeKind":"catalog_component","propsJson":"{\"data\":{\"open\":false,\"title\":\"Delete group\",\"body\":\"This will permanently delete the selected enum group and its items. This cannot be undone.\"}}"},{"nodeId":"enum_delete_group_confirm_button","nodeKind":"catalog_component","dispatchTargetRefByTrigger":{"click":"manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group"},"dispatchPayloadFromByTrigger":{"click":{"groupId":"node:enum_table.value.groupId","confirmed":"literal:true"}},"runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_delete_group_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_group_confirm_button"}]},{"nodeId":"enum_delete_group_cancel_button","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"enum_delete_group_confirm_modal","statePath":"open","sourceActionKey":"enum_delete_group_cancel_button"}]}]}'::jsonb
 )
 ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
     SET layout_patch_json = EXCLUDED.layout_patch_json;

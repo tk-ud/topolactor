@@ -1,3 +1,4 @@
+import type { VNode } from "preact";
 import type { ComponentDataHub } from "./projectionConstructor.ts";
 import type { RuntimeTopologyComponentProps } from "../components/runtimeContract.ts";
 import type { DispatchResponse } from "../api/dispatch.ts";
@@ -55,6 +56,15 @@ export type RuntimeComponentSpec = {
   onNodeValueChange?: (value: unknown) => void;
   /** Fires with the settled result of this node's own admin_runtime dispatch. See ComponentDataHub. */
   onRuntimeDispatchResult?: (result: DispatchResponse) => void;
+  /**
+   * Round 25: the REAL nested schema children (e.g. a Modal's Confirm/Cancel Action children),
+   * as already-rendered VNodes — populated by components/LayoutProjectionTree.tsx's
+   * renderRuntimeComponent() call, never by adaptComponentDataHub (which has no notion of the
+   * schema tree's parent/child structure). Only present when
+   * RuntimeComponentFactory.acceptsAuthoredChildren is true for this componentKind and this node
+   * has at least one real child in the composed layout tree.
+   */
+  authoredChildren?: VNode[];
 };
 
 /** Raw projection-local state store (read/write, no guard). Wrapped by RuntimeGuardedStateStore. */

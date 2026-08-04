@@ -1242,6 +1242,50 @@ round 23監査はround22の4件修正を有効として維持しつつ、(1) bar
 - 「新しいbackend/runtime設計は不要」（round18の発見）を「だから既存component registryにあるものは何でも使ってよい」に一般化する——実際にauthoring/validation両経路を通る語彙かどうかを個別に検証しない限り、registryに存在するというだけでは再利用可能性の証明にならない（本round自身が`safety_guard/apply_confirm_dialog`について犯した誤りそのもの）。
 - `SECTION_OWNABLE_ACTION_LANES`を、他のlane（`internal_instance_wiring`等）へ根拠なく拡張する——本round自身が追加した`disclosure_state_wiring`という具体的必要性以外への拡張は、実際にそのlaneのActionをSection直下に置く具体的必要性が生じるまで行わない。
 
+### admin-enum subBundle 実装記録（2026-08-04 round 20 — round19のModal/Confirm/CancelがDOM上ではsiblingとして描画され実際の確認境界になっていなかった問題の修正、その過程で発見した3件の隠れバグ（ComponentId未設定・propsJson形状不一致・sibling描画）の修正、dispatch結果gatingへの是正、disclosure語彙の厳格化、componentKind exact-match検証）
+
+**round20監査の指摘（正確な指摘だった）**: round19はDB/Composerレベルでは正しくParentNodeIdを解決していたが、production `LayoutProjectionTree.tsx`は`spec.runtimeSpec`を持つnodeについて、常に`{rendered.node}{childElements}`——ownの描画結果と子nodeの描画結果を無条件にDOM上のsiblingとして並べる——という実装になっており、ModalのConfirm/Cancel子nodeもこの経路を通るため、実際にはModal要素の**外側**に兄弟として描画されていた。Modalが閉じていてもConfirm/CancelはDOMから消えず、「閉じている間は操作不能」という確認境界がDB上のParentNodeIdだけの見かけ上のものであり、実際のrenderには存在しないことが判明した。
+
+**1. 汎用container-child projection機構の追加（実装済み・Modalへのみ適用）**: 既存のcomponent factory契約へ`acceptsAuthoredChildren?: boolean`という汎用（enum/Modal専用ではない）opt-inケーパビリティを追加した（`frontend/components/runtimeContract.ts`）。`LayoutProjectionTree.tsx`はこのフラグを持つcomponentKindについてのみ、子nodeの描画結果を`RuntimeComponentSpec.authoredChildren`として実factoryへ渡し、factory自身がその子VNodeを自分の内部（Modalの場合は`footer`スロット）へ埋め込む——フラグを持たないcomponentKindは従来通りsiblingとして描画される、純粋additiveな変更。`RUNTIME_COMPONENT_FACTORIES`のModal登録（`disclosure/modal`）にのみ`acceptsAuthoredChildren: true`を設定し、`modalFactory`をConfirm/Cancelを`footer`として`Modal`コンポーネントへ渡すよう変更した。**Panel/Section（`cardFactory`）にも同種のgapが存在するが、本roundでは対象を広げなかった**——本番稼働中の既存画面群への視覚的回帰を、ブラウザ未接続の環境で検証できないまま広げるのは、今回のModal修正よりもはるかに広いblast radiusを持つ判断であり、round20の指摘するscopeに直接必要な範囲（Modal）のみへ限定する意図的な判断として記録する。
+
+**2. 実装中に発見した3件の隠れバグ（round19自身の既存commitに存在、Composer/live-DBレベルのproofでは検出不能だった）**: 上記の汎用機構を実装しDOM proof testを書く過程で、以下3件がround19の時点で既に壊れていたことが判明した——いずれもフロントエンドの実render経路を一度も通していなかったため、Composer単体testやlive-DB structural proofでは検出できなかった。
+   - **(a) ModalのComponentIdがnullのまま**: `LayoutSchemaTensorComposer.cs`はModal recordの`ComponentId`を一度も設定しておらず、`adaptComponentDataHub`（`runtimeComponentAdapter.ts`）はcomponentKindチェックより先に`componentId`の非空をfail-closeで要求するため、Modalは`modalFactory`へ到達する前にエラーComponentSpecとして描画されていた——ModalはDB/Composer proof上は「正しく解決された」状態に見えつつ、実際にはrender自体が最初から失敗していた。`Compose()`ループ内で`resolvedNodeId`確定直後に`componentId = resolvedNodeId`を設定して修正（`component_operation_event_log.component_id`はFK制約のない`TEXT NOT NULL`であることを`db/context_route_tables.sql`で確認済み、型/制約違反ではない）。
+   - **(b) propsJsonの形状不一致**: round19の`db/seed_empty.sql`はModalのpropsJsonを`{"title":..., "body":...}`というflatな形で書いていたが、`mergeNodeLocalProps`（`renderEmission.ts`）はtop-levelの浅いmergeのみを行い、`disclosure/modal`のcanvas-preview-derived本番default（`buildLayoutPreviewPlaceholderProps`、`{data:{open:true, title:"Modal", body:"プレビュー"}}`）が全体を`.data`配下にnestしているため、flatなpropsJsonは黙って上書きに失敗し、default（`open:true`固定、placeholderテキスト）がそのまま使われていた。`{"data":{"open":false, "title":..., "body":...}}`という正しくnestした形へ修正（seed本体・翻訳SSOT注記の双方）。
+   - **(c) 上記1のsibling描画本体のバグ。**
+
+     いずれもbrowserを使わない標準的なDeno unit test/Composer unit test/live-DB structural proofの組み合わせでは検出できず、実際に本物の`ProjectionShell`/`LayoutProjectionTree`をmountしてDOMを読むtest（下記5）で初めて検出できた——round20が要求した「real production DOM mount test」の必要性を、本round自身の作業が具体的に立証する結果になった。
+
+**3. dispatch結果gatingの是正（実装済み）**: Confirmクリックが「実writeをdispatch」しつつ「同じclickでmodalも閉じる」という二重の振る舞いを持つ既存設計（round19）は、closeModalの`localStateMutation`を**dispatchの結果を待たずenqueue時点で即時適用**していた——backend failure時もmodalは閉じてしまい、失敗が起きたことに気づけない。`emitBoundEvent`（`runtimeComponentFactory.ts`）へ`deferLocalStateMutationToDispatchSuccess`（`Boolean(binding.runtimeDispatch && binding.localStateMutation)`——同一triggerが実dispatchとlocalStateMutationを両方持つ場合のみ真になる汎用判定、Modal専用分岐ではない）を追加し、真の場合はlocalStateMutationの適用を`dispatchRuntimeComponentCommandAndForwardResult`の新規`onSettled`callback（実`DispatchResponse`が確定した時点でのみ発火）へ委譲するよう変更した。`result.success`が真の場合のみ適用し、失敗時は何もしない（modalは開いたまま）。localStateMutationのみを持つtrigger（Cancel等）は従来通り同期的に即時適用される——影響範囲はruntimeDispatchとlocalStateMutationが同一triggerに同居する組み合わせのみ。
+
+**4. disclosure actionType語彙の厳格化（実装済み）**: `.agent/scripts/react_schema_topology_seed_translator.py`の`DISCLOSURE_ACTION_TYPES`は、round19時点で`openModal`/`closeModal`/`toggleModal`に加え`openDrawer`/`closeDrawer`/`toggleDrawer`/`openDialog`/`closeDialog`/`toggleDialog`/`setActiveKey`/`setState`の計11種を「認識済み」としていたが、`DISCLOSURE_TARGET_KIND_BY_ACTION_TYPE`は元々Modal系3種しかmapを持たず、それ以外は`validate_disclosure_targets`が`continue`するだけで target存在チェックも kind一致チェックも一切行われない、という「未証明のまま将来拡張を先取りする」アンチパターンだった。今日実際に生成・cross-validate可能なのはModal系3種のみであるため、`DISCLOSURE_ACTION_TYPES`をこの3種のみへ制限した——Drawer/Dialog/setActiveKey/setStateの著述はDSLレベルで拒否されるようになった。将来これらを追加するroundは、container kind・componentKind・target-kind mapping・authoring UI・backend persistence validation match・translator fixture・negative testの全スタックを同一round内で揃えることを要求するコメントを残した。
+
+**5. componentKindのexact-match化（実装済み）**: `LayoutSchemaTensorComposer.cs`の`ParseRecords`は、Modal recordの`componentKind`が非空であることのみを検証していたが（round19）、SSOTはModalのcomponentKindを`disclosure/modal`という単一固定literalとして定義しているため、`disclosure/drawer`/`disclosure/dialog`/`safety_guard/apply_confirm_dialog`/任意の未知値のいずれも、非空である限り黙って通過していた。exact-match検証へ変更し、`disclosure/modal`以外は`Invalid`を返すようにした。`[Theory]`形式のnegative test（`disclosure/drawer`/`disclosure/dialog`/`safety_guard/apply_confirm_dialog`/`banana`の4ケース）を追加。
+
+**6. 実production DOM mount testの追加（実装済み）**: `frontend/tests/projectionShellAdminRuntimeWritePayloadCapture.test.ts`（既存の`ProjectionShell`/`LayoutProjectionTree`実mount + `FakeEventSource`/`buildMockScenario`/`simulateClick`/`waitFor`基盤を再利用）へ3件のDeno testを追加し、以下を実DOM上で証明した:
+   - 閉状態がデフォルトであること、Confirm/Cancelが閉状態では**DOMに一切存在しない**こと（要素取得結果が`null`であることをboolean assertion `assert(x === null, ...)`で確認——後述のtool infrastructure gotcha参照）、Deleteクリックでmodalが開きConfirm/Cancelが実際にDOM上へ出現すること。
+   - Cancelクリックが一切writeをdispatchせずmodalを閉じること、再度開いて行選択後Confirmすると`node:enum_table.value.groupId`から都度fresh resolveされたgroupIdでdispatchされること、backend成功結果を受け取るまでmodalが閉じないこと。
+   - 行未選択のままConfirmすると（`payloadFrom`解決失敗により）dispatch自体が起きずmodalが開いたままであること、backend failure結果を受けた場合もmodalが閉じずwrite未完了のままであることを証明する2ケース。
+   - **tool infrastructure gotchaの発見**: `deno.land/std@0.208.0/assert`の`assertEquals(domElement, null, msg)`は、比較が偽の場合に失敗diffをformatしようとしてhappy-domの循環参照を持つElementをserializeしようとし、**クリーンな失敗ではなくhangする**（timeoutでのみ気づける）。DOM要素とnullの比較は必ず`assert(x === null, msg)`のようなboolean assertionを使う——本file内の該当箇所は全て修正済み。
+
+**7. test実行結果**: `dotnet test backend/tests/Topolactor.Runtime.Tests`（1564/1564、新規`LayoutSchemaStructuralCompositionTests`4件込み64件）、`dotnet test backend/tests/Topolactor.Integration.Tests`（実PostgreSQL、219件中218件——round19記載の既存無関係stale test `UiTopologyLayoutPatchRollbackIntegrationTests`（`ui_layout_registry`という現存しないテーブル名参照）1件を除き全green、本roundの変更とは無関係であることを`git stash`不要で確認済み——round19から状態不変）、`deno test frontend/tests/`（2028/2028、新規DOM mount test 3件込み）、`bash .agent/tests/check-frontend-types.sh`（PASS、25 files）、`python3 .agent/scripts/check_react_schema_topology_seed_translator.py`（172件中171件——round19以前から既存の無関係な7aフレークのみ残存、新規104-107番のdisclosure負例チェック全pass）、`check-structure.sh`/`check-enum-dictionary.sh`/`check-admin-normal-surface-projection-seed-ssot.sh`/`check-completion-judgment.sh`/`check-worktype-routing.sh`全pass。回帰ゼロを確認した。
+
+**未着手のまま残る内容（正直な記録、round20自身が要求した範囲のうち本roundで着手できなかった部分）**: 本roundはround19の既存commitに存在した3件の隠れバグ（DOM sibling描画・ComponentId欠落・propsJson形状不一致）の発見と修正、および結果gating/語彙厳格化/exact-match検証というDOM/正確性面の是正だけで、当初見積もりを大きく超える調査・実装・test作成を要した。round20が同一round内での継続を明示的に要求していた以下は、いずれも本roundでは着手していない:
+- create_group/update_group/create_item/update_item/set_group_items——残り5 actionへの同種confirmation dialog patternの適用（round19記載の通り、create_group等は破壊的操作ではないため要否自体owner未確認）。
+- cross-manifest response adoptionの汎用contract設計（round17/18から継続する未着手項目）。
+- 統合single-surface UX（画面全体としてのCRUD一体化）。
+- 完全なnegative boundary証明群（本roundで追加した104-107番はdisclosure語彙のみが対象で、他のNG境界の網羅ではない）。
+- `AdminEnumsRoster.tsx`/ハードコードroute（`/admin/enums`）の撤去。
+- `directory-map`ツール・`agent-ui-initial-contract`ツールは本round内では呼び出していない（未使用のまま）。
+
+これらを次roundへ明示的に引き継ぐ。
+
+### Governance NG boundary追記（round 20）
+
+- 本roundのDOM containment修正・3件の隠れバグ修正をもって、admin-enum subBundleまたは`admin-surface-topology-seed-conversion` Bundle全体がimplementedであるかのように扱う——残り5 action・cross-manifest response adoption・統合UX・完全negative boundary証明・route撤去のいずれも未着手である。
+- `acceptsAuthoredChildren`をPanel/Section（`cardFactory`）等、Modal以外のcomponentKindへ根拠なく拡張する——同種のgapは存在するが、本番稼働中の既存画面への視覚的回帰をbrowser未接続で検証できないまま拡張しない。
+- `DISCLOSURE_ACTION_TYPES`をDrawer/Dialog/setActiveKey/setState等へ、container kind・componentKind・target-kind mapping・authoring UI・backend validation・translator fixture・negative testの全スタックを揃えずに再拡張する。
+- DOM proof testにおいて`assertEquals(x, null, ...)`を使う——本roundで発見したhang gotchaを再導入することになる。
+
 ---
 
 ## Bundle `admin-runtime-operation-dispatch-lane-determination`

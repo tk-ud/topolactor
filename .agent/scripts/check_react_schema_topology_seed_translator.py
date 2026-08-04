@@ -1894,6 +1894,82 @@ def main():
             missing_obligation is None,
         )
 
+        # 104-107: validate_disclosure_targets negative-boundary proof (round 25). These
+        # exercise the cross-tree disclosure-family validator directly with hand-built
+        # nodes -- a well-formed CLI input from a real screen cannot organically produce
+        # an unsupported actionType or a dangling targetNodeId, so this is the only place
+        # that proves the restricted DISCLOSURE_ACTION_TYPES set (openModal/closeModal/
+        # toggleModal only, since round 25 removed the unvalidated Drawer/Dialog/setState
+        # entries) and the targetNodeId/target-kind checks actually fail closed rather than
+        # silently passing through.
+        unsupported_action_node = {
+            "_path": "$.test.open_drawer_action",
+            "key": "open_drawer_action",
+            "eventBinding": {
+                "wiringLane": "disclosure_state_wiring",
+                "disclosureActionType": "openDrawer",
+                "disclosureTargetNodeId": "some_drawer",
+            },
+        }
+        unsupported_action_errors = []
+        translator_impl.validate_disclosure_targets(unsupported_action_node, {}, unsupported_action_errors)
+        expect(
+            "104. validate_disclosure_targets rejects an unsupported disclosure-family actionType (openDrawer) with DISCLOSURE_ACTION_TYPE_UNSUPPORTED rather than treating it as recognized vocabulary",
+            "DISCLOSURE_ACTION_TYPE_UNSUPPORTED" in [e["ruleId"] for e in unsupported_action_errors],
+        )
+
+        missing_target_node = {
+            "_path": "$.test.open_modal_no_target",
+            "key": "open_modal_no_target",
+            "eventBinding": {
+                "wiringLane": "disclosure_state_wiring",
+                "disclosureActionType": "openModal",
+                "disclosureTargetNodeId": None,
+            },
+        }
+        missing_target_errors = []
+        translator_impl.validate_disclosure_targets(missing_target_node, {}, missing_target_errors)
+        expect(
+            "105. validate_disclosure_targets rejects a supported disclosureActionType (openModal) with a missing/empty targetNodeId via DISCLOSURE_TARGET_NODE_REQUIRED",
+            "DISCLOSURE_TARGET_NODE_REQUIRED" in [e["ruleId"] for e in missing_target_errors],
+        )
+
+        wrong_kind_target_node = {
+            "_path": "$.test.open_modal_wrong_target",
+            "key": "open_modal_wrong_target",
+            "eventBinding": {
+                "wiringLane": "disclosure_state_wiring",
+                "disclosureActionType": "openModal",
+                "disclosureTargetNodeId": "not_a_modal",
+            },
+        }
+        wrong_kind_target_errors = []
+        translator_impl.validate_disclosure_targets(
+            wrong_kind_target_node, {"not_a_modal": "Section"}, wrong_kind_target_errors,
+        )
+        expect(
+            "106. validate_disclosure_targets rejects a disclosureTargetNodeId that resolves to a real node of the wrong kind (Section, not Modal) via DISCLOSURE_TARGET_KIND_MISMATCH",
+            "DISCLOSURE_TARGET_KIND_MISMATCH" in [e["ruleId"] for e in wrong_kind_target_errors],
+        )
+
+        valid_target_node = {
+            "_path": "$.test.open_modal_valid",
+            "key": "open_modal_valid",
+            "eventBinding": {
+                "wiringLane": "disclosure_state_wiring",
+                "disclosureActionType": "openModal",
+                "disclosureTargetNodeId": "real_modal",
+            },
+        }
+        valid_target_errors = []
+        translator_impl.validate_disclosure_targets(
+            valid_target_node, {"real_modal": "Modal"}, valid_target_errors,
+        )
+        expect(
+            "107. validate_disclosure_targets positive control: a supported actionType (openModal) with a targetNodeId resolving to an actual Modal node produces zero errors, proving 104-106 fail for the right reason and not because every input fails",
+            valid_target_errors == [],
+        )
+
     print()
     if FAILURES:
         print(f"=== {len(FAILURES)} react-schema-topology-seed-translator check(s) failed ===", file=sys.stderr)

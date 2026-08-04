@@ -614,6 +614,25 @@ public class LayoutSchemaStructuralCompositionTests
         Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(LayoutSchemaTensorComposer.ParseRecords(json));
     }
 
+    [Theory]
+    [InlineData("disclosure/drawer")]
+    [InlineData("disclosure/dialog")]
+    [InlineData("safety_guard/apply_confirm_dialog")]
+    [InlineData("banana")]
+    public void ParseRecords_ModalRecordWithAnyOtherNonEmptyComponentKind_ReturnsInvalid_NeverSkipped(string wrongKind)
+    {
+        // Round 25: exact-match fail-close, not merely non-empty. Modal is fixed to the single
+        // literal componentKind "disclosure/modal" (docs/design/react-schema-topology-seed-
+        // translator-ssot.yaml react_schema_contract.allowed_node_kinds.Modal) -- this translator/
+        // composer has no Drawer/Dialog/other container kind support today, so any other value,
+        // including a real backend-recognized disclosure kind ahead of its own support landing, is
+        // a real authoring defect, not a silently-accepted "close enough" kind.
+        var json = "{\"records\":[{\"type\":\"topology_ui_seed_record\",\"parentKey\":null,\"record\":{\"recordType\":\"topology_ui_modal\",\"key\":\"m1\",\"componentKind\":\"" +
+            wrongKind +
+            "\",\"label\":\"m1\",\"sourceReactPath\":\"$.test.m1\",\"sourceYamlRefs\":[\"ref\"],\"knownGapRefs\":[]}}]}";
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(LayoutSchemaTensorComposer.ParseRecords(json));
+    }
+
     [Fact]
     public void ComposeLayoutSchemaWithTensor_ModalRecord_ComponentKindComesFromRecordItself_NeverARegistryLookup()
     {
@@ -634,7 +653,11 @@ public class LayoutSchemaStructuralCompositionTests
         var modal = Assert.Single(composed);
         Assert.Equal("catalog_component", modal.NodeKind);
         Assert.Equal("disclosure/modal", modal.ComponentKind);
-        Assert.Null(modal.ComponentId);
+        // ComponentId is the Modal's own resolved NodeId (round 25 fix) -- never null:
+        // adaptComponentDataHub fails closed (RUNTIME_COMPONENT_ADAPTER_MISSING_COMPONENT_ID) on an
+        // empty componentId before componentKind is even inspected, which would have silently
+        // turned every Modal into a render-time error instead of a working dialog.
+        Assert.Equal("m1", modal.ComponentId);
     }
 
     [Fact]
@@ -671,6 +694,7 @@ public class LayoutSchemaStructuralCompositionTests
         var modal = Assert.Single(composed, n => n.NodeId == "confirm_modal");
         Assert.Null(modal.ParentNodeId);
         Assert.Equal("disclosure/modal", modal.ComponentKind);
+        Assert.Equal("confirm_modal", modal.ComponentId);
 
         var confirm = Assert.Single(composed, n => n.NodeId == "confirm_button");
         Assert.Equal("confirm_modal", confirm.ParentNodeId);

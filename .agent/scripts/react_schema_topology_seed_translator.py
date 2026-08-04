@@ -158,16 +158,25 @@ UNIT_TO_NODE_KIND = {
 # containers today, so only the *Modal actionTypes are reachable via a real fixture; the others
 # are still recognized vocabulary (not UNKNOWN) so a future round adding Drawer/Dialog/Tabs
 # container kinds does not also need a new actionType allowlist.
+# Round 25: deliberately restricted to ONLY the actionTypes this translator can fully generate
+# AND cross-validate (target existence + componentKind match) today -- the *Modal family, since
+# Modal is the only container kind this translator emits. openDrawer/closeDrawer/toggleDrawer/
+# openDialog/closeDialog/toggleDialog/setActiveKey/setState are real backend-recognized
+# actionTypes (NpgsqlUiTopologyRepository.cs ValidateRuntimeInteractions), but this translator has
+# no Drawer/Dialog/Tabs/Accordion container kind, target-kind mapping, authoring shape, or fixture/
+# test coverage for them -- accepting them here as "recognized vocabulary" while skipping their
+# target-kind check (as an earlier version of this set did) would be an unproven allowlist: an
+# authored disclosureActionType="openDrawer" would pass validation with NO check that its
+# targetNodeId even exists, let alone is a Drawer. A future round adding Drawer/Dialog/Tabs/
+# Accordion support must add their full stack (container kind, componentKind, target-kind mapping,
+# authoring shape, backend persistence validation match, translator fixture, negative test) in the
+# SAME round it extends this set, not before.
 DISCLOSURE_ACTION_TYPES = {
     "openModal", "closeModal", "toggleModal",
-    "openDrawer", "closeDrawer", "toggleDrawer",
-    "openDialog", "closeDialog", "toggleDialog",
-    "setActiveKey", "setState",
 }
 
-# Only the *Modal family has a matching container kind this translator can emit and therefore
-# cross-validate today (see validate_disclosure_targets) -- Drawer/Dialog/Tabs/Accordion target
-# kind checking is deferred to whichever future round adds those container kinds.
+# The *Modal family has a matching container kind this translator can emit and therefore
+# cross-validate today (see validate_disclosure_targets).
 DISCLOSURE_TARGET_KIND_BY_ACTION_TYPE = {
     "openModal": "Modal",
     "closeModal": "Modal",

@@ -101,11 +101,9 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         Assert.Contains("localStateMutation", confirmButton.RuntimeInteractions!.Value.GetRawText());
 
         // render completion: every catalog_component leaf resolved either a registry componentId
-        // (Field/Table/Action/WorkflowStep) or, for a Modal (round 24), its own literal
-        // componentKind directly -- Modal is a built-in runtime primitive, never registry-backed,
-        // so a null ComponentId with a non-null ComponentKind is its EXPECTED resolved shape, not
-        // an unresolved gap (see LayoutSchemaTensorComposer.cs ModalRecordType handling). A leaf
-        // with BOTH null is the real gap this assertion exists to catch.
+        // (Field/Table/Action/WorkflowStep) or, for a Modal, its own literal componentKind
+        // directly -- Modal is a built-in runtime primitive, never registry-backed. A leaf with
+        // BOTH ComponentId and ComponentKind null is the real gap this assertion exists to catch.
         var unresolvedLeaves = nodes
             .Where(n => n.NodeKind == "catalog_component" && n.ComponentId is null && n.ComponentKind is null)
             .ToList();
@@ -114,7 +112,14 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         var confirmModal = Assert.Single(nodes, n => n.NodeId == "enum_delete_group_confirm_modal");
         Assert.Equal("catalog_component", confirmModal.NodeKind);
         Assert.Equal("disclosure/modal", confirmModal.ComponentKind);
-        Assert.Null(confirmModal.ComponentId);
+        // ComponentId is the Modal's own resolved NodeId (round 25 fix): frontend/runtime/
+        // runtimeComponentAdapter.ts adaptComponentDataHub fails closed
+        // (RUNTIME_COMPONENT_ADAPTER_MISSING_COMPONENT_ID) on an empty/null componentId before
+        // componentKind is even inspected -- round 24 left this null, which would have silently
+        // rendered every Modal node as a render-time error instead of a working dialog, never
+        // reaching modalFactory at all. Caught here, and by a real DOM mount test, before this
+        // round's fix.
+        Assert.Equal("enum_delete_group_confirm_modal", confirmModal.ComponentId);
 
         Assert.Empty(emission.Errors);
     }

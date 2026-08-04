@@ -393,7 +393,19 @@ react_schema_topology_seed_translator_ssot:
           support Drawer/Dialog container kinds; a future round adds those alongside their own
           disclosure_state_wiring targetKind support). title/body are optional display props,
           carried through to the tensor node's propsJson by the seed transcription step, never
-          read or validated by the translator itself.
+          read or validated by the translator itself. That transcription step MUST nest
+          title/body (and an explicit "open":false) under a top-level "data" key in propsJson --
+          e.g. {"data":{"open":false,"title":"...","body":"..."}} -- never flat top-level
+          {"title":"...","body":"..."} (round 25 fix; round 24's original db/seed_empty.sql shape
+          was flat and wrong). frontend/runtime/renderEmission.ts mergeNodeLocalProps only ever
+          shallow-merges propsJson onto componentKind's default props, and
+          frontend/runtime/layoutComponentPreview.ts's own "disclosure/modal" default props are
+          {data:{open:true,title:"Modal",body:"プレビュー"}} (a UI-Builder canvas-preview
+          convenience) -- a flat propsJson would add new unrelated top-level keys while leaving
+          that default's own nested "data" (still open:true, wrong title/body) completely
+          untouched, since modalFactory reads props.data whenever it is present. Only a real
+          ProjectionShell DOM mount test caught this; neither Composer unit tests nor live-DB
+          structural proof exercise propsJson merging at all.
       Step:
         required: [eventBinding, authorityMarker]
         emits_seed: topology_ui_workflow_step

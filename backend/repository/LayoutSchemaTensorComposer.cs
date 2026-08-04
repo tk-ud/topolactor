@@ -205,6 +205,17 @@ public static class LayoutSchemaTensorComposer
                     ? ck.GetString() : null;
                 if (recordType == ModalRecordType && string.IsNullOrWhiteSpace(componentKind))
                     return new RecordsParseResult.Invalid($"records[{index}].record recordType \"{ModalRecordType}\" is missing a non-empty componentKind.");
+                // Round 25: exact-match fail-close, not merely non-empty. docs/design/
+                // react-schema-topology-seed-translator-ssot.yaml react_schema_contract
+                // .allowed_node_kinds.Modal fixes componentKind to the single literal value
+                // "disclosure/modal" -- this translator/composer emits no Drawer/Dialog/other
+                // container kind today, so any other non-empty value (a typo, "disclosure/drawer"
+                // ahead of that family's own real support landing, or an unrelated string) is a
+                // real authoring defect, never silently accepted as if it were a registered kind.
+                if (recordType == ModalRecordType && componentKind != ModalComponentKind)
+                    return new RecordsParseResult.Invalid(
+                        $"records[{index}].record recordType \"{ModalRecordType}\" has componentKind \"{componentKind}\", " +
+                        $"only \"{ModalComponentKind}\" is supported.");
 
                 // record_common_required_fields (docs/design/react-schema-topology-seed-translator-ssot.yaml
                 // topology_ui_seed_contract.record_common_required_fields, mirrored at runtime so a
@@ -481,8 +492,15 @@ public static class LayoutSchemaTensorComposer
             {
                 // No ui_component_registry lookup: the record already carries its own literal
                 // componentKind (validated non-empty in ParseRecords) -- there is no component_key
-                // convention to resolve, and no ComponentId either (Modal is a built-in runtime
-                // primitive, not a registry-backed preset component).
+                // convention to resolve. ComponentId is still required (round 25 fix): frontend/
+                // runtime/runtimeComponentAdapter.ts adaptComponentDataHub fails closed with
+                // RUNTIME_COMPONENT_ADAPTER_MISSING_COMPONENT_ID on an empty/null componentId
+                // BEFORE componentKind is even inspected -- a null ComponentId here would silently
+                // turn every Modal node into an "error" ComponentSpec at render time (never
+                // reaching modalFactory at all), caught by round 25's own DOM mount test. Assigned
+                // below once resolvedNodeId exists; component_operation_event_log.component_id is
+                // plain TEXT (no FK to ui_component_registry), so a non-registry-backed identifier
+                // is a legitimate value, not a type mismatch.
                 componentKind = row.ComponentKind;
             }
             else if (isCatalogLeaf)
@@ -515,6 +533,8 @@ public static class LayoutSchemaTensorComposer
             var nodeKind = isUnresolved ? "unresolved_gap" : isStructural ? "structural_node" : "catalog_component";
             var resolvedNodeId = ResolveNodeId(row, parentNodeId);
             lastResolvedNodeIdByKey[row.Key] = resolvedNodeId;
+            if (row.RecordType == ModalRecordType)
+                componentId = resolvedNodeId;
 
             NodeLocalData? localData = isCatalogLeaf && nodeLocalDataByNodeId is not null &&
                 nodeLocalDataByNodeId.TryGetValue(resolvedNodeId, out var matchedLocalData)

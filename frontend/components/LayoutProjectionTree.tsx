@@ -7,6 +7,7 @@ import { flowNodePresentation, flowRootClassName } from "../runtime/layoutNodeFl
 import { resolveInlineStyleFromCssTokenRefs } from "../runtime/cssDictionary.ts";
 import { interpolateLinkHrefReadOnly } from "../runtime/linkPlaceholderInterpolation.ts";
 import { renderRuntimeComponent } from "../runtime/runtimePrimitiveRenderer.ts";
+import { componentAcceptsAuthoredChildren } from "../runtime/runtimeComponentRegistry.ts";
 import {
   isLayoutStructureContainerClassRefs,
   resolveFlowContainerPreviewClassName,
@@ -118,7 +119,16 @@ function ProjectionTreeNode({
   }
 
   if (spec.runtimeSpec) {
-    const rendered = renderRuntimeComponent(spec.runtimeSpec);
+    // Round 25 (Modal DOM containment): a componentKind that declares
+    // acceptsAuthoredChildren (currently disclosure/modal) embeds its REAL schema children
+    // itself (see modalFactory's footer usage) instead of them being rendered as trailing DOM
+    // siblings below. Any other componentKind (unset — the default) keeps today's exact
+    // behavior: children still passed through as siblings, authoredChildren left undefined.
+    const embedsChildrenItself = componentAcceptsAuthoredChildren(spec.componentType);
+    const rendered = renderRuntimeComponent(
+      spec.runtimeSpec,
+      embedsChildrenItself ? childElements : undefined,
+    );
     if (!rendered.ok) {
       return (
         <div
@@ -132,7 +142,7 @@ function ProjectionTreeNode({
     return (
       <div {...commonProps} data-component-id={spec.componentId}>
         {rendered.node}
-        {childElements}
+        {embedsChildrenItself ? null : childElements}
       </div>
     );
   }
