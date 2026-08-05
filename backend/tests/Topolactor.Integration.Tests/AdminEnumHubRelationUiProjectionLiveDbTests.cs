@@ -83,22 +83,13 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         Assert.Equal("data_display/table", table.ComponentKind);
         Assert.NotNull(table.ComponentId);
 
-        var formField = Assert.Single(nodes, n => n.NodeId == "enum_form");
-        Assert.Equal("catalog_component", formField.NodeKind);
-        Assert.Equal("form_input/form_field", formField.ComponentKind);
-        Assert.NotNull(formField.ComponentId);
-
-        var confirmButton = Assert.Single(nodes, n => n.NodeId == "enum_confirm_button");
-        Assert.Equal("catalog_component", confirmButton.NodeKind);
-        Assert.Equal("action/button", confirmButton.ComponentKind);
-        Assert.NotNull(confirmButton.ComponentId);
-        // The one real, functioning interaction: opens local confirm state
-        // (internal_instance_wiring localStateMutation) -- explicit_confirm stage of
-        // mutation_confirmation_contract. The write stage has no runtimeInteractions here (see
-        // db/seed_empty.sql admin-enum header comment / enum_write_dispatch_gap validation
-        // record -- known gap, not fabricated).
-        Assert.NotNull(confirmButton.RuntimeInteractions);
-        Assert.Contains("localStateMutation", confirmButton.RuntimeInteractions!.Value.GetRawText());
+        // enum_confirm_form/enum_form/enum_confirm_button (the original structural-leaf-only
+        // edit-and-confirm stub, predating the per-operation write manifests ae210-ae270 and
+        // their real dryRun-preview/confirm-modal wiring) were removed as orphans: zero frontend
+        // consumers, and enum_confirm_button's own dispatch was a ui-local no-op with no backend
+        // target and no consumer of the local "confirm" state it opened. Fully superseded by the
+        // 7 real per-operation confirm modals below (see .agent/tasks/todo.md admin-enum
+        // subBundle closure record).
 
         // render completion: every catalog_component leaf resolved either a registry componentId
         // (Field/Table/Action/WorkflowStep) or, for a Modal, its own literal componentKind
@@ -730,6 +721,9 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
 
         Assert.NotNull(table.PropsJson);
         Assert.Contains("groupName", table.PropsJson);
+        // items-browse UX (admin-enum subBundle closure round): folded into enum_table's own
+        // displayColumns, no new list_items action, no cross-manifest dispatch.
+        Assert.Contains("itemsSummary", table.PropsJson);
         Assert.NotNull(table.PropBindings);
         var propBindingsText = table.PropBindings!.Value.GetRawText();
         Assert.Contains("\"rows\"", propBindingsText);
@@ -742,12 +736,6 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         Assert.Equal("admin_runtime", searchField.WiringKind);
         var groupFilterField = Assert.Single(structureNodes, n => n.NodeId == "enum_group_filter");
         Assert.Equal("admin_runtime", groupFilterField.WiringKind);
-
-        // enum_confirm_button keeps its own explicit_confirm-only interaction, unaffected by the
-        // layout's admin_runtime read binding (Lane 3 overrides Lane 2 on its own click trigger).
-        var confirmButton = Assert.Single(structureNodes, n => n.NodeId == "enum_confirm_button");
-        Assert.NotNull(confirmButton.RuntimeInteractions);
-        Assert.Contains("localStateMutation", confirmButton.RuntimeInteractions!.Value.GetRawText());
 
         // STEP 2: the REAL data dispatch -- Target/Layer/Action set directly (exactly what
         // frontend/runtime/frontendScheduler.ts enqueueRuntimeComponentCommand sends as the
@@ -778,6 +766,12 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         var dataText = dataEmission.Data!.Value.GetRawText();
         Assert.Contains("demo_status", dataText);
         Assert.Contains("groupName", dataText);
+        // items-browse UX: list_groups' own response now carries each group's items as a
+        // flattened "index:name" summary (db/enum_seed.sql: demo_status's real member
+        // demo_active, index_num=1) -- folded into the SAME action, never a separate
+        // list_items dispatch.
+        Assert.Contains("itemsSummary", dataText);
+        Assert.Contains("1:demo_active", dataText);
     }
 
     /// <summary>
@@ -1064,6 +1058,135 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = "SELECT name FROM enum.items WHERE index_num = 1";
             Assert.Equal("demo_active", (string?)await cmd.ExecuteScalarAsync());
+        }
+    }
+
+    /// <summary>
+    /// admin-enum subBundle closure round negative-boundary matrix gap-fill: the constraint-backed
+    /// negative test above proves missing/duplicate-index/referenced-delete for create_group/
+    /// create_item/delete_item/set_group_items, but update_group/update_item's OWN missing-ID and
+    /// duplicate-index checks (AdminRuntimeMasterRoster.cs DataEnumDictionaryUpdateGroupAsync/
+    /// DataEnumDictionaryUpdateItemAsync -- separate method bodies, not shared code with create_*)
+    /// had never been independently live-DB-proven. Uses fresh, UNREFERENCED rows (never demo_status/
+    /// demo_active) so this is a genuine "two ordinary rows, no group-membership entanglement"
+    /// duplicate-index case, distinct from the referenced-row ENUM_ITEM_IN_USE case already proven
+    /// above.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_EnumDictionaryUpdateGroupAndUpdateItem_OwnMissingIdAndDuplicateIndexNegativeCases_FailCloseAgainstRealPostgres()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+        async Task<EndpointResponseDto> DispatchAsync(string action, object payload) =>
+            await DispatchViaOwnWriteManifestAsync(dispatcher, action, payload);
+
+        await using var cleanupConn = new NpgsqlConnection(cs);
+        await cleanupConn.OpenAsync();
+        async Task ExecAsync(string sql, params (string Name, object Value)[] parms)
+        {
+            await using var cmd = cleanupConn.CreateCommand();
+            cmd.CommandText = sql;
+            foreach (var (name, value) in parms) cmd.Parameters.AddWithValue(name, value);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        Guid? groupAId = null, groupBId = null;
+        int? itemAIndex = null, itemBIndex = null;
+        try
+        {
+            var createGroupA = await DispatchAsync("create_group",
+                new { groupName = $"neg-matrix-group-a-{suffix}", confirmed = true });
+            Assert.True(createGroupA.Success, string.Join(";", createGroupA.Errors.Select(e => e.Code)));
+            groupAId = createGroupA.Emission!.Data!.Value.GetProperty("groupId").GetGuid();
+            var groupAIndex = createGroupA.Emission!.Data!.Value.GetProperty("indexNum").GetInt32();
+
+            var createGroupB = await DispatchAsync("create_group",
+                new { groupName = $"neg-matrix-group-b-{suffix}", confirmed = true });
+            Assert.True(createGroupB.Success, string.Join(";", createGroupB.Errors.Select(e => e.Code)));
+            groupBId = createGroupB.Emission!.Data!.Value.GetProperty("groupId").GetGuid();
+            var groupBIndex = createGroupB.Emission!.Data!.Value.GetProperty("indexNum").GetInt32();
+
+            var createItemA = await DispatchAsync("create_item",
+                new { name = $"neg-matrix-item-a-{suffix}", confirmed = true });
+            Assert.True(createItemA.Success, string.Join(";", createItemA.Errors.Select(e => e.Code)));
+            itemAIndex = createItemA.Emission!.Data!.Value.GetProperty("indexNum").GetInt32();
+
+            var createItemB = await DispatchAsync("create_item",
+                new { name = $"neg-matrix-item-b-{suffix}", confirmed = true });
+            Assert.True(createItemB.Success, string.Join(";", createItemB.Errors.Select(e => e.Code)));
+            itemBIndex = createItemB.Emission!.Data!.Value.GetProperty("indexNum").GetInt32();
+
+            // update_group: missing groupId (never created / already deleted) fails close, dryRun
+            // and confirmed alike.
+            var missingGroupDryRun = await DispatchAsync("update_group",
+                new { groupId = Guid.NewGuid().ToString(), groupName = "x", dryRun = true });
+            Assert.False(missingGroupDryRun.Success);
+            Assert.Contains(missingGroupDryRun.Errors, e => e.Code == "ENUM_GROUP_NOT_FOUND");
+            var missingGroupWrite = await DispatchAsync("update_group",
+                new { groupId = Guid.NewGuid().ToString(), groupName = "x", confirmed = true });
+            Assert.False(missingGroupWrite.Success);
+            Assert.Contains(missingGroupWrite.Errors, e => e.Code == "ENUM_GROUP_NOT_FOUND");
+
+            // update_group: changing group A's own indexNum to group B's (unreferenced, ordinary
+            // rows -- no FK entanglement) fails close, dryRun and confirmed alike, group A untouched.
+            var dupGroupIndexDryRun = await DispatchAsync("update_group",
+                new { groupId = groupAId.Value.ToString(), indexNum = groupBIndex, dryRun = true });
+            Assert.False(dupGroupIndexDryRun.Success);
+            Assert.Contains(dupGroupIndexDryRun.Errors, e => e.Code == "ENUM_GROUP_INDEX_CONFLICT");
+            var dupGroupIndexWrite = await DispatchAsync("update_group",
+                new { groupId = groupAId.Value.ToString(), indexNum = groupBIndex, confirmed = true });
+            Assert.False(dupGroupIndexWrite.Success);
+            Assert.Contains(dupGroupIndexWrite.Errors, e => e.Code == "ENUM_GROUP_INDEX_CONFLICT");
+
+            // update_item: missing indexNum (never created) fails close, dryRun and confirmed alike.
+            var missingItemDryRun = await DispatchAsync("update_item",
+                new { indexNum = 987_654_321, name = "x", dryRun = true });
+            Assert.False(missingItemDryRun.Success);
+            Assert.Contains(missingItemDryRun.Errors, e => e.Code == "ENUM_ITEM_NOT_FOUND");
+            var missingItemWrite = await DispatchAsync("update_item",
+                new { indexNum = 987_654_321, name = "x", confirmed = true });
+            Assert.False(missingItemWrite.Success);
+            Assert.Contains(missingItemWrite.Errors, e => e.Code == "ENUM_ITEM_NOT_FOUND");
+
+            // update_item: changing item A's own indexNum to item B's (unreferenced, ordinary rows)
+            // fails close, dryRun and confirmed alike, item A untouched.
+            var dupItemIndexDryRun = await DispatchAsync("update_item",
+                new { indexNum = itemAIndex.Value, newIndexNum = itemBIndex.Value, dryRun = true });
+            Assert.False(dupItemIndexDryRun.Success);
+            Assert.Contains(dupItemIndexDryRun.Errors, e => e.Code == "ENUM_ITEM_INDEX_CONFLICT");
+            var dupItemIndexWrite = await DispatchAsync("update_item",
+                new { indexNum = itemAIndex.Value, newIndexNum = itemBIndex.Value, confirmed = true });
+            Assert.False(dupItemIndexWrite.Success);
+            Assert.Contains(dupItemIndexWrite.Errors, e => e.Code == "ENUM_ITEM_INDEX_CONFLICT");
+
+            // None of the above negative attempts altered group A's or item A's real rows.
+            await using (var conn = new NpgsqlConnection(cs))
+            {
+                await conn.OpenAsync();
+                await using var groupCmd = conn.CreateCommand();
+                groupCmd.CommandText = "SELECT index_num FROM enum.groups WHERE group_id = @id";
+                groupCmd.Parameters.AddWithValue("id", groupAId.Value);
+                Assert.Equal(groupAIndex, (int)(await groupCmd.ExecuteScalarAsync())!);
+
+                await using var itemCmd = conn.CreateCommand();
+                itemCmd.CommandText = "SELECT index_num FROM enum.items WHERE index_num = @idx";
+                itemCmd.Parameters.AddWithValue("idx", itemAIndex.Value);
+                Assert.Equal(itemAIndex.Value, (int)(await itemCmd.ExecuteScalarAsync())!);
+            }
+        }
+        finally
+        {
+            if (groupAId is not null)
+                await ExecAsync("DELETE FROM enum.groups WHERE group_id = @id", ("id", groupAId.Value));
+            if (groupBId is not null)
+                await ExecAsync("DELETE FROM enum.groups WHERE group_id = @id", ("id", groupBId.Value));
+            if (itemAIndex is not null)
+                await ExecAsync("DELETE FROM enum.items WHERE index_num = @idx", ("idx", itemAIndex.Value));
+            if (itemBIndex is not null)
+                await ExecAsync("DELETE FROM enum.items WHERE index_num = @idx", ("idx", itemBIndex.Value));
         }
     }
 

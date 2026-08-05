@@ -28,6 +28,39 @@ public class NpgsqlEnumDictionaryRepository : EnumDictionaryRepository
         return list;
     }
 
+    public override async Task<IReadOnlyList<EnumDictionaryGroupWithItemsSummaryDto>> ListGroupsWithItemsSummaryAsync(
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            """
+            SELECT g.group_id, g.index_num, g.group_name,
+                   COALESCE(
+                       string_agg(i.index_num || ':' || i.name, ', ' ORDER BY gi.position),
+                       ''
+                   ) AS items_summary
+            FROM enum.groups g
+            LEFT JOIN enum.group_items gi ON gi.group_id = g.group_id
+            LEFT JOIN enum.items i ON i.index_num = gi.enum_index_num
+            GROUP BY g.group_id, g.index_num, g.group_name
+            ORDER BY g.index_num
+            """;
+        var list = new List<EnumDictionaryGroupWithItemsSummaryDto>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            list.Add(new EnumDictionaryGroupWithItemsSummaryDto(
+                reader.GetGuid(0),
+                reader.GetInt32(1),
+                reader.GetString(2),
+                reader.GetString(3)));
+        }
+
+        return list;
+    }
+
     public override async Task<EnumDictionaryGroupDetailDto?> GetGroupDetailAsync(
         Guid groupId, CancellationToken ct = default)
     {

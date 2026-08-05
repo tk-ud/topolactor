@@ -3453,10 +3453,19 @@ function installRejectingEnqueueOverride(
   return () => runtimeComponentFactoryTestOnly.setEnqueueRuntimeComponentCommandForTest(null);
 }
 
-Deno.test(
-  "ProjectionShell (real mount, round 3 settlement authority): delete_group's preview dispatch — wrong manifest / missing Emission / backend success:false / queue rejection settlement shapes never open the Modal, each surfacing an explicit warning",
-  async () => {
-    const config = CONFIRM_MODAL_SCENARIOS.find((c) => c.label === "delete_group")!;
+// admin-enum subBundle closure round: round 3's settlement-authority tests originally proved
+// wrong manifest / missing Emission / backend success:false / queue rejection ONLY for
+// delete_group, generalized to all 7 by assertion (never actually driven through the mount for
+// create_group/update_group/create_item/update_item/delete_item/set_group_items). resolveRuntime
+// DispatchSettlement (runtimeDispatchSettlement.ts) is itself fully generic -- never operation-
+// specific -- so this loop drives the SAME real production ProjectionShell mount through all 7
+// CONFIRM_MODAL_SCENARIOS, using the SAME typedFields/needsSelectedGroupRow setup the canonical-
+// reread proof below already established generically, closing the exact gap the round-5 NG axis
+// (.agent/tasks/todo.md) flags: no all-7 boundary proved via only one representative operation.
+for (const config of CONFIRM_MODAL_SCENARIOS) {
+  Deno.test(
+    `ProjectionShell (real mount, round 3 settlement authority): ${config.label}'s preview dispatch — wrong manifest / missing Emission / backend success:false / queue rejection settlement shapes never open the Modal, each surfacing an explicit warning`,
+    async () => {
     for (const shape of NEGATIVE_SETTLEMENT_SHAPES) {
       ensureRuntimeComponentRegistryInitialized();
       schedulerTestOnly.resetCommandQueue();
@@ -3515,7 +3524,7 @@ Deno.test(
                 `enqueueRuntimeComponentCommand override should have rejected before the network`,
             );
           }
-          return negativeSettlementResponseFor(shape, "delete_group's preview");
+          return negativeSettlementResponseFor(shape, `${config.label}'s preview`);
         }
         return Promise.resolve(
           new Response(JSON.stringify(fallbackDispatchResponse(body)), { status: 200 }),
@@ -3530,7 +3539,7 @@ Deno.test(
         ? installRejectingEnqueueOverride(
           config.targetRef,
           "dryRun",
-          "simulated queue/network rejection (delete_group's preview queue_rejection scenario)",
+          `simulated queue/network rejection (${config.label}'s preview queue_rejection scenario)`,
         )
         : null;
 
@@ -3543,12 +3552,21 @@ Deno.test(
           openButtonEl = queryOpenButtonFor(container, config.prefix);
           return openButtonEl !== null;
         });
-        assertExists(openButtonEl, `[${shape}] delete_group's open trigger must render`);
+        assertExists(openButtonEl, `[${shape}] ${config.label}'s open trigger must render`);
 
-        const rowEl = container.querySelector("tbody tr") as HTMLTableRowElement | null;
-        assertExists(rowEl, `[${shape}] delete_group needs a selectable group row`);
-        simulateRowClick(rowEl!);
-        await flushUpdates();
+        for (const [nodeId, value] of Object.entries(config.typedFields)) {
+          const inputEl = container.querySelector(
+            `[data-node-id="${nodeId}"] input`,
+          ) as HTMLInputElement | null;
+          assertExists(inputEl, `[${shape}] ${config.label}'s ${nodeId} input must render`);
+          simulateInput(inputEl!, value);
+        }
+        if (config.needsSelectedGroupRow) {
+          const rowEl = container.querySelector("tbody tr") as HTMLTableRowElement | null;
+          assertExists(rowEl, `[${shape}] ${config.label} needs a selectable group row`);
+          simulateRowClick(rowEl!);
+          await flushUpdates();
+        }
 
         simulateClick(queryOpenButtonFor(container, config.prefix)!);
         await waitFor(() => queryRefreshWarning(container) !== null);
@@ -3556,7 +3574,7 @@ Deno.test(
 
         assert(
           queryModalFor(container) === null,
-          `[${shape}] delete_group's modal must NOT open on a ${shape} preview settlement`,
+          `[${shape}] ${config.label}'s modal must NOT open on a ${shape} preview settlement`,
         );
         assert(
           queryConfirmButtonFor(container, config.prefix) === null,
@@ -3584,13 +3602,14 @@ Deno.test(
         cleanup();
       }
     }
-  },
-);
+    },
+  );
+}
 
-Deno.test(
-  "ProjectionShell (real mount, round 3 settlement authority): delete_group's Confirm dispatch — wrong manifest / missing Emission / backend success:false / queue rejection settlement shapes never close the Modal (no state adopted, no resend), each surfacing an explicit warning",
-  async () => {
-    const config = CONFIRM_MODAL_SCENARIOS.find((c) => c.label === "delete_group")!;
+for (const config of CONFIRM_MODAL_SCENARIOS) {
+  Deno.test(
+    `ProjectionShell (real mount, round 3 settlement authority): ${config.label}'s Confirm dispatch — wrong manifest / missing Emission / backend success:false / queue rejection settlement shapes never close the Modal (no state adopted, no resend), each surfacing an explicit warning`,
+    async () => {
     for (const shape of NEGATIVE_SETTLEMENT_SHAPES) {
       ensureRuntimeComponentRegistryInitialized();
       schedulerTestOnly.resetCommandQueue();
@@ -3665,7 +3684,7 @@ Deno.test(
                 `the enqueueRuntimeComponentCommand override should have rejected before the network`,
             );
           }
-          return negativeSettlementResponseFor(shape, "delete_group's Confirm");
+          return negativeSettlementResponseFor(shape, `${config.label}'s Confirm`);
         }
         return Promise.resolve(
           new Response(JSON.stringify(fallbackDispatchResponse(body)), { status: 200 }),
@@ -3682,12 +3701,21 @@ Deno.test(
           openButtonEl = queryOpenButtonFor(container, config.prefix);
           return openButtonEl !== null;
         });
-        assertExists(openButtonEl, `[${shape}] delete_group's open trigger must render`);
+        assertExists(openButtonEl, `[${shape}] ${config.label}'s open trigger must render`);
 
-        const rowEl = container.querySelector("tbody tr") as HTMLTableRowElement | null;
-        assertExists(rowEl, `[${shape}] delete_group needs a selectable group row`);
-        simulateRowClick(rowEl!);
-        await flushUpdates();
+        for (const [nodeId, value] of Object.entries(config.typedFields)) {
+          const inputEl = container.querySelector(
+            `[data-node-id="${nodeId}"] input`,
+          ) as HTMLInputElement | null;
+          assertExists(inputEl, `[${shape}] ${config.label}'s ${nodeId} input must render`);
+          simulateInput(inputEl!, value);
+        }
+        if (config.needsSelectedGroupRow) {
+          const rowEl = container.querySelector("tbody tr") as HTMLTableRowElement | null;
+          assertExists(rowEl, `[${shape}] ${config.label} needs a selectable group row`);
+          simulateRowClick(rowEl!);
+          await flushUpdates();
+        }
 
         simulateClick(queryOpenButtonFor(container, config.prefix)!);
         await waitFor(() => queryModalFor(container) !== null);
@@ -3702,7 +3730,7 @@ Deno.test(
           ? installRejectingEnqueueOverride(
             config.targetRef,
             "confirmed",
-            "simulated queue/network rejection (delete_group's Confirm queue_rejection scenario)",
+            `simulated queue/network rejection (${config.label}'s Confirm queue_rejection scenario)`,
           )
           : null;
 
@@ -3712,7 +3740,7 @@ Deno.test(
 
         assertExists(
           queryModalFor(container),
-          `[${shape}] delete_group's modal must remain OPEN on a ${shape} Confirm settlement — never closed`,
+          `[${shape}] ${config.label}'s modal must remain OPEN on a ${shape} Confirm settlement — never closed`,
         );
         assertExists(
           queryConfirmButtonFor(container, config.prefix),
@@ -3748,8 +3776,9 @@ Deno.test(
         cleanup();
       }
     }
-  },
-);
+    },
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // Round 3 (preview-gap audit): the existing canonical-reread proofs (round 27's "child manifest

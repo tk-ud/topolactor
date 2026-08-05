@@ -1800,6 +1800,7 @@ react_schema_topology_seed_translator_ssot:
             - form_input/select (select.template)
             - data_display/table (table.primitive)
             - form_input/form_field (form_field.template)
+            - form_input/input (input.primitive)
             - action/button (button.primitive)
             - disclosure/modal (modal.template)
         style_catalog_refs:
@@ -1810,6 +1811,30 @@ react_schema_topology_seed_translator_ssot:
           refs: []
         wiring_lane_refs: []
         known_gaps:
+          - gap: admin_enum_write_field_control_kind_corrected_to_real_input
+            classification: production_dom_reachability_bug
+            status: resolved
+            resolution_note: >-
+              admin-enum subBundle closure round (.agent/tasks/todo.md): the 7 write-flow typed
+              fields (enum_create_group_name_input/enum_update_group_name_input/
+              enum_create_item_name_input/enum_update_item_index_input/
+              enum_update_item_name_input/enum_delete_item_index_input/
+              enum_set_group_items_input) were originally authored with
+              control=form_input/form_field (form_field.template -> formFieldFactory), which
+              renders FormField.tsx with a hardcoded empty span child and NO <input> element --
+              a non-interactive label-only wrapper, confirmed by reading formFieldFactory
+              (frontend/runtime/runtimeComponentFactory.ts) and FormField.tsx directly. Every DOM
+              proof up to this round exercised a hand-built mock Emission substituting
+              control=form_input/input instead (frontend/tests/
+              projectionShellAdminRuntimeWritePayloadCapture.test.ts), and every live-DB proof
+              dispatched a payload object directly -- neither path ever mounted the REAL seeded
+              control kind end to end, so this was never caught: in actual production, none of
+              these 7 fields were typeable, and every one of the 7 write actions' typed-value
+              payloadFrom fields would fail closed with PAYLOAD_FROM_NODE_NOT_FOUND. Fixed by
+              re-authoring all 7 with control=form_input/input (input.primitive -> inputFactory,
+              a real <Input> with onChange wired to the live node value tracker), regenerating
+              db/seed_empty.sql's ae204/ae206 via the translator (never hand-edited), and adding a
+              DOM proof that mounts the REAL production seed shape (not a synthetic substitute).
           - gap: admin_runtime_layer_action_dispatch_wiring_lane_not_yet_implemented
             classification: runtime_dispatch_gap
             status: resolved_2026_07_27

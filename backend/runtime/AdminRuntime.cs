@@ -3329,7 +3329,9 @@ public partial class AdminRuntime
                 "Enum dictionary repository is not configured."));
         }
 
-        var groups = await _enumDictionaryRepository.ListGroupsAsync(ct);
+        // items-browse UX (admin-enum subBundle closure round): folds the existing get_group
+        // item-join into list_groups' OWN query -- no new action, no cross-manifest dispatch.
+        var groups = await _enumDictionaryRepository.ListGroupsWithItemsSummaryAsync(ct);
         return (JsonSerializer.SerializeToElement(groups), null);
     }
 

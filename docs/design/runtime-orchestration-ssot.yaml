@@ -133,10 +133,16 @@ runtime_orchestration_ssot:
           replacement: same_url_seed_backed
           status: pending
           precondition: >-
-            requires a real per-screen ui_projection manifest for enum_dictionary (React-like
-            Schema -> translator -> topology UI seed -> seed registration), which does not exist
-            yet — only per-action dispatcher_mapping-only manifests exist today. Not retired by
-            this change.
+            UPDATED (admin-enum subBundle closure round, .agent/tasks/todo.md): the real per-screen
+            ui_projection manifest this precondition originally asked for now exists (manifest
+            00000000-0000-0000-0000-0000000ae200, admin.enum.management.projection, built
+            2026-07-22, all 7 write actions wired directly into its own layout with dryRun-preview/
+            confirm-modal since PR #601). The remaining blocker is genuine UX parity, not manifest
+            existence: ae200 has no field-prefill mechanism yet for selected-group-detail (a user
+            must retype a group's full current name blind on update, where AdminEnumsRoster.tsx
+            prefills it), and enum_search is structurally present but not wired to any functional
+            server-side filter. Retiring the hardcoded route before those close would ship a
+            materially degraded UX at the same URL. Not retired by this change.
         - route: /admin/team-dashboard
           retirement_kind: hub_navigation_only
           replacement: same_url_plus_hub_entry

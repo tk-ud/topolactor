@@ -58,6 +58,18 @@ public sealed class InMemoryEnumDictionaryRepository : EnumDictionaryRepository
                 .OrderBy(g => g.IndexNum)
                 .ToList());
 
+    public override Task<IReadOnlyList<EnumDictionaryGroupWithItemsSummaryDto>> ListGroupsWithItemsSummaryAsync(
+        CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<EnumDictionaryGroupWithItemsSummaryDto>>(
+            _groups.Values
+                .OrderBy(g => g.IndexNum)
+                .Select(g => new EnumDictionaryGroupWithItemsSummaryDto(
+                    g.GroupId,
+                    g.IndexNum,
+                    g.GroupName,
+                    string.Join(", ", g.Items.Select(i => $"{i.IndexNum}:{i.Name}"))))
+                .ToList());
+
     public override Task<EnumDictionaryGroupDetailDto?> GetGroupDetailAsync(
         Guid groupId, CancellationToken ct = default) =>
         Task.FromResult(_groups.TryGetValue(groupId, out var detail) ? detail : null);

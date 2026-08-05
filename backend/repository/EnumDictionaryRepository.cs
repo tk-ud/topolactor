@@ -12,6 +12,9 @@ public abstract class EnumDictionaryRepository
     public abstract Task<IReadOnlyList<EnumDictionaryGroupDto>> ListGroupsAsync(
         CancellationToken ct = default);
 
+    public abstract Task<IReadOnlyList<EnumDictionaryGroupWithItemsSummaryDto>> ListGroupsWithItemsSummaryAsync(
+        CancellationToken ct = default);
+
     public abstract Task<EnumDictionaryGroupDetailDto?> GetGroupDetailAsync(
         Guid groupId, CancellationToken ct = default);
 

@@ -1054,11 +1054,15 @@ admin_uibuilder_ui_structure_wiring_ssot:
         case-insensitivity), AdminRuntimeManifestManagementTests.cs (save-time duplicate rejection),
         frontend/tests/layoutRightDockWiringKindSync.test.tsx (production LayoutRightDock mount --
         real PackageWiringEditor save flow, including its own ConfirmDialog, driving
-        NodeEventAuthoringPanel's gate live without remount). Not yet done: the admin-enum single
-        per-screen CRUD surface, canonical translator generation replacing hand-authored seed,
-        production DOM proof and live-DB proof of that specific wiring, the full negative-boundary
-        suite for it, and AdminEnumsRoster.tsx/hardcoded route retirement -- unchanged from round 18,
-        still this Bundle's largest remaining scope (see .agent/tasks/todo.md).
+        NodeEventAuthoringPanel's gate live without remount). UPDATED (admin-enum subBundle closure
+        round): the admin-enum single per-screen CRUD surface, canonical translator generation,
+        production DOM proof and live-DB proof of that wiring, and a negative-boundary suite
+        covering all 7 write actions (not one representative operation) are now done -- see
+        round_27_28_settled_child_dispatch_result_authority and
+        dryrun_preview_gated_confirm_modal below for the up to date record.
+        AdminEnumsRoster.tsx/hardcoded route retirement remains open, genuinely blocked on UX
+        parity (no field-prefill mechanism for selected-group-detail yet, enum_search not wired
+        to a functional filter) -- see .agent/tasks/todo.md for the current record.
       round_21_hardening: >-
         2026-07-29. Owner audit found a structural gap in round 19's
         IsBareManifestNavigationReadTargetRefAsync exemption: it resolved the axes-registered
@@ -1160,12 +1164,16 @@ admin_uibuilder_ui_structure_wiring_ssot:
         failed canonical redispatch surfaces the warning banner and retains the stale-but-real DOM
         without resending the write or reopening the modal, and a canonical redispatch forces a
         stale prop-bound tracked value back to the DB-authoritative one while a passive SSE refresh
-        of the same value leaves an in-progress edit untouched). Not yet done as of round_27_28
-        (admin-enum subBundle scope, tracked in .agent/tasks/todo.md, not restated here as owning
-        SSOT authority): dryRun preview wired into the confirm-modal UI flow for any of the 7 write
-        actions, items browse UX via the existing get_group read composed into this surface's own
-        parent read (no new list_items action, no direct child-Emission adoption), the full
-        negative-boundary matrix, and AdminEnumsRoster.tsx/route retirement.
+        of the same value leaves an in-progress edit untouched). UPDATED (admin-enum subBundle
+        closure round, tracked in .agent/tasks/todo.md, not restated here as owning SSOT
+        authority): dryRun preview wired into the confirm-modal UI flow for all 7 write actions
+        (PR #601), items browse UX composed into list_groups' own backend query as an
+        itemsSummary displayColumn on the existing enum_table (no new action, no cross-manifest
+        dispatch, no direct child-Emission adoption), and the negative-boundary matrix now covers
+        all 7 operations (not one representative operation) are done. Still open:
+        AdminEnumsRoster.tsx/route retirement, genuinely blocked on UX parity -- no field-prefill
+        mechanism exists yet for selected-group-detail, and enum_search is not wired to a
+        functional server-side filter.
       dryrun_preview_gated_confirm_modal: >-
         preview-gap round (2026-08-04). Generic runtime boundary contract, not admin-enum-specific
         -- applies to ANY node whose open/action trigger carries an admin_runtime_dispatch_override_

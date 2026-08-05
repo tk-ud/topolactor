@@ -2269,6 +2269,42 @@ def main():
             doc_ae200 is not None and doc_ae200.get("validationErrors") == [],
         )
 
+        # 123a (admin-enum subBundle closure round): the 7 write-flow typed fields must resolve
+        # control=form_input/input (a real <Input> with onChange, frontend/runtime/
+        # runtimeComponentFactory.ts inputFactory), never form_input/form_field
+        # (formFieldFactory renders FormField.tsx with a hardcoded empty span child -- no <input>
+        # element, no onChange, the live node value tracker never gets a value for that node, and
+        # every one of the 7 write actions' typed-value payloadFrom sourced from it would fail
+        # closed with PAYLOAD_FROM_NODE_NOT_FOUND in real production). This regression guard reads
+        # the REAL generated layoutAdoptionCandidates records (not a hand-built node), so it can
+        # only pass if the actual shipped fixture is correct.
+        ae200_layout_records = (
+            dig(doc_ae200, "adoptionCandidates", "layoutAdoptionCandidates")[0]["layoutSchemaJson"]["records"]
+            if doc_ae200 and dig(doc_ae200, "adoptionCandidates", "layoutAdoptionCandidates")
+            else []
+        )
+        ae200_field_control_by_key = {
+            r["record"]["key"]: r["record"].get("control")
+            for r in ae200_layout_records
+            if r["record"].get("recordType") == "topology_ui_field"
+        }
+        ae200_write_flow_typed_field_keys = [
+            "enum_create_group_name_input",
+            "enum_update_group_name_input",
+            "enum_create_item_name_input",
+            "enum_update_item_index_input",
+            "enum_update_item_name_input",
+            "enum_delete_item_index_input",
+            "enum_set_group_items_input",
+        ]
+        expect(
+            "123a. all 7 admin-enum write-flow typed fields resolve control=form_input/input (a real interactive <Input>), never form_input/form_field (a non-interactive label-only wrapper with no <input> element) -- proven against the REAL generated fixture output, not a hand-built substitute",
+            all(
+                ae200_field_control_by_key.get(k) == "form_input/input"
+                for k in ae200_write_flow_typed_field_keys
+            ),
+        )
+
         # 124-125 (round 4, preview-gap audit round 4): split_flat_records_into_adoption_candidates
         # no longer substitutes "emission.data" as a default when a topology_ui_table record's own
         # rowsSource is missing (the round-3 fallback this round removed) -- these two tests prove
