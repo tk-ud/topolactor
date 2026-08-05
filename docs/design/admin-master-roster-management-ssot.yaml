@@ -30,7 +30,6 @@ admin_master_roster_management_ssot:
     - frontend/api/adminApi.ts
     - frontend/routes/admin/enums.tsx
     - frontend/routes/admin/users.tsx
-    - frontend/islands/AdminEnumsRoster.tsx
     - frontend/islands/AdminUsersRoster.tsx
 
   canonical_routes:
@@ -39,8 +38,12 @@ admin_master_roster_management_ssot:
       island: frontend/islands/ProjectionShell.tsx
       note: >-
         Route retirement (admin-enum subBundle closure round): same-URL ProjectionShell thin
-        wrapper pinned to manifest ae200, replacing AdminEnumsRoster (no longer route-reachable;
-        kept catalog-registered/on-disk only, see frontend/components/catalog.ts's own entry).
+        wrapper pinned to manifest ae200, replacing the retired AdminEnumsRoster island. UPDATED
+        (round 36): AdminEnumsRoster.tsx is deleted (was already unreachable from any route since
+        the initial retirement round; kept catalog-registered/on-disk as a ghost entry only
+        because of a hardcoded EXEMPT_KEYS test carve-out, which round 36 also removed --
+        frontend/components/catalog.ts no longer carries an admin_enum_roster.admin_operation
+        entry at all).
       ux_contract:
         - text_search_at_top
         - clearing_the_search_field_restores_full_roster

@@ -574,6 +574,45 @@ def validate_field_value_from_source(node, errors, path="$.root"):
         validate_field_value_from_source(c, errors, path)
 
 
+def validate_field_options_source(node, errors, path="$.root"):
+    """SSOT: docs/design/react-schema-topology-seed-translator-ssot.yaml
+    input_text_markup_grammar_contract.field_options_source_attributes. Fail-close, generic
+    (never Field-key-specific, never admin-enum-specific), mirroring
+    validate_table_display_columns_and_rows_source's own displayColumns/rowsSource pairing rule:
+      1. optionsSource, optionsLabelPath, optionsValuePath must be authored TOGETHER or NEITHER --
+         a data-bound select needs a data source AND both identity paths to build usable options.
+      2. optionsSource, when present, must resolve to a shape frontend/runtime/
+         propBindingResolver.ts's own resolveRuntimeDataPath actually accepts ("emission.data" or
+         "emission.data.<path>") -- the SAME ROWS_SOURCE_SHAPE_RE Table's own rowsSource already
+         uses, never a domain identifier or any other literal.
+    """
+    if node.get("kind") == "Field":
+        node_path = node.get("_path", path)
+        key = node.get("key")
+        options_source = node.get("optionsSource") or ""
+        options_label_path = node.get("optionsLabelPath") or ""
+        options_value_path = node.get("optionsValuePath") or ""
+        any_present = bool(options_source or options_label_path or options_value_path)
+        all_present = bool(options_source and options_label_path and options_value_path)
+        if any_present and not all_present:
+            errors.append(err(
+                "FIELD_OPTIONS_SOURCE_INCOMPLETE", node_path, "blocking",
+                f"Field '{key}' authors only some of optionsSource/optionsLabelPath/"
+                f"optionsValuePath ({options_source!r}, {options_label_path!r}, "
+                f"{options_value_path!r}) -- a data-bound select needs a data source and both "
+                f"identity paths authored together, never a partial set",
+            ))
+        if options_source and not ROWS_SOURCE_SHAPE_RE.match(options_source):
+            errors.append(err(
+                "FIELD_OPTIONS_SOURCE_INVALID", node_path, "blocking",
+                f"Field '{key}' optionsSource '{options_source}' must be \"emission.data\" or "
+                f"start with \"emission.data.\" (the SAME shape Table's own rowsSource uses) -- "
+                f"never a domain/table identifier or other literal",
+            ))
+    for c in node.get("children") or []:
+        validate_field_options_source(c, errors, path)
+
+
 def build_node(kind, attrs, source_refs, known_gaps):
     node_kind = UNIT_TO_NODE_KIND[kind]
     key = attrs.get("key")
@@ -609,6 +648,20 @@ def build_node(kind, attrs, source_refs, known_gaps):
         # propBindings.value.source node-reference, see FIELD_VALUE_FROM_NODE_REF_RE /
         # validate_field_value_from_source. Empty string (not authored) is the common case.
         node["valueFrom"] = attrs.get("valueFrom", "")
+        # generic select options data-binding (round 36, admin-enum subBundle closure): a Field may
+        # ALSO author optionsSource/optionsLabelPath/optionsValuePath together, becoming this
+        # Field's own propBindings.options -- the SAME {"source","transform":"rowsToOptions",
+        # "labelPath","valuePath"} shape frontend/runtime/propBindingResolver.ts's
+        # COMPONENT_ARRAY_PROP_CAPABILITIES["form_input/select"]/backend
+        # StructureMapResolver.ComponentArrayPropCapabilities already validate and accept at the
+        # RUNTIME layer (see ValidateLayoutNodes_AcceptsValidRowsToOptionsWithPathFields) but which
+        # this translator's AUTHORING/GENERATION layer had no attribute to actually produce until
+        # now -- closes that generation gap, mirroring Table's own rowsSource/displayColumns
+        # pairing (see validate_field_options_source below). Empty strings (not authored) are the
+        # common case for every Field that is not a data-bound select.
+        node["optionsSource"] = attrs.get("optionsSource", "")
+        node["optionsLabelPath"] = attrs.get("optionsLabelPath", "")
+        node["optionsValuePath"] = attrs.get("optionsValuePath", "")
         # generic list_groups search/filter (admin-enum subBundle closure round): a Field may ALSO
         # carry an admin_runtime_dispatch_override_wiring eventBinding on its own trigger (default
         # "change", matching a typed field's own keystroke event) -- the SAME override lane/shape
@@ -1391,6 +1444,87 @@ def validate_admin_runtime_preview_action_pairing(node, nodes_by_key, errors, pa
         validate_admin_runtime_preview_action_pairing(c, nodes_by_key, errors, path, parent=node)
 
 
+#: Generic mutation-verb prefix convention shared by BOTH admin_runtime action namespaces this
+#: codebase declares -- docs/design/admin-master-roster-management-ssot.yaml admin_runtime_actions:
+#: enum_dictionary_read (list_groups/get_group) vs enum_dictionary_write (create_group/
+#: update_group/delete_group/create_item/update_item/delete_item/set_group_items), and auth_users
+#: (list/search/get vs create/update/delete). Not enum-specific and not a per-domain allowlist: any
+#: admin_runtime targetRef whose <action> segment's leading verb is a member of this set is treated
+#: as a mutation target by validate_field_admin_runtime_dispatch_wiring below.
+MUTATION_ACTION_VERB_PREFIXES = frozenset({"create", "update", "delete", "set"})
+
+#: manifest:<manifestId>:<layer>:<action> -- the SAME shape lane_target_ref_patterns already
+#: enforces generically via wiring_lane_contract's targetRef_shape regex; this second, narrower
+#: regex exists only to EXTRACT the trailing <action> segment for the mutation-verb check below, not
+#: to re-validate overall shape (a malformed targetRef simply fails to match here and is silently
+#: skipped by this check -- TARGET_REF_SHAPE_MISMATCH from validate_wiring_node already reports it).
+ADMIN_RUNTIME_TARGET_REF_ACTION_RE = re.compile(r"^manifest:[^:]+:[^:]+:([^:]+)$")
+
+
+def validate_field_admin_runtime_dispatch_wiring(node, errors, path="$.root"):
+    """SSOT: docs/design/react-schema-topology-seed-translator-ssot.yaml
+    wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring.field_participation.
+
+    A Field's OWN use of the admin_runtime_dispatch_override_wiring lane (see
+    input_text_markup_grammar_contract.field_admin_runtime_dispatch_override_attributes) is NEVER
+    subject to validate_admin_runtime_preview_action_pairing above (gates on kind=="Action" only)
+    or validate_structural_node's VALID_ACTION_OWNER_NODE_KINDS/SECTION_OWNABLE_ACTION_LANES check
+    (a Field is never Action-owned by a Form/Workflow/Modal/Section in the first place) -- neither
+    rule was ever meant to cover it, and stretching either to do so would be wrong (a Field can
+    never structurally participate in the Section-owned dryRun-preview/Modal-Confirm pairing those
+    rules protect). This is the SEPARATE, generic, fail-close restriction that instead applies:
+    a Field-owned use of this lane must be read/filter-only, never a reachable mutation-authority
+    surface outside an Action-owned preview/confirm pair. Never keyed by nodeId, manifest UUID, or
+    operation name.
+      1. FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_FLAG_NOT_ALLOWED -- payloadFrom must not declare
+         ANY AUTHORITY_FLAG_KEYS member (neither "dryRun" nor "confirmed"). Even dryRun is
+         disallowed here (unlike an Action's Section-owned preview use) because a Field can never
+         pair into the Modal-Confirm shape that dryRun's own safety meaning depends on.
+      2. FIELD_ADMIN_RUNTIME_DISPATCH_MODAL_MUTATION_NOT_ALLOWED -- the Field must not carry a
+         secondaryDisclosureAction; Modal open/close authority belongs to Action/Step's own
+         disclosure_state_wiring lane, never to a Field's keystroke/change event.
+      3. FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED -- the targetRef's <action>
+         segment's leading verb must not be a MUTATION_ACTION_VERB_PREFIXES member.
+    """
+    if node.get("kind") == "Field":
+        eb = node.get("eventBinding")
+        if isinstance(eb, dict) and eb.get("wiringLane") == "admin_runtime_dispatch_override_wiring":
+            node_path = node.get("_path", path)
+            key = node.get("key")
+            payload_from = eb.get("payloadFrom") or {}
+            authority_flags = set(payload_from) & AUTHORITY_FLAG_KEYS
+            if authority_flags:
+                errors.append(err(
+                    "FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_FLAG_NOT_ALLOWED", node_path, "blocking",
+                    f"Field '{key}' uses admin_runtime_dispatch_override_wiring but its own "
+                    f"payloadFrom declares {sorted(authority_flags)} -- a Field can never carry "
+                    f"write-confirmation authority (neither dryRun nor confirmed); only an "
+                    f"Action-owned preview/confirm pair may",
+                ))
+            if node.get("secondaryDisclosureAction"):
+                errors.append(err(
+                    "FIELD_ADMIN_RUNTIME_DISPATCH_MODAL_MUTATION_NOT_ALLOWED", node_path, "blocking",
+                    f"Field '{key}' uses admin_runtime_dispatch_override_wiring paired with a "
+                    f"secondaryDisclosureAction -- a Field must never drive Modal open/close state "
+                    f"as a side effect of its own dispatch",
+                ))
+            target_ref = eb.get("targetRef") or ""
+            m = ADMIN_RUNTIME_TARGET_REF_ACTION_RE.match(target_ref)
+            if m:
+                action = m.group(1)
+                verb = action.split("_", 1)[0]
+                if verb in MUTATION_ACTION_VERB_PREFIXES:
+                    errors.append(err(
+                        "FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED", node_path, "blocking",
+                        f"Field '{key}' targetRef '{target_ref}' resolves to action '{action}', whose "
+                        f"leading verb '{verb}' is a mutation verb "
+                        f"({sorted(MUTATION_ACTION_VERB_PREFIXES)}) -- a Field may only dispatch to a "
+                        f"read/filter action, never a mutation",
+                    ))
+    for c in node.get("children") or []:
+        validate_field_admin_runtime_dispatch_wiring(c, errors, path)
+
+
 # ---------------------------------------------------------------------------
 # react_schema -> topology_ui_seed conversion (generate_topology_ui_seed mode)
 # ---------------------------------------------------------------------------
@@ -1411,7 +1545,7 @@ KIND_SPECIFIC_CONSUMED_KEYS = {
     "Category": set(),
     "Section": {"sectionKind"},
     "Form": {"target", "mode", "fields", "actions"},
-    "Field": {"control", "required", "valueFrom", "eventBinding"},
+    "Field": {"control", "required", "valueFrom", "eventBinding", "optionsSource", "optionsLabelPath", "optionsValuePath"},
     "Table": {"source", "display", "displayColumns", "rowsSource", "_rawDisplayColumns"},
     "Workflow": {"steps"},
     "Modal": {"componentKind", "title", "body"},
@@ -1482,6 +1616,9 @@ def convert_node_to_seed_record(node, schema_to_seed_map, target_surface, loss_e
         record["required"] = bool(node.get("required", False))
         record["validationRefs"] = [c["key"] for c in converted_children if c["recordType"] == "topology_ui_validation"]
         record["valueFrom"] = node.get("valueFrom") or ""
+        record["optionsSource"] = node.get("optionsSource") or ""
+        record["optionsLabelPath"] = node.get("optionsLabelPath") or ""
+        record["optionsValuePath"] = node.get("optionsValuePath") or ""
         if node.get("eventBinding") is not None:
             record["eventBinding"] = node["eventBinding"]
         admin_runtime_override = build_admin_runtime_dispatch_override_candidate(node)
@@ -2014,6 +2151,31 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                 "nodeKind": "catalog_component",
                 "runtimeInteractions": [],
                 "propBindings": {"value": {"source": record["valueFrom"]}},
+            })
+
+        if record_type == "topology_ui_field" and record.get("optionsSource"):
+            # generic select options data-binding (round 36, admin-enum subBundle closure): the
+            # authored optionsSource/optionsLabelPath/optionsValuePath (already grammar-validated
+            # together by validate_field_options_source earlier in this same generate-topology-seed
+            # call) become this Field's own propBindings.options -- the SAME rowsToOptions-transform
+            # shape frontend/runtime/propBindingResolver.ts's COMPONENT_ARRAY_PROP_CAPABILITIES
+            # already validates and resolves at RUNTIME for form_input/select, generated here for
+            # the first time rather than requiring a hand-authored db/seed_empty.sql propBindings
+            # entry. Mutually exclusive with the valueFrom branch above in every field authored so
+            # far (a Field is either a value-prefilled input or a data-bound select, never both) --
+            # same single-purpose-per-node convention the merge step below already assumes.
+            tensor_nodes.append({
+                "nodeId": this_resolved_key,
+                "nodeKind": "catalog_component",
+                "runtimeInteractions": [],
+                "propBindings": {
+                    "options": {
+                        "source": record["optionsSource"],
+                        "transform": "rowsToOptions",
+                        "labelPath": record["optionsLabelPath"],
+                        "valuePath": record["optionsValuePath"],
+                    },
+                },
             })
 
         if record_type == "topology_ui_field" and record.get("adminRuntimeDispatchOverride"):
@@ -2675,6 +2837,8 @@ def cmd_generate_react_schema(args):
         validate_admin_runtime_preview_action_pairing(root_node, nodes_by_key, tree_errors)
         validate_table_display_columns_and_rows_source(root_node, tree_errors)
         validate_field_value_from_source(root_node, tree_errors)
+        validate_field_admin_runtime_dispatch_wiring(root_node, tree_errors)
+        validate_field_options_source(root_node, tree_errors)
         output["validationErrors"].extend(tree_errors)
 
     source_refs = envelope.get("sourceYamlRefs") or []
@@ -2822,6 +2986,8 @@ def cmd_generate_topology_seed(args):
     validate_admin_runtime_preview_action_pairing(root_node, nodes_by_key, tree_errors)
     validate_table_display_columns_and_rows_source(root_node, tree_errors)
     validate_field_value_from_source(root_node, tree_errors)
+    validate_field_admin_runtime_dispatch_wiring(root_node, tree_errors)
+    validate_field_options_source(root_node, tree_errors)
     output["validationErrors"].extend(tree_errors)
 
     schema_to_seed_map = dig(ssot_root, "exchange_mapping", "schema_to_seed_record_mapping") or {}

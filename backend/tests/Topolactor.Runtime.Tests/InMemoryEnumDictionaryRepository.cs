@@ -59,14 +59,27 @@ public sealed class InMemoryEnumDictionaryRepository : EnumDictionaryRepository
                 .ToList());
 
     public override Task<IReadOnlyList<EnumDictionaryGroupWithItemsSummaryDto>> ListGroupsWithItemsSummaryAsync(
-        string? search = null, CancellationToken ct = default)
+        string? search = null, Guid? groupIdFilter = null, CancellationToken ct = default)
     {
         var trimmedSearch = search?.Trim();
         IEnumerable<EnumDictionaryGroupDetailDto> groups = _groups.Values;
         if (!string.IsNullOrEmpty(trimmedSearch))
         {
+            // Mirrors NpgsqlEnumDictionaryRepository's SQL exactly: matches the group's own
+            // identity (group_name/index_num) OR any member item's identity/position
+            // (items.name/items.index_num/group_items.position, position == 0-based index within
+            // g.Items, the same order SetGroupItemsAsync assigns).
             groups = groups.Where(g =>
-                g.GroupName.Contains(trimmedSearch, StringComparison.OrdinalIgnoreCase));
+                g.GroupName.Contains(trimmedSearch, StringComparison.OrdinalIgnoreCase)
+                || g.IndexNum.ToString().Contains(trimmedSearch, StringComparison.OrdinalIgnoreCase)
+                || g.Items.Select((item, position) => (item, position)).Any(t =>
+                    t.item.Name.Contains(trimmedSearch, StringComparison.OrdinalIgnoreCase)
+                    || t.item.IndexNum.ToString().Contains(trimmedSearch, StringComparison.OrdinalIgnoreCase)
+                    || t.position.ToString().Contains(trimmedSearch, StringComparison.OrdinalIgnoreCase)));
+        }
+        if (groupIdFilter.HasValue)
+        {
+            groups = groups.Where(g => g.GroupId == groupIdFilter.Value);
         }
         return Task.FromResult<IReadOnlyList<EnumDictionaryGroupWithItemsSummaryDto>>(
             groups

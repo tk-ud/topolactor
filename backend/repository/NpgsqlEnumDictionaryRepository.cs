@@ -29,13 +29,50 @@ public class NpgsqlEnumDictionaryRepository : EnumDictionaryRepository
     }
 
     public override async Task<IReadOnlyList<EnumDictionaryGroupWithItemsSummaryDto>> ListGroupsWithItemsSummaryAsync(
-        string? search = null, CancellationToken ct = default)
+        string? search = null, Guid? groupIdFilter = null, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         var trimmedSearch = search?.Trim();
         var hasSearch = !string.IsNullOrEmpty(trimmedSearch);
+        var hasGroupIdFilter = groupIdFilter.HasValue;
+
+        var whereClauses = new List<string>();
+        if (hasSearch)
+        {
+            // generic list_groups search (admin-enum subBundle closure round; extended round 36 to
+            // the owning SSOT's full declared search target field set -- docs/design/
+            // admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.enum.
+            // capability_requirements.search): case-insensitive substring match, parameterized --
+            // never string-concatenated -- across the group's OWN identity (group_name/index_num)
+            // OR any MEMBER ITEM's identity/position (items.name/items.index_num/
+            // group_items.position). An EXISTS subquery, not a join-level filter, so a group that
+            // matches via one item still returns its FULL itemsSummary (every member item), not
+            // only the matching one -- the outer LEFT JOIN below stays unfiltered for that reason.
+            whereClauses.Add(
+                """
+                (g.group_name ILIKE @search
+                 OR CAST(g.index_num AS TEXT) ILIKE @search
+                 OR EXISTS (
+                     SELECT 1 FROM enum.group_items gi2
+                     JOIN enum.items i2 ON i2.index_num = gi2.enum_index_num
+                     WHERE gi2.group_id = g.group_id
+                       AND (i2.name ILIKE @search
+                            OR CAST(i2.index_num AS TEXT) ILIKE @search
+                            OR CAST(gi2.position AS TEXT) ILIKE @search)
+                 ))
+                """);
+        }
+        if (hasGroupIdFilter)
+        {
+            // enum_group_filter select control (admin-enum subBundle closure round 36): exact-
+            // match scope to a single group, identified by its groupId -- the select's own option
+            // value, sourced from group_name/index_num as label/identity per the owning SSOT's
+            // declared filter target fields.
+            whereClauses.Add("g.group_id = @groupIdFilter");
+        }
+
         cmd.CommandText =
             """
             SELECT g.group_id, g.index_num, g.group_name,
@@ -47,10 +84,7 @@ public class NpgsqlEnumDictionaryRepository : EnumDictionaryRepository
             LEFT JOIN enum.group_items gi ON gi.group_id = g.group_id
             LEFT JOIN enum.items i ON i.index_num = gi.enum_index_num
             """
-            // generic list_groups search/filter (admin-enum subBundle closure round): case-
-            // insensitive group_name substring match, parameterized -- never string-concatenated.
-            // Absent/empty search omits this clause entirely, returning the canonical full list.
-            + (hasSearch ? " WHERE g.group_name ILIKE @search" : "") +
+            + (whereClauses.Count > 0 ? " WHERE " + string.Join(" AND ", whereClauses) : "") +
             """
 
             GROUP BY g.group_id, g.index_num, g.group_name
@@ -59,6 +93,10 @@ public class NpgsqlEnumDictionaryRepository : EnumDictionaryRepository
         if (hasSearch)
         {
             cmd.Parameters.AddWithValue("search", $"%{trimmedSearch}%");
+        }
+        if (hasGroupIdFilter)
+        {
+            cmd.Parameters.AddWithValue("groupIdFilter", groupIdFilter!.Value);
         }
         var list = new List<EnumDictionaryGroupWithItemsSummaryDto>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);

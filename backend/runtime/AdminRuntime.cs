@@ -3329,11 +3329,13 @@ public partial class AdminRuntime
                 "Enum dictionary repository is not configured."));
         }
 
-        // generic list_groups search/filter (admin-enum subBundle closure round): a data-defined
-        // OPTIONAL payload field on this SAME existing read action -- no new action, no enum-
+        // generic list_groups search/filter (admin-enum subBundle closure round; extended round 36
+        // to the owning SSOT's full declared search/filter target field set): two data-defined
+        // OPTIONAL payload fields on this SAME existing read action -- no new action, no enum-
         // specific runtime lane. Absent payload (the common case, matching every prior call site
         // before this round) is not an error: full list, same as before.
         string? search = null;
+        Guid? groupIdFilter = null;
         if (vector.Payload is { ValueKind: JsonValueKind.Object })
         {
             EnumDictionaryListGroupsRequestDto? request;
@@ -3344,18 +3346,32 @@ public partial class AdminRuntime
             }
             catch (JsonException)
             {
-                // fail-close: a non-string search value (or otherwise malformed payload) is a
-                // genuine authoring/client defect, never silently treated as "no search".
+                // fail-close: a non-string search/groupIdFilter value (or otherwise malformed
+                // payload) is a genuine authoring/client defect, never silently treated as "no
+                // search"/"no filter".
                 return (null, new ValidationError(
                     "ENUM_LIST_GROUPS_PAYLOAD_MALFORMED",
-                    "payload.search must be a string when present."));
+                    "payload.search and payload.groupIdFilter must be strings when present."));
             }
             search = request?.Search;
+            if (!string.IsNullOrEmpty(request?.GroupIdFilter))
+            {
+                // fail-close: JSON deserialization alone accepts any string here -- a
+                // non-UUID-parseable groupIdFilter must be rejected explicitly, not silently
+                // treated as "no filter" or forwarded to the repository as a mistyped value.
+                if (!Guid.TryParse(request.GroupIdFilter, out var parsedGroupIdFilter))
+                {
+                    return (null, new ValidationError(
+                        "ENUM_LIST_GROUPS_GROUP_ID_FILTER_MALFORMED",
+                        "payload.groupIdFilter must be a valid UUID when present."));
+                }
+                groupIdFilter = parsedGroupIdFilter;
+            }
         }
 
         // items-browse UX (admin-enum subBundle closure round): folds the existing get_group
         // item-join into list_groups' OWN query -- no new action, no cross-manifest dispatch.
-        var groups = await _enumDictionaryRepository.ListGroupsWithItemsSummaryAsync(search, ct);
+        var groups = await _enumDictionaryRepository.ListGroupsWithItemsSummaryAsync(search, groupIdFilter, ct);
         return (JsonSerializer.SerializeToElement(groups), null);
     }
 

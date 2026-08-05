@@ -302,7 +302,7 @@ react_schema_topology_seed_translator_ssot:
       category: '[category key=.. label=.. sourceYamlRefs=..] ... [/category]'
       section: '[section key=.. label=.. sectionKind=.. sourceYamlRefs=..] ... [/section]'
       form: '[form key=.. label=.. target=.. mode=.. authorityMarker=.. sourceYamlRefs=..] ... [/form]'
-      field: '[field key=.. label=.. control=.. required=true|false sourceYamlRefs=.. knownGapRefs=..]'
+      field: '[field key=.. label=.. control=.. required=true|false sourceYamlRefs=.. knownGapRefs=.. valueFrom=.. wiringLane=.. actionRef=.. trigger=.. payloadFrom=.. optionsSource=.. optionsLabelPath=.. optionsValuePath=..]'
       table: '[table key=.. label=.. source=.. display=.. displayColumns=.. rowsSource=.. sourceYamlRefs=..]'
       workflow: '[workflow key=.. label=.. authorityMarker=.. sourceYamlRefs=..] ... [/workflow]'
       modal: '[modal key=.. label=.. title=.. body=.. sourceYamlRefs=..] ... [/modal]'
@@ -363,6 +363,72 @@ react_schema_topology_seed_translator_ssot:
       A topology_ui_table record reaching tensor generation with displayColumns set and no
       rowsSource raises SystemExit and fails the whole run closed rather than emitting a
       translator-guessed propBindings.rows.source.
+    field_options_source_attributes: >-
+      round 36 (admin-enum subBundle closure). optionsSource/optionsLabelPath/optionsValuePath are
+      a Field's own OPTIONAL data-defined carrier for a data-bound select's options -- e.g. a
+      "filter by group" dropdown whose choices come from the same roster the surface already
+      displays, never a hardcoded/authored-literal option list (a select filtering user-editable
+      data must reflect that data, not a translator/author-frozen snapshot).
+      Mirrors Table's own displayColumns/rowsSource pairing exactly: optionsSource is a JSON
+      traversal path into the dispatched Emission ("emission.data" or "emission.data.<path>", the
+      SAME ROWS_SOURCE_SHAPE_RE shape rowsSource already uses and
+      frontend/runtime/propBindingResolver.ts's own resolveRuntimeDataPath already accepts), while
+      optionsLabelPath/optionsValuePath are the per-row property names used to build each option's
+      label/value. All three are authored TOGETHER or NEITHER
+      (validate_field_options_source below) -- a data-bound select needs a data source AND both
+      identity paths.
+      When authored, this becomes propBindings.options =
+      {"source":optionsSource,"transform":"rowsToOptions","labelPath":optionsLabelPath,
+      "valuePath":optionsValuePath} on the tensor node -- the SAME rowsToOptions-transform shape
+      frontend/runtime/propBindingResolver.ts's COMPONENT_ARRAY_PROP_CAPABILITIES and
+      backend/runtime/StructureMapResolver.cs's ComponentArrayPropCapabilities already validate
+      and resolve for form_input/select's "options" prop at the RUNTIME layer (this capability
+      predates round 36 -- see ValidateLayoutNodes_AcceptsValidRowsToOptionsWithPathFields) but
+      which the translator's AUTHORING/GENERATION layer had no attribute to actually produce
+      before this round -- a real generation gap, the same shape of gap round 3's rowsSource/
+      displayColumns work closed for Table. Mutually exclusive with valueFrom in every Field
+      authored to date (a Field is either a value-prefilled input or a data-bound select, never
+      both) -- see convert_node_to_seed_record's per-nodeId single-owner propBindings merge
+      comment in .agent/scripts/react_schema_topology_seed_translator.py for why this convention
+      matters generically, not just for this specific Field.
+    field_value_from_attribute: >-
+      admin-enum subBundle closure round. valueFrom is a Field's own OPTIONAL data-defined carrier
+      for selected-row-relative field prefill -- e.g. a group-detail input field whose value should
+      seed from the currently-selected row of a sibling table. Grammar:
+      "node:<id>.value" or "node:<id>.value.<path>", the IDENTICAL grammar
+      ui-builder-preset-ecosystem-ssot.yaml payloadFrom_resolver_contract.recognized_source_
+      patterns.node_value_path already defines for payloadFrom at dispatch time -- reused here for
+      display-time prefill rather than invented as a second parallel source vocabulary
+      (validate_field_value_from_source / FIELD_VALUE_FROM_NODE_REF_RE in
+      .agent/scripts/react_schema_topology_seed_translator.py is the canonical validator/regex,
+      shared with payloadFromResolver.ts's own NODE_VALUE_RE per that contract's own
+      cross_implementation_parity rule). When authored, valueFrom is transcribed into the tensor
+      node's propsJson as propBindings.value.source (generate_topology_ui_seed / seed transcription
+      step) and resolved reactively at runtime by frontend/runtime/liveNodeValueTracker.ts's
+      cascadeNodeValueReferences, which re-resolves only the nodes whose valueFrom-derived source
+      references the node that just changed, writing through the SAME applyLiveNodeValueOverride
+      slot the tracker already exposes -- never a second live-value mechanism. An emission.data-
+      shaped source is out of scope for valueFrom and belongs to the separate, pre-existing
+      propBindings.value resolution path against emissionData (seedTrackerFromPropBindingsValue).
+    field_admin_runtime_dispatch_override_attributes: >-
+      admin-enum subBundle closure round. A Field markup tag MAY additionally carry wiringLane/
+      actionRef/trigger/payloadFrom attributes (the SAME attribute names Action/Step already
+      author) to produce an eventBinding on that Field, consumed by
+      build_admin_runtime_dispatch_override_candidate the SAME way an Action/Step's eventBinding
+      already is -- no separate build function, no Field-specific candidate shape. trigger defaults
+      to "change" when omitted (a typed field's own keystroke/selection event), unlike Action's
+      "click" default. This exists for a generic read/filter use case: a typed search/filter field
+      sourcing an EXISTING read action's optional filter payload from its own current value, never a
+      new action or a new dispatch mechanism. Because validate_structural_node's
+      VALID_ACTION_OWNER_NODE_KINDS / SECTION_OWNABLE_ACTION_LANES ownership check and
+      validate_admin_runtime_preview_action_pairing's dryRun/confirmed pairing checks both gate on
+      kind=="Action" only (a Field is never Action-owned by a Form/Workflow/Modal/Section in the
+      first place, so those rules do not apply and must not be stretched to cover it), a Field's
+      own use of this lane is validated by a SEPARATE, Field-specific fail-close check --
+      validate_field_admin_runtime_dispatch_wiring, see
+      wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring.field_participation --
+      restricting it to generic read/filter use and rejecting any shape that would let a Field carry
+      mutation authority.
     prohibited:
       - inferring_a_unit_kind_from_prose_without_a_matching_tag
       - silently_upgrading_an_unresolved_fragment_to_a_typed_node
@@ -371,6 +437,7 @@ react_schema_topology_seed_translator_ssot:
       - accepting_an_action_or_step_tag_with_no_wiringLane_attribute
       - deriving_rowsSource_from_the_table_source_attribute_or_any_other_hardcoded_literal
       - substituting_a_default_rowsSource_when_validation_was_bypassed_or_skipped
+      - field_owned_admin_runtime_dispatch_override_wiring_eventBinding_declaring_an_authority_flag_key_or_pairing_with_a_secondaryDisclosureAction_or_targeting_a_mutation_verb_action
     validation:
       - every_open_tag_has_a_matching_close_tag_for_container_units
       - every_tag_key_is_unique_within_its_parent
@@ -424,6 +491,24 @@ react_schema_topology_seed_translator_ssot:
         emits_seed: topology_ui_form
       Field:
         required: [control, required]
+        optional: [valueFrom, eventBinding]
+        optional_paired: [optionsSource, optionsLabelPath, optionsValuePath]
+        optional_note: >-
+          admin-enum subBundle closure round. valueFrom is the authored propBindings.value.source
+          node-reference for selected-row-relative field prefill -- see
+          input_text_markup_grammar_contract.field_value_from_attribute below. eventBinding is
+          produced only when the field markup tag also carries a wiringLane attribute (the SAME
+          admin_runtime_dispatch_override_wiring lane Action/Step already author, extended to Field
+          for a generic read/filter use case such as a typed search field sourcing an existing read
+          action's optional filter payload) -- see
+          wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring.field_participation
+          below for the read-only fail-close restriction this participation is subject to. Both are
+          absent for the common case (most Fields author neither).
+        optional_paired_note: >-
+          round 36: optionsSource/optionsLabelPath/optionsValuePath (authored together or none --
+          see input_text_markup_grammar_contract.field_options_source_attributes below) become this
+          Field's own propBindings.options for a data-bound select (e.g. a "filter by group"
+          dropdown). Absent for the common case (most Fields are not data-bound selects).
         emits_seed: topology_ui_field
       Table:
         required: [source, display]
@@ -1284,6 +1369,46 @@ react_schema_topology_seed_translator_ssot:
           "confirmed"})) checked via set difference on both the preview and confirm sides, not two
           independent single-key checks -- a third authority-shaped flag introduced later to either
           side fails closed here rather than silently passing.
+        field_participation: >-
+          admin-enum subBundle closure round (round 36). A Field node (see
+          input_text_markup_grammar_contract.field_admin_runtime_dispatch_override_attributes) may
+          ALSO declare this lane on its own eventBinding, independent of the Action-only rules
+          above -- rules 1-5 and confirm_action_authority_pairing all gate on
+          `node.get("kind") == "Action"` and never run for a Field, by design (a Field is never
+          Action-owned by a Form/Workflow/Modal/Section, so the preview/confirm-modal-pairing shape
+          those rules protect does not apply to it at all). A Field's own use of this lane is
+          instead a SEPARATE, narrower, generic fail-close restricting it to read/filter use only --
+          validate_field_admin_runtime_dispatch_wiring in
+          .agent/scripts/react_schema_topology_seed_translator.py, run over every Field node
+          (never keyed by nodeId, manifest UUID, or operation name):
+            1. FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_FLAG_NOT_ALLOWED -- the Field's own
+               payloadFrom must not declare ANY AUTHORITY_FLAG_KEYS member (neither "dryRun" nor
+               "confirmed"). A Field can never legally carry write-confirmation authority, and
+               unlike an Action it can never pair into the Section-owned dryRun-preview shape
+               either (that shape structurally requires a paired Modal Confirm child, which a bare
+               Field can never own) -- so even dryRun is disallowed here, not just confirmed.
+            2. FIELD_ADMIN_RUNTIME_DISPATCH_MODAL_MUTATION_NOT_ALLOWED -- the Field must not carry
+               a secondaryDisclosureAction. Disclosure/Modal open-close authority belongs to
+               Action/Step's own disclosure_state_wiring lane and its documented
+               secondary_combination with this lane; a Field driving Modal state as a side effect
+               of a keystroke/change event is exactly the kind of ungated mutation-adjacent
+               authority this restriction exists to prevent.
+            3. FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED -- the Field's own
+               targetRef (manifest:<manifestId>:<layer>:<action>) must not resolve to a mutation
+               action. Generic, not enum-specific: the <action> segment's leading verb must not be
+               a member of MUTATION_ACTION_VERB_PREFIXES ({"create", "update", "delete", "set"}),
+               the SAME read/write verb convention docs/design/admin-master-roster-management-
+               ssot.yaml admin_runtime_actions already documents across BOTH enum_dictionary
+               (enum_dictionary_read: list_groups/get_group vs enum_dictionary_write:
+               create_group/update_group/delete_group/create_item/update_item/delete_item/
+               set_group_items) and auth_users (list/search/get vs create/update/delete) --
+               shared vocabulary, not a per-domain allowlist.
+          A Field satisfying all three restrictions is a legal generic read/filter override (the
+          enum_search -> list_groups example above); one that fails any of them is a blocking
+          authoring error, never a silent pass-through. Distinct from, and does not replace,
+          validate_wiring_node's existing generic lane/source/completeness checks (payloadFrom
+          source-kind allowlist, targetRef shape, authority mapping), which already run for Field
+          the same as for Action/Step.
       disclosure_state_wiring:
         meaning: >-
           UI-local overlay disclosure state (open/close/toggle) for a disclosure/modal target

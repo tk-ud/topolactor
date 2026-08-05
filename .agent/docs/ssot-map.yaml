@@ -312,7 +312,6 @@ mapping:
       - backend/service/AuthService.cs
       - frontend/routes/admin/enums.tsx
       - frontend/routes/admin/users.tsx
-      - frontend/islands/AdminEnumsRoster.tsx
       - frontend/islands/AdminUsersRoster.tsx
       - frontend/api/adminApi.ts
       - frontend/content/adminGuides.ts

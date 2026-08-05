@@ -456,20 +456,6 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
       "runtime_reachability: existing_route_composition — mounted at /admin/users (unchanged route; unified single surface, not split into a standalone route/panel per admin-console-workflow-ssot.yaml). Owns auth_users:* account CRUD (role/approve/status/suspension via auth_users:update roleName field) plus session/credential revoke via the thin /admin/auth/users/{userId}/* HTTP boundary (bypasses /dispatch — see backend/Program.cs). Never exposes a UI to view or set another account's password value.",
   },
   {
-    componentKey: "admin_enum_roster.admin_operation",
-    componentKind: "admin_operation/enum_roster",
-    sourcePath: "frontend/islands/AdminEnumsRoster.tsx",
-    componentFamily: "composite",
-    semanticRole: "admin_operation",
-    visualRole: "panel",
-    lifecycleStatus: "registered",
-    capabilityTags: ["admin_only", "displays_backend_result", "field_binding", "emits_event"],
-    runtimeConnected: false,
-    registrationRequired: false,
-    notes:
-      "route retirement (admin-enum subBundle closure round): /admin/enums no longer mounts this island -- it now renders ProjectionShell directly (frontend/routes/admin/enums.tsx), the SAME generic production runtime db/seed_empty.sql's ae200 manifest already drives, reaching full UX parity (selected-group prefill, enum_search filter, all 7 write operations) via the generic admin_runtime substrate. This entry stays catalog-registered (roleBasedSurfaceSeparation.test.ts's own historical entry-existence contract) but carries no runtimeReachability/routeCompositionFile claim and is EXEMPT in runtimeComponentCatalogFullConnection.test.ts -- it is no longer mounted anywhere in production.",
-  },
-  {
     componentKey: "scheduler_job_settings.admin_operation",
     componentKind: "admin_operation/scheduler_settings",
     sourcePath: "frontend/islands/SchedulerJobSettingsPanel.tsx",

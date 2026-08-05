@@ -12,11 +12,15 @@ public abstract class EnumDictionaryRepository
     public abstract Task<IReadOnlyList<EnumDictionaryGroupDto>> ListGroupsAsync(
         CancellationToken ct = default);
 
-    // generic list_groups search/filter (admin-enum subBundle closure round): search is an
-    // OPTIONAL case-insensitive group_name substring filter. Absent/null/empty search returns the
-    // canonical full list -- the exact pre-existing behavior every prior caller relied on.
+    // generic list_groups search/filter (admin-enum subBundle closure round; extended round 36 to
+    // the owning SSOT's full declared field set -- see EnumDictionaryListGroupsRequestDto).
+    // search is an OPTIONAL case-insensitive substring filter across group_name/groups.index_num
+    // (the group's own identity) and items.name/items.index_num/group_items.position (any member
+    // item's identity/position -- matches the whole group that contains it). groupIdFilter is an
+    // OPTIONAL exact-match group scope. Absent/null/empty for both returns the canonical full list
+    // -- the exact pre-existing behavior every prior caller relied on.
     public abstract Task<IReadOnlyList<EnumDictionaryGroupWithItemsSummaryDto>> ListGroupsWithItemsSummaryAsync(
-        string? search = null, CancellationToken ct = default);
+        string? search = null, Guid? groupIdFilter = null, CancellationToken ct = default);
 
     public abstract Task<EnumDictionaryGroupDetailDto?> GetGroupDetailAsync(
         Guid groupId, CancellationToken ct = default);

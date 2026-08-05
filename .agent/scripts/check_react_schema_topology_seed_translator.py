@@ -2358,6 +2358,122 @@ def main():
             == {"rows": {"source": NON_DEFAULT_ROWS_SOURCE}},
         )
 
+        # 126-131 (round 36, admin-enum subBundle closure): validate_field_admin_runtime_dispatch_
+        # wiring -- a Field's own use of admin_runtime_dispatch_override_wiring is NEVER subject to
+        # validate_admin_runtime_preview_action_pairing (Action-only, tests 108-119 above) or
+        # validate_structural_node's ownership check (a Field is never Action-owned in the first
+        # place); this is the SEPARATE, generic fail-close restricting a Field's own participation
+        # in this lane to read/filter use only, closing the gap where a Field could otherwise carry
+        # mutation authority (confirmed/dryRun), drive Modal state, or target a mutation action
+        # entirely outside the Action-only Section-ownership/dryRun-preview-pairing rules.
+        def run_field_dispatch_check(node):
+            errs = []
+            translator_impl.validate_field_admin_runtime_dispatch_wiring(node, errs)
+            return [e["ruleId"] for e in errs]
+
+        def build_field_dispatch_node(
+            payload_from=None,
+            secondary=None,
+            target_ref="manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+        ):
+            node = {
+                "kind": "Field", "key": "test_dispatch_field", "_path": "$.test.test_dispatch_field",
+                "eventBinding": {
+                    "trigger": "change",
+                    "wiringLane": "admin_runtime_dispatch_override_wiring",
+                    "targetRef": target_ref,
+                    "authority": "validation_only",
+                    "payloadFrom": payload_from or {},
+                },
+            }
+            if secondary is not None:
+                node["secondaryDisclosureAction"] = secondary
+            return node
+
+        field_confirmed_flag_node = build_field_dispatch_node(
+            payload_from={"search": "node:test_dispatch_field.value", "confirmed": "literal:true"},
+        )
+        expect(
+            "126. validate_field_admin_runtime_dispatch_wiring rejects a Field's payloadFrom declaring confirmed=literal:true via FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_FLAG_NOT_ALLOWED -- a Field can never carry write-confirmation authority",
+            "FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_FLAG_NOT_ALLOWED" in run_field_dispatch_check(field_confirmed_flag_node),
+        )
+
+        field_dryrun_flag_node = build_field_dispatch_node(
+            payload_from={"search": "node:test_dispatch_field.value", "dryRun": "literal:true"},
+        )
+        expect(
+            "127. validate_field_admin_runtime_dispatch_wiring rejects a Field's payloadFrom declaring dryRun=literal:true too via FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_FLAG_NOT_ALLOWED -- unlike an Action's Section-owned preview use, even dryRun is disallowed for a Field, since a Field can never pair into the Modal-Confirm shape dryRun's own safety meaning depends on",
+            "FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_FLAG_NOT_ALLOWED" in run_field_dispatch_check(field_dryrun_flag_node),
+        )
+
+        field_modal_mutation_node = build_field_dispatch_node(
+            payload_from={"search": "node:test_dispatch_field.value"},
+            secondary={"trigger": "change", "actionType": "openModal", "targetNodeId": "some_modal"},
+        )
+        expect(
+            "128. validate_field_admin_runtime_dispatch_wiring rejects a Field paired with a secondaryDisclosureAction via FIELD_ADMIN_RUNTIME_DISPATCH_MODAL_MUTATION_NOT_ALLOWED -- Modal open/close authority belongs to Action/Step's own disclosure_state_wiring lane, never a Field's own change event",
+            "FIELD_ADMIN_RUNTIME_DISPATCH_MODAL_MUTATION_NOT_ALLOWED" in run_field_dispatch_check(field_modal_mutation_node),
+        )
+
+        field_mutation_target_node = build_field_dispatch_node(
+            payload_from={"groupName": "node:test_dispatch_field.value"},
+            target_ref="manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:create_group",
+        )
+        expect(
+            "129. validate_field_admin_runtime_dispatch_wiring rejects a Field whose targetRef resolves to a mutation action (create_group) via FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED -- generic verb-prefix check (MUTATION_ACTION_VERB_PREFIXES), not enum-specific",
+            "FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED" in run_field_dispatch_check(field_mutation_target_node),
+        )
+
+        for _mutation_suffix, _mutation_action in enumerate(("update_group", "delete_group", "set_group_items", "create_item", "update_item", "delete_item")):
+            _mutation_node = build_field_dispatch_node(
+                payload_from={"groupName": "node:test_dispatch_field.value"},
+                target_ref=f"manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:{_mutation_action}",
+            )
+            expect(
+                f"129{chr(97 + _mutation_suffix)}. validate_field_admin_runtime_dispatch_wiring also rejects a Field targeting '{_mutation_action}' via FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED -- proves the verb-prefix check covers every enum_dictionary write action, not just create_group",
+                "FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED" in run_field_dispatch_check(_mutation_node),
+            )
+
+        # auth_users domain uses the SAME create/update/delete verb convention (docs/design/
+        # admin-master-roster-management-ssot.yaml admin_runtime_actions) -- proves the check is a
+        # shared, generic naming convention across BOTH admin_runtime action namespaces, never a
+        # hardcoded enum_dictionary allowlist.
+        auth_users_mutation_node = build_field_dispatch_node(
+            payload_from={"status": "node:test_dispatch_field.value"},
+            target_ref="manifest:00000000-0000-0000-0000-000000000a01:auth_users:update",
+        )
+        expect(
+            "129g. validate_field_admin_runtime_dispatch_wiring also rejects a Field targeting the UNRELATED auth_users domain's 'update' action via FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED -- the verb-prefix convention is shared across admin_runtime action namespaces, not an enum_dictionary-only allowlist",
+            "FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED" in run_field_dispatch_check(auth_users_mutation_node),
+        )
+
+        field_valid_read_node = build_field_dispatch_node(
+            payload_from={"search": "node:test_dispatch_field.value"},
+        )
+        expect(
+            "130. validate_field_admin_runtime_dispatch_wiring positive control: a Field dispatching to a read action (list_groups) with no authority flag and no secondaryDisclosureAction produces zero errors, proving 126-129 fail for the right reason and not because every Field-owned use of this lane fails",
+            run_field_dispatch_check(field_valid_read_node) == [],
+        )
+
+        # 131: the REAL admin-enum-ae200 fixture's own enum_search Field (the actual production
+        # shape, not a hand-built substitute) passes this new check cleanly -- proves the fail-close
+        # does not regress the legitimate generic read/filter use case it exists to still permit.
+        enum_search_react_node = find_node(ae200_candidate["root"], "enum_search")
+        expect(
+            "131. the real admin-enum-ae200 fixture's own enum_search Field (control=form_input/search_input, targeting enum_dictionary:list_groups) exists, carries the admin_runtime_dispatch_override_wiring eventBinding, and produces zero FIELD_ADMIN_RUNTIME_DISPATCH_* errors -- proving the new fail-close was actually exercised against production content and passed for the right (permitted read/filter) reason",
+            enum_search_react_node is not None
+            and (enum_search_react_node.get("eventBinding") or {}).get("wiringLane") == "admin_runtime_dispatch_override_wiring"
+            and not any(
+                rid.startswith("FIELD_ADMIN_RUNTIME_DISPATCH_")
+                for rid in run_field_dispatch_check(enum_search_react_node)
+            )
+            and doc_ae200 is not None
+            and not any(
+                e.get("ruleId", "").startswith("FIELD_ADMIN_RUNTIME_DISPATCH_")
+                for e in (doc_ae200.get("validationErrors") or [])
+            ),
+        )
+
     print()
     if FAILURES:
         print(f"=== {len(FAILURES)} react-schema-topology-seed-translator check(s) failed ===", file=sys.stderr)

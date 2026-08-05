@@ -121,7 +121,7 @@ primary target は `hubs.*`。`topologys.*` / registry は projection/support la
 **関連実装surface**:
 - `db/enum_seed.sql` — `user_status` group seed
 - `backend/runtime/AdminRuntime.cs` — `enum_dictionary:*` write、`auth_users:*`
-- `frontend/islands/AdminEnumsRoster.tsx` / `AdminUsersRoster.tsx`
+- `frontend/routes/admin/enums.tsx` (ProjectionShell, ae200 manifest) / `frontend/islands/AdminUsersRoster.tsx`
 
 ---
 

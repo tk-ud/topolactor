@@ -1401,8 +1401,9 @@ admin_console_workflow_ssot:
         island: frontend/islands/ProjectionShell.tsx
         note: >
           Route retirement (admin-enum subBundle closure round): same-URL ProjectionShell thin
-          wrapper pinned to manifest ae200 (admin.enum.management.projection), replacing
-          AdminEnumsRoster (no longer route-reachable). Pipeline-external master data. Enum
+          wrapper pinned to manifest ae200 (admin.enum.management.projection), replacing the
+          retired AdminEnumsRoster island (round 36: the island file itself is deleted, not just
+          route-unreachable). Pipeline-external master data. Enum
           group/item CRUD via admin_runtime enum_dictionary write actions; enum_search filters
           list_groups via a data-defined optional payload.search field; selecting a row prefills
           the update field via node:enum_table.value.groupName.

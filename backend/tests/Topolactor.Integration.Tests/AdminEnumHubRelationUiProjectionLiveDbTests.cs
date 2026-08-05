@@ -913,6 +913,136 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
     }
 
     /// <summary>
+    /// round 36 (admin-enum subBundle closure): the owning SSOT (docs/design/
+    /// admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.enum.
+    /// capability_requirements.search/filter) declares FIVE search target fields (not group_name
+    /// alone) and a groupIdFilter exact-match scope. Proves against REAL PostgreSQL: (1) search
+    /// matches via group_items.position specifically (an item whose own name/index_num do NOT
+    /// contain the search term, only its position within a freshly created group does), (2)
+    /// groupIdFilter scopes the roster to exactly one group, excluding db/enum_seed.sql's own
+    /// demo_status/user_status rows, and (3) a malformed (non-UUID) groupIdFilter fails close
+    /// through the real dispatch chain.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_AdminEnumManagementManifest_ListGroupsSearchAndGroupIdFilter_MatchPositionAndScopeToExactGroupRealRows()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+
+        // "2" is the search token this test proves matches ONLY via group_items.position -- every
+        // other numeric identity below (group's own indexNum, every item's own indexNum, the
+        // group name's random suffix) is deliberately generated to avoid the digit '2' entirely,
+        // so a match can only be explained by the target item's computed position (index 2, the
+        // 3rd item passed to set_group_items).
+        const string positionSearchTerm = "2";
+        static int NextIndexNumAvoidingDigit(char digit)
+        {
+            int candidate;
+            do { candidate = 970_000 + Random.Shared.Next(0, 9_000); }
+            while (candidate.ToString().Contains(digit));
+            return candidate;
+        }
+        var groupNameSuffix = Guid.NewGuid().ToString("N").Replace('2', 'x');
+        var groupName = $"position-search-proof-{groupNameSuffix}"[..40];
+        var groupIndexNum = NextIndexNumAvoidingDigit('2');
+        var itemAIndex = NextIndexNumAvoidingDigit('2');
+        var itemBIndex = NextIndexNumAvoidingDigit('2');
+        var itemCIndex = NextIndexNumAvoidingDigit('2'); // lands at position 2 (3rd in enumIndexNums order)
+        string? groupId = null;
+        var createdItemIndexes = new List<int>();
+
+        try
+        {
+            var createdGroup = await DispatchViaOwnWriteManifestAsync(dispatcher, "create_group",
+                new { groupName, indexNum = groupIndexNum, confirmed = true });
+            Assert.True(createdGroup.Success, string.Join(";", createdGroup.Errors.Select(e => e.Code + ":" + e.Message)));
+            using (var doc = System.Text.Json.JsonDocument.Parse(createdGroup.Emission!.Data!.Value.GetRawText()))
+                groupId = doc.RootElement.GetProperty("groupId").GetString();
+
+            foreach (var idx in new[] { itemAIndex, itemBIndex, itemCIndex })
+            {
+                var createdItem = await DispatchViaOwnWriteManifestAsync(dispatcher, "create_item",
+                    new { name = $"position-proof-item-{idx}", indexNum = idx, confirmed = true });
+                Assert.True(createdItem.Success, string.Join(";", createdItem.Errors.Select(e => e.Code + ":" + e.Message)));
+                createdItemIndexes.Add(idx);
+            }
+
+            var setItems = await DispatchViaOwnWriteManifestAsync(dispatcher, "set_group_items",
+                new { groupId, enumIndexNums = $"{itemAIndex},{itemBIndex},{itemCIndex}", confirmed = true });
+            Assert.True(setItems.Success, string.Join(";", setItems.Errors.Select(e => e.Code + ":" + e.Message)));
+
+            // Sanity: none of this group's own identity fields (name/indexNum) or any of its
+            // items' own indexNums contain the search token -- a match below can only be the
+            // position dimension.
+            Assert.DoesNotContain(positionSearchTerm, groupName);
+            Assert.DoesNotContain(positionSearchTerm, groupIndexNum.ToString());
+            Assert.DoesNotContain(positionSearchTerm, itemAIndex.ToString());
+            Assert.DoesNotContain(positionSearchTerm, itemBIndex.ToString());
+            Assert.DoesNotContain(positionSearchTerm, itemCIndex.ToString());
+
+            var positionSearchPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups",
+                search = positionSearchTerm,
+            });
+            var positionSearchResponse = await dispatcher.DispatchAsync(new EndpointRequestDto(
+                "list_groups", "manifest", "enum_dictionary", "list_groups",
+                IdOrHubId: null, Payload: positionSearchPayload, Context: null, TriggerKind: "client", Role: "admin"));
+            Assert.True(positionSearchResponse.Success, string.Join(";", positionSearchResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+            Assert.Contains(groupName, positionSearchResponse.Emission!.Data!.Value.GetRawText());
+
+            // groupIdFilter: exact-match scope to this one group, excluding the real
+            // db/enum_seed.sql demo_status/user_status rows.
+            var groupIdFilterPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups",
+                groupIdFilter = groupId,
+            });
+            var groupIdFilterResponse = await dispatcher.DispatchAsync(new EndpointRequestDto(
+                "list_groups", "manifest", "enum_dictionary", "list_groups",
+                IdOrHubId: null, Payload: groupIdFilterPayload, Context: null, TriggerKind: "client", Role: "admin"));
+            Assert.True(groupIdFilterResponse.Success, string.Join(";", groupIdFilterResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+            var groupIdFilterText = groupIdFilterResponse.Emission!.Data!.Value.GetRawText();
+            Assert.Contains(groupName, groupIdFilterText);
+            Assert.DoesNotContain("demo_status", groupIdFilterText);
+            Assert.DoesNotContain("user_status", groupIdFilterText);
+
+            // fail-close: a non-UUID groupIdFilter through the real dispatch chain.
+            var malformedGroupIdFilterPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups",
+                groupIdFilter = "not-a-uuid",
+            });
+            var malformedGroupIdFilterResponse = await dispatcher.DispatchAsync(new EndpointRequestDto(
+                "list_groups", "manifest", "enum_dictionary", "list_groups",
+                IdOrHubId: null, Payload: malformedGroupIdFilterPayload, Context: null, TriggerKind: "client", Role: "admin"));
+            Assert.False(malformedGroupIdFilterResponse.Success);
+            Assert.Contains(malformedGroupIdFilterResponse.Errors, e => e.Code == "ENUM_LIST_GROUPS_GROUP_ID_FILTER_MALFORMED");
+        }
+        finally
+        {
+            await using var conn = new NpgsqlConnection(cs);
+            await conn.OpenAsync();
+            if (groupId is not null)
+            {
+                await using var delGroupCmd = conn.CreateCommand();
+                delGroupCmd.CommandText = "DELETE FROM enum.groups WHERE group_id = @id";
+                delGroupCmd.Parameters.AddWithValue("id", Guid.Parse(groupId));
+                await delGroupCmd.ExecuteNonQueryAsync();
+            }
+            foreach (var idx in createdItemIndexes)
+            {
+                await using var delItemCmd = conn.CreateCommand();
+                delItemCmd.CommandText = "DELETE FROM enum.items WHERE index_num = @idx";
+                delItemCmd.Parameters.AddWithValue("idx", idx);
+                await delItemCmd.ExecuteNonQueryAsync();
+            }
+        }
+    }
+
+    /// <summary>
     /// Write-side live-DB proof (2026-07-24, admin-runtime-operation-dispatch-lane-determination
     /// remaining_write_payload_capture_gap resolution). Unlike the read-circuit test above, this
     /// dispatches enum_dictionary:create_group / delete_group directly against real PostgreSQL --

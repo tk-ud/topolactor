@@ -120,6 +120,105 @@ public class AdminRuntimeMasterRosterTests
         Assert.Equal("ENUM_LIST_GROUPS_PAYLOAD_MALFORMED", error!.Code);
     }
 
+    // round 36 (admin-enum subBundle closure): the owning SSOT (docs/design/
+    // admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.enum.
+    // capability_requirements.search) declares FIVE search target fields, not group_name alone --
+    // this proves the two item-level fields (items.name/items.index_num) actually match against
+    // the fixture seed's own member items, not only against each group's own group_name/index_num.
+    // group_items.position is proven separately (live-DB test, isolated values -- see
+    // AdminEnumHubRelationUiProjectionLiveDbTests.cs) since the fixture seed's small position
+    // values (0-3) overlap in digits with other fields, making an in-memory isolation harder than
+    // just using real, deliberately-chosen data.
+    [Fact]
+    public async Task EnumDictionaryListGroups_WithSearch_MatchesMemberItemName()
+    {
+        var runtime = CreateRuntime();
+        var vector = new OperationVector(
+            "admin", "enum_dictionary", "list_groups", null, "admin",
+            JsonSerializer.SerializeToElement(new { search = "fixture_active" }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+        Assert.Null(error);
+        var json = data!.Value.GetRawText();
+        // fixture_status is the ONLY group carrying an item named fixture_active; its own
+        // group_name/index_num do not otherwise match "fixture_active" -- proves this is a
+        // genuine item.name match, not a group-identity match.
+        Assert.Contains("fixture_status", json);
+        Assert.DoesNotContain("user_status", json);
+    }
+
+    [Fact]
+    public async Task EnumDictionaryListGroups_WithSearch_MatchesMemberItemIndexNum()
+    {
+        var runtime = CreateRuntime();
+        var vector = new OperationVector(
+            "admin", "enum_dictionary", "list_groups", null, "admin",
+            JsonSerializer.SerializeToElement(new { search = "13" }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+        Assert.Null(error);
+        var json = data!.Value.GetRawText();
+        // Only user_status carries a member item with indexNum 13 (archived); neither group's own
+        // group_name/index_num nor any OTHER member item's name/index_num/position contains "13"
+        // -- proves this is a genuine item.index_num match.
+        Assert.Contains("user_status", json);
+        Assert.DoesNotContain("fixture_status", json);
+    }
+
+    // groupIdFilter (round 36): the enum_group_filter select control's own selected groupId --
+    // exact-match scope to a single group, independent of (and combinable with) search.
+    [Fact]
+    public async Task EnumDictionaryListGroups_WithGroupIdFilter_ScopesToExactGroup()
+    {
+        var vector = new OperationVector(
+            "admin", "enum_dictionary", "list_groups", null, "admin",
+            JsonSerializer.SerializeToElement(new
+            {
+                groupIdFilter = InMemoryEnumDictionaryRepository.FixtureGroupId.ToString(),
+            }),
+            null);
+
+        var runtime = CreateRuntime();
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+        Assert.Null(error);
+        var json = data!.Value.GetRawText();
+        Assert.Contains("fixture_status", json);
+        Assert.DoesNotContain("user_status", json);
+    }
+
+    [Fact]
+    public async Task EnumDictionaryListGroups_WithMalformedGroupIdFilter_FailsCloseAndDoesNotSilentlyIgnore()
+    {
+        var runtime = CreateRuntime();
+        var vector = new OperationVector(
+            "admin", "enum_dictionary", "list_groups", null, "admin",
+            JsonSerializer.SerializeToElement(new { groupIdFilter = "not-a-uuid" }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("ENUM_LIST_GROUPS_GROUP_ID_FILTER_MALFORMED", error!.Code);
+    }
+
+    [Fact]
+    public async Task EnumDictionaryListGroups_WithNullGroupIdFilter_ReturnsCanonicalFullList()
+    {
+        var runtime = CreateRuntime();
+        var vector = new OperationVector(
+            "admin", "enum_dictionary", "list_groups", null, "admin",
+            JsonSerializer.SerializeToElement(new { groupIdFilter = (string?)null }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+        Assert.Null(error);
+        var json = data!.Value.GetRawText();
+        Assert.Contains("fixture_status", json);
+        Assert.Contains("user_status", json);
+    }
+
     [Fact]
     public async Task EnumDictionaryCreateGroup_WithoutConfirmed_FailsCloseAndDoesNotPersist()
     {

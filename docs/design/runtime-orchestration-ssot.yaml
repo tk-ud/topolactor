@@ -140,12 +140,12 @@ runtime_orchestration_ssot:
             cascadeNodeValueReferences/applyLiveNodeValueOverride) and a functional enum_search
             filter (a data-defined optional payload.search field on the SAME existing list_groups
             action, no new action/lane) now match the hardcoded island's own UX.
-            frontend/routes/admin/enums.tsx replaces AdminEnumsRoster with a same-URL
-            ProjectionShell thin wrapper (a new optional manifestId prop, applied only when the URL
-            carries no explicit selection) pinned to ae200. AdminEnumsRoster.tsx carries no
-            production route/import reachability; see
-            docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml lane_storage_boundary's own
-            open-item record for the full proof reference.
+            frontend/routes/admin/enums.tsx replaces the retired AdminEnumsRoster island with a
+            same-URL ProjectionShell thin wrapper (a new optional manifestId prop, applied only
+            when the URL carries no explicit selection) pinned to ae200. UPDATED (round 36):
+            AdminEnumsRoster.tsx is deleted (see docs/design/admin-uibuilder-ui-structure-wiring-
+            ssot.yaml lane_storage_boundary's own open-item record for the full retirement-to-
+            deletion proof reference).
         - route: /admin/team-dashboard
           retirement_kind: hub_navigation_only
           replacement: same_url_plus_hub_entry

@@ -406,8 +406,10 @@ admin_uibuilder_ui_structure_wiring_ssot:
           AdminEnumHubRelationUiProjectionLiveDbTests.cs. See
           docs/design/react-schema-topology-seed-translator-ssot.yaml
           declared_seed_surface_catalog admin.enum.management.projection known_gaps
-          resolution_note for the full record, including the honestly-open remaining item
-          (hardcoded /admin/enums retirement still pending a genuine UX-parity replacement).
+          resolution_note for the full record. UPDATED (admin-enum subBundle closure round):
+          the hardcoded /admin/enums retirement previously tracked here as open is done --
+          see round_27_28_settled_child_dispatch_result_authority below for the current,
+          single-source record (this paragraph is not restated there as owning authority).
     admin_runtime_payload_binding_contract:
       payload_source_grammar_authority: >-
         Round 22 correction: this contract governs WHERE dispatchPayloadFromByTrigger is
@@ -1059,10 +1061,10 @@ admin_uibuilder_ui_structure_wiring_ssot:
         production DOM proof and live-DB proof of that wiring, and a negative-boundary suite
         covering all 7 write actions (not one representative operation) are now done -- see
         round_27_28_settled_child_dispatch_result_authority and
-        dryrun_preview_gated_confirm_modal below for the up to date record.
-        AdminEnumsRoster.tsx/hardcoded route retirement remains open, genuinely blocked on UX
-        parity (no field-prefill mechanism for selected-group-detail yet, enum_search not wired
-        to a functional filter) -- see .agent/tasks/todo.md for the current record.
+        dryrun_preview_gated_confirm_modal below for the up to date record. UPDATED
+        (admin-enum subBundle closure round): AdminEnumsRoster.tsx/hardcoded route retirement,
+        selected-group-detail field-prefill, and enum_search's functional filter are all done --
+        see round_27_28_settled_child_dispatch_result_authority below for the current record.
       round_21_hardening: >-
         2026-07-29. Owner audit found a structural gap in round 19's
         IsBareManifestNavigationReadTargetRefAsync exemption: it resolved the axes-registered
@@ -1179,10 +1181,14 @@ admin_uibuilder_ui_structure_wiring_ssot:
         existing read action, sourced from enum_search's own tracked value via
         dispatchPayloadFromByTrigger, backend/repository/NpgsqlEnumDictionaryRepository.cs ILIKE
         filter), and /admin/enums route retirement (frontend/routes/admin/enums.tsx now a same-URL
-        ProjectionShell thin wrapper pinned to ae200 via a new optional manifestId prop;
-        AdminEnumsRoster.tsx carries no production route/import reachability, kept catalog-
-        registered only per roleBasedSurfaceSeparation.test.ts's own historical contract) are all
-        done. Proof: frontend/tests/projectionShellAdminRuntimeWritePayloadCapture.test.ts's
+        ProjectionShell thin wrapper pinned to ae200 via a new optional manifestId prop) are all
+        done. UPDATED (round 36): AdminEnumsRoster.tsx itself is deleted -- it had carried no
+        production route/import reachability since the round above, and was kept catalog-
+        registered only as a ghost entry behind a hardcoded EXEMPT_KEYS test carve-out in
+        runtimeComponentCatalogFullConnection.test.ts; round 36 removed the island file, the
+        catalog.ts entry, the EXEMPT_KEYS carve-out, and roleBasedSurfaceSeparation.test.ts's
+        historical entry-existence assertion for it together, so no ghost/exempt residue remains.
+        Proof: frontend/tests/projectionShellAdminRuntimeWritePayloadCapture.test.ts's
         canonical-ae200-fixture scenarios (the checked-in, backend-live-DB-captured
         admin_enum_ae200_layout_nodes.json, never hand-built layoutNodes) prove prefill/edit-
         retention/row-reselection-overwrite/fresh-preview-confirm and search-filter/empty-query-

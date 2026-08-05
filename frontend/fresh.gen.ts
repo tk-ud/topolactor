@@ -31,7 +31,6 @@ import * as $index from "./routes/index.tsx";
 import * as $runtime_status from "./routes/runtime-status.tsx";
 import * as $super_auth from "./routes/super_auth.tsx";
 import * as $AdminAuthGate from "./islands/AdminAuthGate.tsx";
-import * as $AdminEnumsRoster from "./islands/AdminEnumsRoster.tsx";
 import * as $AdminImport from "./islands/AdminImport.tsx";
 import * as $AdminMainFlowStepper from "./islands/AdminMainFlowStepper.tsx";
 import * as $AdminUsersRoster from "./islands/AdminUsersRoster.tsx";
@@ -87,7 +86,6 @@ const manifest = {
   },
   islands: {
     "./islands/AdminAuthGate.tsx": $AdminAuthGate,
-    "./islands/AdminEnumsRoster.tsx": $AdminEnumsRoster,
     "./islands/AdminImport.tsx": $AdminImport,
     "./islands/AdminMainFlowStepper.tsx": $AdminMainFlowStepper,
     "./islands/AdminUsersRoster.tsx": $AdminUsersRoster,
