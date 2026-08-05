@@ -36,12 +36,16 @@ admin_master_roster_management_ssot:
   canonical_routes:
     admin_enums:
       path: /admin/enums
-      island: frontend/islands/AdminEnumsRoster.tsx
+      island: frontend/islands/ProjectionShell.tsx
+      note: >-
+        Route retirement (admin-enum subBundle closure round): same-URL ProjectionShell thin
+        wrapper pinned to manifest ae200, replacing AdminEnumsRoster (no longer route-reachable;
+        kept catalog-registered/on-disk only, see frontend/components/catalog.ts's own entry).
       ux_contract:
         - text_search_at_top
-        - show_all_button_clears_filter_and_lists_full_roster
+        - clearing_the_search_field_restores_full_roster
         - new_record_via_modal_form
-        - row_click_opens_inline_update_panel
+        - row_click_prefills_the_inline_update_field
         - delete_requires_confirm_dialog
     admin_users:
       path: /admin/users

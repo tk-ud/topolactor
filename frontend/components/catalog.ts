@@ -465,11 +465,9 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     lifecycleStatus: "registered",
     capabilityTags: ["admin_only", "displays_backend_result", "field_binding", "emits_event"],
     runtimeConnected: false,
-    runtimeReachability: "existing_route_composition",
-    routeCompositionFile: "frontend/routes/admin/enums.tsx",
     registrationRequired: false,
     notes:
-      "runtime_reachability: existing_route_composition — mounted at /admin/enums (unchanged route). enum_dictionary:* CRUD via admin dispatch, gated admin-only by the same manifest capability_requirement inference every admin_runtime action relies on.",
+      "route retirement (admin-enum subBundle closure round): /admin/enums no longer mounts this island -- it now renders ProjectionShell directly (frontend/routes/admin/enums.tsx), the SAME generic production runtime db/seed_empty.sql's ae200 manifest already drives, reaching full UX parity (selected-group prefill, enum_search filter, all 7 write operations) via the generic admin_runtime substrate. This entry stays catalog-registered (roleBasedSurfaceSeparation.test.ts's own historical entry-existence contract) but carries no runtimeReachability/routeCompositionFile claim and is EXEMPT in runtimeComponentCatalogFullConnection.test.ts -- it is no longer mounted anywhere in production.",
   },
   {
     componentKey: "scheduler_job_settings.admin_operation",

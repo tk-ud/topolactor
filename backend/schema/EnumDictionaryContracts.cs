@@ -31,3 +31,13 @@ public record EnumDictionaryGroupWithItemsSummaryDto(
 
 public record EnumDictionaryGetGroupRequestDto(
     [property: JsonPropertyName("groupId")] string GroupId);
+
+// generic list_groups search/filter (admin-enum subBundle closure round): a data-defined
+// OPTIONAL payload field on the EXISTING list_groups read action, never a new action or
+// enum-specific lane. Absent/null/empty Search means no filter (the canonical full list);
+// present Search filters group_name case-insensitively. A payload key present but carrying a
+// non-string JSON value fails the request's own JSON deserialization (System.Text.Json raises
+// before this record is ever constructed), so DataEnumDictionaryListGroupsAsync's own
+// malformed-payload branch already fails closed for that case -- no extra check needed here.
+public record EnumDictionaryListGroupsRequestDto(
+    [property: JsonPropertyName("search")] string? Search);

@@ -192,6 +192,27 @@ export function resolvePayloadFromSource(
   }
 }
 
+/**
+ * Resolves a single `node:<id>.value.<path>` (or bare `node:<id>.value`) source string against a
+ * nodeValues snapshot — the display-time counterpart to resolvePayloadFrom's dispatch-time use of
+ * the same grammar. Deliberately narrower than resolvePayloadFromSource: only `node_value` sources
+ * are meaningful for a display-time value reference (propBindings.value.source, see
+ * liveNodeValueTracker.ts cascadeNodeValueReferences) — `event.<path>` has no triggering event
+ * outside a dispatch, and `literal:<value>` needs no resolution at all. Any other source shape
+ * (including a non-`node:` string, e.g. an `emission.data...` path meant for the OTHER
+ * propBindings.value resolution path — resolveRuntimeDataPath against emissionData, see
+ * seedTrackerFromPropBindingsValue) is reported as not-ok rather than guessed at.
+ */
+export function resolveNodeValueReferenceSource(
+  source: string,
+  nodeValues: Record<string, unknown>,
+): { ok: true; value: unknown } | { ok: false } {
+  const parsed = parsePayloadFromSource(source);
+  if (parsed.kind !== "node_value") return { ok: false };
+  const result = resolvePayloadFromSource(parsed, nodeValues, {});
+  return result.ok ? { ok: true, value: result.value } : { ok: false };
+}
+
 export type ResolvePayloadFromResult =
   | { ok: true; payload: Record<string, unknown> }
   | { ok: false; errors: string[] };

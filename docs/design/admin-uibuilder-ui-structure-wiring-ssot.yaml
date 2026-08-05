@@ -1170,10 +1170,27 @@ admin_uibuilder_ui_structure_wiring_ssot:
         (PR #601), items browse UX composed into list_groups' own backend query as an
         itemsSummary displayColumn on the existing enum_table (no new action, no cross-manifest
         dispatch, no direct child-Emission adoption), and the negative-boundary matrix now covers
-        all 7 operations (not one representative operation) are done. Still open:
-        AdminEnumsRoster.tsx/route retirement, genuinely blocked on UX parity -- no field-prefill
-        mechanism exists yet for selected-group-detail, and enum_search is not wired to a
-        functional server-side filter.
+        all 7 operations (not one representative operation) are done. UPDATED (admin-enum
+        subBundle closure round): selected-group-detail field-prefill (enum_update_group_name_input's
+        propBindings.value.source="node:enum_table.value.groupName", resolved reactively by
+        cascadeNodeValueReferences/applyLiveNodeValueOverride -- frontend/runtime/
+        liveNodeValueTracker.ts, frontend/islands/ProjectionShell.tsx), enum_search's functional
+        list_groups search/filter (a data-defined optional payload.search field on the SAME
+        existing read action, sourced from enum_search's own tracked value via
+        dispatchPayloadFromByTrigger, backend/repository/NpgsqlEnumDictionaryRepository.cs ILIKE
+        filter), and /admin/enums route retirement (frontend/routes/admin/enums.tsx now a same-URL
+        ProjectionShell thin wrapper pinned to ae200 via a new optional manifestId prop;
+        AdminEnumsRoster.tsx carries no production route/import reachability, kept catalog-
+        registered only per roleBasedSurfaceSeparation.test.ts's own historical contract) are all
+        done. Proof: frontend/tests/projectionShellAdminRuntimeWritePayloadCapture.test.ts's
+        canonical-ae200-fixture scenarios (the checked-in, backend-live-DB-captured
+        admin_enum_ae200_layout_nodes.json, never hand-built layoutNodes) prove prefill/edit-
+        retention/row-reselection-overwrite/fresh-preview-confirm and search-filter/empty-query-
+        restore end-to-end; backend/tests/Topolactor.Integration.Tests/
+        AdminEnumHubRelationUiProjectionLiveDbTests.cs's
+        DispatchAsync_AdminEnumManagementManifest_ListGroupsSearch_... proves the search filter
+        against real PostgreSQL (db/enum_seed.sql's demo_status/user_status rows) including fail-
+        close on a non-string search value.
       dryrun_preview_gated_confirm_modal: >-
         preview-gap round (2026-08-04). Generic runtime boundary contract, not admin-enum-specific
         -- applies to ANY node whose open/action trigger carries an admin_runtime_dispatch_override_
@@ -1220,12 +1237,12 @@ admin_uibuilder_ui_structure_wiring_ssot:
         was required in react_schema_topology_seed_translator.py so this preview trigger button can
         legally sit directly under a Section the same way its disclosure-only predecessor did — see
         that file's SECTION_OWNABLE_ACTION_LANES comment for the narrow-scope rationale (paired-
-        with-a-Modal-opening-secondaryDisclosureAction only, never a bare ungated mutation). Not yet
-        done (admin-enum subBundle scope, unchanged from round_27_28): items browse UX, the full
-        negative-boundary matrix (this round proves structural wiring + core preview success/
-        failure/retention/no-canonical-reread for all 7 operations, not the complete existing
-        delete_group-scale negative matrix replicated across all 7), and AdminEnumsRoster.tsx/route
-        retirement.
+        with-a-Modal-opening-secondaryDisclosureAction only, never a bare ungated mutation).
+        UPDATED (admin-enum subBundle closure round): items browse UX (list_groups' own
+        itemsSummary column), a negative-boundary matrix covering all 7 operations (not
+        delete_group alone), selected-group-detail field-prefill, functional enum_search, and
+        /admin/enums route retirement are all done -- see
+        round_27_28_settled_child_dispatch_result_authority above for the up to date record.
     manifest_topology_boundary:
       rule: >-
         manifest.topology entries for this surface (ui_projection type per

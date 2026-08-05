@@ -444,6 +444,14 @@ def parse_columns(raw):
 
 ROWS_SOURCE_SHAPE_RE = re.compile(r"^emission\.data(\..+)?$")
 
+# admin-enum subBundle closure round (.agent/tasks/todo.md): selected-row-relative field prefill.
+# IDENTICAL grammar to payloadFromResolver.ts's own NODE_VALUE_RE (docs/design/
+# ui-builder-preset-ecosystem-ssot.yaml payloadFrom_resolver_contract.recognized_source_patterns
+# .node_value_path) -- one owning grammar definition, never a second independently-maintained
+# regex, mirroring this file's own existing rule for ROWS_SOURCE_SHAPE_RE / round_21 node_value_path
+# promotion note.
+FIELD_VALUE_FROM_NODE_REF_RE = re.compile(r"^node:[A-Za-z0-9_-]+\.value(?:\.[A-Za-z0-9_]+)*$")
+
 
 def find_display_columns_issues(raw):
     """Round 3 (preview-gap audit): strict re-parse of the SAME raw displayColumns string
@@ -537,6 +545,35 @@ def validate_table_display_columns_and_rows_source(node, errors, path="$.root"):
         validate_table_display_columns_and_rows_source(c, errors, path)
 
 
+def validate_field_value_from_source(node, errors, path="$.root"):
+    """SSOT: docs/design/react-schema-topology-seed-translator-ssot.yaml
+    input_text_markup_grammar_contract.per_unit_grammar.field's valueFrom attribute.
+    Fail-close, generic (never Field-key-specific, never admin-enum-specific): a Field's
+    valueFrom, when present, must be a node:<id>.value(.<path>)* reference -- the SAME grammar
+    payloadFrom already uses at dispatch time (frontend/runtime/payloadFromResolver.ts), reused
+    here for display-time selected-row-relative prefill (frontend/runtime/
+    liveNodeValueTracker.ts cascadeNodeValueReferences) rather than invented as a second
+    parallel source vocabulary. An emission.data-shaped source belongs to the OTHER, pre-existing
+    propBindings.value resolution path (seedTrackerFromPropBindingsValue against emissionData) and
+    is out of scope for valueFrom, which exists specifically for the node-reference case that path
+    cannot express.
+    """
+    if node.get("kind") == "Field":
+        node_path = node.get("_path", path)
+        key = node.get("key")
+        value_from = node.get("valueFrom") or ""
+        if value_from and not FIELD_VALUE_FROM_NODE_REF_RE.match(value_from):
+            errors.append(err(
+                "FIELD_VALUE_FROM_INVALID", node_path, "blocking",
+                f"Field '{key}' valueFrom '{value_from}' must be \"node:<id>.value\" or "
+                f"\"node:<id>.value.<path>\" (the SAME grammar payloadFrom already resolves at "
+                f"dispatch time) -- never an emission.data path, which belongs to the separate, "
+                f"pre-existing propBindings.value resolution against emissionData",
+            ))
+    for c in node.get("children") or []:
+        validate_field_value_from_source(c, errors, path)
+
+
 def build_node(kind, attrs, source_refs, known_gaps):
     node_kind = UNIT_TO_NODE_KIND[kind]
     key = attrs.get("key")
@@ -568,6 +605,35 @@ def build_node(kind, attrs, source_refs, known_gaps):
     if kind == "field":
         node["control"] = attrs.get("control", "")
         node["required"] = str(attrs.get("required", "false")).lower() == "true"
+        # selected-row-relative field prefill (admin-enum subBundle closure round): the authored
+        # propBindings.value.source node-reference, see FIELD_VALUE_FROM_NODE_REF_RE /
+        # validate_field_value_from_source. Empty string (not authored) is the common case.
+        node["valueFrom"] = attrs.get("valueFrom", "")
+        # generic list_groups search/filter (admin-enum subBundle closure round): a Field may ALSO
+        # carry an admin_runtime_dispatch_override_wiring eventBinding on its own trigger (default
+        # "change", matching a typed field's own keystroke event) -- the SAME override lane/shape
+        # Action/Step already author (build_admin_runtime_dispatch_override_candidate,
+        # validate_wiring_node), extended here so a typed search field's OWN current value can
+        # source an EXISTING read action's optional filter payload
+        # (dispatchPayloadFromByTrigger) -- no new wiringLane, no new actionType, no Field-vs-Action
+        # structural-ownership special-casing (validate_structural_node and
+        # validate_admin_runtime_preview_action_pairing both gate on kind=="Action" only, so a
+        # Field's own use of this lane is never subject to those Action-only Section-ownership /
+        # dryRun-preview-pairing rules -- correct, since a Field-sourced read/filter override is not
+        # the bare-ungated-mutation risk those Action-only rules exist to prevent). Absent when no
+        # wiringLane is authored (the common case for every other Field) -- never invented.
+        wiring_lane = attrs.get("wiringLane")
+        if wiring_lane:
+            event_binding = {
+                "trigger": attrs.get("trigger", "change"),
+                "wiringLane": wiring_lane,
+                "targetRef": attrs.get("actionRef", ""),
+                "authority": authority_marker,
+            }
+            payload_from_raw = attrs.get("payloadFrom")
+            if payload_from_raw:
+                event_binding["payloadFrom"] = parse_payload_from(payload_from_raw)
+            node["eventBinding"] = event_binding
     if kind == "table":
         node["source"] = attrs.get("source", "")
         node["display"] = attrs.get("display", "")
@@ -880,7 +946,14 @@ def classify_source_pattern(value):
 
 
 def validate_wiring_node(node, lanes_def, errors, path):
-    if node.get("kind") not in ("Action", "Step"):
+    kind = node.get("kind")
+    if kind not in ("Action", "Step", "Field"):
+        return
+    # A Field's eventBinding is OPTIONAL (generic list_groups search/filter round) -- unlike
+    # Action/Step, which always carry one (build_node sets it unconditionally), most Fields never
+    # author a wiringLane at all. Only a Field that DID author one is subject to this lane
+    # validation; an absent eventBinding is silently fine, never UNRESOLVED_WIRING_LANE.
+    if kind == "Field" and not node.get("eventBinding"):
         return
     eb = node.get("eventBinding") or {}
     lane_key = eb.get("wiringLane")
@@ -1338,7 +1411,7 @@ KIND_SPECIFIC_CONSUMED_KEYS = {
     "Category": set(),
     "Section": {"sectionKind"},
     "Form": {"target", "mode", "fields", "actions"},
-    "Field": {"control", "required"},
+    "Field": {"control", "required", "valueFrom", "eventBinding"},
     "Table": {"source", "display", "displayColumns", "rowsSource", "_rawDisplayColumns"},
     "Workflow": {"steps"},
     "Modal": {"componentKind", "title", "body"},
@@ -1408,6 +1481,12 @@ def convert_node_to_seed_record(node, schema_to_seed_map, target_surface, loss_e
         record["control"] = node.get("control", "")
         record["required"] = bool(node.get("required", False))
         record["validationRefs"] = [c["key"] for c in converted_children if c["recordType"] == "topology_ui_validation"]
+        record["valueFrom"] = node.get("valueFrom") or ""
+        if node.get("eventBinding") is not None:
+            record["eventBinding"] = node["eventBinding"]
+        admin_runtime_override = build_admin_runtime_dispatch_override_candidate(node)
+        if admin_runtime_override is not None:
+            record["adminRuntimeDispatchOverride"] = admin_runtime_override
     elif react_kind == "Table":
         record["tableKey"] = record["key"]
         record["source"] = node.get("source", "")
@@ -1918,6 +1997,41 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                 "propBindings": {"rows": {"source": rows_source}},
             })
 
+        if record_type == "topology_ui_field" and record.get("valueFrom"):
+            # selected-row-relative field prefill (admin-enum subBundle closure round): the
+            # authored valueFrom (already grammar-validated by validate_field_value_from_source
+            # earlier in this same generate-topology-seed call) becomes this Field's own
+            # propBindings.value.source -- consumed at RUNTIME not by seedTrackerFromPropBindingsValue
+            # (that function's own componentKind gate and resolveRuntimeDataPath-against-emissionData
+            # resolution are for the OTHER, pre-existing emission.data-sourced case) but by
+            # ProjectionShell.tsx's handleNodeValueChange -> cascadeNodeValueReferences
+            # (frontend/runtime/liveNodeValueTracker.ts), fired when the REFERENCED node's own
+            # tracked value changes (e.g. a table row select) -- never at every render, never on an
+            # unrelated rerender. Same NodeLocalData-by-own-nodeId convention as the Table/Modal
+            # branches above: a Field is never itself a Form/Section owner.
+            tensor_nodes.append({
+                "nodeId": this_resolved_key,
+                "nodeKind": "catalog_component",
+                "runtimeInteractions": [],
+                "propBindings": {"value": {"source": record["valueFrom"]}},
+            })
+
+        if record_type == "topology_ui_field" and record.get("adminRuntimeDispatchOverride"):
+            # generic list_groups search/filter (admin-enum subBundle closure round): reuses the
+            # SAME adminRuntimeDispatchOverride merge shape the Action/Step branch below builds
+            # (merged[nid]["dispatchTargetRefByTrigger"/"dispatchPayloadFromByTrigger"] keyed by
+            # trigger) -- deliberately NOT the wiring_action_entries dedicated-wiring-row path
+            # below, which is Action/Step's own per-node wiring registration and not needed here:
+            # a Field carrying this override still dispatches through the layout's OWN uniform
+            # admin_runtime wiring (wiringId=ae205), this override only supplies a per-trigger
+            # payload addition, same as Action/Step's override does for THEIR own uniform target.
+            tensor_nodes.append({
+                "nodeId": this_resolved_key,
+                "nodeKind": "catalog_component",
+                "runtimeInteractions": [],
+                "adminRuntimeDispatchOverride": record["adminRuntimeDispatchOverride"],
+            })
+
         if record_type in ("topology_ui_action", "topology_ui_workflow_step"):
             event_binding = record.get("eventBinding") or {}
             # Derived wiring projection, collected here and aggregated into a
@@ -2278,7 +2392,7 @@ def validate_adoption_candidates(candidates, flat_records):
         record_type = record.get("recordType")
         key = record.get("key")
         path = record.get("sourceReactPath", "$.root")
-        if record_type not in ("topology_ui_action", "topology_ui_workflow_step"):
+        if record_type not in ("topology_ui_action", "topology_ui_workflow_step", "topology_ui_field"):
             continue
 
         event_binding = record.get("eventBinding") or {}
@@ -2295,7 +2409,7 @@ def validate_adoption_candidates(candidates, flat_records):
                 "ADMIN_RUNTIME_DISPATCH_OVERRIDE_NOT_PERSISTED_LAYOUT_PATH",
                 path,
                 "blocking",
-                f"Action/Step '{key}' has an admin_runtime_dispatch_override_wiring eventBinding but no "
+                f"'{key}' has an admin_runtime_dispatch_override_wiring eventBinding but no "
                 "corresponding tensorAdoptionCandidates dispatchTargetRefByTrigger entry",
             ))
 
@@ -2560,6 +2674,7 @@ def cmd_generate_react_schema(args):
         collect_nodes_by_key(root_node, nodes_by_key)
         validate_admin_runtime_preview_action_pairing(root_node, nodes_by_key, tree_errors)
         validate_table_display_columns_and_rows_source(root_node, tree_errors)
+        validate_field_value_from_source(root_node, tree_errors)
         output["validationErrors"].extend(tree_errors)
 
     source_refs = envelope.get("sourceYamlRefs") or []
@@ -2706,6 +2821,7 @@ def cmd_generate_topology_seed(args):
     collect_nodes_by_key(root_node, nodes_by_key)
     validate_admin_runtime_preview_action_pairing(root_node, nodes_by_key, tree_errors)
     validate_table_display_columns_and_rows_source(root_node, tree_errors)
+    validate_field_value_from_source(root_node, tree_errors)
     output["validationErrors"].extend(tree_errors)
 
     schema_to_seed_map = dig(ssot_root, "exchange_mapping", "schema_to_seed_record_mapping") or {}

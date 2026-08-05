@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { JSX } from "preact";
+import type { FunctionComponent } from "preact";
 import { probeSessionToken, refreshProjectionSession } from "../api/authApi.ts";
 import {
   clearSessionToken,
@@ -34,15 +34,18 @@ import {
   type UiEventEffectRunner,
 } from "../runtime/uiEventEffectRunner.ts";
 import {
+  cascadeNodeValueReferences,
   createLiveNodeValueTracker,
   type LiveNodeValueTracker,
   seedTrackerFromPropBindingsValue,
 } from "../runtime/liveNodeValueTracker.ts";
 import { resolveRuntimeDataPath } from "../runtime/propBindingResolver.ts";
+import { resolveNodeValueReferenceSource } from "../runtime/payloadFromResolver.ts";
 import type { WiringNode } from "../lib/uiBuilderWiringProjection.ts";
 import {
   adoptResolvedManifestIdentity,
   confirmProjectionEntryEmission,
+  isDefaultProjectionEntry,
   parseProjectionEntrySelection,
   resolveHubNavigationLinks,
   resolveProjectionEntryAxes,
@@ -86,7 +89,21 @@ function toRunnerWiringNodes(
  * to the onProjectionUpdate handler, which re-dispatches via queueClientCommand
  * with identity-preserving axes. No field is silently discarded.
  */
-export default function ProjectionShell(): JSX.Element {
+export type ProjectionShellProps = {
+  /**
+   * Route retirement (admin-enum subBundle closure round): lets a same-URL thin route wrapper
+   * (e.g. frontend/routes/admin/enums.tsx) pin a manifest without a `?manifest=` query string.
+   * Applied ONLY when the URL itself carries no explicit route/package/manifest selection
+   * (isDefaultProjectionEntry) -- an explicit URL selection always wins, so this is purely a
+   * default, never an override of a real user navigation.
+   */
+  manifestId?: string;
+};
+
+const ProjectionShell: FunctionComponent<ProjectionShellProps> = (
+  props,
+) => {
+  const { manifestId } = props;
   const [loading, setLoading] = useState(true);
   const [emission, setEmission] = useState<Emission | null>(null);
   const [specs, setSpecs] = useState<ComponentSpec[]>([]);
@@ -236,7 +253,11 @@ export default function ProjectionShell(): JSX.Element {
         setLoading(false);
         return;
       }
-      const entrySelection = entryParse.selection;
+      // A `manifestId` prop only ever fills in a DEFAULT entry (no explicit route/package/
+      // manifest in the URL) -- a real user navigation (?manifest=/?route=/?package=) always wins.
+      const entrySelection = manifestId && isDefaultProjectionEntry(entryParse.selection)
+        ? { ...entryParse.selection, manifestId }
+        : entryParse.selection;
 
       const initialAxes: UserOperation = resolveProjectionEntryAxes(
         entrySelection,
@@ -472,7 +493,41 @@ export default function ProjectionShell(): JSX.Element {
         setSpecs(renderEmission(dispatched, defaultComponentRegistry, {
           localStateStore: stateDispatcherRef.current ?? undefined,
           payloadFromNodeValues: nodeValueTrackerRef.current.snapshot(),
-          onNodeValueChange: nodeValueTrackerRef.current.set,
+          onNodeValueChange: handleNodeValueChange,
+          onRuntimeDispatchResult: handleRuntimeDispatchResult,
+        }));
+      };
+
+      // Selected-row-relative field prefill (admin-enum subBundle closure round): the single
+      // onNodeValueChange callback passed to every renderEmission() call site below. Wraps the
+      // tracker's own set() with cascadeNodeValueReferences (liveNodeValueTracker.ts) — when the
+      // changed node is one OTHER nodes reference via propBindings.value.source="node:<id>.value...",
+      // those dependent nodes' OWN tracker slots are overwritten with the freshly-resolved value too.
+      // Always re-renders (not only when cascaded.length > 0): the CHANGED node's own controlled
+      // <input>/<select> (Input.tsx etc.) must also pick up its own fresh tracker value via
+      // applyLiveNodeValueOverride on this same pass -- a node with no wiringKind-driven UI状態更新
+      // side effect on its own change trigger (e.g. enum_update_group_name_input, which only carries
+      // Lane 3 tracking + its own Lane 2 read-circuit redispatch, no runtimeInteractions setState) has
+      // NO other path that would re-render specs; without this, the very next UNRELATED re-render
+      // (an unrelated node's dispatch settling, an SSE refresh) would reapply the stale pre-keystroke
+      // specs and visibly revert the just-typed value on screen.
+      // Fires ONLY on an actual value change of the source node itself (a row click, a keystroke)
+      // — never on an unrelated rerender (SSE passive refresh, an unrelated local-state mutation),
+      // so an in-progress edit in a field with no dependency on the changed node is never touched.
+      const handleNodeValueChange = (nodeId: string, value: unknown) => {
+        nodeValueTrackerRef.current.set(nodeId, value);
+        cascadeNodeValueReferences(
+          nodeId,
+          emissionRef.current?.layoutNodes,
+          nodeValueTrackerRef.current,
+          resolveNodeValueReferenceSource,
+        );
+        const current = emissionRef.current;
+        if (!current) return;
+        setSpecs(renderEmission(current, defaultComponentRegistry, {
+          localStateStore: stateDispatcherRef.current ?? undefined,
+          payloadFromNodeValues: nodeValueTrackerRef.current.snapshot(),
+          onNodeValueChange: handleNodeValueChange,
           onRuntimeDispatchResult: handleRuntimeDispatchResult,
         }));
       };
@@ -482,7 +537,7 @@ export default function ProjectionShell(): JSX.Element {
       setSpecs(renderEmission(nextEmission, defaultComponentRegistry, {
         localStateStore: stateDispatcher,
         payloadFromNodeValues: nodeValueTrackerRef.current.snapshot(),
-        onNodeValueChange: nodeValueTrackerRef.current.set,
+        onNodeValueChange: handleNodeValueChange,
         onRuntimeDispatchResult: handleRuntimeDispatchResult,
       }));
       setLoading(false);
@@ -503,7 +558,7 @@ export default function ProjectionShell(): JSX.Element {
             setSpecs(renderEmission(current, defaultComponentRegistry, {
               localStateStore: stateDispatcherRef.current ?? stateDispatcher,
               payloadFromNodeValues: nodeValueTrackerRef.current.snapshot(),
-              onNodeValueChange: nodeValueTrackerRef.current.set,
+              onNodeValueChange: handleNodeValueChange,
               onRuntimeDispatchResult: handleRuntimeDispatchResult,
             }));
           },
@@ -680,7 +735,7 @@ export default function ProjectionShell(): JSX.Element {
           setSpecs(renderEmission(updated, defaultComponentRegistry, {
             localStateStore: stateDispatcherRef.current ?? undefined,
             payloadFromNodeValues: nodeValueTrackerRef.current.snapshot(),
-            onNodeValueChange: nodeValueTrackerRef.current.set,
+            onNodeValueChange: handleNodeValueChange,
             onRuntimeDispatchResult: handleRuntimeDispatchResult,
           }));
         } catch (err) {
@@ -865,4 +920,6 @@ export default function ProjectionShell(): JSX.Element {
       )}
     </div>
   );
-}
+};
+
+export default ProjectionShell;

@@ -59,9 +59,17 @@ public sealed class InMemoryEnumDictionaryRepository : EnumDictionaryRepository
                 .ToList());
 
     public override Task<IReadOnlyList<EnumDictionaryGroupWithItemsSummaryDto>> ListGroupsWithItemsSummaryAsync(
-        CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<EnumDictionaryGroupWithItemsSummaryDto>>(
-            _groups.Values
+        string? search = null, CancellationToken ct = default)
+    {
+        var trimmedSearch = search?.Trim();
+        IEnumerable<EnumDictionaryGroupDetailDto> groups = _groups.Values;
+        if (!string.IsNullOrEmpty(trimmedSearch))
+        {
+            groups = groups.Where(g =>
+                g.GroupName.Contains(trimmedSearch, StringComparison.OrdinalIgnoreCase));
+        }
+        return Task.FromResult<IReadOnlyList<EnumDictionaryGroupWithItemsSummaryDto>>(
+            groups
                 .OrderBy(g => g.IndexNum)
                 .Select(g => new EnumDictionaryGroupWithItemsSummaryDto(
                     g.GroupId,
@@ -69,6 +77,7 @@ public sealed class InMemoryEnumDictionaryRepository : EnumDictionaryRepository
                     g.GroupName,
                     string.Join(", ", g.Items.Select(i => $"{i.IndexNum}:{i.Name}"))))
                 .ToList());
+    }
 
     public override Task<EnumDictionaryGroupDetailDto?> GetGroupDetailAsync(
         Guid groupId, CancellationToken ct = default) =>

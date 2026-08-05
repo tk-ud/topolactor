@@ -116,6 +116,59 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
     }
 
     /// <summary>
+    /// admin-enum subBundle closure round (.agent/tasks/todo.md): mirrors CredentialManagement
+    /// HubRelationUiProjectionLiveDbTests's own manifest_0092_bare_entry_layout_nodes.json pattern.
+    /// frontend/tests/fixtures/admin_enum_ae200_layout_nodes.json is a checked-in snapshot of
+    /// THIS EXACT dispatch's Emission.LayoutNodes (camelCase-serialized, the same shape the
+    /// frontend receives over HTTP -- backend/Program.cs JsonNamingPolicy.CamelCase), consumed by
+    /// frontend/tests/projectionShellAdminEnumCanonicalSeedShape.test.ts as its mocked initial
+    /// dispatch response -- a production DOM proof driven by the REAL canonical translator-
+    /// generated ae200 layout, never a hand-built layoutNodes object standing in for it. If
+    /// ae200's seed ever changes, this test fails HERE (a live-DB dispatch against real
+    /// PostgreSQL), not by the frontend fixture silently going stale against real data.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_AdminEnumManagementManifest_LayoutNodesMatchCheckedInFrontendFixture()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+
+        var payload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = $"manifest:{AdminEnumManagementManifestId}:projection_entry",
+        });
+        var request = new EndpointRequestDto(
+            "Search", "default", "screen_list", "Search",
+            IdOrHubId: null, Payload: payload, Context: null, TriggerKind: "client", Role: "admin");
+
+        var response = await dispatcher.DispatchAsync(request);
+        Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
+        Assert.NotNull(response.Emission);
+        Assert.NotNull(response.Emission!.LayoutNodes);
+
+        var fixturePath = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "../../../../../../frontend/tests/fixtures/admin_enum_ae200_layout_nodes.json"));
+        var expectedJson = await File.ReadAllTextAsync(fixturePath);
+        // Options must mirror backend/Program.cs's actual wire serialization exactly (including
+        // DefaultIgnoreCondition) -- the fixture is a snapshot of what the frontend really
+        // receives over HTTP, not an arbitrary debug dump. A field-shape drift (e.g. a new
+        // LayoutNode field, or a null-handling change) must fail HERE, not silently pass while
+        // the checked-in fixture and the real DTO diverge.
+        var actualJson = System.Text.Json.JsonSerializer.Serialize(
+            response.Emission.LayoutNodes,
+            new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+                WriteIndented = true,
+            });
+        Assert.Equal(expectedJson.Trim(), actualJson.Trim());
+    }
+
+    /// <summary>
     /// Round 19 (admin-write-surface-selection-context-and-mode-composition-gap Bundle): the
     /// FIRST of the 7 write actions (create_group) wired directly into ae200's own single-surface
     /// layout via a node-local dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger override
@@ -772,6 +825,91 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         // list_items dispatch.
         Assert.Contains("itemsSummary", dataText);
         Assert.Contains("1:demo_active", dataText);
+    }
+
+    /// <summary>
+    /// generic list_groups search/filter (admin-enum subBundle closure round): a data-defined
+    /// OPTIONAL payload field on this SAME existing list_groups read action -- no new action, no
+    /// enum-specific runtime lane. Proves against REAL PostgreSQL (db/enum_seed.sql's own
+    /// demo_status/user_status rows, not hand-built data): enum_search's own generated wiring
+    /// carries the search payloadFrom override, a real dispatch with payload.search filters
+    /// group_name case-insensitively, an empty/absent search returns the canonical full list, and
+    /// a non-string search fails close rather than being silently ignored.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_AdminEnumManagementManifest_ListGroupsSearch_FiltersRealRowsEmptyReturnsFullListNonStringFailsClose()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+
+        // STEP 1: structural proof -- enum_search's own generated wiring (db/seed_empty.sql
+        // ae206, produced by the translator from admin-enum-ae200.input.json/
+        // admin-enum-ae200.topology-seed.input.json, adopted verbatim) carries the search
+        // payloadFrom override on its own change trigger.
+        var structurePayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = $"manifest:{AdminEnumManagementManifestId}:projection_entry",
+        });
+        var structureRequest = new EndpointRequestDto(
+            "Search", "default", "screen_list", "Search",
+            IdOrHubId: null, Payload: structurePayload, Context: null, TriggerKind: "client", Role: "admin");
+        var structureResponse = await dispatcher.DispatchAsync(structureRequest);
+        Assert.True(structureResponse.Success, string.Join(";", structureResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+        var structureNodes = structureResponse.Emission!.LayoutNodes!;
+        var searchField = Assert.Single(structureNodes, n => n.NodeId == "enum_search");
+        Assert.NotNull(searchField.DispatchPayloadFromByTrigger);
+        var payloadFromText = searchField.DispatchPayloadFromByTrigger!.Value.GetRawText();
+        Assert.Contains("\"change\"", payloadFromText);
+        Assert.Contains("\"search\"", payloadFromText);
+        Assert.Contains("\"node:enum_search.value\"", payloadFromText);
+
+        // STEP 2: a real dispatch with payload.search="demo" must return ONLY demo_status, not
+        // user_status -- both real db/enum_seed.sql rows, proving a genuine SQL-level filter, not
+        // a coincidence of there being only one row.
+        var searchDataPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups",
+            search = "demo",
+        });
+        var searchDataRequest = new EndpointRequestDto(
+            "list_groups", "manifest", "enum_dictionary", "list_groups",
+            IdOrHubId: null, Payload: searchDataPayload, Context: null, TriggerKind: "client", Role: "admin");
+        var searchDataResponse = await dispatcher.DispatchAsync(searchDataRequest);
+        Assert.True(searchDataResponse.Success, string.Join(";", searchDataResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+        var searchDataText = searchDataResponse.Emission!.Data!.Value.GetRawText();
+        Assert.Contains("demo_status", searchDataText);
+        Assert.DoesNotContain("user_status", searchDataText);
+
+        // STEP 3: an empty search returns the SAME canonical full list an absent payload does.
+        var emptySearchDataPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups",
+            search = "",
+        });
+        var emptySearchDataRequest = new EndpointRequestDto(
+            "list_groups", "manifest", "enum_dictionary", "list_groups",
+            IdOrHubId: null, Payload: emptySearchDataPayload, Context: null, TriggerKind: "client", Role: "admin");
+        var emptySearchDataResponse = await dispatcher.DispatchAsync(emptySearchDataRequest);
+        Assert.True(emptySearchDataResponse.Success, string.Join(";", emptySearchDataResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+        var emptySearchDataText = emptySearchDataResponse.Emission!.Data!.Value.GetRawText();
+        Assert.Contains("demo_status", emptySearchDataText);
+        Assert.Contains("user_status", emptySearchDataText);
+
+        // STEP 4: fail-close -- a non-string search must never be silently ignored/treated as "no
+        // search"; the real dispatch chain surfaces an explicit validation error.
+        var malformedDataPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups",
+            search = 12345,
+        });
+        var malformedDataRequest = new EndpointRequestDto(
+            "list_groups", "manifest", "enum_dictionary", "list_groups",
+            IdOrHubId: null, Payload: malformedDataPayload, Context: null, TriggerKind: "client", Role: "admin");
+        var malformedDataResponse = await dispatcher.DispatchAsync(malformedDataRequest);
+        Assert.False(malformedDataResponse.Success);
+        Assert.Contains(malformedDataResponse.Errors, e => e.Code == "ENUM_LIST_GROUPS_PAYLOAD_MALFORMED");
     }
 
     /// <summary>

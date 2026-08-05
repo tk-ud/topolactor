@@ -58,6 +58,15 @@ public class StructureMapResolver
             // mechanism already used for table/card_list/json_viewer, extended to one more component
             // kind, not a new mechanism.
             ["form_input/search_input"]         = new HashSet<string>(StringComparer.Ordinal) { "value" },
+            // admin-enum subBundle closure round (.agent/tasks/todo.md): selected-row-relative
+            // field prefill for an ordinary text input (as opposed to search_input above) --
+            // SAME generic propBindings.value mechanism, one more component kind, not a new one.
+            // The source is resolved either against emission.data (existing
+            // seedTrackerFromPropBindingsValue path) or a node:<id>.value.<path> reference
+            // (new cascadeNodeValueReferences path, frontend/runtime/liveNodeValueTracker.ts) --
+            // this capability whitelist only gates WHICH componentKinds may carry a `value`
+            // propBinding at all, not which source grammar resolves it.
+            ["form_input/input"]                = new HashSet<string>(StringComparer.Ordinal) { "value" },
             ["table_op/faceted_filter_bar"]     = new HashSet<string>(StringComparer.Ordinal) { "filters" },
             ["table_op/column_filter"]          = new HashSet<string>(StringComparer.Ordinal) { "options" },
             ["table_op/column_visibility_editor"] = new HashSet<string>(StringComparer.Ordinal) { "columns" },
@@ -76,6 +85,14 @@ public class StructureMapResolver
     // stays out of reach of propBindings — docs/framework-core.yaml runtime_route_attention_boundary).
     // Must stay in sync with frontend/runtime/propBindingResolver.ts EMISSION_NAVIGATION_SEQUENCE_SOURCE.
     internal const string EmissionNavigationSequenceSource = "emission.navigationSequence";
+
+    // SSOT: docs/design/ui-builder-preset-ecosystem-ssot.yaml payloadFrom_resolver_contract
+    // .recognized_source_patterns.node_value_path -- IDENTICAL grammar to
+    // frontend/runtime/payloadFromResolver.ts's NODE_VALUE_RE and the translator's
+    // FIELD_VALUE_FROM_NODE_REF_RE (.agent/scripts/react_schema_topology_seed_translator.py).
+    // One owning grammar definition, never a third independently-maintained regex.
+    private static readonly System.Text.RegularExpressions.Regex NodeValueSourceRegex =
+        new(@"^node:[A-Za-z0-9_-]+\.value(\.[A-Za-z0-9_]+)*$", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     // SSOT: admin-console-workflow-ssot.yaml layout_node_props_contract.propBindings.transform.allowlist
     // Must stay in sync with frontend/runtime/propBindingResolver.ts ALLOWED_PROP_BINDING_TRANSFORMS.
@@ -445,15 +462,28 @@ public class StructureMapResolver
                     ];
                 }
                 var source = sourceProp.GetString()!;
+                // Selected-row-relative field prefill (admin-enum subBundle closure round,
+                // .agent/tasks/todo.md): a `value` propBinding may ALSO reference another node's
+                // own tracked value (node:<id>.value(.<path>)*) -- the SAME grammar payloadFrom
+                // already resolves at dispatch time (NodeValueSourceRegex mirrors payloadFromResolver
+                // .ts's NODE_VALUE_RE / the translator's FIELD_VALUE_FROM_NODE_REF_RE, one owning
+                // grammar, never a third independently-maintained regex), resolved at render time
+                // by frontend/runtime/liveNodeValueTracker.ts's cascadeNodeValueReferences, never by
+                // this backend (which only validates the AUTHORED shape, the same way it validates
+                // but never resolves emission.data paths). Scoped to prop "value" only -- rows/
+                // columns/options etc. have no cross-node-reference use case and keep the original
+                // emission.data-only restriction.
+                var isValidNodeValueReference = propName == "value" && NodeValueSourceRegex.IsMatch(source);
                 if (!(source == "emission.data" ||
                       source.StartsWith("emission.data.", StringComparison.Ordinal) ||
-                      source == EmissionNavigationSequenceSource))
+                      source == EmissionNavigationSequenceSource ||
+                      isValidNodeValueReference))
                 {
                     return
                     [
                         new ValidationError(
                             "LAYOUT_NODE_PROP_BINDING_INVALID_SOURCE",
-                            $"Node '{node.NodeId}', prop '{propName}': source \"{source}\" must be \"emission.data\", start with \"emission.data.\", or be \"{EmissionNavigationSequenceSource}\".")
+                            $"Node '{node.NodeId}', prop '{propName}': source \"{source}\" must be \"emission.data\", start with \"emission.data.\", be \"{EmissionNavigationSequenceSource}\", or (for prop \"value\" only) a \"node:<id>.value\" reference.")
                     ];
                 }
 

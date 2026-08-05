@@ -29,11 +29,13 @@ public class NpgsqlEnumDictionaryRepository : EnumDictionaryRepository
     }
 
     public override async Task<IReadOnlyList<EnumDictionaryGroupWithItemsSummaryDto>> ListGroupsWithItemsSummaryAsync(
-        CancellationToken ct = default)
+        string? search = null, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
+        var trimmedSearch = search?.Trim();
+        var hasSearch = !string.IsNullOrEmpty(trimmedSearch);
         cmd.CommandText =
             """
             SELECT g.group_id, g.index_num, g.group_name,
@@ -44,9 +46,20 @@ public class NpgsqlEnumDictionaryRepository : EnumDictionaryRepository
             FROM enum.groups g
             LEFT JOIN enum.group_items gi ON gi.group_id = g.group_id
             LEFT JOIN enum.items i ON i.index_num = gi.enum_index_num
+            """
+            // generic list_groups search/filter (admin-enum subBundle closure round): case-
+            // insensitive group_name substring match, parameterized -- never string-concatenated.
+            // Absent/empty search omits this clause entirely, returning the canonical full list.
+            + (hasSearch ? " WHERE g.group_name ILIKE @search" : "") +
+            """
+
             GROUP BY g.group_id, g.index_num, g.group_name
             ORDER BY g.index_num
             """;
+        if (hasSearch)
+        {
+            cmd.Parameters.AddWithValue("search", $"%{trimmedSearch}%");
+        }
         var list = new List<EnumDictionaryGroupWithItemsSummaryDto>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))

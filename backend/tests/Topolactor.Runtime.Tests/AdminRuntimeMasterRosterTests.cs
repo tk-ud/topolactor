@@ -50,6 +50,76 @@ public class AdminRuntimeMasterRosterTests
         Assert.Contains("test_group_roster", json);
     }
 
+    // generic list_groups search/filter (admin-enum subBundle closure round): a data-defined
+    // OPTIONAL payload field on this SAME existing read action -- no new action, no enum-specific
+    // runtime lane.
+    [Fact]
+    public async Task EnumDictionaryListGroups_WithSearch_FiltersByGroupNameCaseInsensitiveSubstring()
+    {
+        var runtime = CreateRuntime();
+        foreach (var name in new[] { "alpha_search_roster", "beta_search_roster", "gamma_other_roster" })
+        {
+            var (_, createError) = await runtime.ExecuteDataAsync(new OperationVector(
+                "admin", "enum_dictionary", "create_group", null, "admin",
+                JsonSerializer.SerializeToElement(new { groupName = name, confirmed = true }),
+                null));
+            Assert.Null(createError);
+        }
+
+        var searchVector = new OperationVector(
+            "admin", "enum_dictionary", "list_groups", null, "admin",
+            JsonSerializer.SerializeToElement(new { search = "SEARCH" }),
+            null);
+        var (searchData, searchError) = await runtime.ExecuteDataAsync(searchVector);
+        Assert.Null(searchError);
+        var searchJson = searchData!.Value.GetRawText();
+        Assert.Contains("alpha_search_roster", searchJson);
+        Assert.Contains("beta_search_roster", searchJson);
+        Assert.DoesNotContain("gamma_other_roster", searchJson);
+    }
+
+    [Fact]
+    public async Task EnumDictionaryListGroups_WithEmptySearch_ReturnsCanonicalFullList()
+    {
+        var runtime = CreateRuntime();
+        var (_, createError) = await runtime.ExecuteDataAsync(new OperationVector(
+            "admin", "enum_dictionary", "create_group", null, "admin",
+            JsonSerializer.SerializeToElement(new { groupName = "empty_search_roster", confirmed = true }),
+            null));
+        Assert.Null(createError);
+
+        var emptySearchVector = new OperationVector(
+            "admin", "enum_dictionary", "list_groups", null, "admin",
+            JsonSerializer.SerializeToElement(new { search = "" }),
+            null);
+        var (emptySearchData, emptySearchError) = await runtime.ExecuteDataAsync(emptySearchVector);
+        Assert.Null(emptySearchError);
+
+        var noPayloadVector = new OperationVector(
+            "admin", "enum_dictionary", "list_groups", null, "admin", null, null);
+        var (noPayloadData, noPayloadError) = await runtime.ExecuteDataAsync(noPayloadVector);
+        Assert.Null(noPayloadError);
+
+        // empty search and no payload at all must both resolve to the SAME canonical full list.
+        Assert.Equal(noPayloadData!.Value.GetRawText(), emptySearchData!.Value.GetRawText());
+        Assert.Contains("empty_search_roster", emptySearchData.Value.GetRawText());
+    }
+
+    [Fact]
+    public async Task EnumDictionaryListGroups_WithNonStringSearch_FailsCloseAndDoesNotSilentlyIgnore()
+    {
+        var runtime = CreateRuntime();
+        var vector = new OperationVector(
+            "admin", "enum_dictionary", "list_groups", null, "admin",
+            JsonSerializer.SerializeToElement(new { search = 12345 }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("ENUM_LIST_GROUPS_PAYLOAD_MALFORMED", error!.Code);
+    }
+
     [Fact]
     public async Task EnumDictionaryCreateGroup_WithoutConfirmed_FailsCloseAndDoesNotPersist()
     {

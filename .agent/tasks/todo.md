@@ -1597,6 +1597,31 @@ PR #600（round14〜24、コミット履歴は上記の各round実装記録を�
 - 選択行相対のfield prefillを実現するために、既存の`propBindings.value`／`node:<id>.value.<path>`という汎用機構を調査せず、いきなり新規enum専用runtime laneを設計する——両機構の組み合わせで実現可能な範囲を先に確認すること（round34で確認済み、未実装）。
 - UX parityが未成立（prefill機構・search結線が無い）状態で`/admin/enums`のroute retirementを実施する。
 
+### admin-enum subBundle 実装記録（2026-08-05 round 35 — round34が意図的に見送ったroute retirement 1項目、およびその前提であるselected-row-relative field prefillとenum_search server-side filterを実装し、Bundle全4項目を完遂）
+
+**round35の指示**: owning SSOT（`admin-normal-surface-projection-seed-ssot.yaml`）のcomponent treeが旧stub（`enum_form`/`enum_confirm_button`）のままpróduction実態と乖離していること、同一SSOT内に完了状態の記述衝突が残っていること、canonical generated ae200を使わないhand-built layoutNodesのDOM proofを直接証明として扱っていたことの是正に加え、round34が未着手のまま残した2点（selected-row-relative field prefill、enum_searchのserver-side filter結線）と、それに連動するroute retirementを実装するよう指示された。既存generic substrateのみを使用し、enum専用runtime lane・nodeId分岐・manifest UUID分岐を新設しないこと、route retirementを別todoへ分離しないことが明示された。
+
+**1. owning SSOT component tree同期**: `admin-normal-surface-projection-seed-ssot.yaml`のenum `seed_contract.component_tree`が、round19以前の5-node stub（`enum_form`/`enum_confirm_button`含む、round34のorphan監査で撤去済みのnode）のままだったことを発見。現行7-operation構成（35 node、`db/seed_empty.sql`のae204/ae206と実translator fixtureが実際に生成する内容）へ全面差し替え、旧stubからの移行理由を`component_tree_note`として明記した。
+
+**2. `admin-uibuilder-ui-structure-wiring-ssot.yaml`内の完了状態衝突の解消**: 同一SSOT内3箇所で"done"と"Not yet done"の記述が併存していたことを発見（`round_27_28_settled_child_dispatch_result_authority`と`dryrun_preview_gated_confirm_modal`それぞれの本文）。round34時点の実態（items browse/orphan監査/negative matrix完了、prefill/search/route retirement未完了）へ単一化した。
+
+**3. selected-row-relative field prefillの実装（round34が発見していた2つの既存汎用機構の合成）**: `propBindings.value.source`へ`node:<nodeId>.value.<path>`参照を新たに認め（既存の`emission.data...`参照とは別系統、`payloadFromResolver.ts`が既に所有するgrammarを再利用）、参照先nodeの値が変化した時だけ再評価する`cascadeNodeValueReferences`（`liveNodeValueTracker.ts`新設）を、既存の`applyLiveNodeValueOverride`（renderEmission.ts、既存）と`ProjectionShell.tsx`のnode value tracker（既存）へ合成した。バックエンド（`StructureMapResolver.cs`のcomponentKind capability allowlist・source-shape validator）・フロントエンド（`propBindingResolver.ts`の同allowlist）・SSOT（`admin-console-workflow-ssot.yaml`）・translator（`react_schema_topology_seed_translator.py`の`valueFrom`属性、Field DSL拡張）の4箇所を同期した。**本round自身が発見・修正した2件のバグ（正直な記録）**: (a) フロントエンド側の`isRecognizedPropBindingSource`が`node:`参照を一切認識せず、`node:enum_table.value.groupName`を持つfieldが丸ごと`componentType:"error"`へfail closeする状態だった（backend側は既に`NodeValueSourceRegex`で受理していたため、backend/frontend間で認識が乖離していた）——`propBindingResolver.ts`へ同grammarを追加し解消。(b) `cascadeNodeValueReferences`が`changedNodeId`引数を実際にはfilterへ使っておらず、ANY nodeの値変更のたびに全propBindings.value-bound nodeを無条件に再解決していたため、`enum_update_group_name_input`自身へタイプした直後にその値が（参照元`enum_table`の現在値で）即座に上書きされる実害があった——canonical ae200 fixtureを使った実DOM testで検出し、`changedNodeId`と一致する参照のみを対象とするよう修正した。
+
+**4. enum_searchのserver-side filter結線**: 既存`list_groups` read actionへ、`payload.search`という data-defined optional fieldを追加した（新規action無し、`EnumDictionaryListGroupsRequestDto`新設、`NpgsqlEnumDictionaryRepository.ListGroupsWithItemsSummaryAsync`へparameterized ILIKE句を追加、非string search値は`ENUM_LIST_GROUPS_PAYLOAD_MALFORMED`でfail close）。frontend側は、translatorの`admin_runtime_dispatch_override_wiring` laneをAction/Step限定からField nodeへも拡張し（`build_admin_runtime_dispatch_override_candidate`自体は既存のまま再利用、Field自身がこのlaneを合法的に使えるようbuild_node/convert_node_to_seed_record/validate_wiring_node/completeness checkの4箇所を拡張——`validate_admin_runtime_preview_action_pairing`等のAction専用ownership/pairing検証はkind=="Action"限定のままなので一切影響を受けない）、`enum_search`自身の`change` triggerへ`payloadFrom={search: "node:enum_search.value"}`を配線した。同一manifest（ae200）への上書きであるため、既存の「Load current values」パターンと同じdirect-adoption経路でenum_tableの行がそのまま更新される——新規adoption機構の追加は不要だった。
+
+**5. route retirement**: `frontend/routes/admin/enums.tsx`を`AdminEnumsRoster`から`ProjectionShell` thin wrapperへ置換した。同一URL（`/admin/enums`）のまま、`ProjectionShell`へ新設した optional `manifestId` prop（URLに明示的selectionが無い場合のみ適用、`isDefaultProjectionEntry`で判定——実user navigationは常に優先）でae200を指定する。`AdminEnumsRoster.tsx`はファイルとして残るがproduction route/import経路から到達不能になった（`components/catalog.ts`のcatalog entryは`roleBasedSurfaceSeparation.test.ts`の既存entry-existence契約のため残すが、`runtimeReachability`/`routeCompositionFile`の主張は撤去しexemptへ分類）。
+
+**test証明の全体像**: python translator check script（197 check、既知の無関係flake"7a"のみ残存、git stash比較で本round着手前から存在することを再確認）。backend: 実PostgreSQL経由で`AdminEnumHubRelationUiProjectionLiveDbTests`35/35 pass（新規search live-DB test 1件含む）、`AdminRuntimeMasterRosterTests`25/25 pass（新規search unit test 3件含む）、`dotnet build`solution全体0 error。frontend: `deno check`clean、`projectionShellAdminRuntimeWritePayloadCapture.test.ts`の新規2 test（canonical ae200 fixture使用のprefill/edit保持/row再選択上書き/fresh preview confirm、およびsearch filter/empty query full list復帰）含め`AssertionError`0件を確認（git stash比較で、本round着手前から repo全体で86件存在する`Leaks detected`という pre-existing sandbox leak sanitizer誤検出——module-level singleton timer由来、cascading——のみが残ることを再確認、`.agent/tests/check-frontend-all-tests.sh`のpassed件数は本round前後で不変）。`.agent/tests/check-static-ssot-purity.sh`/`check-design-ssot-progress-terms.sh`/`check-completion-judgment.sh`/`check-docs-ssot-connectivity.sh`/`check-admin-master-roster.sh`いずれもpass。
+
+**Bundle全4項目の状態（round35時点）**: items browse UX（round34完了）・orphan監査（round34完了）・negative boundary matrix（round34完了）・route retirement（round35完了、本節）——全4項目完了。
+
+### Governance NG boundary追記（round 35）
+
+- selected-row-relative field prefillをenum専用runtime lane・nodeId分岐・manifest UUID分岐で実装する——既存の`propBindings.value`／`node:<id>.value.<path>`という2つの汎用機構の合成のみで実現すること（round35で実装）。
+- enum_searchのserver-side filterを新規actionまたはenum専用laneで実装する——既存`list_groups`へのdata-defined optional payload fieldとして実装すること（round35で実装）。
+- prefill/search双方のUX parityが未成立のまま`/admin/enums`のroute retirementを実施する——round35はUX parity成立を実際に証明したうえでroute retirementを実施した。
+- `cascadeNodeValueReferences`のような新設汎用機構を、実際のcanonical fixtureを使ったDOM testで検証せず「設計上正しいはず」として出荷する——本round自身が発見した2件のバグ（frontendのnode:参照未認識、changedNodeId未filter）はいずれも、hand-builtではない実canonical ae200 fixtureを使ったDOM test無しには発見できなかった。
+
 ---
 
 ## Bundle `admin-runtime-operation-dispatch-lane-determination`

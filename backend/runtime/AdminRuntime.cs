@@ -296,7 +296,7 @@ public partial class AdminRuntime
             "manifest:list_screen_read_query_wiring"      => await DataManifestListScreenReadQueryWiringAsync(vector, ct),
             "manifest:list_relationship_remote_targets"   => await DataManifestListRelationshipRemoteTargetsAsync(vector, ct),
             "manifest:list_aggregate_trigger_processing_functions" => await DataManifestListAggregateTriggerProcessingFunctionsAsync(ct),
-            "enum_dictionary:list_groups"                 => await DataEnumDictionaryListGroupsAsync(ct),
+            "enum_dictionary:list_groups"                 => await DataEnumDictionaryListGroupsAsync(vector, ct),
             "enum_dictionary:get_group"                   => await DataEnumDictionaryGetGroupAsync(vector, ct),
             "enum_dictionary:create_group"                => await DataEnumDictionaryCreateGroupAsync(vector, ct),
             "enum_dictionary:update_group"                => await DataEnumDictionaryUpdateGroupAsync(vector, ct),
@@ -3320,7 +3320,7 @@ public partial class AdminRuntime
     }
 
     private async Task<(JsonElement? data, ValidationError? error)> DataEnumDictionaryListGroupsAsync(
-        CancellationToken ct)
+        OperationVector vector, CancellationToken ct)
     {
         if (_enumDictionaryRepository is null)
         {
@@ -3329,9 +3329,33 @@ public partial class AdminRuntime
                 "Enum dictionary repository is not configured."));
         }
 
+        // generic list_groups search/filter (admin-enum subBundle closure round): a data-defined
+        // OPTIONAL payload field on this SAME existing read action -- no new action, no enum-
+        // specific runtime lane. Absent payload (the common case, matching every prior call site
+        // before this round) is not an error: full list, same as before.
+        string? search = null;
+        if (vector.Payload is { ValueKind: JsonValueKind.Object })
+        {
+            EnumDictionaryListGroupsRequestDto? request;
+            try
+            {
+                request = JsonSerializer.Deserialize<EnumDictionaryListGroupsRequestDto>(
+                    vector.Payload.Value.GetRawText());
+            }
+            catch (JsonException)
+            {
+                // fail-close: a non-string search value (or otherwise malformed payload) is a
+                // genuine authoring/client defect, never silently treated as "no search".
+                return (null, new ValidationError(
+                    "ENUM_LIST_GROUPS_PAYLOAD_MALFORMED",
+                    "payload.search must be a string when present."));
+            }
+            search = request?.Search;
+        }
+
         // items-browse UX (admin-enum subBundle closure round): folds the existing get_group
         // item-join into list_groups' OWN query -- no new action, no cross-manifest dispatch.
-        var groups = await _enumDictionaryRepository.ListGroupsWithItemsSummaryAsync(ct);
+        var groups = await _enumDictionaryRepository.ListGroupsWithItemsSummaryAsync(search, ct);
         return (JsonSerializer.SerializeToElement(groups), null);
     }
 

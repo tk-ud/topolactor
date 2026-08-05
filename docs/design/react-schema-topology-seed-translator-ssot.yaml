@@ -1864,12 +1864,18 @@ react_schema_topology_seed_translator_ssot:
               the enum_confirm_button entry described below (structural-leaf-only,
               ADMIN_OPERATION_NOT_FOUND fallback) is now superseded for the actions listed above;
               read-side list_groups/get_group dispatch was already resolved earlier (2026-07-23).
-              Remaining, honestly open item: hardcoded frontend/routes/admin/enums.tsx /
-              AdminEnumsRoster.tsx retirement has NOT happened -- the 7 new write manifests are
-              each a separate bare single-purpose screen (?manifest=<id>), not a UX replacement
-              for AdminEnumsRoster's single polished roster page (search/table/modal/inline-edit
-              in one surface), so retiring the hardcoded route now would violate this Bundle's own
-              NG boundary (no route removal before a genuine production replacement exists).
+              RESOLVED (admin-enum subBundle closure round): the original reasoning above (each
+              write manifest is a separate bare single-purpose screen) went stale after round 15-19
+              (dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger wired all 7 write actions
+              directly into ae200's own layout), and the remaining UX-parity blocker (selected-
+              group-detail field-prefill, functional enum_search) is now closed too: prefill via
+              enum_update_group_name_input's propBindings.value.source="node:enum_table.value.
+              groupName" (cascadeNodeValueReferences/applyLiveNodeValueOverride), search via a
+              data-defined optional payload.search field on the SAME existing list_groups action
+              (no new action/lane). frontend/routes/admin/enums.tsx now replaces AdminEnumsRoster
+              with a same-URL ProjectionShell thin wrapper pinned to ae200 -- see
+              docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
+              lane_storage_boundary.known_gaps for the full record and proof references.
             note: >-
               admin-surface-topology-seed-conversion admin-enum subBundle (.agent/tasks/todo.md).
               The 9 enum_dictionary:* admin_runtime actions (docs/design/enum-dictionary-ssot.yaml

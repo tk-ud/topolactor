@@ -132,7 +132,6 @@ const EXISTING_ROUTE_COMPOSITION_MOUNT_IDENTIFIERS: Record<string, string> = {
   "md_translation_authoring_surface.authoring": "TeamMarkdownAuthoring",
   "saved_view_adjustment_authoring.authoring": "SavedViewAdjustmentAuthoringPanel",
   "credential_management.admin_operation": "AdminUsersRoster",
-  "admin_enum_roster.admin_operation": "AdminEnumsRoster",
   "scheduler_job_settings.admin_operation": "SchedulerJobSettingsPanel",
   "hub_navigation_admin.admin_operation": "HubNavigationAdmin",
 };
@@ -145,6 +144,11 @@ Deno.test("catalog invariant: every runtimeConnected:false entry is either exemp
   // invariant passing resolves.
   const EXEMPT_KEYS = new Set([
     "tree_node.template", // sub-component of tree.template, not a standalone placement
+    // admin-enum subBundle closure round: /admin/enums route retirement -- AdminEnumsRoster is no
+    // longer mounted by any route (superseded by ProjectionShell, see catalog.ts's own entry
+    // notes). Kept catalog-registered only for roleBasedSurfaceSeparation.test.ts's historical
+    // entry-existence contract, never claims a route-composition reachability path.
+    "admin_enum_roster.admin_operation",
   ]);
   const violations = COMPONENT_CATALOG_ENTRIES.filter((e) =>
     !e.runtimeConnected &&

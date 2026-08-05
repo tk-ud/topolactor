@@ -3941,3 +3941,367 @@ for (const config of CONFIRM_MODAL_SCENARIOS) {
     },
   );
 }
+
+// ─── admin-enum subBundle closure round (round 6): every scenario above builds its own
+// hand-authored layoutNodes -- a deliberate simplification for isolating one operation's shape,
+// but never itself proof that the REAL translator-generated ae200 seed (db/seed_empty.sql, produced
+// by .agent/scripts/react_schema_topology_seed_translator.py and captured byte-for-byte by
+// backend/tests/Topolactor.Integration.Tests/AdminEnumHubRelationUiProjectionLiveDbTests.cs's
+// DispatchAsync_AdminEnumManagementManifest_LayoutNodesMatchCheckedInFrontendFixture) renders
+// through this SAME production ProjectionShell without silently failing a node closed. This test
+// feeds that exact checked-in fixture -- untouched, not hand-built -- into a real mount, and proves
+// the new selected-row-relative field prefill mechanism (propBindings.value.source =
+// "node:enum_table.value.groupName", resolved by cascadeNodeValueReferences +
+// applyLiveNodeValueOverride) end-to-end: row selection prefills, an in-progress edit survives an
+// unrelated SSE refresh, selecting a DIFFERENT row destructively overwrites, and Preview/Confirm
+// both re-resolve the CURRENT typed value fresh. ───────────────────────────────────────────────
+
+Deno.test(
+  "ProjectionShell (real mount, canonical ae200 fixture): selected-row-relative field prefill + edit retention + row-reselection overwrite + fresh Preview/Confirm payloads (admin-enum subBundle closure round)",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource =
+      FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    const fixtureText = await Deno.readTextFile(
+      new URL("./fixtures/admin_enum_ae200_layout_nodes.json", import.meta.url),
+    );
+    const layoutNodes = JSON.parse(fixtureText) as Record<string, unknown>[];
+    assert(
+      Array.isArray(layoutNodes) && layoutNodes.length > 0,
+      "fixture must contain the real translator-generated, backend-drift-guarded ae200 layout nodes",
+    );
+
+    const ROWS = [
+      { groupId: "grp-alpha-11111111", groupName: "Alpha", indexNum: 1, itemsSummary: "1:one" },
+      { groupId: "grp-beta-222222222", groupName: "Beta", indexNum: 2, itemsSummary: "1:uno, 2:dos" },
+    ];
+
+    // Input.tsx only renders a <label> when data.label is set, and the default production props
+    // for form_input/input (buildLayoutPreviewPlaceholderProps, renderEmission.ts) never populate
+    // it from the node's own authored `label` field (that field only reaches action/button's
+    // rendered label) -- so there is no label/name/data-node-id to query by. Instead, compute
+    // enum_update_group_name_input's own position among the fixture's OWN visible (not nested
+    // inside a currently-closed disclosure/modal) input-producing nodes, in the SAME order
+    // renderEmission/ProjectionShell render them -- self-documenting from the checked-in fixture's
+    // own content, not a hardcoded magic index.
+    const INPUT_COMPONENT_KINDS = new Set([
+      "form_input/input",
+      "form_input/textarea",
+      "form_input/search_input",
+    ]);
+    const modalNodeIds = new Set(
+      layoutNodes
+        .filter((n) => n.componentKind === "disclosure/modal")
+        .map((n) => n.nodeId as string),
+    );
+    const visibleInputNodeIds = layoutNodes
+      .filter((n) =>
+        INPUT_COMPONENT_KINDS.has(n.componentKind as string) &&
+        !modalNodeIds.has(n.parentNodeId as string)
+      )
+      .map((n) => n.nodeId as string);
+    const nameInputIndex = visibleInputNodeIds.indexOf(
+      "enum_update_group_name_input",
+    );
+    assert(
+      nameInputIndex >= 0,
+      "enum_update_group_name_input must be one of the fixture's own visible input nodes",
+    );
+
+    function canonicalEmission() {
+      return {
+        manifestId: ADMIN_ENUM_MANIFEST_ID,
+        layoutId: "layout-admin-enum-ae200-canonical-fixture",
+        projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+        layoutNodes,
+        data: ROWS,
+      };
+    }
+
+    const scenario = buildMockScenario((_callIndex, body) => {
+      // Identifies BOTH the initial projection_entry mount and any later SSE-triggered refresh --
+      // resolveProjectionEntryAxes (projectionEntry.ts) always uses this SAME layer/action pair,
+      // regardless of how many times it fires -- so this responder is order-independent, unlike a
+      // callIndex-keyed one, which would break under the extra same-manifest list_groups
+      // redispatches this fixture's uniform admin_runtime binding fires on every row-select/keystroke.
+      if (body.action === "Search" && body.layer === "screen_list") {
+        return { success: true, emission: canonicalEmission() };
+      }
+      return fallbackDispatchResponse(body);
+    });
+    globalThis.fetch = scenario.fetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+      render(h(ProjectionShell, {}), container);
+
+      const rows = () =>
+        Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
+      await waitFor(() => rows().length === 2);
+      assertEquals(
+        rows().length,
+        2,
+        "the REAL canonical enum_table (columns from its own propsJson, rows from its own propBindings.rows) must render from the fixture + live data",
+      );
+
+      const findNameInput = (): HTMLInputElement => {
+        const inputs = Array.from(
+          container.querySelectorAll("input"),
+        ) as HTMLInputElement[];
+        const input = inputs[nameInputIndex];
+        assertExists(
+          input,
+          `expected a real <input> at position ${nameInputIndex} among the fixture's own visible input nodes (enum_update_group_name_input) -- its absence would mean the node failed closed into a componentType:"error" spec instead of rendering`,
+        );
+        return input;
+      };
+
+      const nameInput = findNameInput();
+      assertEquals(nameInput.value, "", "no row selected yet -- no invented value");
+
+      // (a) selecting row A prefills the update field with A's own tracked groupName.
+      simulateRowClick(rows()[0]);
+      await waitFor(() => findNameInput().value === "Alpha");
+      assertEquals(
+        findNameInput().value,
+        "Alpha",
+        "selecting row A must prefill the update field via node:enum_table.value.groupName (cascadeNodeValueReferences + applyLiveNodeValueOverride)",
+      );
+
+      // (b) an in-progress edit must survive an UNRELATED rerender (an SSE passive refresh) --
+      // never rewound, since seedTrackerFromPropBindingsValue only ever re-seeds
+      // form_input/search_input nodes, and cascadeNodeValueReferences fires only from an actual
+      // onNodeValueChange call, never from the passive refresh path itself.
+      simulateInput(findNameInput(), "Alpha Edited");
+      await flushUpdates();
+      assertEquals(findNameInput().value, "Alpha Edited");
+      assertEquals(
+        FakeEventSource.instances.length,
+        1,
+        "sseReceiver.connect() must have created exactly one EventSource",
+      );
+      FakeEventSource.instances[0].emit(
+        "projection",
+        JSON.stringify({ manifest_id: ADMIN_ENUM_MANIFEST_ID }),
+      );
+      await waitFor(() =>
+        rows().length === 2 && findNameInput().value === "Alpha Edited"
+      );
+      assertEquals(
+        findNameInput().value,
+        "Alpha Edited",
+        "an unrelated SSE passive refresh must never rewind an in-progress edit in a field with no dependency on the refresh itself",
+      );
+
+      // (c) selecting a DIFFERENT row (B) destructively overwrites the field to B's own value --
+      // explicit reselection always wins over whatever was typed for the previously-selected row.
+      simulateRowClick(rows()[1]);
+      await waitFor(() => findNameInput().value === "Beta");
+      assertEquals(findNameInput().value, "Beta");
+
+      // (d) a fresh edit for B, then clicking the write action button dispatches a dryRun PREVIEW
+      // carrying B's own selected-row groupId plus the FRESH typed groupName.
+      simulateInput(findNameInput(), "Beta Renamed");
+      await flushUpdates();
+      const updateButton = Array.from(container.querySelectorAll("button")).find(
+        (b) => b.textContent === "Update selected group",
+      ) as HTMLButtonElement | undefined;
+      assertExists(updateButton, "enum_update_group_button must render");
+      simulateClick(updateButton!);
+
+      await waitFor(() =>
+        scenario.capturedDispatchBodies.some((b) =>
+          b.layer === "enum_dictionary" && b.action === "update_group" &&
+          payloadOf(b).dryRun === "true"
+        )
+      );
+      const previewBody = scenario.capturedDispatchBodies.find((b) =>
+        b.layer === "enum_dictionary" && b.action === "update_group" &&
+        payloadOf(b).dryRun === "true"
+      )!;
+      const previewPayload = payloadOf(previewBody);
+      assertEquals(
+        previewPayload.groupId,
+        "grp-beta-222222222",
+        "preview must carry B's own selected-row groupId (node:enum_table.value.groupId), not A's",
+      );
+      assertEquals(
+        previewPayload.groupName,
+        "Beta Renamed",
+        "preview must carry the FRESH typed groupName (node:enum_update_group_name_input.value)",
+      );
+
+      // A settled preview success opens the confirm modal (deferLocalStateMutationToDispatchSuccess).
+      await waitFor(() =>
+        container.querySelector('[role="dialog"][aria-label="Update group"]') !== null
+      );
+      const dialog = container.querySelector(
+        '[role="dialog"][aria-label="Update group"]',
+      ) as HTMLElement;
+      assertExists(dialog, "a successful dryRun preview must open the Update group confirm modal");
+
+      // (e) editing AGAIN while the modal is open, then Confirm must re-resolve the CURRENT field
+      // value fresh -- never a captured preview-time value.
+      simulateInput(findNameInput(), "Beta Renamed Again");
+      await flushUpdates();
+      const confirmButton = Array.from(dialog.querySelectorAll("button")).find(
+        (b) => b.textContent === "Update",
+      ) as HTMLButtonElement | undefined;
+      assertExists(
+        confirmButton,
+        "the Update group confirm modal must render its own Update confirm button as a real DOM child",
+      );
+      simulateClick(confirmButton!);
+
+      await waitFor(() =>
+        scenario.capturedDispatchBodies.some((b) =>
+          b.layer === "enum_dictionary" && b.action === "update_group" &&
+          payloadOf(b).confirmed === "true"
+        )
+      );
+      const confirmBody = scenario.capturedDispatchBodies.find((b) =>
+        b.layer === "enum_dictionary" && b.action === "update_group" &&
+        payloadOf(b).confirmed === "true"
+      )!;
+      const confirmPayload = payloadOf(confirmBody);
+      assertEquals(confirmPayload.groupId, "grp-beta-222222222");
+      assertEquals(
+        confirmPayload.groupName,
+        "Beta Renamed Again",
+        "confirm must re-resolve the CURRENT field value fresh, not the captured preview-time value",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource =
+        originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
+      render(null, container);
+      cleanup();
+    }
+  },
+);
+
+// ─── admin-enum subBundle closure round: generic list_groups search/filter. enum_search's own
+// generated wiring (dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger on its "change"
+// trigger, produced by the SAME translator/seed pipeline the rest of this file's canonical-fixture
+// test proves) sources payload.search from its own tracked value -- a same-manifest override that
+// adopts directly into ae200's own projection state (the SAME mechanism the pre-existing "Load
+// current values" pattern already used), so typing filters enum_table's rendered rows with no new
+// wiringLane/actionType/enum-specific runtime lane. ─────────────────────────────────────────────
+
+Deno.test(
+  "ProjectionShell (real mount, canonical ae200 fixture): typing into enum_search filters enum_table's rendered rows via list_groups' own search payload, and clearing it restores the canonical full list (admin-enum subBundle closure round)",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource =
+      FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    const fixtureText = await Deno.readTextFile(
+      new URL("./fixtures/admin_enum_ae200_layout_nodes.json", import.meta.url),
+    );
+    const layoutNodes = JSON.parse(fixtureText) as Record<string, unknown>[];
+
+    const ALL_ROWS = [
+      { groupId: "grp-alpha-11111111", groupName: "Alpha", indexNum: 1, itemsSummary: "1:one" },
+      { groupId: "grp-beta-222222222", groupName: "Beta", indexNum: 2, itemsSummary: "1:uno, 2:dos" },
+    ];
+
+    function emissionWithRows(rows: typeof ALL_ROWS) {
+      return {
+        manifestId: ADMIN_ENUM_MANIFEST_ID,
+        layoutId: "layout-admin-enum-ae200-canonical-fixture",
+        projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+        layoutNodes,
+        data: rows,
+      };
+    }
+
+    const scenario = buildMockScenario((_callIndex, body) => {
+      if (body.action === "Search" && body.layer === "screen_list") {
+        return { success: true, emission: emissionWithRows(ALL_ROWS) };
+      }
+      // enum_search's OWN change-triggered dispatch is the only same-manifest list_groups call
+      // that ever carries a "search" payload field -- mirrors the real backend's ILIKE substring
+      // filter (backend/repository/NpgsqlEnumDictionaryRepository.cs) so this mock proves the
+      // SAME contract the live-DB test proves against real PostgreSQL, without duplicating it.
+      if (
+        body.layer === "enum_dictionary" && body.action === "list_groups" &&
+        typeof payloadOf(body).search === "string"
+      ) {
+        const q = (payloadOf(body).search as string).trim().toLowerCase();
+        const filtered = q
+          ? ALL_ROWS.filter((r) => r.groupName.toLowerCase().includes(q))
+          : ALL_ROWS;
+        return { success: true, emission: emissionWithRows(filtered) };
+      }
+      return fallbackDispatchResponse(body);
+    });
+    globalThis.fetch = scenario.fetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+      render(h(ProjectionShell, {}), container);
+
+      const rows = () =>
+        Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
+      await waitFor(() => rows().length === 2);
+      assertEquals(rows().length, 2, "the canonical full list must render initially");
+
+      // enum_search is the FIRST of the fixture's own visible input-producing nodes.
+      const searchInput = container.querySelector("input") as HTMLInputElement;
+      assertExists(searchInput, "enum_search must render as a real input");
+
+      simulateInput(searchInput, "Alpha");
+      await waitFor(() =>
+        scenario.capturedDispatchBodies.some((b) =>
+          b.layer === "enum_dictionary" && b.action === "list_groups" &&
+          payloadOf(b).search === "Alpha"
+        )
+      );
+      await waitFor(() => rows().length === 1);
+      assertEquals(
+        rows().length,
+        1,
+        "typing 'Alpha' into enum_search must filter enum_table's rendered rows via list_groups' own search payload",
+      );
+      assertEquals(rows()[0].textContent?.includes("Alpha"), true);
+      assertEquals(rows()[0].textContent?.includes("Beta"), false);
+
+      simulateInput(searchInput, "");
+      await waitFor(() =>
+        scenario.capturedDispatchBodies.some((b) =>
+          b.layer === "enum_dictionary" && b.action === "list_groups" &&
+          payloadOf(b).search === ""
+        )
+      );
+      await waitFor(() => rows().length === 2);
+      assertEquals(
+        rows().length,
+        2,
+        "clearing enum_search must restore the canonical full list",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource =
+        originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
+      render(null, container);
+      cleanup();
+    }
+  },
+);

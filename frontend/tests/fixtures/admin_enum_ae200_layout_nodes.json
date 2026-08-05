@@ -1,0 +1,1059 @@
+[
+  {
+    "nodeId": "enum_dictionary",
+    "nodeKind": "structural_node",
+    "orderIndex": 0,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_category",
+    "label": "Enum dictionary"
+  },
+  {
+    "nodeId": "enum_dictionary_roster",
+    "nodeKind": "structural_node",
+    "parentNodeId": "enum_dictionary",
+    "orderIndex": 1,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_section",
+    "label": "Enum groups and items"
+  },
+  {
+    "nodeId": "enum_search",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000002",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 2,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/search_input",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "dispatchPayloadFromByTrigger": {
+      "change": {
+        "search": "node:enum_search.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "change": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups"
+    },
+    "label": "Enum search"
+  },
+  {
+    "nodeId": "enum_group_filter",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000012",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 3,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/select",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "label": "Group filter"
+  },
+  {
+    "nodeId": "enum_table",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000020",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 4,
+    "x": 0,
+    "y": 0,
+    "componentKind": "data_display/table",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "propsJson": "{\u0022table\u0022: null, \u0022columns\u0022: [{\u0022key\u0022: \u0022groupName\u0022, \u0022header\u0022: \u0022Group name\u0022}, {\u0022key\u0022: \u0022indexNum\u0022, \u0022header\u0022: \u0022Index\u0022}, {\u0022key\u0022: \u0022groupId\u0022, \u0022header\u0022: \u0022Group ID\u0022}, {\u0022key\u0022: \u0022itemsSummary\u0022, \u0022header\u0022: \u0022Items\u0022}]}",
+    "propBindings": {
+      "rows": {
+        "source": "emission.data"
+      }
+    },
+    "label": "Enum groups and items table"
+  },
+  {
+    "nodeId": "enum_create_group_name_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000011",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 5,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/input",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "label": "Group name"
+  },
+  {
+    "nodeId": "enum_create_group_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 6,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "enum_create_group_confirm_modal",
+        "sourceActionKey": "enum_create_group_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "dryRun": "literal:true",
+        "groupName": "node:enum_create_group_name_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group"
+    },
+    "label": "Create group"
+  },
+  {
+    "nodeId": "enum_create_group_confirm_modal",
+    "nodeKind": "catalog_component",
+    "componentId": "enum_create_group_confirm_modal",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 7,
+    "x": 0,
+    "y": 0,
+    "componentKind": "disclosure/modal",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022Create group\u0022, \u0022body\u0022: \u0022Create a new enum group with the entered name.\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "enum_create_group_confirm_modal",
+        "sourceActionKey": "enum_create_group_confirm_modal"
+      }
+    ],
+    "label": "Create group confirmation dialog"
+  },
+  {
+    "nodeId": "enum_create_group_confirm_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "enum_create_group_confirm_modal",
+    "orderIndex": 8,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "enum_create_group_confirm_modal",
+        "sourceActionKey": "enum_create_group_confirm_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "confirmed": "literal:true",
+        "groupName": "node:enum_create_group_name_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group"
+    },
+    "label": "Create"
+  },
+  {
+    "nodeId": "enum_create_group_cancel_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "enum_create_group_confirm_modal",
+    "orderIndex": 9,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "enum_create_group_confirm_modal",
+        "sourceActionKey": "enum_create_group_cancel_button"
+      }
+    ],
+    "label": "Cancel"
+  },
+  {
+    "nodeId": "enum_update_group_name_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000011",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 10,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/input",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "propBindings": {
+      "value": {
+        "source": "node:enum_table.value.groupName"
+      }
+    },
+    "label": "New group name"
+  },
+  {
+    "nodeId": "enum_update_group_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 11,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "enum_update_group_confirm_modal",
+        "sourceActionKey": "enum_update_group_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "dryRun": "literal:true",
+        "groupId": "node:enum_table.value.groupId",
+        "groupName": "node:enum_update_group_name_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ae220:enum_dictionary:update_group"
+    },
+    "label": "Update selected group"
+  },
+  {
+    "nodeId": "enum_update_group_confirm_modal",
+    "nodeKind": "catalog_component",
+    "componentId": "enum_update_group_confirm_modal",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 12,
+    "x": 0,
+    "y": 0,
+    "componentKind": "disclosure/modal",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022Update group\u0022, \u0022body\u0022: \u0022Rename the selected enum group to the entered name.\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "enum_update_group_confirm_modal",
+        "sourceActionKey": "enum_update_group_confirm_modal"
+      }
+    ],
+    "label": "Update group confirmation dialog"
+  },
+  {
+    "nodeId": "enum_update_group_confirm_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "enum_update_group_confirm_modal",
+    "orderIndex": 13,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "enum_update_group_confirm_modal",
+        "sourceActionKey": "enum_update_group_confirm_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "groupId": "node:enum_table.value.groupId",
+        "confirmed": "literal:true",
+        "groupName": "node:enum_update_group_name_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ae220:enum_dictionary:update_group"
+    },
+    "label": "Update"
+  },
+  {
+    "nodeId": "enum_update_group_cancel_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "enum_update_group_confirm_modal",
+    "orderIndex": 14,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "enum_update_group_confirm_modal",
+        "sourceActionKey": "enum_update_group_cancel_button"
+      }
+    ],
+    "label": "Cancel"
+  },
+  {
+    "nodeId": "enum_delete_group_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 15,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "enum_delete_group_confirm_modal",
+        "sourceActionKey": "enum_delete_group_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "dryRun": "literal:true",
+        "groupId": "node:enum_table.value.groupId"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group"
+    },
+    "label": "Delete selected group"
+  },
+  {
+    "nodeId": "enum_delete_group_confirm_modal",
+    "nodeKind": "catalog_component",
+    "componentId": "enum_delete_group_confirm_modal",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 16,
+    "x": 0,
+    "y": 0,
+    "componentKind": "disclosure/modal",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022Delete group\u0022, \u0022body\u0022: \u0022This will permanently delete the selected enum group and its items. This cannot be undone.\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "enum_delete_group_confirm_modal",
+        "sourceActionKey": "enum_delete_group_confirm_modal"
+      }
+    ],
+    "label": "Delete group confirmation dialog"
+  },
+  {
+    "nodeId": "enum_delete_group_confirm_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "enum_delete_group_confirm_modal",
+    "orderIndex": 17,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "enum_delete_group_confirm_modal",
+        "sourceActionKey": "enum_delete_group_confirm_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "groupId": "node:enum_table.value.groupId",
+        "confirmed": "literal:true"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group"
+    },
+    "label": "Delete"
+  },
+  {
+    "nodeId": "enum_delete_group_cancel_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "enum_delete_group_confirm_modal",
+    "orderIndex": 18,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "enum_delete_group_confirm_modal",
+        "sourceActionKey": "enum_delete_group_cancel_button"
+      }
+    ],
+    "label": "Cancel"
+  },
+  {
+    "nodeId": "enum_create_item_name_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000011",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 19,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/input",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "label": "Item name"
+  },
+  {
+    "nodeId": "enum_create_item_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 20,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "enum_create_item_confirm_modal",
+        "sourceActionKey": "enum_create_item_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "name": "node:enum_create_item_name_input.value",
+        "dryRun": "literal:true"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ae240:enum_dictionary:create_item"
+    },
+    "label": "Create item"
+  },
+  {
+    "nodeId": "enum_create_item_confirm_modal",
+    "nodeKind": "catalog_component",
+    "componentId": "enum_create_item_confirm_modal",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 21,
+    "x": 0,
+    "y": 0,
+    "componentKind": "disclosure/modal",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022Create item\u0022, \u0022body\u0022: \u0022Create a new enum item with the entered name.\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "enum_create_item_confirm_modal",
+        "sourceActionKey": "enum_create_item_confirm_modal"
+      }
+    ],
+    "label": "Create item confirmation dialog"
+  },
+  {
+    "nodeId": "enum_create_item_confirm_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "enum_create_item_confirm_modal",
+    "orderIndex": 22,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "enum_create_item_confirm_modal",
+        "sourceActionKey": "enum_create_item_confirm_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "name": "node:enum_create_item_name_input.value",
+        "confirmed": "literal:true"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ae240:enum_dictionary:create_item"
+    },
+    "label": "Create"
+  },
+  {
+    "nodeId": "enum_create_item_cancel_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "enum_create_item_confirm_modal",
+    "orderIndex": 23,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "enum_create_item_confirm_modal",
+        "sourceActionKey": "enum_create_item_cancel_button"
+      }
+    ],
+    "label": "Cancel"
+  },
+  {
+    "nodeId": "enum_update_item_index_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000011",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 24,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/input",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "label": "Item index"
+  },
+  {
+    "nodeId": "enum_update_item_name_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000011",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 25,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/input",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "label": "New item name"
+  },
+  {
+    "nodeId": "enum_update_item_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 26,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "enum_update_item_confirm_modal",
+        "sourceActionKey": "enum_update_item_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "name": "node:enum_update_item_name_input.value",
+        "dryRun": "literal:true",
+        "indexNum": "node:enum_update_item_index_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ae250:enum_dictionary:update_item"
+    },
+    "label": "Update item"
+  },
+  {
+    "nodeId": "enum_update_item_confirm_modal",
+    "nodeKind": "catalog_component",
+    "componentId": "enum_update_item_confirm_modal",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 27,
+    "x": 0,
+    "y": 0,
+    "componentKind": "disclosure/modal",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022Update item\u0022, \u0022body\u0022: \u0022Rename the enum item at the entered index to the entered name.\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "enum_update_item_confirm_modal",
+        "sourceActionKey": "enum_update_item_confirm_modal"
+      }
+    ],
+    "label": "Update item confirmation dialog"
+  },
+  {
+    "nodeId": "enum_update_item_confirm_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "enum_update_item_confirm_modal",
+    "orderIndex": 28,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "enum_update_item_confirm_modal",
+        "sourceActionKey": "enum_update_item_confirm_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "name": "node:enum_update_item_name_input.value",
+        "indexNum": "node:enum_update_item_index_input.value",
+        "confirmed": "literal:true"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ae250:enum_dictionary:update_item"
+    },
+    "label": "Update"
+  },
+  {
+    "nodeId": "enum_update_item_cancel_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "enum_update_item_confirm_modal",
+    "orderIndex": 29,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "enum_update_item_confirm_modal",
+        "sourceActionKey": "enum_update_item_cancel_button"
+      }
+    ],
+    "label": "Cancel"
+  },
+  {
+    "nodeId": "enum_delete_item_index_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000011",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 30,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/input",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "label": "Item index to delete"
+  },
+  {
+    "nodeId": "enum_delete_item_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 31,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "enum_delete_item_confirm_modal",
+        "sourceActionKey": "enum_delete_item_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "dryRun": "literal:true",
+        "indexNum": "node:enum_delete_item_index_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ae260:enum_dictionary:delete_item"
+    },
+    "label": "Delete item"
+  },
+  {
+    "nodeId": "enum_delete_item_confirm_modal",
+    "nodeKind": "catalog_component",
+    "componentId": "enum_delete_item_confirm_modal",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 32,
+    "x": 0,
+    "y": 0,
+    "componentKind": "disclosure/modal",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022Delete item\u0022, \u0022body\u0022: \u0022This will permanently delete the enum item at the entered index. This cannot be undone.\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "enum_delete_item_confirm_modal",
+        "sourceActionKey": "enum_delete_item_confirm_modal"
+      }
+    ],
+    "label": "Delete item confirmation dialog"
+  },
+  {
+    "nodeId": "enum_delete_item_confirm_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "enum_delete_item_confirm_modal",
+    "orderIndex": 33,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "enum_delete_item_confirm_modal",
+        "sourceActionKey": "enum_delete_item_confirm_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "indexNum": "node:enum_delete_item_index_input.value",
+        "confirmed": "literal:true"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ae260:enum_dictionary:delete_item"
+    },
+    "label": "Delete"
+  },
+  {
+    "nodeId": "enum_delete_item_cancel_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "enum_delete_item_confirm_modal",
+    "orderIndex": 34,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "enum_delete_item_confirm_modal",
+        "sourceActionKey": "enum_delete_item_cancel_button"
+      }
+    ],
+    "label": "Cancel"
+  },
+  {
+    "nodeId": "enum_set_group_items_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000011",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 35,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/input",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "label": "Item indexes (comma-separated)"
+  },
+  {
+    "nodeId": "enum_set_group_items_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 36,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "enum_set_group_items_confirm_modal",
+        "sourceActionKey": "enum_set_group_items_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "dryRun": "literal:true",
+        "groupId": "node:enum_table.value.groupId",
+        "enumIndexNums": "node:enum_set_group_items_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ae270:enum_dictionary:set_group_items"
+    },
+    "label": "Set selected group\u0027s items"
+  },
+  {
+    "nodeId": "enum_set_group_items_confirm_modal",
+    "nodeKind": "catalog_component",
+    "componentId": "enum_set_group_items_confirm_modal",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 37,
+    "x": 0,
+    "y": 0,
+    "componentKind": "disclosure/modal",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022Set group items\u0022, \u0022body\u0022: \u0022Replace the selected group\u0027s item membership with the entered indexes.\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "enum_set_group_items_confirm_modal",
+        "sourceActionKey": "enum_set_group_items_confirm_modal"
+      }
+    ],
+    "label": "Set group items confirmation dialog"
+  },
+  {
+    "nodeId": "enum_set_group_items_confirm_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "enum_set_group_items_confirm_modal",
+    "orderIndex": 38,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "enum_set_group_items_confirm_modal",
+        "sourceActionKey": "enum_set_group_items_confirm_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "groupId": "node:enum_table.value.groupId",
+        "confirmed": "literal:true",
+        "enumIndexNums": "node:enum_set_group_items_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ae270:enum_dictionary:set_group_items"
+    },
+    "label": "Set items"
+  },
+  {
+    "nodeId": "enum_set_group_items_cancel_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "enum_set_group_items_confirm_modal",
+    "orderIndex": 39,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000ae205",
+    "wiringKey": "admin.enum.management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "enum_set_group_items_confirm_modal",
+        "sourceActionKey": "enum_set_group_items_cancel_button"
+      }
+    ],
+    "label": "Cancel"
+  },
+  {
+    "nodeId": "enum_write_dispatch_preview_gap",
+    "nodeKind": "structural_node",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 40,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_validation",
+    "label": "All 7 enum_dictionary write actions (create_group/update_group/delete_group/create_item/update_item/delete_item/set_group_items) now dispatch a non-mutating dryRun preview (payload.dryRun=literal:true, the SAME target manifest and the SAME payloadFrom field mapping the eventual confirmed write uses) when their own visible action button is clicked, via the SAME admin_runtime_dispatch_override_wiring lane the confirm button already used -- no new wiringLane, actionType, or per-operation branch. The confirm modal opens only when that preview dispatch settles successfully (secondaryDisclosureActionType=openModal deferred to dispatch success, the same deferLocalStateMutationToDispatchSuccess mechanism the confirm buttons already used for secondaryDisclosureActionType=closeModal); a failed preview (backend validation error) never opens the modal and surfaces the backend error message via the existing non-destructive refreshWarning banner, leaving every typed field and the tracked table selection exactly as the user left them. Confirm re-resolves the SAME payloadFrom mapping fresh from current node values (never a captured preview-time value) and sends payload.confirmed=literal:true; Cancel never dispatches anything. A settled dryRun preview result is classified by its own dispatched payload dryRun flag -- generic runtime context, never operation name/nodeId/manifest UUID -- and is therefore never adopted into this surface own projection state and never triggers the canonical re-read that only a settled CONFIRMED write success triggers."
+  },
+  {
+    "nodeId": "enum_write_dispatch_gap",
+    "nodeKind": "structural_node",
+    "parentNodeId": "enum_dictionary_roster",
+    "orderIndex": 41,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_validation",
+    "label": "All 7 enum_dictionary write actions (create_group/update_group/delete_group/create_item/update_item/delete_item/set_group_items) are now wired into this single surface via admin_runtime_dispatch_override_wiring to their own dedicated per-action manifests (ae210/ae220/ae230/ae240/ae250/ae260/ae270), each gated behind its own disclosure/modal explicit-confirm dialog (open only via its own button, no write on cancel/backdrop-close, confirm dispatches the SAME override as before with group-identity fields (groupId) re-resolved fresh from enum_table own tracked selected-row value node:enum_table.value.groupId at confirm time -- never a captured/stale selection -- and fails closed with no write and no modal-close if that resolution fails); item-identity fields (indexNum) for update_item/delete_item/set_group_items are entered as typed values, matching the same manual-identity entry pattern already established by each operation own dedicated single-purpose write manifest -- items browse is composed into the existing enum_table (enum_table\u0027s displayColumns now carries itemsSummary, a flattened index:name list per group, folded into list_groups own query -- no new list_items action, no cross-manifest dispatch, no direct child-Emission adoption). group-items membership is entered as a comma-separated indexNum list, matching the existing backend CSV-string enumIndexNums contract."
+  }
+]
