@@ -56,6 +56,22 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "propBindings": {
+      "options": {
+        "source": "emission.data",
+        "labelPath": "groupName",
+        "transform": "rowsToOptions",
+        "valuePath": "groupId"
+      }
+    },
+    "dispatchPayloadFromByTrigger": {
+      "change": {
+        "groupIdFilter": "node:enum_group_filter.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "change": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups"
+    },
     "label": "Group filter"
   },
   {
