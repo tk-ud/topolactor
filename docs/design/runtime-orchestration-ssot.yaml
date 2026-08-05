@@ -133,16 +133,15 @@ runtime_orchestration_ssot:
           replacement: same_url_seed_backed
           status: pending
           precondition: >-
-            UPDATED (admin-enum subBundle closure round, .agent/tasks/todo.md): the real per-screen
-            ui_projection manifest this precondition originally asked for now exists (manifest
-            00000000-0000-0000-0000-0000000ae200, admin.enum.management.projection, built
-            2026-07-22, all 7 write actions wired directly into its own layout with dryRun-preview/
-            confirm-modal since PR #601). The remaining blocker is genuine UX parity, not manifest
-            existence: ae200 has no field-prefill mechanism yet for selected-group-detail (a user
-            must retype a group's full current name blind on update, where AdminEnumsRoster.tsx
-            prefills it), and enum_search is structurally present but not wired to any functional
-            server-side filter. Retiring the hardcoded route before those close would ship a
-            materially degraded UX at the same URL. Not retired by this change.
+            a real per-screen ui_projection manifest for enum_dictionary now exists (manifest
+            00000000-0000-0000-0000-0000000ae200, admin.enum.management.projection, all 7 write
+            actions wired directly into its own layout with a dryRun-preview-gated confirm-modal
+            flow), so manifest existence is no longer the blocker. The open blocker is UX parity
+            against the hardcoded island: ae200 has no field-prefill mechanism for
+            selected-group-detail (a user must retype a group's full current name blind on
+            update, where the hardcoded island prefills it), and its search field is not wired to
+            any functional server-side filter. Retiring the hardcoded route before those close
+            would ship a degraded UX at the same URL. Not retired by this change.
         - route: /admin/team-dashboard
           retirement_kind: hub_navigation_only
           replacement: same_url_plus_hub_entry
