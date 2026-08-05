@@ -1098,6 +1098,74 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     }
 
     /// <summary>
+    /// Explicit, positive read/filter operation-classification authority (round 37) -- mirrors
+    /// docs/design/admin-master-roster-management-ssot.yaml admin_runtime_actions' "_read" groups
+    /// verbatim as "&lt;layer&gt;:&lt;action&gt;" strings. Same set, same source, same purpose as
+    /// .agent/scripts/react_schema_topology_seed_translator.py ADMIN_RUNTIME_READ_ACTIONS and
+    /// frontend/runtime/adminRuntimeReadActions.ts ADMIN_RUNTIME_READ_ACTIONS -- see either one's own
+    /// doc comment for why this is a positive allowlist rather than the removed mutation-verb
+    /// denylist. All three must be updated together when the SSOT's admin_runtime_actions changes.
+    /// </summary>
+    private static readonly IReadOnlySet<string> AdminRuntimeReadActions = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "enum_dictionary:list_groups",
+        "enum_dictionary:get_group",
+        "auth_users:list",
+        "auth_users:search",
+        "auth_users:get",
+    };
+
+    /// <summary>
+    /// A layout node's own componentKind identifies it as Field-family authoring content
+    /// (form_input/*) as opposed to Action/Step-family (action/*) -- the flattened layout_patch
+    /// JSON boundary has no surviving "kind": "Field" discriminator (that is a react_schema/
+    /// translator-level concept only), so componentKind prefix is the only signal available here
+    /// to tell a Field-owned dispatchTargetRefByTrigger override apart from an Action/Step-owned
+    /// one when persisting a layout patch directly (bypassing the translator entirely).
+    /// </summary>
+    private const string FieldComponentKindPrefix = "form_input/";
+
+    /// <summary>
+    /// Round 37 defense-in-depth layer 2 of 3 (translator authoring-time / THIS backend
+    /// layout_patch save-time / frontend live runtime-dispatch-time) -- backend persistence-boundary
+    /// mirror of .agent/scripts/react_schema_topology_seed_translator.py
+    /// validate_field_admin_runtime_dispatch_wiring rule 3. Even if the translator's own authoring-
+    /// time check were bypassed entirely (a hand-authored or directly-DB-inserted layout_patch_json
+    /// reaching this save boundary without ever going through the translator), a Field-family node
+    /// (componentKind starting with "form_input/") carrying a dispatchTargetRefByTrigger entry must
+    /// still resolve to a resource:action listed in AdminRuntimeReadActions -- fails the WHOLE patch
+    /// closed otherwise, mirroring every other node-level admin_runtime validator's own contract for
+    /// this JSON boundary. Only called after ValidateDispatchTargetRefByTrigger's own shape
+    /// validation has already passed (guarantees each value matches AdminRuntimeTargetRefRe).
+    /// </summary>
+    private static string? ValidateFieldOwnedAdminRuntimeReadOnlyDispatch(JsonElement nodes)
+    {
+        foreach (var node in nodes.EnumerateArray())
+        {
+            if (node.ValueKind != JsonValueKind.Object) continue;
+            if (!node.TryGetProperty("dispatchTargetRefByTrigger", out var byTriggerEl) || byTriggerEl.ValueKind != JsonValueKind.Object)
+                continue;
+            var componentKind = node.TryGetProperty("componentKind", out var componentKindEl) && componentKindEl.ValueKind == JsonValueKind.String
+                ? componentKindEl.GetString()
+                : null;
+            if (componentKind is null || !componentKind.StartsWith(FieldComponentKindPrefix, StringComparison.Ordinal))
+                continue;
+            foreach (var triggerEntry in byTriggerEl.EnumerateObject())
+            {
+                if (triggerEntry.Value.ValueKind != JsonValueKind.String) continue;
+                var targetRef = triggerEntry.Value.GetString()?.Trim();
+                if (string.IsNullOrEmpty(targetRef)) continue;
+                var match = AdminRuntimeTargetRefRe.Match(targetRef);
+                if (!match.Success) continue;
+                var resourceAction = $"{match.Groups[2].Value}:{match.Groups[3].Value}";
+                if (!AdminRuntimeReadActions.Contains(resourceAction))
+                    return $"RUNTIME_INTERACTION_FIELD_DISPATCH_TARGET_REF_NOT_READ_ACTION:{resourceAction}";
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Extracts every distinct manifest_id referenced by dispatchTargetRefByTrigger entries across
     /// all nodes. Only called after ValidateDispatchTargetRefByTrigger's own shape validation has
     /// already passed (guarantees each value matches AdminRuntimeTargetRefRe, so parsing here never
@@ -1602,6 +1670,9 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                     var dispatchTargetRefByTriggerError = ValidateDispatchTargetRefByTrigger(runtimeNodes, layoutWiringKind);
                     if (dispatchTargetRefByTriggerError is not null)
                         return normalized with { Ok = false, Valid = false, Message = dispatchTargetRefByTriggerError };
+                    var fieldReadOnlyDispatchError = ValidateFieldOwnedAdminRuntimeReadOnlyDispatch(runtimeNodes);
+                    if (fieldReadOnlyDispatchError is not null)
+                        return normalized with { Ok = false, Valid = false, Message = fieldReadOnlyDispatchError };
 
                     var referencedManifestIds = ExtractDispatchTargetRefByTriggerManifestIds(runtimeNodes);
                     if (referencedManifestIds.Count > 0)

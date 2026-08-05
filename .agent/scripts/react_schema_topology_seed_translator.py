@@ -1444,21 +1444,48 @@ def validate_admin_runtime_preview_action_pairing(node, nodes_by_key, errors, pa
         validate_admin_runtime_preview_action_pairing(c, nodes_by_key, errors, path, parent=node)
 
 
-#: Generic mutation-verb prefix convention shared by BOTH admin_runtime action namespaces this
-#: codebase declares -- docs/design/admin-master-roster-management-ssot.yaml admin_runtime_actions:
-#: enum_dictionary_read (list_groups/get_group) vs enum_dictionary_write (create_group/
-#: update_group/delete_group/create_item/update_item/delete_item/set_group_items), and auth_users
-#: (list/search/get vs create/update/delete). Not enum-specific and not a per-domain allowlist: any
-#: admin_runtime targetRef whose <action> segment's leading verb is a member of this set is treated
-#: as a mutation target by validate_field_admin_runtime_dispatch_wiring below.
-MUTATION_ACTION_VERB_PREFIXES = frozenset({"create", "update", "delete", "set"})
+#: Explicit, positive read/filter operation-classification authority for Field-owned
+#: admin_runtime_dispatch_override_wiring use (round 37 -- REPLACES the prior
+#: MUTATION_ACTION_VERB_PREFIXES verb-heuristic denylist {"create", "update", "delete", "set"}).
+#: A denylist only rejects verbs someone thought to enumerate; it silently PASSES a Field wired to
+#: manifest:promote, layout_patch:apply, seed_runtime:import, package_generator:promote_package,
+#: content_bundle:promote_draft, etc. -- none of those verbs start with create/update/delete/set,
+#: yet every one of them is a mutation. This allowlist instead mirrors, verbatim, the "_read" groups
+#: of docs/design/admin-master-roster-management-ssot.yaml admin_runtime_actions (the single
+#: explicit operation classification authority that YAML block now documents -- see its own leading
+#: comment) as "<resource>:<action>" strings. A Field may dispatch ONLY to a resource:action listed
+#: here; every "_write" group member AND every resource:action absent from admin_runtime_actions
+#: entirely is rejected by construction (fail-closed by default-deny, not by an ever-growing verb
+#: list). Mirrored by:
+#:   - backend/repository/NpgsqlUiTopologyRepository.cs AdminRuntimeReadActions (layout_patch
+#:     save-time persistence guard)
+#:   - frontend/runtime/adminRuntimeReadActions.ts ADMIN_RUNTIME_READ_ACTIONS (live runtime
+#:     dispatch guard)
+#: A resource:action moved between the SSOT's read/write groups, or a new resource/action added,
+#: must update THIS set and both mirrors above in the same change -- drift is caught by
+#: .agent/tests/... admin_runtime_read_actions_mirror tests (one per mirror) that assert set
+#: equality against a value parsed straight out of the SSOT YAML.
+ADMIN_RUNTIME_READ_ACTIONS = frozenset({
+    "enum_dictionary:list_groups",
+    "enum_dictionary:get_group",
+    "auth_users:list",
+    "auth_users:search",
+    "auth_users:get",
+})
 
 #: manifest:<manifestId>:<layer>:<action> -- the SAME shape lane_target_ref_patterns already
 #: enforces generically via wiring_lane_contract's targetRef_shape regex; this second, narrower
-#: regex exists only to EXTRACT the trailing <action> segment for the mutation-verb check below, not
-#: to re-validate overall shape (a malformed targetRef simply fails to match here and is silently
-#: skipped by this check -- TARGET_REF_SHAPE_MISMATCH from validate_wiring_node already reports it).
-ADMIN_RUNTIME_TARGET_REF_ACTION_RE = re.compile(r"^manifest:[^:]+:[^:]+:([^:]+)$")
+#: regex exists only to EXTRACT the trailing <layer>:<action> resource:action pair for the
+#: allowlist check below, not to re-validate overall shape (a malformed targetRef simply fails to
+#: match here and is silently skipped by this check -- TARGET_REF_SHAPE_MISMATCH from
+#: validate_wiring_node already reports it).
+ADMIN_RUNTIME_TARGET_REF_ACTION_RE = re.compile(r"^manifest:[^:]+:([^:]+:[^:]+)$")
+
+#: The single authorityMarker value a Field may declare when using
+#: admin_runtime_dispatch_override_wiring (round 37) -- exchange_mapping.authority_mapping's own
+#: frontend_intent value, the weakest of the six authority tiers, chosen because it is the exact
+#: semantic match for "Field-driven frontend read/filter intent, no backend mutation authority".
+FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER = "draft_or_projection_only"
 
 
 def validate_field_admin_runtime_dispatch_wiring(node, errors, path="$.root"):
@@ -1483,8 +1510,16 @@ def validate_field_admin_runtime_dispatch_wiring(node, errors, path="$.root"):
       2. FIELD_ADMIN_RUNTIME_DISPATCH_MODAL_MUTATION_NOT_ALLOWED -- the Field must not carry a
          secondaryDisclosureAction; Modal open/close authority belongs to Action/Step's own
          disclosure_state_wiring lane, never to a Field's keystroke/change event.
-      3. FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED -- the targetRef's <action>
-         segment's leading verb must not be a MUTATION_ACTION_VERB_PREFIXES member.
+      3. FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED -- the targetRef's
+         <layer>:<action> resource:action pair must be a member of ADMIN_RUNTIME_READ_ACTIONS
+         (round 37 positive allowlist; see its own doc comment for why this replaced the prior
+         verb-prefix denylist).
+      4. FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_REQUIRED /
+         FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_MISMATCH (round 37) -- the Field must
+         declare authorityMarker == FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER
+         ("draft_or_projection_only"), and its own eventBinding.authority (set from that SAME
+         authorityMarker at build_node time) must agree -- an independent author-asserted-intent
+         signal checked alongside, not instead of, rule 3's allowlist-derived classification.
     """
     if node.get("kind") == "Field":
         eb = node.get("eventBinding")
@@ -1511,16 +1546,33 @@ def validate_field_admin_runtime_dispatch_wiring(node, errors, path="$.root"):
             target_ref = eb.get("targetRef") or ""
             m = ADMIN_RUNTIME_TARGET_REF_ACTION_RE.match(target_ref)
             if m:
-                action = m.group(1)
-                verb = action.split("_", 1)[0]
-                if verb in MUTATION_ACTION_VERB_PREFIXES:
+                resource_action = m.group(1)
+                if resource_action not in ADMIN_RUNTIME_READ_ACTIONS:
                     errors.append(err(
                         "FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED", node_path, "blocking",
-                        f"Field '{key}' targetRef '{target_ref}' resolves to action '{action}', whose "
-                        f"leading verb '{verb}' is a mutation verb "
-                        f"({sorted(MUTATION_ACTION_VERB_PREFIXES)}) -- a Field may only dispatch to a "
-                        f"read/filter action, never a mutation",
+                        f"Field '{key}' targetRef '{target_ref}' resolves to '{resource_action}', which "
+                        f"is not a member of the explicit read-action allowlist "
+                        f"({sorted(ADMIN_RUNTIME_READ_ACTIONS)}) -- a Field may only dispatch to a "
+                        f"resource:action listed under a \"_read\" group of docs/design/"
+                        f"admin-master-roster-management-ssot.yaml admin_runtime_actions, never a "
+                        f"mutation or an unlisted action",
                     ))
+            authority_marker = node.get("authorityMarker")
+            if authority_marker != FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER:
+                errors.append(err(
+                    "FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_REQUIRED", node_path, "blocking",
+                    f"Field '{key}' uses admin_runtime_dispatch_override_wiring but its "
+                    f"authorityMarker is {authority_marker!r} -- a Field participating in this lane "
+                    f"must declare authorityMarker=\"{FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER}\" "
+                    f"explicitly, asserting frontend read/filter-only intent",
+                ))
+            elif eb.get("authority") != FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER:
+                errors.append(err(
+                    "FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_MISMATCH", node_path, "blocking",
+                    f"Field '{key}' authorityMarker is "
+                    f"\"{FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER}\" but its own "
+                    f"eventBinding.authority is {eb.get('authority')!r} -- the two must agree",
+                ))
     for c in node.get("children") or []:
         validate_field_admin_runtime_dispatch_wiring(c, errors, path)
 

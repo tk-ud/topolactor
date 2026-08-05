@@ -293,6 +293,12 @@ react_schema_topology_seed_translator_ssot:
           a wiring lane
       authorityMarker:
         required_on: [form, action, step, workflow]
+        required_on_conditional:
+          field: >-
+            round 37 -- required if and only if the Field also declares a wiringLane attribute
+            (admin_runtime_dispatch_override_wiring); a Field authoring neither never needs
+            authorityMarker. See wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring.
+            field_participation rule 4.
         rule: one of exchange_mapping.authority_mapping target-stage values
       wiringLane:
         required_on: [action, step]
@@ -302,7 +308,7 @@ react_schema_topology_seed_translator_ssot:
       category: '[category key=.. label=.. sourceYamlRefs=..] ... [/category]'
       section: '[section key=.. label=.. sectionKind=.. sourceYamlRefs=..] ... [/section]'
       form: '[form key=.. label=.. target=.. mode=.. authorityMarker=.. sourceYamlRefs=..] ... [/form]'
-      field: '[field key=.. label=.. control=.. required=true|false sourceYamlRefs=.. knownGapRefs=.. valueFrom=.. wiringLane=.. actionRef=.. trigger=.. payloadFrom=.. optionsSource=.. optionsLabelPath=.. optionsValuePath=..]'
+      field: '[field key=.. label=.. control=.. required=true|false sourceYamlRefs=.. knownGapRefs=.. valueFrom=.. wiringLane=.. actionRef=.. trigger=.. payloadFrom=.. optionsSource=.. optionsLabelPath=.. optionsValuePath=.. authorityMarker=..]'
       table: '[table key=.. label=.. source=.. display=.. displayColumns=.. rowsSource=.. sourceYamlRefs=..]'
       workflow: '[workflow key=.. label=.. authorityMarker=.. sourceYamlRefs=..] ... [/workflow]'
       modal: '[modal key=.. label=.. title=.. body=.. sourceYamlRefs=..] ... [/modal]'
@@ -491,7 +497,7 @@ react_schema_topology_seed_translator_ssot:
         emits_seed: topology_ui_form
       Field:
         required: [control, required]
-        optional: [valueFrom, eventBinding]
+        optional: [valueFrom, eventBinding, authorityMarker]
         optional_paired: [optionsSource, optionsLabelPath, optionsValuePath]
         optional_note: >-
           admin-enum subBundle closure round. valueFrom is the authored propBindings.value.source
@@ -503,7 +509,10 @@ react_schema_topology_seed_translator_ssot:
           action's optional filter payload) -- see
           wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring.field_participation
           below for the read-only fail-close restriction this participation is subject to. Both are
-          absent for the common case (most Fields author neither).
+          absent for the common case (most Fields author neither). round 37: authorityMarker becomes
+          REQUIRED (not merely optional) the moment a Field also carries wiringLane -- see
+          authorityMarker.required_on_conditional.field above and field_participation rule 4;
+          absent for the common case (a Field with no wiringLane never needs it).
         optional_paired_note: >-
           round 36: optionsSource/optionsLabelPath/optionsValuePath (authored together or none --
           see input_text_markup_grammar_contract.field_options_source_attributes below) become this
@@ -1319,7 +1328,12 @@ react_schema_topology_seed_translator_ssot:
         examples: [enum_group_create_preview, enum_group_create_confirm, admin_write_operation_selector_override]
         targetRef_shape: 'manifest:<manifestId>:<layer>:<action>'
         authority_ref: docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml admin_runtime_target_ref_override_contract
-        allowed_authority_mapping_values: [validation_only, preview_only, draft_apply_not_execution_authority]
+        allowed_authority_mapping_values: [validation_only, preview_only, draft_apply_not_execution_authority, draft_or_projection_only]
+        allowed_authority_mapping_values_note: >-
+          draft_or_projection_only (round 37) is additive and Field-only -- see
+          field_participation's rule 4 below. Action/Step's own use of this lane (rules 1-5 above,
+          gated on kind=="Action") is unaffected and still uses only the original three values;
+          nothing about this addition changes what an Action/Step may declare.
         allowed_payload_from_sources: [node_value, event_path, literal]
         record_carrier: >-
           Distinct from every other lane above: this lane's Action/Step candidate is NEVER folded
@@ -1370,7 +1384,7 @@ react_schema_topology_seed_translator_ssot:
           independent single-key checks -- a third authority-shaped flag introduced later to either
           side fails closed here rather than silently passing.
         field_participation: >-
-          admin-enum subBundle closure round (round 36). A Field node (see
+          admin-enum subBundle closure round (round 36, strengthened round 37). A Field node (see
           input_text_markup_grammar_contract.field_admin_runtime_dispatch_override_attributes) may
           ALSO declare this lane on its own eventBinding, independent of the Action-only rules
           above -- rules 1-5 and confirm_action_authority_pairing all gate on
@@ -1394,16 +1408,39 @@ react_schema_topology_seed_translator_ssot:
                of a keystroke/change event is exactly the kind of ungated mutation-adjacent
                authority this restriction exists to prevent.
             3. FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED -- the Field's own
-               targetRef (manifest:<manifestId>:<layer>:<action>) must not resolve to a mutation
-               action. Generic, not enum-specific: the <action> segment's leading verb must not be
-               a member of MUTATION_ACTION_VERB_PREFIXES ({"create", "update", "delete", "set"}),
-               the SAME read/write verb convention docs/design/admin-master-roster-management-
-               ssot.yaml admin_runtime_actions already documents across BOTH enum_dictionary
-               (enum_dictionary_read: list_groups/get_group vs enum_dictionary_write:
-               create_group/update_group/delete_group/create_item/update_item/delete_item/
-               set_group_items) and auth_users (list/search/get vs create/update/delete) --
-               shared vocabulary, not a per-domain allowlist.
-          A Field satisfying all three restrictions is a legal generic read/filter override (the
+               targetRef (manifest:<manifestId>:<layer>:<action>) must resolve to a resource:action
+               pair listed under a "_read" group of docs/design/admin-master-roster-management-
+               ssot.yaml admin_runtime_actions. Round 37 replaced the prior
+               MUTATION_ACTION_VERB_PREFIXES verb-heuristic denylist ({"create", "update", "delete",
+               "set"}) with this POSITIVE allowlist -- ADMIN_RUNTIME_READ_ACTIONS in
+               .agent/scripts/react_schema_topology_seed_translator.py, mirroring the SSOT's
+               enum_dictionary_read/auth_users_read groups verbatim -- because a denylist only
+               catches verbs someone thought to list (it would silently pass a Field wired to
+               manifest:promote, layout_patch:apply, seed_runtime:import, package_generator:
+               promote_package, etc., none of which start with create/update/delete/set). Any
+               resource:action absent from the SSOT's admin_runtime_actions block at all (not just
+               one explicitly listed under a "_write" group) is rejected by this same allowlist,
+               fail-closed by construction rather than by an ever-growing verb list.
+            4. FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_REQUIRED /
+               FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_MISMATCH (round 37) -- a Field
+               declaring this lane must carry an explicit authorityMarker equal to
+               "draft_or_projection_only" (exchange_mapping.authority_mapping's own
+               frontend_intent value -- the weakest of the six authority tiers, semantically exact
+               for "Field-driven frontend read/filter intent, no backend mutation authority").
+               react_schema_contract.node_common_optional_fields already lists authorityMarker as a
+               Field-legal attribute; this rule makes it REQUIRED specifically when (and only when)
+               the Field also declares admin_runtime_dispatch_override_wiring, mirroring
+               EVENT_BINDING_AUTHORITY_MISMATCH's existing "eventBinding authority must equal owning
+               node authorityMarker" rule (previously enforced only for Form/Action/Step/Workflow)
+               rather than inventing a second pattern. "draft_or_projection_only" was added to this
+               lane's own allowed_authority_mapping_values (below) as an additive, Field-only legal
+               value -- Action/Step's own three existing values for this lane are unchanged. This is
+               an independent, author-asserted-intent signal that must AGREE with rule 3's
+               allowlist-derived classification; either one failing alone still fails the whole
+               Field closed (they are not redundant with each other -- rule 3 checks what the
+               targetRef actually resolves to, rule 4 checks what the author declared they meant it
+               to be, and BOTH must hold).
+          A Field satisfying all four restrictions is a legal generic read/filter override (the
           enum_search -> list_groups example above); one that fails any of them is a blocking
           authoring error, never a silent pass-through. Distinct from, and does not replace,
           validate_wiring_node's existing generic lane/source/completeness checks (payloadFrom

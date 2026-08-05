@@ -165,6 +165,27 @@ admin_master_roster_management_ssot:
       timestamp: observed_at
 
   admin_runtime_actions:
+    # round 37 (admin-enum subBundle closure): this block is now the single explicit operation
+    # classification authority for Field-owned admin_runtime dispatch (replaces the prior
+    # MUTATION_ACTION_VERB_PREFIXES verb-heuristic denylist). Every admin_runtime resource:action
+    # pair reachable via this SSOT MUST be classified into a "_read" or "_write" group -- there is
+    # no third, ungrouped shape (auth_users below was ungrouped pre-round-37; that ambiguity is
+    # exactly what made this block non-machine-consumable and forced the translator to fall back
+    # to a verb-prefix guess instead of reading this authority directly). A Field may only ever
+    # dispatch to a resource:action listed under a "_read" group; every "_write" group member (and
+    # any resource:action absent from this block entirely, e.g. manifest:promote, layout_patch:
+    # apply, seed_runtime:import) is rejected by default -- this is a positive allowlist, not a
+    # denylist, so it fails closed on unknown future actions without needing a new verb added to
+    # anything. Mirrored verbatim (same resource:action strings) by:
+    #   - .agent/scripts/react_schema_topology_seed_translator.py ADMIN_RUNTIME_READ_ACTIONS
+    #     (translator/authoring-time Field dispatch guard)
+    #   - backend/repository/NpgsqlUiTopologyRepository.cs AdminRuntimeReadActions
+    #     (layout_patch save-time persistence guard, componentKind-discriminated)
+    #   - frontend/runtime/adminRuntimeReadActions.ts ADMIN_RUNTIME_READ_ACTIONS
+    #     (live runtime dispatch guard, componentKind-discriminated)
+    # A resource:action moved between groups, or a new resource added, must update all three
+    # mirrors in the SAME change -- see each mirror's own doc comment for the drift-detection test
+    # that enforces this.
     enum_dictionary_read:
       - enum_dictionary:list_groups
       - enum_dictionary:get_group
@@ -176,10 +197,11 @@ admin_master_roster_management_ssot:
       - enum_dictionary:update_item
       - enum_dictionary:delete_item
       - enum_dictionary:set_group_items
-    auth_users:
+    auth_users_read:
       - auth_users:list
       - auth_users:search
       - auth_users:get
+    auth_users_write:
       - auth_users:create
       - auth_users:update
       - auth_users:delete

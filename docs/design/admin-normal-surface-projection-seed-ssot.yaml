@@ -306,7 +306,7 @@ admin_normal_surface_projection_seed_ssot:
                 revoke_sessions: revokes one (by sessionId) or all active auth.sessions rows for the account in one transaction, with non-secret evidence appended in the same transaction.
                 update_role: grants or revokes the admin/system auth.grants row for the account (auth_users:update roleName field); never affects auth.credentials.
               admin_users_authority_relationship:
-                existing_authority_ref: docs/design/admin-master-roster-management-ssot.yaml admin_runtime_actions.auth_users
+                existing_authority_ref: docs/design/admin-master-roster-management-ssot.yaml admin_runtime_actions.auth_users_read/auth_users_write
                 relationship: continuation_refinement_not_duplicate_authority
                 rule: /admin/users remains the existing account CRUD authority surface for auth_users:* actions. credentials.users is the topology seed projection design for that same account lifecycle capability; it must bind to the same authority and must not introduce a parallel account CRUD authority.
             external_api_credential:

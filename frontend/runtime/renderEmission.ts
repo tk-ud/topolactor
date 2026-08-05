@@ -36,6 +36,10 @@ import {
   wiringSettingCategoryOf,
 } from "../lib/uiBuilderWiringProjection.ts";
 import { resolveUiStateUpdateMutation } from "./uiEventEffectRunner.ts";
+import {
+  ADMIN_RUNTIME_READ_ACTIONS,
+  isFieldFamilyComponentKind,
+} from "./adminRuntimeReadActions.ts";
 
 export type RenderEmissionOptions = {
   /**
@@ -595,6 +599,7 @@ export type AdminRuntimeTargetRefOverrideByTriggerResult =
 function buildAdminRuntimeTargetRefOverrideByTrigger(
   rawByTrigger: unknown,
   targetSurface: string | null | undefined,
+  componentKind: string | null | undefined,
 ): AdminRuntimeTargetRefOverrideByTriggerResult {
   if (rawByTrigger === undefined || rawByTrigger === null) {
     return { ok: true, byTrigger: {} };
@@ -651,6 +656,24 @@ function buildAdminRuntimeTargetRefOverrideByTrigger(
         ok: false,
         error:
           `RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_TARGET_REF_INVALID: dispatchTargetRefByTrigger entry for trigger "${trigger}" is not a valid "manifest:<uuid>:<layer>:<action>" target_ref`,
+      };
+    }
+    // Round 37 defense-in-depth layer 3 of 3 (translator authoring-time / backend layout_patch
+    // save-time / THIS live runtime-dispatch-time render boundary) -- a Field-family node
+    // (componentKind starting with "form_input/") must resolve to a resource:action listed in
+    // ADMIN_RUNTIME_READ_ACTIONS. Even if BOTH earlier layers were bypassed (a directly-DB-edited
+    // layout_patch_json reaching this render/dispatch-wiring boundary without ever going through
+    // the translator or the NpgsqlUiTopologyRepository save-time validator), this is the last point
+    // before a click/keystroke handler is actually wired up to fire the request -- refusing here
+    // means no request is ever sent, not merely that one was rejected server-side after the fact.
+    if (
+      isFieldFamilyComponentKind(componentKind) &&
+      !ADMIN_RUNTIME_READ_ACTIONS.has(`${parsed.layer}:${parsed.action}`)
+    ) {
+      return {
+        ok: false,
+        error:
+          `RUNTIME_INTERACTION_FIELD_DISPATCH_TARGET_REF_NOT_READ_ACTION: dispatchTargetRefByTrigger entry for trigger "${trigger}" on Field-family componentKind "${componentKind}" resolves to "${parsed.layer}:${parsed.action}", which is not a member of ADMIN_RUNTIME_READ_ACTIONS`,
       };
     }
     if (!surface) {
@@ -1390,6 +1413,7 @@ export function renderEmission(
           : buildAdminRuntimeTargetRefOverrideByTrigger(
             node.dispatchTargetRefByTrigger,
             node.targetSurface,
+            node.componentKind,
           );
         if (!adminRuntimeTargetRefOverride.ok) {
           return {

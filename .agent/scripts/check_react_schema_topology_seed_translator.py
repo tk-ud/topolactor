@@ -2375,14 +2375,22 @@ def main():
             payload_from=None,
             secondary=None,
             target_ref="manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+            authority_marker="draft_or_projection_only",
+            event_binding_authority="draft_or_projection_only",
         ):
+            # round 37: defaults are the CORRECT authorityMarker/authority pair (rule 4's required
+            # value) so every negative test below isolates the ONE violation its own name/comment
+            # describes, rather than incidentally also tripping FIELD_ADMIN_RUNTIME_DISPATCH_
+            # AUTHORITY_MARKER_REQUIRED/MISMATCH alongside it. Tests that specifically target rule 4
+            # override authority_marker/event_binding_authority explicitly.
             node = {
                 "kind": "Field", "key": "test_dispatch_field", "_path": "$.test.test_dispatch_field",
+                "authorityMarker": authority_marker,
                 "eventBinding": {
                     "trigger": "change",
                     "wiringLane": "admin_runtime_dispatch_override_wiring",
                     "targetRef": target_ref,
-                    "authority": "validation_only",
+                    "authority": event_binding_authority,
                     "payloadFrom": payload_from or {},
                 },
             }
@@ -2420,7 +2428,7 @@ def main():
             target_ref="manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:create_group",
         )
         expect(
-            "129. validate_field_admin_runtime_dispatch_wiring rejects a Field whose targetRef resolves to a mutation action (create_group) via FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED -- generic verb-prefix check (MUTATION_ACTION_VERB_PREFIXES), not enum-specific",
+            "129. validate_field_admin_runtime_dispatch_wiring rejects a Field whose targetRef resolves to a mutation action (create_group) via FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED -- round 37 positive allowlist (ADMIN_RUNTIME_READ_ACTIONS), not the removed verb-prefix denylist",
             "FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED" in run_field_dispatch_check(field_mutation_target_node),
         )
 
@@ -2447,11 +2455,67 @@ def main():
             "FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED" in run_field_dispatch_check(auth_users_mutation_node),
         )
 
+        # 129h-129l (round 37): negative proof that the POSITIVE allowlist (ADMIN_RUNTIME_READ_
+        # ACTIONS) rejects mutation actions whose leading verb was NEVER a member of the removed
+        # MUTATION_ACTION_VERB_PREFIXES denylist ({"create", "update", "delete", "set"}) -- exactly
+        # the class of action a verb-DENYLIST would have silently let through. A positive allowlist
+        # rejects these by construction (absent from admin_runtime_actions' "_read" groups), not by
+        # anyone having thought to add "apply"/"promote"/"import"/"deprecate" to a verb list.
+        for _non_denylist_suffix, (_ndm_manifest, _ndm_action) in enumerate((
+            ("00000000-0000-0000-0000-000000000m01", "manifest:promote"),
+            ("00000000-0000-0000-0000-000000000m01", "manifest:deprecate"),
+            ("00000000-0000-0000-0000-000000000m02", "layout_patch:apply"),
+            ("00000000-0000-0000-0000-000000000m03", "seed_runtime:import"),
+            ("00000000-0000-0000-0000-000000000m04", "package_generator:promote_package"),
+        )):
+            _ndm_node = build_field_dispatch_node(
+                payload_from={"x": "node:test_dispatch_field.value"},
+                target_ref=f"manifest:{_ndm_manifest}:{_ndm_action}",
+            )
+            expect(
+                f"129{chr(104 + _non_denylist_suffix)}. validate_field_admin_runtime_dispatch_wiring rejects a Field targeting '{_ndm_action}' via FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED even though its leading verb was never a MUTATION_ACTION_VERB_PREFIXES member -- proves the round-37 positive allowlist catches what the removed verb-denylist would have silently passed",
+                "FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED" in run_field_dispatch_check(_ndm_node),
+            )
+
+        # 129m-129n (round 37): FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_REQUIRED /
+        # _MISMATCH -- a Field participating in this lane must declare authorityMarker ==
+        # "draft_or_projection_only" (the exchange_mapping.authority_mapping frontend_intent value),
+        # independent of and in addition to rule 3's targetRef-resolved classification.
+        field_authority_marker_missing_node = build_field_dispatch_node(
+            payload_from={"search": "node:test_dispatch_field.value"},
+            authority_marker=None,
+            event_binding_authority=None,
+        )
+        expect(
+            "129m. validate_field_admin_runtime_dispatch_wiring rejects a Field with no authorityMarker at all via FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_REQUIRED, even though its targetRef legitimately resolves to a read action",
+            "FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_REQUIRED" in run_field_dispatch_check(field_authority_marker_missing_node),
+        )
+
+        field_authority_marker_wrong_value_node = build_field_dispatch_node(
+            payload_from={"search": "node:test_dispatch_field.value"},
+            authority_marker="validation_only",
+            event_binding_authority="validation_only",
+        )
+        expect(
+            "129n. validate_field_admin_runtime_dispatch_wiring rejects a Field whose authorityMarker is a DIFFERENT legal-for-the-lane value (validation_only) rather than the Field-specific required draft_or_projection_only, via FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_REQUIRED",
+            "FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_REQUIRED" in run_field_dispatch_check(field_authority_marker_wrong_value_node),
+        )
+
+        field_authority_marker_disagreement_node = build_field_dispatch_node(
+            payload_from={"search": "node:test_dispatch_field.value"},
+            authority_marker="draft_or_projection_only",
+            event_binding_authority="preview_only",
+        )
+        expect(
+            "129o. validate_field_admin_runtime_dispatch_wiring rejects a Field whose authorityMarker is correct (draft_or_projection_only) but whose OWN eventBinding.authority disagrees, via FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_MISMATCH",
+            "FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_MISMATCH" in run_field_dispatch_check(field_authority_marker_disagreement_node),
+        )
+
         field_valid_read_node = build_field_dispatch_node(
             payload_from={"search": "node:test_dispatch_field.value"},
         )
         expect(
-            "130. validate_field_admin_runtime_dispatch_wiring positive control: a Field dispatching to a read action (list_groups) with no authority flag and no secondaryDisclosureAction produces zero errors, proving 126-129 fail for the right reason and not because every Field-owned use of this lane fails",
+            "130. validate_field_admin_runtime_dispatch_wiring positive control: a Field dispatching to a read action (list_groups) with no authority flag, no secondaryDisclosureAction, and the correct authorityMarker produces zero errors, proving 126-129o fail for the right reason and not because every Field-owned use of this lane fails",
             run_field_dispatch_check(field_valid_read_node) == [],
         )
 
