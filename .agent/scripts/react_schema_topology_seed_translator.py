@@ -1884,18 +1884,38 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
             # NodeLocalData-by-own-nodeId convention as the Modal propsJson above -- a Table is
             # never itself a Form/Section owner, so this is always keyed at its own
             # this_resolved_key, never an owning_form_key lookup.
-            # round 3 (preview-gap audit): propBindings.rows.source is the AUTHORED rowsSource
-            # attribute (validate_table_display_columns_and_rows_source enforces it is present
-            # and shaped correctly whenever displayColumns is authored) -- never a translator-
-            # hardcoded literal. The "emission.data" fallback only matters when validation was
-            # skipped/bypassed upstream (e.g. a hand-authored react schema candidate fed directly
-            # into generate-topology-seed); it is not the normal, validated path.
+            # round 4 (preview-gap audit round 4): propBindings.rows.source is the AUTHORED
+            # rowsSource attribute ONLY -- never a translator-hardcoded literal, including as a
+            # fallback for the missing/skipped-validation case. validate_table_display_columns_
+            # and_rows_source (run earlier in the SAME generate-react-schema/generate-topology-seed
+            # call) already raises a blocking TABLE_ROWS_SOURCE_REQUIRED_WITH_DISPLAY_COLUMNS
+            # validationError when displayColumns is authored with no rowsSource, but that pass
+            # only ACCUMULATES errors -- it does not itself stop this generation step from running.
+            # A caller that supplies a hand-built react schema candidate directly to
+            # generate-topology-seed (bypassing generate-react-schema's own markup-attribute
+            # parsing entirely) could otherwise still reach this branch with displayColumns set and
+            # rowsSource missing; silently defaulting to "emission.data" in that case is exactly
+            # the round-3 violation this branch was built to close (a translator-hardcoded literal
+            # standing in for an actually-authored value) -- round 3 only moved the hardcode from
+            # "always" to "only when validation was bypassed", which is still a hardcode. This
+            # branch now fails the WHOLE run closed (raise SystemExit, matching this file's own
+            # render_seed_sql_fragment fail-loud-rather-than-emit-wrong-output precedent) instead of
+            # silently substituting a default when it is about to emit a tensor node it cannot
+            # correctly source.
+            rows_source = record.get("rowsSource")
+            if not rows_source:
+                raise SystemExit(
+                    f"topology_ui_table record '{record.get('key')}' declares displayColumns but "
+                    f"no rowsSource -- refusing to emit propBindings.rows.source with a "
+                    f"translator-hardcoded default; author rowsSource on the Table (or drop "
+                    f"displayColumns) instead"
+                )
             tensor_nodes.append({
                 "nodeId": this_resolved_key,
                 "nodeKind": "catalog_component",
                 "runtimeInteractions": [],
                 "propsJson": json.dumps({"table": None, "columns": record["displayColumns"]}),
-                "propBindings": {"rows": {"source": record.get("rowsSource") or "emission.data"}},
+                "propBindings": {"rows": {"source": rows_source}},
             })
 
         if record_type in ("topology_ui_action", "topology_ui_workflow_step"):

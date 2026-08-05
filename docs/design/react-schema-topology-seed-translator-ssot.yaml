@@ -352,6 +352,17 @@ react_schema_topology_seed_translator_ssot:
       to-rowsSource mapping would be actively wrong here). displayColumns and rowsSource are
       authored TOGETHER or NEITHER (table_display_and_rows_binding_validation below) -- a Table
       binding real data needs both a column list and a data source.
+      round 4 (2026-08-05): split_flat_records_into_adoption_candidates
+      (.agent/scripts/react_schema_topology_seed_translator.py) reads rowsSource ONLY -- it never
+      substitutes "emission.data" (or any other literal) as a default when rowsSource is
+      missing/empty, including on the path where a caller feeds a hand-built react schema
+      candidate directly into generate-topology-seed and bypasses generate-react-schema's own
+      markup-attribute parsing (the only path where validate_table_display_columns_and_rows_
+      source's own blocking TABLE_ROWS_SOURCE_REQUIRED_WITH_DISPLAY_COLUMNS error, which
+      accumulates but does not itself halt generation, could otherwise be silently worked around).
+      A topology_ui_table record reaching tensor generation with displayColumns set and no
+      rowsSource raises SystemExit and fails the whole run closed rather than emitting a
+      translator-guessed propBindings.rows.source.
     prohibited:
       - inferring_a_unit_kind_from_prose_without_a_matching_tag
       - silently_upgrading_an_unresolved_fragment_to_a_typed_node
@@ -359,6 +370,7 @@ react_schema_topology_seed_translator_ssot:
       - accepting_a_tag_with_no_sourceYamlRefs_attribute
       - accepting_an_action_or_step_tag_with_no_wiringLane_attribute
       - deriving_rowsSource_from_the_table_source_attribute_or_any_other_hardcoded_literal
+      - substituting_a_default_rowsSource_when_validation_was_bypassed_or_skipped
     validation:
       - every_open_tag_has_a_matching_close_tag_for_container_units
       - every_tag_key_is_unique_within_its_parent

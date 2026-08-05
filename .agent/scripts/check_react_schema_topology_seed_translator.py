@@ -2269,6 +2269,59 @@ def main():
             doc_ae200 is not None and doc_ae200.get("validationErrors") == [],
         )
 
+        # 124-125 (round 4, preview-gap audit round 4): split_flat_records_into_adoption_candidates
+        # no longer substitutes "emission.data" as a default when a topology_ui_table record's own
+        # rowsSource is missing (the round-3 fallback this round removed) -- these two tests prove
+        # BOTH directions of that removal against the REAL production react schema candidate (a
+        # mutated copy of the actual ae200 fixture, not a hand-built minimal node), so the proof
+        # reflects what actually ships: (124) omitting rowsSource fails the WHOLE run closed rather
+        # than silently defaulting, (125) an authored NON-default rowsSource is what actually
+        # reaches propBindings.rows.source -- proving true data-driven generation rather than a
+        # same-value coincidence with the (now-removed) hardcoded default.
+        ae200_envelope_raw = json.loads(ADMIN_ENUM_AE200_TOPOLOGY_SEED_FIXTURE.read_text(encoding="utf-8"))
+        ae200_candidate = json.loads(ae200_envelope_raw["inputText"])
+
+        def write_ae200_variant_fixture(mutated_candidate):
+            envelope = dict(ae200_envelope_raw)
+            envelope["inputText"] = json.dumps(mutated_candidate)
+            path = Path(tmpdir) / _next_tmp_name("ae200_variant_fixture")
+            path.write_text(json.dumps(envelope), encoding="utf-8")
+            return path
+
+        missing_rows_source_candidate = json.loads(json.dumps(ae200_candidate))
+        missing_rows_source_table_node = find_node(missing_rows_source_candidate["root"], "enum_table")
+        if missing_rows_source_table_node is None:
+            raise AssertionError("124/125 setup: enum_table node must exist in the real ae200 fixture")
+        missing_rows_source_table_node["rowsSource"] = ""
+        tmp124 = write_ae200_variant_fixture(missing_rows_source_candidate)
+        proc124, doc124 = run_generate_topology_seed(tmp124)
+        expect(
+            "124. split_flat_records_into_adoption_candidates fails the WHOLE generate-topology-seed run closed (non-zero exit, no JSON document) when a topology_ui_table record reaches tensor generation with displayColumns authored but rowsSource missing -- never silently substitutes a translator-hardcoded default",
+            proc124.returncode != 0 and doc124 is None,
+        )
+
+        NON_DEFAULT_ROWS_SOURCE = "emission.data.groups"
+        non_default_candidate = json.loads(json.dumps(ae200_candidate))
+        non_default_table_node = find_node(non_default_candidate["root"], "enum_table")
+        if non_default_table_node is None:
+            raise AssertionError("124/125 setup: enum_table node must exist in the real ae200 fixture")
+        non_default_table_node["rowsSource"] = NON_DEFAULT_ROWS_SOURCE
+        tmp125 = write_ae200_variant_fixture(non_default_candidate)
+        proc125, doc125 = run_generate_topology_seed(tmp125)
+        non_default_tensor_nodes = (
+            dig(doc125, "adoptionCandidates", "tensorAdoptionCandidates")[0]["layoutPatchJson"]["nodes"]
+            if doc125 and dig(doc125, "adoptionCandidates", "tensorAdoptionCandidates")
+            else []
+        )
+        non_default_nodes_by_id = {n["nodeId"]: n for n in non_default_tensor_nodes}
+        expect(
+            "125. an authored NON-default rowsSource (emission.data.groups, distinct from the removed hardcoded default emission.data) reaches the generated tensor's propBindings.rows.source EXACTLY -- proving data-driven generation, not a same-value coincidence with the old hardcode",
+            doc125 is not None
+            and doc125.get("validationErrors") == []
+            and non_default_nodes_by_id.get("enum_table", {}).get("propBindings")
+            == {"rows": {"source": NON_DEFAULT_ROWS_SOURCE}},
+        )
+
     print()
     if FAILURES:
         print(f"=== {len(FAILURES)} react-schema-topology-seed-translator check(s) failed ===", file=sys.stderr)

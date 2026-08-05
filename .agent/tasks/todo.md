@@ -1539,6 +1539,32 @@ PR #600（round14〜24、コミット履歴は上記の各round実装記録を�
 - delete_group 1件のcanonical reread「ちょうど1回」証明をもって「全7 operation証明済み」と宣言する。
 - CI green（テストsuiteの実行結果のみ）を根拠に、本Bundle・subBundle・PRをImplemented/mergeableと判断する。
 
+### admin-enum subBundle 実装記録（2026-08-05 round 33 — PR #601 audit round 4指摘の2件を同一Bundle scope内で解消）
+
+**round33の指示（audit round 4）**: (1) translatorの`split_flat_records_into_adoption_candidates`に`record.get("rowsSource") or "emission.data"`というSSOT禁止のhardcoded fallbackが残っていた（round32でrowsSourceをauthored値として導入したが、fallback自体は「validation bypass時のみ」という理由で残していた——これ自体がNG）、(2) `queue_rejection`と命名されたDOM testが、実際には`dispatchOperation`（`frontend/api/dispatch.ts`）内でfetch/networkエラーが必ず`success:false`へ変換される経路（`backend_failure`と同じ経路）しか通しておらず、`runtimeComponentFactory.ts`の`dispatchRuntimeComponentCommandAndForwardResult`自身の`.catch()`分岐（`enqueueRuntimeComponentCommand`のpromise自体のreject）を一度も証明していなかった——の2件を解消した。
+
+**1. rowsSource hardcoded fallbackの完全撤去**: `split_flat_records_into_adoption_candidates`の`"propBindings": {"rows": {"source": record.get("rowsSource") or "emission.data"}}`から`or "emission.data"`を削除し、`rowsSource`が空の場合は`raise SystemExit(...)`で生成全体をfail-closeするよう変更した（このファイル自身の`render_seed_sql_fragment`が既に持つ「fail loud rather than emit wrong output」という前例パターンに倣った）。`validate_table_display_columns_and_rows_source`自身の`TABLE_ROWS_SOURCE_REQUIRED_WITH_DISPLAY_COLUMNS`はvalidationErrorsへ蓄積するのみで生成自体は止めないため、hand-authoredなreact schema candidateを`generate-topology-seed`へ直接投入してgenerate-react-schema自身のmarkup解析を経由しない経路がこのfallbackの実質的な迂回口になっていた——round33はこの迂回口自体を塞いだ。`docs/design/react-schema-topology-seed-translator-ssot.yaml`の`table_display_and_rows_binding_attributes`へこの経緯を追記し、`prohibited`へ`substituting_a_default_rowsSource_when_validation_was_bypassed_or_skipped`を追加した。新規regression test 2件（124: rowsSource欠落時に`generate-topology-seed`全体が非zero exit・JSON出力無しでfail-closeすることを証明、125: `rowsSource=emission.data.groups`という非default値をauthorし、生成されたtensorの`propBindings.rows.source`がその値と完全一致することを証明——実ae200 fixtureを複製・改変した現実的な入力で、hand-builtな最小nodeではない）を追加し、実ae200 fixtureの通常再生成（`rowsSource=emission.data`のまま）がzero validationErrorsを維持することも確認した。
+
+**2. queue_rejection DOM testの再分類と、実際にcatch()分岐を発火させる新規機構**: `frontend/api/dispatch.ts`の`dispatchOperation`はtry/catchで全てのfetch/networkエラーを`{success:false, errors:[...]}`へ変換し、決してrejectしない設計（自身のdocコメントが明言）であることを確認した——このため、`globalThis.fetch`をmockしてPromise.rejectさせても、`enqueueRuntimeComponentCommand`が返すpromiseは常にresolveし、`dispatchRuntimeComponentCommandAndForwardResult`の`.catch()`分岐には現実的な経路で到達できない。この事実に基づき、`frontend/runtime/runtimeComponentFactory.ts`へmodule-levelのswappable reference（`enqueueRuntimeComponentCommandImpl`）を新設し、`__testOnly.setEnqueueRuntimeComponentCommandForTest()`として公開した——`emitBoundEvent`の全呼び出し経路がこの1箇所を間接的に参照するため、実`ProjectionShell`マウント経由のtestからも本番配線を経由したまま特定dispatchのみをrejectさせられる。(a) `frontend/tests/runtimeComponentFactory.test.ts`へ新規unit testを追加し、`enqueueRuntimeComponentCommand`のpromise自体を直接rejectさせ、synthetic failureが`onRuntimeDispatchResult`へ転送されること・deferred `localStateMutation`（Modal open/closeの実体）が一切適用されないこと（predeclareした状態が変化しない）を証明した。(b) `frontend/tests/projectionShellAdminRuntimeWritePayloadCapture.test.ts`の既存2 negative settlement test（preview/confirm、4 shape×2方向）を再設計し、`queue_rejection`shapeのみ新規`installRejectingEnqueueOverride()`ヘルパー（targetRef＋authority flagで対象dispatchのみを狙い撃ちし、他の全dispatch——行選択の読み込み等——は実装へpass-through）で処理するよう変更した。旧`negativeSettlementResponseFor`の`queue_rejection`分岐（mock fetch自体をreject）は削除し、fetch handler自身に「queue_rejection shapeでfetchに到達したらthrow」という自己検証を追加した（このtestが再び間違った経路を証明する状態へ後退しないための防御）。全4 shapeの待機条件も、shape固有のcallSeenフラグから`queryRefreshWarning(container) !== null`という統一条件へ変更し、queue_rejectionを含む全shapeで一貫させた。
+
+**test証明の全体像**: frontend `deno check`clean（25 files）。`runtimeComponentFactory.test.ts`全36 test（既存35＋新規1）、`projectionShellAdminRuntimeWritePayloadCapture.test.ts`全32 testを`--filter`で個別実行し、全てAssertionErrorゼロを確認（正直な既知の制限、round30-32から変わらず: `Leaks detected`という環境依存resource sanitizer誤検出のみ残存）。`deno test frontend/tests/`全体（2051 test）でも`AssertionError`は0件。backend: 実PostgreSQL 16（CI同一の21 SQLファイル適用）経由で`backend_runtime_tests`/`backend_db_continuity_tests`全pass（本roundはbackend C#コード・db/seed_empty.sqlともに無変更）。python translator check: 196/197 pass（新規2 test含む、1件は"7a"——git stash比較で本round着手前から存在する既知flakeと再確認済み）。`.agent/tools/agent-ui-local-test summary --worktype implementation_change`はpass。
+
+**未着手のまま残る内容（round30-32から変わらず、正直な記録）**:
+- items browse UX（round22から未着手）
+- 完全なnegative boundary matrix（全7 operation × missing record／duplicate index／referenced delete／role mismatch等）のpreview軸への横展開
+- `enum_confirm_form`/`enum_form`/`enum_confirm_button`の再監査
+- `AdminEnumsRoster.tsx`/`/admin/enums`のthin_projection_wrapper route撤去
+
+これらを次roundへ明示的に引き継ぐ。
+
+### Governance NG boundary追記（round 33）
+
+- `record.get("rowsSource") or "emission.data"`その他のhardcoded defaultをtranslatorの生成経路へ残す——rowsSource欠落時は生成全体をfail-closeすること。
+- validation（`validate_table_display_columns_and_rows_source`）がblockingエラーを蓄積することを理由に、生成経路（`split_flat_records_into_adoption_candidates`）側でのdefault補完を許容する——validationとgenerationは別パスであり、両方が独立してfail-closeする必要がある。
+- author値とhardcoded default値が偶然同じfixtureのみで「data-driven generationを証明した」と扱う——非default値での証明を維持すること。
+- `dispatchOperation`がsuccess:falseへ変換する通常のfetch/networkエラー経路（mocked fetchのPromise.reject含む）を「queue rejection」の証明として扱う——`enqueueRuntimeComponentCommand`自体のpromiseを直接rejectさせる経路（`__testOnly.setEnqueueRuntimeComponentCommandForTest`）を使うこと。
+- CI green（テストsuiteの実行結果のみ）を根拠に、本Bundle・subBundle・PRをImplemented/mergeableと判断する。
+
 ---
 
 ## Bundle `admin-runtime-operation-dispatch-lane-determination`

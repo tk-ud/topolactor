@@ -23,7 +23,11 @@ import {
 import { h, options, render } from "preact";
 import { flushUpdates, setupDom } from "./test-dom-setup.ts";
 import { ensureRuntimeComponentRegistryInitialized } from "../runtime/runtimeComponentRegistry.ts";
-import { __testOnly as schedulerTestOnly } from "../runtime/frontendScheduler.ts";
+import {
+  enqueueRuntimeComponentCommand,
+  __testOnly as schedulerTestOnly,
+} from "../runtime/frontendScheduler.ts";
+import { __testOnly as runtimeComponentFactoryTestOnly } from "../runtime/runtimeComponentFactory.ts";
 import ProjectionShell from "../islands/ProjectionShell.tsx";
 
 // deno-lint-ignore no-explicit-any
@@ -3385,17 +3389,21 @@ const NEGATIVE_SETTLEMENT_SHAPES: readonly NegativeSettlementShape[] = [
 const UNEXPECTED_SETTLEMENT_MANIFEST_ID =
   "00000000-0000-0000-0000-0000000ae998";
 
-/** Builds the raw HTTP Response (or a rejected Promise, for queue_rejection) a mock fetch should
- * settle a captured /api/dispatch call with, for a given negative settlement shape. */
+/**
+ * Round 4 (preview-gap audit round 4): "queue_rejection" is handled by a SEPARATE mechanism
+ * (installRejectingEnqueueOverride below, at the enqueueRuntimeComponentCommand level), never by
+ * a mocked-fetch rejection here — dispatchOperation (frontend/api/dispatch.ts) deliberately
+ * converts EVERY fetch/network failure into a normal {success:false} response and never rejects,
+ * so a mocked-fetch Promise.reject can only ever re-prove the SAME success:false path
+ * "backend_failure" already covers below, never runtimeComponentFactory's own
+ * dispatchRuntimeComponentCommandAndForwardResult .catch() branch. Builds the raw HTTP Response a
+ * mock fetch should settle a captured /api/dispatch call with, for the 3 shapes that ARE genuine
+ * backend response shapes.
+ */
 function negativeSettlementResponseFor(
-  shape: NegativeSettlementShape,
+  shape: Exclude<NegativeSettlementShape, "queue_rejection">,
   scenarioLabel: string,
 ): Promise<Response> {
-  if (shape === "queue_rejection") {
-    return Promise.reject(
-      new Error(`simulated network/queue rejection (${scenarioLabel} ${shape} scenario)`),
-    );
-  }
   let responseBody: Record<string, unknown>;
   switch (shape) {
     case "wrong_manifest":
@@ -3422,6 +3430,29 @@ function negativeSettlementResponseFor(
   );
 }
 
+/**
+ * Round 4: installs a rejecting override for enqueueRuntimeComponentCommand's module-level
+ * reference (runtimeComponentFactory.ts's __testOnly seam) that intercepts ONLY the dispatch
+ * matching targetRef + the given authority flag ("dryRun" for a preview, "confirmed" for a
+ * Confirm) — every other admin_runtime dispatch (e.g. delete_group's own row-select list_groups
+ * re-read) passes through to the REAL enqueueRuntimeComponentCommand unchanged, so it still
+ * reaches the mock fetch exactly as before. Returns a restore function.
+ */
+function installRejectingEnqueueOverride(
+  targetRef: string,
+  authorityFlag: "dryRun" | "confirmed",
+  message: string,
+): () => void {
+  runtimeComponentFactoryTestOnly.setEnqueueRuntimeComponentCommandForTest((dispatchSpec) => {
+    const payload = dispatchSpec.payload as Record<string, unknown> | undefined;
+    if (dispatchSpec.targetRef === targetRef && payload?.[authorityFlag] === "true") {
+      return Promise.reject(new Error(message));
+    }
+    return enqueueRuntimeComponentCommand(dispatchSpec);
+  });
+  return () => runtimeComponentFactoryTestOnly.setEnqueueRuntimeComponentCommandForTest(null);
+}
+
 Deno.test(
   "ProjectionShell (real mount, round 3 settlement authority): delete_group's preview dispatch — wrong manifest / missing Emission / backend success:false / queue rejection settlement shapes never open the Modal, each surfacing an explicit warning",
   async () => {
@@ -3437,7 +3468,6 @@ Deno.test(
         FakeEventSource;
       const originalFetch = globalThis.fetch;
 
-      let previewCallSeen = false;
       const capturedDispatchBodies: Record<string, unknown>[] = [];
       const mockFetch = ((url: string, init?: RequestInit) => {
         const path = url.toString();
@@ -3475,7 +3505,16 @@ Deno.test(
         const isPreviewDispatch = payload.target_ref === config.targetRef &&
           payload.dryRun === "true";
         if (isPreviewDispatch) {
-          previewCallSeen = true;
+          // Round 4: queue_rejection is intercepted BELOW the network entirely (at
+          // enqueueRuntimeComponentCommand itself) — fetch must never be reached for it. If it
+          // is, the interception isn't actually happening and this test would silently go back
+          // to proving the wrong thing (dispatchOperation's success:false conversion).
+          if (shape === "queue_rejection") {
+            throw new Error(
+              `[${shape}] fetch must never be reached for the intercepted dispatch — the ` +
+                `enqueueRuntimeComponentCommand override should have rejected before the network`,
+            );
+          }
           return negativeSettlementResponseFor(shape, "delete_group's preview");
         }
         return Promise.resolve(
@@ -3483,6 +3522,17 @@ Deno.test(
         );
       }) as typeof fetch;
       globalThis.fetch = mockFetch;
+
+      // Round 4: queue_rejection makes enqueueRuntimeComponentCommand's OWN returned promise
+      // genuinely reject (dispatchOperation itself never rejects — see negativeSettlementResponseFor's
+      // own doc comment) — installed only for THIS shape, restored in finally regardless of shape.
+      const restoreEnqueue = shape === "queue_rejection"
+        ? installRejectingEnqueueOverride(
+          config.targetRef,
+          "dryRun",
+          "simulated queue/network rejection (delete_group's preview queue_rejection scenario)",
+        )
+        : null;
 
       try {
         globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
@@ -3501,7 +3551,7 @@ Deno.test(
         await flushUpdates();
 
         simulateClick(queryOpenButtonFor(container, config.prefix)!);
-        await waitFor(() => previewCallSeen);
+        await waitFor(() => queryRefreshWarning(container) !== null);
         for (let i = 0; i < 15; i++) await flushUpdates();
 
         assert(
@@ -3516,7 +3566,16 @@ Deno.test(
           queryRefreshWarning(container),
           `[${shape}] a ${shape} preview settlement must surface an explicit, non-destructive warning`,
         );
+        if (shape === "queue_rejection") {
+          assert(
+            !capturedDispatchBodies.some((b) =>
+              payloadOf(b).target_ref === config.targetRef && payloadOf(b).dryRun === "true"
+            ),
+            `[${shape}] the rejected preview dispatch must never reach the network at all`,
+          );
+        }
       } finally {
+        restoreEnqueue?.();
         globalThis.fetch = originalFetch;
         (globalThis as unknown as { EventSource: unknown }).EventSource =
           originalEventSource;
@@ -3543,7 +3602,6 @@ Deno.test(
         FakeEventSource;
       const originalFetch = globalThis.fetch;
 
-      let confirmCallSeen = false;
       const capturedDispatchBodies: Record<string, unknown>[] = [];
       const mockFetch = ((url: string, init?: RequestInit) => {
         const path = url.toString();
@@ -3599,7 +3657,14 @@ Deno.test(
         const isConfirmDispatch = payload.target_ref === config.targetRef &&
           payload.confirmed === "true";
         if (isConfirmDispatch) {
-          confirmCallSeen = true;
+          // Round 4: queue_rejection is intercepted BELOW the network entirely (at
+          // enqueueRuntimeComponentCommand itself) — fetch must never be reached for it.
+          if (shape === "queue_rejection") {
+            throw new Error(
+              `[${shape}] fetch must never be reached for the intercepted Confirm dispatch — ` +
+                `the enqueueRuntimeComponentCommand override should have rejected before the network`,
+            );
+          }
           return negativeSettlementResponseFor(shape, "delete_group's Confirm");
         }
         return Promise.resolve(
@@ -3631,8 +3696,18 @@ Deno.test(
         assertExists(confirmButtonEl, `[${shape}] Confirm must be present once the modal legitimately opened`);
         const dispatchCountBeforeConfirm = capturedDispatchBodies.length;
 
+        // Round 4: queue_rejection makes enqueueRuntimeComponentCommand's OWN returned promise
+        // genuinely reject — installed only for THIS shape, restored in finally regardless.
+        const restoreEnqueue = shape === "queue_rejection"
+          ? installRejectingEnqueueOverride(
+            config.targetRef,
+            "confirmed",
+            "simulated queue/network rejection (delete_group's Confirm queue_rejection scenario)",
+          )
+          : null;
+
         simulateClick(confirmButtonEl!);
-        await waitFor(() => confirmCallSeen);
+        await waitFor(() => queryRefreshWarning(container) !== null);
         for (let i = 0; i < 15; i++) await flushUpdates();
 
         assertExists(
@@ -3647,12 +3722,24 @@ Deno.test(
           queryRefreshWarning(container),
           `[${shape}] a ${shape} Confirm settlement must surface an explicit, non-destructive warning`,
         );
-        assertEquals(
-          capturedDispatchBodies.length,
-          dispatchCountBeforeConfirm + 1,
-          `[${shape}] a rejected Confirm settlement must never re-send the write itself`,
-        );
+        if (shape === "queue_rejection") {
+          // The rejected dispatch never reached the network at all — the capture count must not
+          // have grown by the usual "+1 for the Confirm dispatch itself" either.
+          assertEquals(
+            capturedDispatchBodies.length,
+            dispatchCountBeforeConfirm,
+            `[${shape}] a queue-rejected Confirm dispatch must never reach the network at all`,
+          );
+        } else {
+          assertEquals(
+            capturedDispatchBodies.length,
+            dispatchCountBeforeConfirm + 1,
+            `[${shape}] a rejected Confirm settlement must never re-send the write itself`,
+          );
+        }
+        restoreEnqueue?.();
       } finally {
+        runtimeComponentFactoryTestOnly.setEnqueueRuntimeComponentCommandForTest(null);
         globalThis.fetch = originalFetch;
         (globalThis as unknown as { EventSource: unknown }).EventSource =
           originalEventSource;

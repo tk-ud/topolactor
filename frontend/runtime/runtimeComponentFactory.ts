@@ -442,6 +442,24 @@ function isTruthyDryRunPayloadFlag(payload: Record<string, unknown> | undefined)
   return value === true || value === "true";
 }
 
+// Round 4 (preview-gap audit round 4): dispatchOperation (frontend/api/dispatch.ts) deliberately
+// converts EVERY fetch/network-level failure into a normal {success:false} DispatchResponse and
+// never throws/rejects -- by design, so callers can "treat all outcomes uniformly" (its own doc
+// comment). This means enqueueRuntimeComponentCommand's own returned promise has NO reachable
+// production trigger for a genuine rejection through the real fetch-mocking test seam every other
+// test in this codebase uses: a mocked fetch that rejects, or even synchronously throws, is still
+// caught inside dispatchOperation's own try/catch and surfaces as {success:false}, not a rejected
+// promise. round 3's "queue_rejection" DOM test scenario mocked fetch itself to reject, which
+// therefore only ever exercised dispatchOperation's success:false conversion (the SAME path
+// "backend_failure" already covers) -- never this function's OWN .catch() branch below.
+// This module-level swappable reference is the real seam: every call site in this file (both
+// emitBoundEvent branches) reads it indirectly through dispatchRuntimeComponentCommandAndForward
+// Result, so a test can install a rejecting override BEFORE a specific click and restore the real
+// implementation after, exercising this exact catch() branch through a genuine ProjectionShell DOM
+// mount -- not a synthetic unit call that bypasses the real dispatch/rendering wiring.
+let enqueueRuntimeComponentCommandImpl: typeof enqueueRuntimeComponentCommand =
+  enqueueRuntimeComponentCommand;
+
 function dispatchRuntimeComponentCommandAndForwardResult(
   spec: RuntimeComponentSpec,
   dispatchSpec: Parameters<typeof enqueueRuntimeComponentCommand>[0],
@@ -456,7 +474,7 @@ function dispatchRuntimeComponentCommandAndForwardResult(
     targetRef: dispatchSpec.targetRef,
     dryRun: isTruthyDryRunPayloadFlag(dispatchSpec.payload),
   };
-  enqueueRuntimeComponentCommand(dispatchSpec)
+  enqueueRuntimeComponentCommandImpl(dispatchSpec)
     .then((result) => {
       spec.onRuntimeDispatchResult?.(result, context);
       onSettled?.(result, context);
@@ -3761,4 +3779,18 @@ export type { LayoutPreviewRenderResult } from "./layoutComponentPreview.ts";
 export const __testOnly = {
   parseEventBinding,
   emitBoundEvent,
+  /**
+   * Round 4 (preview-gap audit round 4): installs a replacement for the module-level
+   * enqueueRuntimeComponentCommand reference every emitBoundEvent admin_runtime dispatch call
+   * site reads indirectly (dispatchRuntimeComponentCommandAndForwardResult) -- the real seam for
+   * making a settled dispatch's own promise genuinely REJECT through a real ProjectionShell DOM
+   * mount, since dispatchOperation itself never rejects (see the doc comment on
+   * enqueueRuntimeComponentCommandImpl). Pass `null` to restore the real
+   * enqueueRuntimeComponentCommand implementation.
+   */
+  setEnqueueRuntimeComponentCommandForTest(
+    fn: typeof enqueueRuntimeComponentCommand | null,
+  ): void {
+    enqueueRuntimeComponentCommandImpl = fn ?? enqueueRuntimeComponentCommand;
+  },
 };

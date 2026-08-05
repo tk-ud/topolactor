@@ -13,6 +13,10 @@ import { ensureRuntimeComponentRegistryInitialized } from "../runtime/runtimeCom
 import { __testOnly } from "../runtime/runtimeComponentFactory.ts";
 import { __testOnly as schedulerTestOnly } from "../runtime/frontendScheduler.ts";
 import type { RuntimeComponentSpec } from "../runtime/runtimeComponentAdapter.ts";
+import {
+  createRuntimeLocalStateStore,
+  createRuntimeStateDispatcher,
+} from "../runtime/uiEventEffectRunner.ts";
 
 const ADMIN_ENUM_MANIFEST_ID = "00000000-0000-0000-0000-0000000ae200";
 
@@ -442,6 +446,107 @@ Deno.test("emitBoundEvent: admin_runtime Lane 2 never calls onRuntimeDispatchRes
     }
     assertEquals(fetchCalled, true, "the dispatch must still have fired");
   } finally {
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
+});
+
+Deno.test("emitBoundEvent: admin_runtime Lane 2's dispatchRuntimeComponentCommandAndForwardResult catch() branch — a GENUINE enqueueRuntimeComponentCommand promise rejection (not a mocked-fetch success:false conversion) forwards a synthetic failure to onRuntimeDispatchResult and never applies the deferred localStateMutation", async () => {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+  // Round 4 (preview-gap audit round 4): dispatchOperation (frontend/api/dispatch.ts) never
+  // rejects — every fetch/network failure it catches becomes a normal {success:false} response,
+  // so a mocked-fetch rejection can NEVER reach dispatchRuntimeComponentCommandAndForwardResult's
+  // own .catch() branch through the real call chain; it only ever re-proves the SAME
+  // success:false path a "backend_failure" scenario already covers. The module-level
+  // enqueueRuntimeComponentCommand override __testOnly exposes is the real seam: it makes
+  // enqueueRuntimeComponentCommand's OWN returned promise genuinely reject, exactly the shape
+  // this catch() branch exists to handle.
+  const originalFetch = globalThis.fetch;
+  let fetchCalled = false;
+  globalThis.fetch = ((_url: string) => {
+    fetchCalled = true;
+    return Promise.resolve(
+      new Response(JSON.stringify({ success: true, errors: [] }), { status: 200 }),
+    );
+  }) as typeof fetch;
+  __testOnly.setEnqueueRuntimeComponentCommandForTest(() =>
+    Promise.reject(new Error("simulated queue/network rejection"))
+  );
+  try {
+    const rawStore = createRuntimeLocalStateStore();
+    const dispatcher = createRuntimeStateDispatcher(rawStore);
+    dispatcher.declare("confirm_modal", "open", false);
+
+    let forwardedResult: unknown = null;
+    let forwardedContext: unknown = null;
+    const spec: RuntimeComponentSpec = {
+      componentId: "comp-queue-rejection-001",
+      packageId: null,
+      layoutId: "layout-queue-rejection-001",
+      wiringId: null,
+      componentType: "action/button",
+      props: { data: { label: "Confirm" } },
+      eventBinding: {
+        click: {
+          eventType: "click",
+          runtimeDispatch: {
+            operationType: "delete_group",
+            target: "manifest",
+            layer: "enum_dictionary",
+            action: "delete_group",
+            targetRef:
+              `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:delete_group`,
+            payloadFrom: { groupId: "node:group-id-input.value", confirmed: "literal:true" },
+          },
+          // Round 25 deferred-gate shape: a trigger carrying BOTH runtimeDispatch and
+          // localStateMutation only applies the mutation once the dispatch settles
+          // successfully — this is the SAME shape a real Confirm button's closeModal uses.
+          localStateMutation: {
+            targetNodeId: "confirm_modal",
+            statePath: "open",
+            action: "set",
+            value: false,
+          },
+        },
+      },
+      payloadFromNodeValues: { "group-id-input": "11111111-1111-1111-1111-111111111111" },
+      localStateStore: dispatcher,
+      onRuntimeDispatchResult: (result, context) => {
+        forwardedResult = result;
+        forwardedContext = context;
+      },
+    };
+    const clickResult = __testOnly.emitBoundEvent(spec, "click", {});
+    assertEquals(clickResult.ok, true);
+    for (let i = 0; i < 20 && forwardedResult === null; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assertEquals(fetchCalled, false, "a rejected enqueueRuntimeComponentCommand must never reach fetch at all");
+    assertExists(forwardedResult, "the catch() branch must forward a synthetic failure to onRuntimeDispatchResult");
+    const result = forwardedResult as { success: boolean; errors?: Array<{ message?: string }> };
+    assertEquals(result.success, false, "the synthetic forwarded result must be success:false");
+    assertExists(
+      result.errors?.[0]?.message?.includes("simulated queue/network rejection"),
+      "the synthetic failure message must carry the real rejection's own message",
+    );
+    assertEquals(
+      forwardedContext,
+      {
+        targetRef: `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:delete_group`,
+        dryRun: false,
+      },
+    );
+    // The deferred localStateMutation gate (onSettled, the SAME mechanism that opens/closes a
+    // Modal in production) must never have applied — the modal's own tracked state stays at its
+    // predeclared initial value (false), never flipped to the queued mutation's value.
+    assertEquals(
+      dispatcher.get("confirm_modal", "open"),
+      false,
+      "onSettled (Modal open/close) must never fire on a queue/network rejection",
+    );
+  } finally {
+    __testOnly.setEnqueueRuntimeComponentCommandForTest(null);
     globalThis.fetch = originalFetch;
     schedulerTestOnly.resetCommandQueue();
   }
