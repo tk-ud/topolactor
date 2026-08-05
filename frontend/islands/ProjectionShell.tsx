@@ -49,20 +49,9 @@ import {
 } from "../runtime/projectionEntry.ts";
 import type { DispatchResponse, Emission, LayoutNode } from "../api/dispatch.ts";
 import type { RuntimeDispatchResultContext } from "../runtime/runtimeComponentAdapter.ts";
+import { resolveRuntimeDispatchSettlement } from "../runtime/runtimeDispatchSettlement.ts";
 import { RecommendNavigationIsland } from "../components/RecommendNavigationIsland.tsx";
 import { LayoutProjectionTree } from "../components/LayoutProjectionTree.tsx";
-
-/**
- * Round 29: extracts the manifest id an authored target_ref actually pointed at
- * ("manifest:<uuid>:<wiringKey>" — see projectionEntry.ts's own target_ref construction and
- * RuntimeDispatchSpec.targetRef's doc comment for the shape). Generic string parsing, never a
- * lookup table keyed by operation/nodeId/UUID.
- */
-function extractManifestIdFromTargetRef(targetRef: string | undefined): string | undefined {
-  if (!targetRef) return undefined;
-  const match = /^manifest:([^:]+):/.exec(targetRef);
-  return match ? match[1] : undefined;
-}
 
 /** Narrow an emission's layoutNodes into the WiringNode shape the runtime state/effect runner consumes. */
 function toRunnerWiringNodes(
@@ -393,32 +382,29 @@ export default function ProjectionShell(): JSX.Element {
         // operation/nodeId — so a confirmed write's failure gets the same explicit surfacing a
         // preview's failure does, matching round_27_28_settled_child_dispatch_result_authority's
         // own "(a) success/failure determination, (b) error display" description.
-        if (!result.success) {
+        //
+        // Round 3 (preview-gap audit): backend success:false, a missing Emission, and an
+        // authored-target_ref identity mismatch are now determined by the SAME shared settlement
+        // authority (resolveRuntimeDispatchSettlement) runtimeComponentFactory.ts's deferred
+        // localStateMutation gate also uses — a missing Emission on an otherwise-"successful"
+        // response previously fell through this handler as a silent no-op (no warning, though the
+        // Modal-mutation gate at least still correctly stayed closed on the OLD result.success
+        // check since a genuinely absent Emission never accompanies backend success in practice;
+        // the real gap this closes is that the two consumers now agree on ALL four rejection
+        // shapes — failure, missing Emission, identity mismatch, and queue rejection — instead of
+        // only sharing the trivial result.success=false case).
+        const settlement = resolveRuntimeDispatchSettlement(result, context);
+        if (!settlement.accepted) {
           console.error(
-            "[ProjectionShell] RUNTIME_DISPATCH_RESULT_FAILED:",
-            result.errors,
+            `[ProjectionShell] RUNTIME_DISPATCH_RESULT_${settlement.kind.toUpperCase()}:`,
+            settlement.reason,
           );
-          setRefreshWarning(
-            result.errors?.[0]?.message ?? "操作を完了できませんでした。",
-          );
+          setRefreshWarning(settlement.reason);
           return;
         }
-        if (!result.emission) return;
-        const dispatched = result.emission;
-        const expectedManifestId = extractManifestIdFromTargetRef(context.targetRef);
+        const dispatched = settlement.emission;
+        const expectedManifestId = settlement.expectedManifestId;
         if (expectedManifestId) {
-          if (dispatched.manifestId !== expectedManifestId) {
-            console.error(
-              "[ProjectionShell] RUNTIME_DISPATCH_RESULT_IDENTITY_MISMATCH:",
-              `authored target_ref resolved manifest "${expectedManifestId}" but the settled ` +
-                `response carries manifest "${dispatched.manifestId ?? "(absent)"}".`,
-            );
-            setRefreshWarning(
-              `書き込み結果の投影先が想定と一致しませんでした（想定: ${expectedManifestId}、` +
-                `実際: ${dispatched.manifestId ?? "(absent)"}）。`,
-            );
-            return;
-          }
           if (expectedManifestId !== adoptedManifestIdRef.current) {
             // Confirmed expected cross-manifest child response — never adopted into ae200's own
             // state. preview-gap round: a settled DRY-RUN preview's SUCCESS is a validation-only

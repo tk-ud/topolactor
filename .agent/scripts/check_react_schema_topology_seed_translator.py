@@ -2149,6 +2149,90 @@ def main():
             run_pairing_check(not_section_owned_action, not_section_owned_nodes, {"kind": "Modal", "key": "some_modal"}) == [],
         )
 
+        # 119a-119b (round 3, preview-gap audit): the RESOLVED Confirm button's own payloadFrom
+        # authority, not merely lane membership plus Modal position, is now checked.
+        confirm_missing_confirmed_action, confirm_missing_confirmed_nodes, confirm_missing_confirmed_parent = (
+            build_preview_confirm_pair(
+                confirm_payload_from={"groupName": "node:name_input.value"},
+            )
+        )
+        expect(
+            "119a. validate_admin_runtime_preview_action_pairing rejects a resolved Confirm button whose own payloadFrom omits confirmed=literal:true via ADMIN_RUNTIME_CONFIRM_ACTION_CONFIRMED_LITERAL_TRUE_REQUIRED (lane membership plus Modal position alone is not write-confirmation authority proof)",
+            "ADMIN_RUNTIME_CONFIRM_ACTION_CONFIRMED_LITERAL_TRUE_REQUIRED"
+            in run_pairing_check(
+                confirm_missing_confirmed_action, confirm_missing_confirmed_nodes, confirm_missing_confirmed_parent,
+            ),
+        )
+
+        confirm_leftover_dryrun_action, confirm_leftover_dryrun_nodes, confirm_leftover_dryrun_parent = (
+            build_preview_confirm_pair(
+                confirm_payload_from={
+                    "groupName": "node:name_input.value", "confirmed": "literal:true", "dryRun": "literal:true",
+                },
+            )
+        )
+        expect(
+            "119b. validate_admin_runtime_preview_action_pairing rejects a resolved Confirm button whose own payloadFrom carries a leftover dryRun flag via ADMIN_RUNTIME_CONFIRM_ACTION_EXTRA_AUTHORITY_FLAG_NOT_ALLOWED (a Confirm button must never carry any authority flag besides confirmed)",
+            "ADMIN_RUNTIME_CONFIRM_ACTION_EXTRA_AUTHORITY_FLAG_NOT_ALLOWED"
+            in run_pairing_check(
+                confirm_leftover_dryrun_action, confirm_leftover_dryrun_nodes, confirm_leftover_dryrun_parent,
+            ),
+        )
+
+        # 119c-119f (round 3, preview-gap audit): validate_table_display_columns_and_rows_source --
+        # displayColumns/rowsSource are now an SSOT-defined, independently-validated data carrier
+        # rather than a translator-hardcoded literal (see the split_flat_records_into_adoption_
+        # candidates topology_ui_table branch, which now reads record["rowsSource"] instead of
+        # unconditionally emitting "emission.data").
+        def run_table_check(node):
+            errs = []
+            translator_impl.validate_table_display_columns_and_rows_source(node, errs)
+            return [e["ruleId"] for e in errs]
+
+        malformed_columns_table = {
+            "kind": "Table", "key": "malformed_table", "_path": "$.test.malformed_table",
+            "displayColumns": [{"key": "groupName", "header": "Group name"}],
+            "_rawDisplayColumns": "groupName:Group name,badsegment_no_colon",
+            "rowsSource": "emission.data",
+        }
+        expect(
+            "119c. validate_table_display_columns_and_rows_source rejects a displayColumns segment missing the ':' key:header separator via TABLE_DISPLAY_COLUMNS_MALFORMED (never silently dropped even though parse_columns' own lenient parsing omits it from the returned column list)",
+            "TABLE_DISPLAY_COLUMNS_MALFORMED" in run_table_check(malformed_columns_table),
+        )
+
+        missing_rows_source_table = {
+            "kind": "Table", "key": "missing_rows_source_table", "_path": "$.test.missing_rows_source_table",
+            "displayColumns": [{"key": "groupName", "header": "Group name"}],
+            "_rawDisplayColumns": "groupName:Group name",
+            "rowsSource": "",
+        }
+        expect(
+            "119d. validate_table_display_columns_and_rows_source rejects a Table with displayColumns authored but no rowsSource via TABLE_ROWS_SOURCE_REQUIRED_WITH_DISPLAY_COLUMNS (a data-bound table needs both a column list and a rows source)",
+            "TABLE_ROWS_SOURCE_REQUIRED_WITH_DISPLAY_COLUMNS" in run_table_check(missing_rows_source_table),
+        )
+
+        invalid_rows_source_table = {
+            "kind": "Table", "key": "invalid_rows_source_table", "_path": "$.test.invalid_rows_source_table",
+            "displayColumns": [{"key": "groupName", "header": "Group name"}],
+            "_rawDisplayColumns": "groupName:Group name",
+            "rowsSource": "enum.groups",
+        }
+        expect(
+            "119e. validate_table_display_columns_and_rows_source rejects a rowsSource equal to a domain/table identifier (e.g. the Table's own `source` attribute value) rather than an emission.data JSON traversal path via TABLE_ROWS_SOURCE_INVALID",
+            "TABLE_ROWS_SOURCE_INVALID" in run_table_check(invalid_rows_source_table),
+        )
+
+        valid_table = {
+            "kind": "Table", "key": "valid_table", "_path": "$.test.valid_table",
+            "displayColumns": [{"key": "groupName", "header": "Group name"}],
+            "_rawDisplayColumns": "groupName:Group name",
+            "rowsSource": "emission.data",
+        }
+        expect(
+            "119f. validate_table_display_columns_and_rows_source positive control: well-formed displayColumns paired with a valid emission.data rowsSource produces zero errors, proving 119c-119e fail for the right reason and not because every input fails",
+            run_table_check(valid_table) == [],
+        )
+
         # 120-123: canonical-generation regression guard for the REAL admin-enum-ae200 fixture
         # (preview-gap round) -- proves generate-topology-seed alone (no manual extraction/merge
         # from a previously-hand-patched db/seed_empty.sql) reproduces enum_table's own

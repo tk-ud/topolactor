@@ -59,3 +59,4 @@
 2026-07-24T05:11:31Z 594822cf-274a-4f4d-ab4c-53a9db851988 admin-runtime-dispatch-lane-write-payload-capture implementation_change
 2026-07-27T01:08:16Z 1ce733b0-43e3-4c06-9f73-444f54a2ba38 admin-enum-write-projection implementation_change
 2026-08-04T16:40:16Z 53e73645-d7bc-4759-a2ed-a5bd39620421 ae200-preview-dryrun-confirmation-workflow implementation_change
+2026-08-05T04:01:23Z edb1c942-96b4-4f7b-94a9-41592b3ae105 ae200-preview-settlement-authority-round3 implementation_change

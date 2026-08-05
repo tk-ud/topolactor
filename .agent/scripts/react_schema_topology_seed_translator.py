@@ -423,7 +423,11 @@ def parse_columns(raw):
     tensor-only propsJson addition (previously invisible to canonical generation) into an
     authorable DSL attribute, so `generate-topology-seed` alone reproduces it -- see
     split_flat_records_into_adoption_candidates' topology_ui_table branch, which projects this
-    into the tensor node's own propsJson.columns."""
+    into the tensor node's own propsJson.columns. Lenient by design (malformed/empty/duplicate
+    segments are silently omitted from the returned list rather than raising here) -- this stays a
+    pure parse step; find_display_columns_issues below re-parses the SAME raw string strictly and
+    is what actually makes malformed input a blocking validation error
+    (validate_table_display_columns_and_rows_source), so nothing is silently lost end-to-end."""
     result = []
     if not raw:
         return result
@@ -436,6 +440,101 @@ def parse_columns(raw):
             continue
         result.append({"key": key.strip(), "header": header.strip()})
     return result
+
+
+ROWS_SOURCE_SHAPE_RE = re.compile(r"^emission\.data(\..+)?$")
+
+
+def find_display_columns_issues(raw):
+    """Round 3 (preview-gap audit): strict re-parse of the SAME raw displayColumns string
+    parse_columns consumes leniently, returning human-readable issue strings for every segment
+    parse_columns would otherwise silently drop (empty segment, missing ':' separator, empty key,
+    empty header) plus duplicate keys across the whole list. Used only by
+    validate_table_display_columns_and_rows_source to raise a blocking validation error -- never
+    used to filter parse_columns' own returned column list, which stays lenient/best-effort for
+    whatever WAS parseable."""
+    issues = []
+    if not raw:
+        return issues
+    seen_keys = set()
+    for pair in raw.split(","):
+        pair_stripped = pair.strip()
+        if not pair_stripped:
+            issues.append(f"empty displayColumns segment in '{raw}'")
+            continue
+        key, sep, header = pair_stripped.partition(":")
+        if not sep:
+            issues.append(
+                f"displayColumns segment '{pair_stripped}' is missing the required "
+                f"':' key:header separator"
+            )
+            continue
+        key = key.strip()
+        header = header.strip()
+        if not key:
+            issues.append(f"displayColumns segment '{pair_stripped}' has an empty key")
+            continue
+        if not header:
+            issues.append(f"displayColumns segment '{pair_stripped}' has an empty header")
+            continue
+        if key in seen_keys:
+            issues.append(f"displayColumns key '{key}' is duplicated")
+            continue
+        seen_keys.add(key)
+    return issues
+
+
+def validate_table_display_columns_and_rows_source(node, errors, path="$.root"):
+    """SSOT: docs/design/react-schema-topology-seed-translator-ssot.yaml
+    input_text_markup_grammar_contract.per_unit_grammar.table's displayColumns/rowsSource
+    attributes and exchange_mapping's Table -> topology_ui_table -> tensor propsJson/propBindings
+    projection. Fail-close, generic (never Table-key-specific):
+      1. Malformed/empty/duplicate displayColumns segments are a blocking validation error --
+         parse_columns' own lenient parsing never silently drops information end-to-end once this
+         check runs alongside it.
+      2. displayColumns and rowsSource must be authored TOGETHER -- a Table binding real data
+         needs both a column list and a data source; declaring only one is a genuine authoring
+         defect, not a partial-but-valid shape.
+      3. rowsSource, when present, must resolve to a shape
+         frontend/runtime/propBindingResolver.ts's own resolveRuntimeDataPath actually accepts
+         ("emission.data" or "emission.data.<path>") -- never the Table's own `source` attribute
+         value verbatim, which is a domain/table lineage identifier (e.g. "enum.groups"), not a
+         JSON traversal path into the dispatched Emission.
+    """
+    if node.get("kind") == "Table":
+        node_path = node.get("_path", path)
+        key = node.get("key")
+        raw_display_columns = node.get("_rawDisplayColumns")
+        if raw_display_columns:
+            for issue in find_display_columns_issues(raw_display_columns):
+                errors.append(err(
+                    "TABLE_DISPLAY_COLUMNS_MALFORMED", node_path, "blocking",
+                    f"Table '{key}' displayColumns is malformed: {issue}",
+                ))
+        display_columns = node.get("displayColumns") or []
+        rows_source = node.get("rowsSource") or ""
+        if display_columns and not rows_source:
+            errors.append(err(
+                "TABLE_ROWS_SOURCE_REQUIRED_WITH_DISPLAY_COLUMNS", node_path, "blocking",
+                f"Table '{key}' declares displayColumns but no rowsSource -- a data-bound table "
+                f"needs both a column list and a rows data source authored together",
+            ))
+        if rows_source and not display_columns:
+            errors.append(err(
+                "TABLE_DISPLAY_COLUMNS_REQUIRED_WITH_ROWS_SOURCE", node_path, "blocking",
+                f"Table '{key}' declares rowsSource but no displayColumns -- a data-bound table "
+                f"needs both a column list and a rows data source authored together",
+            ))
+        if rows_source and not ROWS_SOURCE_SHAPE_RE.match(rows_source):
+            errors.append(err(
+                "TABLE_ROWS_SOURCE_INVALID", node_path, "blocking",
+                f"Table '{key}' rowsSource '{rows_source}' must be \"emission.data\" or start "
+                f"with \"emission.data.\" (frontend/runtime/propBindingResolver.ts's own "
+                f"recognized prop-binding source shape) -- never a domain/table identifier such "
+                f"as this Table's own `source` attribute",
+            ))
+    for c in node.get("children") or []:
+        validate_table_display_columns_and_rows_source(c, errors, path)
 
 
 def build_node(kind, attrs, source_refs, known_gaps):
@@ -473,6 +572,16 @@ def build_node(kind, attrs, source_refs, known_gaps):
         node["source"] = attrs.get("source", "")
         node["display"] = attrs.get("display", "")
         node["displayColumns"] = parse_columns(attrs.get("displayColumns"))
+        # Kept alongside the parsed list so validate_table_display_columns_and_rows_source can
+        # strictly re-check the ORIGINAL string for malformed/duplicate/empty segments that
+        # parse_columns' own lenient parsing silently omitted -- never read for seed generation
+        # itself (that always uses the already-parsed "displayColumns" list above).
+        node["_rawDisplayColumns"] = attrs.get("displayColumns")
+        # rowsSource is the authored propBindings.rows.source value (round 3, preview-gap audit)
+        # -- a JSON traversal path into the dispatched Emission ("emission.data" or
+        # "emission.data.<path>"), never the `source` attribute above (a domain/table lineage
+        # identifier such as "enum.groups", unrelated to response shape).
+        node["rowsSource"] = attrs.get("rowsSource", "")
     if kind == "workflow":
         node["steps"] = []
     if kind == "modal":
@@ -1060,6 +1169,17 @@ def collect_nodes_by_key(node, out):
         collect_nodes_by_key(c, out)
 
 
+#: mutation_confirmation_contract's closed authority-flag vocabulary
+#: (admin-normal-surface-projection-seed-ssot.yaml, docs/design/admin-uibuilder-ui-structure-
+#: wiring-ssot.yaml dryrun_preview_gated_confirm_modal): payload.dryRun marks a non-mutating
+#: preview, payload.confirmed marks the actual write-confirmation authority. No other payloadFrom
+#: key carries mutation-authority semantics -- validate_admin_runtime_preview_action_pairing uses
+#: this closed set (never a single-key check) so a THIRD authority-shaped flag introduced later
+#: fails closed here too, rather than silently passing because only "dryRun"/"confirmed" were
+#: individually checked.
+AUTHORITY_FLAG_KEYS = frozenset({"dryRun", "confirmed"})
+
+
 def validate_admin_runtime_preview_action_pairing(node, nodes_by_key, errors, path="$.root", parent=None):
     """SECTION_OWNABLE_ACTION_LANES admits admin_runtime_dispatch_override_wiring directly under a
     Section ONLY as a dryRun preview trigger paired with a Modal-opening secondaryDisclosureAction
@@ -1068,7 +1188,8 @@ def validate_admin_runtime_preview_action_pairing(node, nodes_by_key, errors, pa
     the full safety shape actually holds for every Section-owned use of the lane:
       1. secondaryDisclosureAction exists with actionType=="openModal" specifically (never
          closeModal/toggleModal -- a preview trigger only ever OPENS a confirm surface).
-      2. eventBinding.payloadFrom declares dryRun="literal:true" and never a "confirmed" key --
+      2. eventBinding.payloadFrom declares dryRun="literal:true" and carries no OTHER
+         AUTHORITY_FLAG_KEYS member (never "confirmed", never a future third authority flag) --
          a preview must never carry write-confirmation authority.
       3. The targeted Modal contains EXACTLY ONE child Action whose own wiringLane is also
          admin_runtime_dispatch_override_wiring (the Confirm button) to pair against -- zero or
@@ -1078,13 +1199,23 @@ def validate_admin_runtime_preview_action_pairing(node, nodes_by_key, errors, pa
          business-field payloadFrom (every payloadFrom key except "dryRun") -- a preview that
          resolves a DIFFERENT manifest/layer/action or field set than what Confirm will actually
          write is a genuine authoring defect, not a cosmetic mismatch.
+      5. (round 3, preview-gap audit) That Confirm button's OWN payloadFrom declares
+         confirmed="literal:true" exactly -- Lane MEMBERSHIP plus a same-lane child under the
+         opened Modal is not itself proof that button actually carries write-confirmation
+         authority -- and carries no OTHER AUTHORITY_FLAG_KEYS member (never "dryRun", never a
+         future third authority flag): a Modal-owned admin_runtime Action that forgot
+         confirmed=literal:true, or that still carries a leftover dryRun flag, is a genuine
+         authoring defect this rule now catches structurally rather than trusting lane membership
+         alone as write-confirmation proof.
     Runs only for a Section-owned use of this lane (parent_kind == "Section"); the Confirm button
-    itself (Modal-owned, same lane) is unaffected -- its own secondaryDisclosureAction is
-    closeModal, never openModal, so it never reaches this rule's target-Modal cross-check, and it
-    is never itself Section-owned. The target Modal's own existence/kind is already checked
-    generically by validate_disclosure_targets (DISCLOSURE_TARGET_NODE_REQUIRED /
-    DISCLOSURE_TARGET_KIND_MISMATCH) -- not duplicated here; this function only proceeds to the
-    Confirm cross-check once a real Modal node is resolved.
+    itself (Modal-owned, same lane) is unaffected by checks 1-4 above -- its own
+    secondaryDisclosureAction is closeModal, never openModal, so it never reaches this rule's
+    target-Modal cross-check as the OUTER action, and it is never itself Section-owned. It is
+    reached and checked (rule 5) only as the RESOLVED Confirm target of a Section-owned preview
+    Action. The target Modal's own existence/kind is already checked generically by
+    validate_disclosure_targets (DISCLOSURE_TARGET_NODE_REQUIRED / DISCLOSURE_TARGET_KIND_MISMATCH)
+    -- not duplicated here; this function only proceeds to the Confirm cross-check once a real
+    Modal node is resolved.
     """
     if node.get("kind") == "Action":
         eb = node.get("eventBinding") or {}
@@ -1108,12 +1239,13 @@ def validate_admin_runtime_preview_action_pairing(node, nodes_by_key, errors, pa
                     f"Action '{key}' is Section-owned admin_runtime_dispatch_override_wiring (a preview "
                     f"trigger) but its own payloadFrom does not declare dryRun=literal:true",
                 ))
-            if "confirmed" in payload_from:
+            preview_extra_authority_flags = (set(payload_from) & AUTHORITY_FLAG_KEYS) - {"dryRun"}
+            if preview_extra_authority_flags:
                 errors.append(err(
                     "ADMIN_RUNTIME_PREVIEW_ACTION_CONFIRMED_NOT_ALLOWED", node_path, "blocking",
                     f"Action '{key}' is Section-owned admin_runtime_dispatch_override_wiring (a preview "
-                    f"trigger) but its own payloadFrom declares 'confirmed' -- a preview must never carry "
-                    f"write-confirmation authority",
+                    f"trigger) but its own payloadFrom declares {sorted(preview_extra_authority_flags)} "
+                    f"-- a preview must never carry any write-confirmation authority flag besides dryRun",
                 ))
             if secondary and secondary.get("actionType") == "openModal":
                 modal_node = nodes_by_key.get(secondary.get("targetNodeId"))
@@ -1155,6 +1287,33 @@ def validate_admin_runtime_preview_action_pairing(node, nodes_by_key, errors, pa
                                 f"{sorted(confirm_business_fields.items())} -- preview and confirm must "
                                 f"resolve the SAME fields from the SAME sources",
                             ))
+                        # round 3 (preview-gap audit): lane membership plus a resolved same-lane
+                        # Confirm child is not itself proof that button carries write-confirmation
+                        # authority -- its OWN payloadFrom must declare confirmed=literal:true
+                        # exactly, and never carry a leftover dryRun (or any other) authority flag.
+                        if confirm_payload_from.get("confirmed") != "literal:true":
+                            errors.append(err(
+                                "ADMIN_RUNTIME_CONFIRM_ACTION_CONFIRMED_LITERAL_TRUE_REQUIRED",
+                                node_path, "blocking",
+                                f"Action '{key}' opens Modal '{modal_node.get('key')}' whose Confirm "
+                                f"button '{confirm_action.get('key')}' does not declare "
+                                f"confirmed=literal:true in its own payloadFrom -- a Confirm button must "
+                                f"carry explicit write-confirmation authority, not merely lane membership "
+                                f"and Modal position",
+                            ))
+                        confirm_extra_authority_flags = (
+                            set(confirm_payload_from) & AUTHORITY_FLAG_KEYS
+                        ) - {"confirmed"}
+                        if confirm_extra_authority_flags:
+                            errors.append(err(
+                                "ADMIN_RUNTIME_CONFIRM_ACTION_EXTRA_AUTHORITY_FLAG_NOT_ALLOWED",
+                                node_path, "blocking",
+                                f"Action '{key}' opens Modal '{modal_node.get('key')}' whose Confirm "
+                                f"button '{confirm_action.get('key')}' declares "
+                                f"{sorted(confirm_extra_authority_flags)} in its own payloadFrom -- a "
+                                f"Confirm button must never carry any write-confirmation authority flag "
+                                f"besides confirmed (e.g. a leftover dryRun)",
+                            ))
     for c in node.get("children") or []:
         validate_admin_runtime_preview_action_pairing(c, nodes_by_key, errors, path, parent=node)
 
@@ -1180,7 +1339,7 @@ KIND_SPECIFIC_CONSUMED_KEYS = {
     "Section": {"sectionKind"},
     "Form": {"target", "mode", "fields", "actions"},
     "Field": {"control", "required"},
-    "Table": {"source", "display", "displayColumns"},
+    "Table": {"source", "display", "displayColumns", "rowsSource", "_rawDisplayColumns"},
     "Workflow": {"steps"},
     "Modal": {"componentKind", "title", "body"},
     "Step": {"eventBinding", "actionRef", "runtimeInteractions", "idempotencyPolicy", "lifecycleDispatchConfirmed", "debounceMs", "secondaryDisclosureAction"},
@@ -1260,6 +1419,11 @@ def convert_node_to_seed_record(node, schema_to_seed_map, target_surface, loss_e
         # key:Header,key2:Header2 attribute list -- see parse_columns and
         # split_flat_records_into_adoption_candidates' topology_ui_table branch.
         record["displayColumns"] = node.get("displayColumns") or []
+        # round 3 (preview-gap audit): the authored propBindings.rows.source JSON traversal path
+        # (paired with displayColumns by validate_table_display_columns_and_rows_source) -- never
+        # derived from "source" above, which is a domain/table lineage identifier, not a response
+        # shape path.
+        record["rowsSource"] = node.get("rowsSource") or ""
     elif react_kind == "Workflow":
         record["workflowKey"] = record["key"]
         record["steps"] = [c for c in converted_children if c["recordType"] == "topology_ui_workflow_step"]
@@ -1713,19 +1877,25 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
 
         if record_type == "topology_ui_table" and record.get("displayColumns"):
             # preview-gap round: promotes the Table's static display shape (columns list, the
-            # emission.data-bound rows propBinding every admin_runtime read-circuit table this
-            # translator emits shares -- round 23's own LayoutSchemaTensorComposer
-            # BuildNodeLocalDataByNodeId merge is what actually consumes this at Compose time)
-            # from a hand-patched db/seed_empty.sql-only addition (round 14) into canonical
-            # generation. Same NodeLocalData-by-own-nodeId convention as the Modal propsJson
-            # above -- a Table is never itself a Form/Section owner, so this is always keyed at
-            # its own this_resolved_key, never an owning_form_key lookup.
+            # rows propBinding every admin_runtime read-circuit table this translator emits
+            # shares -- round 23's own LayoutSchemaTensorComposer BuildNodeLocalDataByNodeId merge
+            # is what actually consumes this at Compose time) from a hand-patched
+            # db/seed_empty.sql-only addition (round 14) into canonical generation. Same
+            # NodeLocalData-by-own-nodeId convention as the Modal propsJson above -- a Table is
+            # never itself a Form/Section owner, so this is always keyed at its own
+            # this_resolved_key, never an owning_form_key lookup.
+            # round 3 (preview-gap audit): propBindings.rows.source is the AUTHORED rowsSource
+            # attribute (validate_table_display_columns_and_rows_source enforces it is present
+            # and shaped correctly whenever displayColumns is authored) -- never a translator-
+            # hardcoded literal. The "emission.data" fallback only matters when validation was
+            # skipped/bypassed upstream (e.g. a hand-authored react schema candidate fed directly
+            # into generate-topology-seed); it is not the normal, validated path.
             tensor_nodes.append({
                 "nodeId": this_resolved_key,
                 "nodeKind": "catalog_component",
                 "runtimeInteractions": [],
                 "propsJson": json.dumps({"table": None, "columns": record["displayColumns"]}),
-                "propBindings": {"rows": {"source": "emission.data"}},
+                "propBindings": {"rows": {"source": record.get("rowsSource") or "emission.data"}},
             })
 
         if record_type in ("topology_ui_action", "topology_ui_workflow_step"):
@@ -2369,6 +2539,7 @@ def cmd_generate_react_schema(args):
         nodes_by_key = {}
         collect_nodes_by_key(root_node, nodes_by_key)
         validate_admin_runtime_preview_action_pairing(root_node, nodes_by_key, tree_errors)
+        validate_table_display_columns_and_rows_source(root_node, tree_errors)
         output["validationErrors"].extend(tree_errors)
 
     source_refs = envelope.get("sourceYamlRefs") or []
@@ -2514,6 +2685,7 @@ def cmd_generate_topology_seed(args):
     nodes_by_key = {}
     collect_nodes_by_key(root_node, nodes_by_key)
     validate_admin_runtime_preview_action_pairing(root_node, nodes_by_key, tree_errors)
+    validate_table_display_columns_and_rows_source(root_node, tree_errors)
     output["validationErrors"].extend(tree_errors)
 
     schema_to_seed_map = dig(ssot_root, "exchange_mapping", "schema_to_seed_record_mapping") or {}

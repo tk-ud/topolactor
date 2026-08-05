@@ -126,6 +126,7 @@ import type {
   RuntimeDispatchResultContext,
 } from "./runtimeComponentAdapter.ts";
 import type { DispatchResponse } from "../api/dispatch.ts";
+import { resolveRuntimeDispatchSettlement } from "./runtimeDispatchSettlement.ts";
 import { resolvePayloadFrom } from "./payloadFromResolver.ts";
 import { applyGuardedLocalStateMutation } from "./uiEventEffectRunner.ts";
 import {
@@ -444,7 +445,7 @@ function isTruthyDryRunPayloadFlag(payload: Record<string, unknown> | undefined)
 function dispatchRuntimeComponentCommandAndForwardResult(
   spec: RuntimeComponentSpec,
   dispatchSpec: Parameters<typeof enqueueRuntimeComponentCommand>[0],
-  onSettled?: (result: DispatchResponse) => void,
+  onSettled?: (result: DispatchResponse, context: RuntimeDispatchResultContext) => void,
 ): void {
   // Round 29: the authored targetRef actually dispatched (never inferred/guessed downstream) —
   // forwarded verbatim so a caller can confirm a settled response landed on the manifest that
@@ -458,12 +459,28 @@ function dispatchRuntimeComponentCommandAndForwardResult(
   enqueueRuntimeComponentCommand(dispatchSpec)
     .then((result) => {
       spec.onRuntimeDispatchResult?.(result, context);
-      onSettled?.(result);
+      onSettled?.(result, context);
     })
     .catch((err) => {
+      // preview-gap round 3: a queue/network-level rejection (never a normal {success:false}
+      // response) previously reached NEITHER onRuntimeDispatchResult NOR onSettled — Modal state
+      // correctly never mutated (onSettled never fired), but no warning ever reached the DOM
+      // either. Forwarding a synthetic failure result through the SAME onRuntimeDispatchResult
+      // channel a real {success:false} response uses lets ProjectionShell's shared settlement
+      // authority (resolveRuntimeDispatchSettlement) surface the SAME non-destructive warning
+      // uniformly, without a second ad-hoc error-display path. onSettled (the localStateMutation
+      // gate) is deliberately NOT called here — a queue rejection never opens/closes a Modal.
       console.error(
         "[runtimeComponentFactory] admin_runtime dispatch queue rejected:",
         err,
+      );
+      const message = err instanceof Error ? err.message : String(err);
+      spec.onRuntimeDispatchResult?.(
+        {
+          success: false,
+          errors: [{ message: `送信キューへの登録に失敗しました: ${message}` }],
+        },
+        context,
       );
     });
 }
@@ -535,8 +552,19 @@ function emitBoundEvent(
   const deferLocalStateMutationToDispatchSuccess = Boolean(
     binding.runtimeDispatch && binding.localStateMutation,
   );
-  const applyDeferredLocalStateMutationOnSuccess = (result: DispatchResponse) => {
-    if (!result.success) return;
+  // preview-gap round 3: gates on the SAME shared settlement authority
+  // (resolveRuntimeDispatchSettlement) ProjectionShell's handleRuntimeDispatchResult uses for its
+  // own error display / canonical-reread decision — never on result.success alone. Before this,
+  // a success response carrying a manifestId that did not match the authored target_ref, or
+  // carrying no Emission at all, still opened/closed a preview/confirm Modal here, even though
+  // ProjectionShell's own handler would separately have logged it as an anomaly: the two
+  // consumers of the SAME settled result disagreed about whether it was acceptable. A single
+  // settlement authority shared by both closes that gap.
+  const applyDeferredLocalStateMutationOnSuccess = (
+    result: DispatchResponse,
+    context: RuntimeDispatchResultContext,
+  ) => {
+    if (!resolveRuntimeDispatchSettlement(result, context).accepted) return;
     if (!binding.localStateMutation || !spec.localStateStore) return;
     const mutationResult = applyGuardedLocalStateMutation(
       spec.localStateStore,

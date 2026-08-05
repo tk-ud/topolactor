@@ -1506,6 +1506,39 @@ PR #600（round14〜24、コミット履歴は上記の各round実装記録を�
 - 「fieldがpayloadに存在する」ことを「fresh resolution（最新値からの再解決）」の証明として扱う——A→Bのように値を変更した上でConfirm payloadが新しい値を運ぶことを実際に確認すること。
 - CI green（テストsuiteの実行結果のみ）を根拠に、本Bundle・subBundle・PRをImplemented/mergeableと判断する。
 
+### admin-enum subBundle 実装記録（2026-08-05 round 32 — PR #601 audit round 3指摘の4件を同一Bundle scope内で解消）
+
+**round32の指示（audit round 3）**: (1) 想定外manifestまたはEmission欠落を伴うsuccess responseでもModal mutationが適用されること（`applyDeferredLocalStateMutationOnSuccess`が`result.success`のみで判定し、`ProjectionShell.handleRuntimeDispatchResult`のidentity/Emission判定と分離していた）、(2) `displayColumns`DSLと`propBindings.rows.source`が翻訳器SSOT未定義のまま、`rows.source`が`"emission.data"`へ無条件translator hardcodeされていたこと、(3) `validate_admin_runtime_preview_action_pairing`がConfirm button自身の`confirmed:literal:true`を必須化していなかったこと（lane所属＋Modal内位置のみで書き込み権限ありと扱っていた）、(4) 全7 confirmed write後のae200 canonical reread「ちょうど1回」証明がdelete_group 1件のみで、残り6 operationへ未展開だったこと——の4件を解消した。
+
+**1. 単一settlement authorityの新設**: `frontend/runtime/runtimeDispatchSettlement.ts`を新設し、`resolveRuntimeDispatchSettlement(result, context)`を、`ProjectionShell.tsx`の`handleRuntimeDispatchResult`（error表示/canonical reread判定）と`runtimeComponentFactory.ts`の`applyDeferredLocalStateMutationOnSuccess`（Modal open/close gate）の両方が呼ぶ、唯一の受理判定として実装した。backend `success:false`／`emission`欠落／authored `target_ref`が解決したmanifestIdとの不一致——の3種を`accepted:false`として一律拒否する。`extractManifestIdFromTargetRef`をProjectionShell.tsxのローカル定義からこの新モジュールへ移設し、両消費者が同一ロジックを共有するようにした。`runtimeComponentFactory.ts`の`dispatchRuntimeComponentCommandAndForwardResult`のcatch節（queue/network rejection）も、従来はconsole.errorのみで`onRuntimeDispatchResult`へ到達しなかったが、synthetic failure resultを同じchannelへ転送するよう変更し、queue rejectionもProjectionShell側の同一warning表示経路を通るようにした（Modal mutation gate側の`onSettled`は従来通り呼ばれず、Modal状態は変更されない）。
+
+**2. displayColumns/rowsSourceのSSOT定義化**: `docs/design/react-schema-topology-seed-translator-ssot.yaml`の`input_text_markup_grammar_contract`へ`table_display_and_rows_binding_attributes`/`table_display_and_rows_binding_validation`を新設し、`[table ... displayColumns=.. rowsSource=..]`の文法・`rowsSource`が`frontend/runtime/propBindingResolver.ts`の`isRecognizedPropBindingSource`と同一shape（`"emission.data"`または`"emission.data.<path>"`）である要件・displayColumns/rowsSourceの対必須（片方のみは blocking error）を明文化した。`react_schema_topology_seed_translator.py`へ`find_display_columns_issues()`（malformed/empty/duplicate key segmentの厳格re-parse）と`validate_table_display_columns_and_rows_source()`（`TABLE_DISPLAY_COLUMNS_MALFORMED`/`TABLE_ROWS_SOURCE_REQUIRED_WITH_DISPLAY_COLUMNS`/`TABLE_DISPLAY_COLUMNS_REQUIRED_WITH_ROWS_SOURCE`/`TABLE_ROWS_SOURCE_INVALID`の4種fail-close validation）を新設し、`generate-react-schema`/`generate-topology-seed`双方の検証経路へ配線した。`split_flat_records_into_adoption_candidates()`のtopology_ui_table分岐を、`propBindings.rows.source`のhardcoded literalから`record.get("rowsSource")`読み取りへ変更した（フォールバックの`"emission.data"`はvalidationがスキップされた場合のみの安全網であり、通常経路ではない）。`admin-enum-ae200.input.json`の`enum_table`宣言へ`rowsSource=emission.data`を追加し（backend`AdminRuntime.DataEnumDictionaryListGroupsAsync`が`emission.data`直下へ配列を返す実shapeと一致することを確認済み——`enum_table`の`source=enum.groups`という属性はDB tableの系譜識別子であり、JSON traversal pathとは無関係であることを`AdminEnumHubRelationUiProjectionLiveDbTests.cs`の既存assertion経由で確認した）、`generate-react-schema`→`generate-topology-seed`を実行しzero validationErrorsを確認、生成物（ae206 tensor）が既存の`db/seed_empty.sql`と構造的に完全一致（0 diff）であることをPythonスクリプトで確認した。ae204（layout_schema_json、design-time record）は新フィールド`rowsSource`の追加分のみ差分があったため、生成物のverbatim値でtranscribeした。
+
+**3. Confirm button自身のwrite-confirmation authority検証**: `validate_admin_runtime_preview_action_pairing`へ、解決済みConfirm buttonの`payloadFrom`が`confirmed="literal:true"`を厳密に宣言していること（`ADMIN_RUNTIME_CONFIRM_ACTION_CONFIRMED_LITERAL_TRUE_REQUIRED`）と、`dryRun`を含む他のauthority flagを一切持たないこと（`ADMIN_RUNTIME_CONFIRM_ACTION_EXTRA_AUTHORITY_FLAG_NOT_ALLOWED`）を追加した。`AUTHORITY_FLAG_KEYS = frozenset({"dryRun", "confirmed"})`という閉じた語彙をpreview/confirm両側の`set`差分チェックへ使うよう既存2条件（`ADMIN_RUNTIME_PREVIEW_ACTION_CONFIRMED_NOT_ALLOWED`）もリファクタし、将来3つ目のauthority flagが追加された場合も両側で自動的にfail-closeするようにした。
+
+**4. 全7 operationのcanonical reread「ちょうど1回」証明**: `frontend/tests/projectionShellAdminRuntimeWritePayloadCapture.test.ts`へ`CONFIRM_MODAL_SCENARIOS`table-drivenの新規test（round 3 canonical reread proof）を追加し、7 operation全部について、Confirm click後の総dispatch数が「Confirm dispatch自身＋canonical reread 1回」の合計2件ちょうどであること・Confirm dispatch自体は1回のみ（resendなし）・Confirm応答自身のEmission（child manifestの canary データ）がDOMへ絶対に現れないこと・canonical rereadが実際に新しいデータ（`AlphaAfterWrite`）をDOMへ反映することの4点を機械的に証明した。加えて、settlement authorityの実際の挙動を証明する新規negative test 2件（wrong manifest/missing Emission/backend success:false/queue rejectionの4 shape × preview/confirmの2方向）を追加し、既存fixture群（`buildMockScenario`の20箇所のfallback応答）を、settlement authorityがEmission存在を要求するようになったことに対応する形で、cross-manifest呼び出しには現実的なEmissionを、same-manifest/no-override呼び出しには従来通りのbare no-op応答を返すよう修正した（`fallbackDispatchResponse`ヘルパー新設）。
+
+**test証明の全体像**: frontend `deno check`clean（25 files）。`projectionShellAdminRuntimeWritePayloadCapture.test.ts`の全32 test（既存23＋新規9）を`--filter`で個別実行し、全てAssertionErrorゼロを確認（**正直な既知の制限、round30/31から変わらず**: このsandbox環境ではファイル全体を一括実行すると`Leaks detected`という環境依存resource sanitizer誤検出で失敗表示になる——baseline（本round着手前のコミット8771bc3）とgit stash比較し、同一の失敗パターンであることを確認済み。個別`--filter`実行では`AssertionError`が一件も出ないことを全32 testで確認した——新規failureは皆無）。`deno test frontend/tests/`全体（2050 test）でも`AssertionError`は0件（74件は同種のLeak誤検出のみ）。backend: 実PostgreSQL 16（CI同一の21 SQLファイル適用、`TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY=1`）経由で`backend_runtime_tests`/`backend_db_continuity_tests`（`AdminEnumHubRelationUiProjectionLiveDbTests`含む）全pass。`db/seed_empty.sql`の変更分がCIと同一手順のpsql適用で問題なく通ることも確認した。python translator check: 194/195 pass（新規8 test含む、1件は"7a"——git stash比較で本round着手前から存在する既知flakeと再確認済み）。`.agent/tools/agent-ui-local-test summary --worktype implementation_change`はpass。
+
+**未着手のまま残る内容（round30/31から変わらず、正直な記録）**:
+- items browse UX（round22から未着手）
+- 完全なnegative boundary matrix（全7 operation × missing record／duplicate index／referenced delete／role mismatch等）のpreview軸への横展開
+- `enum_confirm_form`/`enum_form`/`enum_confirm_button`の再監査
+- `AdminEnumsRoster.tsx`/`/admin/enums`のthin_projection_wrapper route撤去
+
+これらを次roundへ明示的に引き継ぐ。
+
+### Governance NG boundary追記（round 32）
+
+- Modal open/close（`applyDeferredLocalStateMutationOnSuccess`）を`result.success`のみで判定し、`ProjectionShell`側のidentity/Emission判定と分離したまま維持する——両者は`resolveRuntimeDispatchSettlement`という単一authorityを共有すること。
+- 想定外manifestまたはEmission欠落を伴う`success:true`応答でModal state（open/close）を変更する。
+- queue/network rejectionをconsole.errorのみで処理し、DOM上のwarning表示を伴わない。
+- `displayColumns`をSSOT未定義のDSL属性のまま残す、または`rowsSource`をTableの`source`属性（domain識別子）から導出する。
+- 構文不正な`displayColumns`セグメント（`:`欠落・空key・空header・重複key）を`parse_columns`の寛容パースのみに任せ、validation層で検知しない。
+- Confirm buttonをlane所属＋Modal内位置のみで書き込み権限ありと扱い、自身の`payloadFrom.confirmed=literal:true`を検証しない。
+- delete_group 1件のcanonical reread「ちょうど1回」証明をもって「全7 operation証明済み」と宣言する。
+- CI green（テストsuiteの実行結果のみ）を根拠に、本Bundle・subBundle・PRをImplemented/mergeableと判断する。
+
 ---
 
 ## Bundle `admin-runtime-operation-dispatch-lane-determination`

@@ -90,6 +90,60 @@ type MockScenario = {
   capturedDispatchBodies: Record<string, unknown>[];
 };
 
+/**
+ * Round 3 (preview-gap audit, settlement authority): production ManifestDispatcher always
+ * resolves an Emission for any manifest-resolved dispatch (see api/dispatch.ts's Emission.manifestId
+ * doc comment) — a real backend response never carries success:true with no emission at all. Before
+ * this round, most of this file's fallback mock responses were the unrealistic
+ * `{ success: true, errors: [] }` (no emission), which the OLD Modal-mutation gate tolerated because
+ * it only checked result.success. The new shared settlement authority
+ * (runtime/runtimeDispatchSettlement.ts's resolveRuntimeDispatchSettlement, used by BOTH
+ * ProjectionShell's handleRuntimeDispatchResult and runtimeComponentFactory's deferred
+ * localStateMutation gate) requires a present Emission to accept a settled result — matching real
+ * backend behavior — so every fallback response a test does not otherwise care about must now carry
+ * a plausible Emission too, or it would (correctly) fail settlement and block Modal open/close.
+ * manifestId is derived from the REQUEST's own payload.target_ref.
+ *
+ * Scoped to CROSS-manifest (child) dispatches only — a preview/confirm admin_runtime override
+ * always targets a dedicated child manifest (ae210/ae220/ae230/...), never ae200 itself. A
+ * same-manifest or no-target_ref call (e.g. enum_table's own row-select list_groups re-read, or
+ * ae200's own canonical-reread redispatch) is deliberately left at the pre-existing bare
+ * `{success:true, errors:[]}` shape: round_27_28_settled_child_dispatch_result_authority's own
+ * comment already documents that a same-manifest result through this handler is not the shape any
+ * seeded write override in practice produces, and round-3's settlement-authority fix is scoped to
+ * the cross-manifest preview/confirm Modal-mutation gate, not to this file's incidental same-manifest
+ * read-circuit calls; giving those calls a synthesized Emission would make ProjectionShell's SEPARATE
+ * same-manifest direct-adoption path (confirmProjectionEntryEmission + setEmission/setSpecs) replace
+ * the already-rendered DOM tree with the synthesized emission's own (empty) layoutNodes, which is a
+ * fixture-realism regression this file's other assertions do not expect.
+ */
+function extractManifestIdFromRequestBody(body: Record<string, unknown>): string | undefined {
+  const payload = body.payload as Record<string, unknown> | undefined;
+  const targetRef = payload?.target_ref;
+  if (typeof targetRef !== "string") return undefined;
+  const match = /^manifest:([^:]+):/.exec(targetRef);
+  return match ? match[1] : undefined;
+}
+
+function fallbackDispatchResponse(
+  body: Record<string, unknown>,
+): Record<string, unknown> {
+  const manifestId = extractManifestIdFromRequestBody(body);
+  if (!manifestId || manifestId === ADMIN_ENUM_MANIFEST_ID) {
+    return { success: true, errors: [] };
+  }
+  return {
+    success: true,
+    errors: [],
+    emission: {
+      manifestId,
+      layoutId: "layout-fallback-generic-emission",
+      projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+      layoutNodes: [],
+    },
+  };
+}
+
 /** Builds a mock fetch that answers auth probe/refresh + routes /api/dispatch
  * calls through a caller-supplied responder keyed by call index (1-based). */
 function buildMockScenario(
@@ -211,7 +265,7 @@ Deno.test(
       FakeEventSource;
     const originalFetch = globalThis.fetch;
 
-    const scenario = buildMockScenario((callIndex) => {
+    const scenario = buildMockScenario((callIndex, body) => {
       if (callIndex === 1) {
         return {
           success: true,
@@ -251,7 +305,7 @@ Deno.test(
         };
       }
       // Lane 2 write dispatch triggered by the simulated button click.
-      return { success: true, errors: [] };
+      return fallbackDispatchResponse(body);
     });
     globalThis.fetch = scenario.fetch;
 
@@ -316,7 +370,7 @@ Deno.test(
     const AE210_CREATE_GROUP_TARGET_REF =
       "manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group";
 
-    const scenario = buildMockScenario((callIndex) => {
+    const scenario = buildMockScenario((callIndex, body) => {
       if (callIndex === 1) {
         return {
           success: true,
@@ -367,7 +421,7 @@ Deno.test(
         };
       }
       // The override dispatch triggered by the simulated button click.
-      return { success: true, errors: [] };
+      return fallbackDispatchResponse(body);
     });
     globalThis.fetch = scenario.fetch;
 
@@ -501,13 +555,13 @@ Deno.test(
       ],
     };
 
-    const scenario = buildMockScenario((callIndex) => {
+    const scenario = buildMockScenario((callIndex, body) => {
       if (callIndex === 1) return { success: true, emission: initialEmission };
       if (callIndex === 3) {
         return { success: true, emission: refreshedEmission };
       }
       // callIndex 2 (first click's Lane 2 write) — succeeds normally.
-      return { success: true, errors: [] };
+      return fallbackDispatchResponse(body);
     });
     globalThis.fetch = scenario.fetch;
 
@@ -662,7 +716,7 @@ Deno.test(
       };
     }
 
-    const scenario = buildMockScenario((callIndex) => {
+    const scenario = buildMockScenario((callIndex, body) => {
       if (callIndex === 1 || callIndex === 3) {
         // callIndex 1: initial mount. callIndex 3: SSE-triggered refresh —
         // same layout shape (both nodes survive), simulating an ordinary
@@ -670,7 +724,7 @@ Deno.test(
         return { success: true, emission: twoInputEmission() };
       }
       // callIndex 2/4: Lane 2 write dispatches — succeed normally.
-      return { success: true, errors: [] };
+      return fallbackDispatchResponse(body);
     });
     globalThis.fetch = scenario.fetch;
 
@@ -764,11 +818,11 @@ Deno.test(
     (globalThis as unknown as { EventSource: unknown }).EventSource =
       FakeEventSource;
     FakeEventSource.instances = [];
-    const remountScenario = buildMockScenario((callIndex) => {
+    const remountScenario = buildMockScenario((callIndex, body) => {
       if (callIndex === 1) {
         return { success: true, emission: twoInputEmission() };
       }
-      return { success: true, errors: [] };
+      return fallbackDispatchResponse(body);
     });
     globalThis.fetch = remountScenario.fetch;
     try {
@@ -902,7 +956,7 @@ Deno.test(
       };
     }
 
-    const scenario = buildMockScenario((callIndex) => {
+    const scenario = buildMockScenario((callIndex, body) => {
       if (callIndex === 1) {
         // Initial mount: no record loaded yet, no preview data.
         return { success: true, emission: emissionWithPreview(undefined) };
@@ -916,7 +970,7 @@ Deno.test(
         return { success: true, emission: emissionWithPreview("record_b") };
       }
       // callIndex 3 and 5: Confirm clicks — succeed normally (no emission needed).
-      return { success: true, errors: [] };
+      return fallbackDispatchResponse(body);
     });
     globalThis.fetch = scenario.fetch;
 
@@ -1096,13 +1150,13 @@ Deno.test(
       };
     }
 
-    const scenario = buildMockScenario((callIndex) => {
+    const scenario = buildMockScenario((callIndex, body) => {
       if (callIndex === 1) {
         return { success: true, emission: tableAndDeleteButtonEmission() };
       }
       // callIndex 2: the row select's own list_groups re-dispatch (harmless, idempotent read).
       // callIndex 3: the delete button's override dispatch.
-      return { success: true, errors: [] };
+      return fallbackDispatchResponse(body);
     });
     globalThis.fetch = scenario.fetch;
 
@@ -1139,11 +1193,18 @@ Deno.test(
       );
 
       simulateClick(buttonEl!);
-      await waitFor(() => scenario.capturedDispatchBodies.length >= 3);
+      // Round 3 (preview-gap audit, settlement authority): the confirmed write's settled result
+      // now carries a realistic Emission (manifestId ae230, matching its own authored target_ref)
+      // instead of the old fixture's unrealistic no-emission fallback — so
+      // round_27_28_settled_child_dispatch_result_authority's OWN documented behavior (a settled
+      // cross-manifest write's success re-reads ae200's own canonical identity) now actually
+      // fires, adding a 4th dispatch (the canonical reread) this test does not otherwise inspect.
+      await waitFor(() => scenario.capturedDispatchBodies.length >= 4);
       assertEquals(
         scenario.capturedDispatchBodies.length,
-        3,
-        "expected the row-select dispatch plus the delete button's override dispatch",
+        4,
+        "expected the row-select dispatch, the delete button's override dispatch, and the " +
+          "confirmed write's own canonical-reread redispatch",
       );
 
       const deleteDispatchBody = scenario.capturedDispatchBodies[2];
@@ -1188,7 +1249,7 @@ Deno.test(
     const AE230_DELETE_GROUP_TARGET_REF =
       "manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group";
 
-    const scenario = buildMockScenario((callIndex) => {
+    const scenario = buildMockScenario((callIndex, body) => {
       if (callIndex === 1) {
         return {
           success: true,
@@ -1238,7 +1299,7 @@ Deno.test(
           },
         };
       }
-      return { success: true, errors: [] };
+      return fallbackDispatchResponse(body);
     });
     globalThis.fetch = scenario.fetch;
 
@@ -1464,7 +1525,7 @@ Deno.test(
       FakeEventSource;
     const originalFetch = globalThis.fetch;
 
-    const scenario = buildMockScenario((callIndex) => {
+    const scenario = buildMockScenario((callIndex, body) => {
       if (callIndex === 1) {
         return {
           success: true,
@@ -1478,7 +1539,7 @@ Deno.test(
           },
         };
       }
-      return { success: true, errors: [] };
+      return fallbackDispatchResponse(body);
     });
     globalThis.fetch = scenario.fetch;
 
@@ -1570,7 +1631,7 @@ Deno.test(
       FakeEventSource;
     const originalFetch = globalThis.fetch;
 
-    const scenario = buildMockScenario((callIndex) => {
+    const scenario = buildMockScenario((callIndex, body) => {
       if (callIndex === 1) {
         return {
           success: true,
@@ -1587,7 +1648,7 @@ Deno.test(
       }
       // The confirm dispatch (only dispatch after the initial entry — row selects reuse
       // enum_table's own tracked value locally, no server round trip in this scenario).
-      return { success: true, errors: [] };
+      return fallbackDispatchResponse(body);
     });
     globalThis.fetch = scenario.fetch;
 
@@ -1858,7 +1919,7 @@ Deno.test(
         };
       }
       // Row-select reissue (enum_dictionary/list_groups) — irrelevant to this test, no-op.
-      return { success: true, errors: [] };
+      return fallbackDispatchResponse(body);
     });
     globalThis.fetch = scenario.fetch;
 
@@ -1982,7 +2043,7 @@ Deno.test(
           emission: { manifestId: CHILD_MANIFEST_ID, data: { ok: true } },
         };
       }
-      return { success: true, errors: [] };
+      return fallbackDispatchResponse(body);
     });
     globalThis.fetch = scenario.fetch;
 
@@ -2123,7 +2184,7 @@ Deno.test(
           emission: { manifestId: CHILD_MANIFEST_ID, data: { ok: true } },
         };
       }
-      return { success: true, errors: [] };
+      return fallbackDispatchResponse(body);
     });
     globalThis.fetch = scenario.fetch;
 
@@ -2563,7 +2624,7 @@ for (const config of CONFIRM_MODAL_SCENARIOS) {
             emission: { manifestId: targetManifestId, data: { ok: true, dryRun: true, valid: true } },
           };
         }
-        return { success: true, errors: [] };
+        return fallbackDispatchResponse(body);
       });
       globalThis.fetch = scenario.fetch;
 
@@ -2862,12 +2923,28 @@ Deno.test(
         };
       }
       if (layer === "enum_dictionary" && action === "delete_group") {
+        // Round 3 (preview-gap audit, settlement authority): the PREVIEW dispatch (dryRun) must
+        // resolve the CORRECT manifest (ae230) so the shared settlement authority accepts it and
+        // the Modal actually opens — the settlement authority now validates identity for the
+        // Modal-open gate too, not just for handleRuntimeDispatchResult's own classification (the
+        // OLD comment on this test claimed opening "gates purely on result.success... independent
+        // of handleRuntimeDispatchResult's own identity classification", which was exactly the gap
+        // this round closes). Only the CONFIRM dispatch (confirmed:true) returns the wrong
+        // manifestId, so the identity anomaly this test is actually about is observed on Confirm,
+        // after the Modal has legitimately opened — matching what the assertions below check.
+        const payload = body.payload as Record<string, unknown> | undefined;
+        if (payload?.confirmed === "true" || payload?.confirmed === true) {
+          return {
+            success: true,
+            emission: { manifestId: UNEXPECTED_MANIFEST_ID, data: { ok: true } },
+          };
+        }
         return {
           success: true,
-          emission: { manifestId: UNEXPECTED_MANIFEST_ID, data: { ok: true } },
+          emission: { manifestId: "00000000-0000-0000-0000-0000000ae230", data: {} },
         };
       }
-      return { success: true, errors: [] };
+      return fallbackDispatchResponse(body);
     });
     globalThis.fetch = scenario.fetch;
 
@@ -2883,10 +2960,10 @@ Deno.test(
         return deleteButtonEl !== null;
       });
       // preview-gap round: select the row FIRST -- Delete's own preview also needs groupId. Its
-      // preview dispatch ALSO matches layer=enum_dictionary/action=delete_group above (so it
-      // ALSO receives the same wrong-manifest response) -- opening still proceeds because the
-      // deferred openModal mutation gates purely on result.success (true here), independent of
-      // handleRuntimeDispatchResult's own identity classification.
+      // preview dispatch ALSO matches layer=enum_dictionary/action=delete_group above, but (round
+      // 3) resolves the CORRECT ae230 manifest, so the shared settlement authority accepts it and
+      // the Modal legitimately opens -- only Confirm's own dispatch below carries the wrong
+      // manifestId, which is what this test is actually about.
       const rows = () =>
         Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
       await waitFor(() => rows().length === 1);
@@ -3009,9 +3086,9 @@ Deno.test(
       }
       if (layer === "enum_dictionary" && action === "noop_probe") {
         noopProbeDispatchCount++;
-        return { success: true, errors: [] };
+        return fallbackDispatchResponse(body);
       }
-      return { success: true, errors: [] };
+      return fallbackDispatchResponse(body);
     });
     globalThis.fetch = scenario.fetch;
 
@@ -3162,7 +3239,7 @@ Deno.test(
         }
         // Unreachable synchronously — buildMockScenario's responder is synchronous, so the
         // pending-promise indirection is applied via the wrapping fetch below instead.
-        return { success: true, errors: [] };
+        return fallbackDispatchResponse(body);
       }
       if (layer === "enum_dictionary" && action === "delete_group") {
         return {
@@ -3170,7 +3247,7 @@ Deno.test(
           emission: { manifestId: CHILD_MANIFEST_ID, data: { ok: true } },
         };
       }
-      return { success: true, errors: [] };
+      return fallbackDispatchResponse(body);
     });
 
     // Wrap scenario.fetch so ONLY the SECOND screen_list/Search call ever made (the
@@ -3277,3 +3354,474 @@ Deno.test(
     }
   },
 );
+
+// ─────────────────────────────────────────────────────────────────────────
+// Round 3 (preview-gap audit): the shared settlement authority
+// (runtime/runtimeDispatchSettlement.ts's resolveRuntimeDispatchSettlement) is the SAME function
+// both ProjectionShell's handleRuntimeDispatchResult (error display / canonical-reread decision)
+// AND runtimeComponentFactory's deferred localStateMutation gate (Modal open/close) call on every
+// settled admin_runtime dispatch result. Before this round, the Modal-mutation gate checked ONLY
+// result.success — a success response carrying an unexpected manifestId, or carrying no Emission
+// at all, still opened/closed a Modal. These two tests drive delete_group's preview (open) and
+// confirm (close) dispatches through all four settlement-rejection shapes
+// round_27_28_settled_child_dispatch_result_authority names (wrong manifest, missing Emission,
+// backend success:false, and a queue/network rejection) and assert the Modal never mutates and an
+// explicit warning is always surfaced — never a silent no-op.
+// ─────────────────────────────────────────────────────────────────────────
+
+type NegativeSettlementShape =
+  | "wrong_manifest"
+  | "missing_emission"
+  | "backend_failure"
+  | "queue_rejection";
+
+const NEGATIVE_SETTLEMENT_SHAPES: readonly NegativeSettlementShape[] = [
+  "wrong_manifest",
+  "missing_emission",
+  "backend_failure",
+  "queue_rejection",
+];
+
+const UNEXPECTED_SETTLEMENT_MANIFEST_ID =
+  "00000000-0000-0000-0000-0000000ae998";
+
+/** Builds the raw HTTP Response (or a rejected Promise, for queue_rejection) a mock fetch should
+ * settle a captured /api/dispatch call with, for a given negative settlement shape. */
+function negativeSettlementResponseFor(
+  shape: NegativeSettlementShape,
+  scenarioLabel: string,
+): Promise<Response> {
+  if (shape === "queue_rejection") {
+    return Promise.reject(
+      new Error(`simulated network/queue rejection (${scenarioLabel} ${shape} scenario)`),
+    );
+  }
+  let responseBody: Record<string, unknown>;
+  switch (shape) {
+    case "wrong_manifest":
+      responseBody = {
+        success: true,
+        emission: { manifestId: UNEXPECTED_SETTLEMENT_MANIFEST_ID, data: {} },
+      };
+      break;
+    case "missing_emission":
+      responseBody = { success: true, errors: [] };
+      break;
+    case "backend_failure":
+      responseBody = {
+        success: false,
+        errors: [{
+          code: "ENUM_SETTLEMENT_REJECTED",
+          message: `${scenarioLabel} rejected (${shape} scenario)`,
+        }],
+      };
+      break;
+  }
+  return Promise.resolve(
+    new Response(JSON.stringify(responseBody!), { status: 200 }),
+  );
+}
+
+Deno.test(
+  "ProjectionShell (real mount, round 3 settlement authority): delete_group's preview dispatch — wrong manifest / missing Emission / backend success:false / queue rejection settlement shapes never open the Modal, each surfacing an explicit warning",
+  async () => {
+    const config = CONFIRM_MODAL_SCENARIOS.find((c) => c.label === "delete_group")!;
+    for (const shape of NEGATIVE_SETTLEMENT_SHAPES) {
+      ensureRuntimeComponentRegistryInitialized();
+      schedulerTestOnly.resetCommandQueue();
+      FakeEventSource.instances = [];
+      const { container, cleanup } = setupDom();
+      const originalEventSource =
+        (globalThis as unknown as { EventSource?: unknown }).EventSource;
+      (globalThis as unknown as { EventSource: unknown }).EventSource =
+        FakeEventSource;
+      const originalFetch = globalThis.fetch;
+
+      let previewCallSeen = false;
+      const capturedDispatchBodies: Record<string, unknown>[] = [];
+      const mockFetch = ((url: string, init?: RequestInit) => {
+        const path = url.toString();
+        if (path.startsWith("/api/auth/session") || path === "/api/auth/refresh") {
+          return Promise.resolve(
+            new Response(JSON.stringify({ success: true }), { status: 200 }),
+          );
+        }
+        if (path !== "/api/dispatch") {
+          return Promise.resolve(
+            new Response(JSON.stringify({ success: true }), { status: 200 }),
+          );
+        }
+        const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+        capturedDispatchBodies.push(body);
+        if (capturedDispatchBodies.length === 1) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                success: true,
+                emission: {
+                  manifestId: ADMIN_ENUM_MANIFEST_ID,
+                  layoutId: `layout-round3-negative-preview-${shape}`,
+                  projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+                  layoutNodes: buildConfirmModalLayoutNodes(config, [
+                    { groupId: "row-uuid-1", groupName: "Alpha" },
+                  ]),
+                },
+              }),
+              { status: 200 },
+            ),
+          );
+        }
+        const payload = payloadOf(body);
+        const isPreviewDispatch = payload.target_ref === config.targetRef &&
+          payload.dryRun === "true";
+        if (isPreviewDispatch) {
+          previewCallSeen = true;
+          return negativeSettlementResponseFor(shape, "delete_group's preview");
+        }
+        return Promise.resolve(
+          new Response(JSON.stringify(fallbackDispatchResponse(body)), { status: 200 }),
+        );
+      }) as typeof fetch;
+      globalThis.fetch = mockFetch;
+
+      try {
+        globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+        render(h(ProjectionShell, {}), container);
+
+        let openButtonEl: HTMLButtonElement | null = null;
+        await waitFor(() => {
+          openButtonEl = queryOpenButtonFor(container, config.prefix);
+          return openButtonEl !== null;
+        });
+        assertExists(openButtonEl, `[${shape}] delete_group's open trigger must render`);
+
+        const rowEl = container.querySelector("tbody tr") as HTMLTableRowElement | null;
+        assertExists(rowEl, `[${shape}] delete_group needs a selectable group row`);
+        simulateRowClick(rowEl!);
+        await flushUpdates();
+
+        simulateClick(queryOpenButtonFor(container, config.prefix)!);
+        await waitFor(() => previewCallSeen);
+        for (let i = 0; i < 15; i++) await flushUpdates();
+
+        assert(
+          queryModalFor(container) === null,
+          `[${shape}] delete_group's modal must NOT open on a ${shape} preview settlement`,
+        );
+        assert(
+          queryConfirmButtonFor(container, config.prefix) === null,
+          `[${shape}] Confirm must not exist in the DOM while the modal stays closed`,
+        );
+        assertExists(
+          queryRefreshWarning(container),
+          `[${shape}] a ${shape} preview settlement must surface an explicit, non-destructive warning`,
+        );
+      } finally {
+        globalThis.fetch = originalFetch;
+        (globalThis as unknown as { EventSource: unknown }).EventSource =
+          originalEventSource;
+        schedulerTestOnly.resetCommandQueue();
+        render(null, container);
+        cleanup();
+      }
+    }
+  },
+);
+
+Deno.test(
+  "ProjectionShell (real mount, round 3 settlement authority): delete_group's Confirm dispatch — wrong manifest / missing Emission / backend success:false / queue rejection settlement shapes never close the Modal (no state adopted, no resend), each surfacing an explicit warning",
+  async () => {
+    const config = CONFIRM_MODAL_SCENARIOS.find((c) => c.label === "delete_group")!;
+    for (const shape of NEGATIVE_SETTLEMENT_SHAPES) {
+      ensureRuntimeComponentRegistryInitialized();
+      schedulerTestOnly.resetCommandQueue();
+      FakeEventSource.instances = [];
+      const { container, cleanup } = setupDom();
+      const originalEventSource =
+        (globalThis as unknown as { EventSource?: unknown }).EventSource;
+      (globalThis as unknown as { EventSource: unknown }).EventSource =
+        FakeEventSource;
+      const originalFetch = globalThis.fetch;
+
+      let confirmCallSeen = false;
+      const capturedDispatchBodies: Record<string, unknown>[] = [];
+      const mockFetch = ((url: string, init?: RequestInit) => {
+        const path = url.toString();
+        if (path.startsWith("/api/auth/session") || path === "/api/auth/refresh") {
+          return Promise.resolve(
+            new Response(JSON.stringify({ success: true }), { status: 200 }),
+          );
+        }
+        if (path !== "/api/dispatch") {
+          return Promise.resolve(
+            new Response(JSON.stringify({ success: true }), { status: 200 }),
+          );
+        }
+        const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+        capturedDispatchBodies.push(body);
+        if (capturedDispatchBodies.length === 1) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                success: true,
+                emission: {
+                  manifestId: ADMIN_ENUM_MANIFEST_ID,
+                  layoutId: `layout-round3-negative-confirm-${shape}`,
+                  projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+                  layoutNodes: buildConfirmModalLayoutNodes(config, [
+                    { groupId: "row-uuid-1", groupName: "Alpha" },
+                  ]),
+                },
+              }),
+              { status: 200 },
+            ),
+          );
+        }
+        const payload = payloadOf(body);
+        const isPreviewDispatch = payload.target_ref === config.targetRef &&
+          payload.dryRun === "true";
+        if (isPreviewDispatch) {
+          // The preview itself must succeed cleanly so the Modal legitimately opens — this test
+          // is about the CONFIRM dispatch's own settlement, not the preview's.
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                success: true,
+                emission: {
+                  manifestId: manifestIdFromTargetRef(config.targetRef),
+                  data: { ok: true, dryRun: true },
+                },
+              }),
+              { status: 200 },
+            ),
+          );
+        }
+        const isConfirmDispatch = payload.target_ref === config.targetRef &&
+          payload.confirmed === "true";
+        if (isConfirmDispatch) {
+          confirmCallSeen = true;
+          return negativeSettlementResponseFor(shape, "delete_group's Confirm");
+        }
+        return Promise.resolve(
+          new Response(JSON.stringify(fallbackDispatchResponse(body)), { status: 200 }),
+        );
+      }) as typeof fetch;
+      globalThis.fetch = mockFetch;
+
+      try {
+        globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+        render(h(ProjectionShell, {}), container);
+
+        let openButtonEl: HTMLButtonElement | null = null;
+        await waitFor(() => {
+          openButtonEl = queryOpenButtonFor(container, config.prefix);
+          return openButtonEl !== null;
+        });
+        assertExists(openButtonEl, `[${shape}] delete_group's open trigger must render`);
+
+        const rowEl = container.querySelector("tbody tr") as HTMLTableRowElement | null;
+        assertExists(rowEl, `[${shape}] delete_group needs a selectable group row`);
+        simulateRowClick(rowEl!);
+        await flushUpdates();
+
+        simulateClick(queryOpenButtonFor(container, config.prefix)!);
+        await waitFor(() => queryModalFor(container) !== null);
+
+        const confirmButtonEl = queryConfirmButtonFor(container, config.prefix);
+        assertExists(confirmButtonEl, `[${shape}] Confirm must be present once the modal legitimately opened`);
+        const dispatchCountBeforeConfirm = capturedDispatchBodies.length;
+
+        simulateClick(confirmButtonEl!);
+        await waitFor(() => confirmCallSeen);
+        for (let i = 0; i < 15; i++) await flushUpdates();
+
+        assertExists(
+          queryModalFor(container),
+          `[${shape}] delete_group's modal must remain OPEN on a ${shape} Confirm settlement — never closed`,
+        );
+        assertExists(
+          queryConfirmButtonFor(container, config.prefix),
+          `[${shape}] Confirm must still be present — the modal was never closed`,
+        );
+        assertExists(
+          queryRefreshWarning(container),
+          `[${shape}] a ${shape} Confirm settlement must surface an explicit, non-destructive warning`,
+        );
+        assertEquals(
+          capturedDispatchBodies.length,
+          dispatchCountBeforeConfirm + 1,
+          `[${shape}] a rejected Confirm settlement must never re-send the write itself`,
+        );
+      } finally {
+        globalThis.fetch = originalFetch;
+        (globalThis as unknown as { EventSource: unknown }).EventSource =
+          originalEventSource;
+        schedulerTestOnly.resetCommandQueue();
+        render(null, container);
+        cleanup();
+      }
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// Round 3 (preview-gap audit): the existing canonical-reread proofs (round 27's "child manifest
+// response never adopted" test, round 28's "stale tracked value forced to DB-authoritative" and
+// "failed canonical reread surfaces a warning" tests, round 29's supersession-priority test) all
+// exercise delete_group as their SINGLE write trigger — round 27/28/29 established the MECHANISM
+// generically, but no test previously drove all 7 CONFIRM_MODAL_SCENARIOS operations through it.
+// This table-driven test closes that gap: for EACH of the 7 operations, a settled Confirm write
+// triggers EXACTLY ONE ae200 canonical reread (never zero, never resent, never adopting the
+// child manifest's own settled Emission data) via the SAME production ProjectionShell mount path
+// every other test in this file uses — never a delete_group-only proof generalized by assertion.
+// ─────────────────────────────────────────────────────────────────────────
+
+for (const config of CONFIRM_MODAL_SCENARIOS) {
+  Deno.test(
+    `ProjectionShell (real mount, round 3 canonical reread proof): ${config.label}'s confirmed write triggers EXACTLY ONE ae200 canonical reread — no write resend, no child Emission data adopted`,
+    async () => {
+      ensureRuntimeComponentRegistryInitialized();
+      schedulerTestOnly.resetCommandQueue();
+      FakeEventSource.instances = [];
+      const { container, cleanup } = setupDom();
+      const originalEventSource =
+        (globalThis as unknown as { EventSource?: unknown }).EventSource;
+      (globalThis as unknown as { EventSource: unknown }).EventSource =
+        FakeEventSource;
+      const originalFetch = globalThis.fetch;
+
+      const targetManifestId = manifestIdFromTargetRef(config.targetRef);
+      // A canary string embedded ONLY in the confirm dispatch's own settled Emission -- if this
+      // EVER reaches the rendered DOM, the child manifest's own response was wrongly adopted
+      // into ae200's projection state (round 27's own prohibition).
+      const CHILD_EMISSION_CANARY = `CHILD_MANIFEST_CANARY_${config.label}_MUST_NEVER_RENDER`;
+
+      const scenario = buildMockScenario((callIndex, body) => {
+        if (callIndex === 1) {
+          return {
+            success: true,
+            emission: {
+              manifestId: ADMIN_ENUM_MANIFEST_ID,
+              layoutId: `layout-round3-canonical-reread-${config.label}`,
+              projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+              layoutNodes: buildConfirmModalLayoutNodes(config, [
+                { groupId: "row-uuid-1", groupName: "Alpha" },
+              ]),
+            },
+          };
+        }
+        const payload = payloadOf(body);
+        const isPreviewDispatch = payload.target_ref === config.targetRef &&
+          payload.dryRun === "true";
+        if (isPreviewDispatch) {
+          return {
+            success: true,
+            emission: { manifestId: targetManifestId, data: { ok: true, dryRun: true } },
+          };
+        }
+        const isConfirmDispatch = payload.target_ref === config.targetRef &&
+          payload.confirmed === "true";
+        if (isConfirmDispatch) {
+          return {
+            success: true,
+            emission: { manifestId: targetManifestId, data: { ok: true, canary: CHILD_EMISSION_CANARY } },
+          };
+        }
+        // Any OTHER dispatch is ae200's own read circuit (the row-select's own list_groups
+        // re-read before Confirm, and the canonical reread after Confirm settles) -- always a
+        // real, distinguishable success carrying fresh (post-write) row data, so the canonical
+        // reread's own adoption is provably visible in the DOM.
+        return {
+          success: true,
+          emission: {
+            manifestId: ADMIN_ENUM_MANIFEST_ID,
+            layoutId: `layout-round3-canonical-reread-${config.label}`,
+            projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+            layoutNodes: buildConfirmModalLayoutNodes(config, [
+              { groupId: "row-uuid-1", groupName: "AlphaAfterWrite" },
+            ]),
+          },
+        };
+      });
+      globalThis.fetch = scenario.fetch;
+
+      try {
+        globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+        render(h(ProjectionShell, {}), container);
+
+        let openButtonEl: HTMLButtonElement | null = null;
+        await waitFor(() => {
+          openButtonEl = queryOpenButtonFor(container, config.prefix);
+          return openButtonEl !== null;
+        });
+        assertExists(openButtonEl, `${config.label}'s open trigger must render`);
+
+        for (const [nodeId, value] of Object.entries(config.typedFields)) {
+          const inputEl = container.querySelector(
+            `[data-node-id="${nodeId}"] input`,
+          ) as HTMLInputElement | null;
+          assertExists(inputEl, `${config.label}'s ${nodeId} input must render`);
+          simulateInput(inputEl!, value);
+        }
+        if (config.needsSelectedGroupRow) {
+          const rowEl = container.querySelector(
+            "tbody tr",
+          ) as HTMLTableRowElement | null;
+          assertExists(rowEl, `${config.label} needs a selectable group row`);
+          simulateRowClick(rowEl!);
+          await flushUpdates();
+        }
+
+        simulateClick(queryOpenButtonFor(container, config.prefix)!);
+        await waitFor(() => queryModalFor(container) !== null);
+
+        const confirmButtonEl = queryConfirmButtonFor(container, config.prefix);
+        assertExists(confirmButtonEl, `${config.label}'s Confirm must be present once the modal opened`);
+
+        const dispatchCountBeforeConfirm = scenario.capturedDispatchBodies.length;
+        simulateClick(confirmButtonEl!);
+        await waitFor(() => queryModalFor(container) === null);
+        // Give the canonical reread (fired only AFTER the confirm dispatch itself settles) time
+        // to land, not merely the confirm dispatch's own settlement that closes the modal.
+        for (let i = 0; i < 20; i++) await flushUpdates();
+
+        const dispatchesSinceConfirm = scenario.capturedDispatchBodies.length - dispatchCountBeforeConfirm;
+        assertEquals(
+          dispatchesSinceConfirm,
+          2,
+          `${config.label}'s settled Confirm write must trigger EXACTLY ONE ae200 canonical ` +
+            `reread (the Confirm dispatch itself, plus exactly one canonical-reread redispatch) ` +
+            `-- got ${dispatchesSinceConfirm} dispatch(es) since Confirm was clicked`,
+        );
+
+        const confirmDispatchesTotal = scenario.capturedDispatchBodies.filter((b) =>
+          payloadOf(b).target_ref === config.targetRef && payloadOf(b).confirmed === "true"
+        ).length;
+        assertEquals(
+          confirmDispatchesTotal,
+          1,
+          `${config.label}'s settled write must never be RESENT once its canonical reread lands`,
+        );
+
+        assert(
+          !(container.textContent ?? "").includes(CHILD_EMISSION_CANARY),
+          `${config.label}'s child manifest response (the Confirm dispatch's own settled ` +
+            `Emission) must NEVER be adopted into ae200's rendered projection state`,
+        );
+
+        assert(
+          (container.querySelector("tbody")?.textContent ?? "").includes("AlphaAfterWrite"),
+          `${config.label}'s canonical reread must actually re-dispatch and render ae200's OWN ` +
+            `fresh (post-write) data -- the reread is not merely counted, its own response lands`,
+        );
+      } finally {
+        globalThis.fetch = originalFetch;
+        (globalThis as unknown as { EventSource: unknown }).EventSource =
+          originalEventSource;
+        schedulerTestOnly.resetCommandQueue();
+        render(null, container);
+        cleanup();
+      }
+    },
+  );
+}

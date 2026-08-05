@@ -303,7 +303,7 @@ react_schema_topology_seed_translator_ssot:
       section: '[section key=.. label=.. sectionKind=.. sourceYamlRefs=..] ... [/section]'
       form: '[form key=.. label=.. target=.. mode=.. authorityMarker=.. sourceYamlRefs=..] ... [/form]'
       field: '[field key=.. label=.. control=.. required=true|false sourceYamlRefs=.. knownGapRefs=..]'
-      table: '[table key=.. label=.. source=.. display=.. sourceYamlRefs=..]'
+      table: '[table key=.. label=.. source=.. display=.. displayColumns=.. rowsSource=.. sourceYamlRefs=..]'
       workflow: '[workflow key=.. label=.. authorityMarker=.. sourceYamlRefs=..] ... [/workflow]'
       modal: '[modal key=.. label=.. title=.. body=.. sourceYamlRefs=..] ... [/modal]'
       step: '[step key=.. actionRef=.. wiringLane=.. authorityMarker=.. order=.. sourceYamlRefs=..]'
@@ -331,17 +331,51 @@ react_schema_topology_seed_translator_ssot:
       (react_schema_contract.allowed_node_kinds.Unresolved) carrying rawFragment and a
       mandatory knownGapRefs entry. The translator must never infer structure from
       unrecognized free text.
+    table_display_and_rows_binding_attributes: >-
+      round 3 (preview-gap audit, 2026-08-05). displayColumns and rowsSource are a Table's own
+      data-defined carrier for a bound data_display/table's column list and rows propBinding
+      source -- promoted from a translator-internal hardcode (propBindings.rows.source was
+      unconditionally emitted as the literal "emission.data" for every Table with displayColumns,
+      regardless of what was authored) into two explicit, independently-validated attributes.
+      displayColumns is `key:Header,key2:Header 2` (comma-separated key:header pairs, order
+      preserved) -- parse_columns in .agent/scripts/react_schema_topology_seed_translator.py is the
+      canonical parser; find_display_columns_issues re-parses the SAME raw string strictly for
+      validation (below). rowsSource is a JSON traversal path into the dispatched Emission --
+      "emission.data" or "emission.data.<path>", the EXACT shape
+      frontend/runtime/propBindingResolver.ts's own resolveRuntimeDataPath (isRecognizedPropBinding
+      Source) accepts -- NEVER the Table's own `source` attribute value verbatim: `source` is a
+      domain/table lineage identifier (e.g. "enum.groups", matching a
+      docs/design/*-ssot.yaml#canonical_tables entry for sourceYamlRefs traceability) with no
+      guaranteed relationship to the dispatched response's actual JSON shape, which is
+      backend-action-specific (e.g. enum_dictionary:list_groups happens to return the whole groups
+      array AT emission.data's root, not nested under an "enum"/"groups" key -- a literal-source-
+      to-rowsSource mapping would be actively wrong here). displayColumns and rowsSource are
+      authored TOGETHER or NEITHER (table_display_and_rows_binding_validation below) -- a Table
+      binding real data needs both a column list and a data source.
     prohibited:
       - inferring_a_unit_kind_from_prose_without_a_matching_tag
       - silently_upgrading_an_unresolved_fragment_to_a_typed_node
       - accepting_a_tag_with_no_key_attribute
       - accepting_a_tag_with_no_sourceYamlRefs_attribute
       - accepting_an_action_or_step_tag_with_no_wiringLane_attribute
+      - deriving_rowsSource_from_the_table_source_attribute_or_any_other_hardcoded_literal
     validation:
       - every_open_tag_has_a_matching_close_tag_for_container_units
       - every_tag_key_is_unique_within_its_parent
       - unknown_unitKind_in_a_tag_is_a_blocking_validation_error_not_silent_ignore
       - action_and_step_tags_declare_a_wiringLane_recognized_by_wiring_lane_contract
+    table_display_and_rows_binding_validation: >-
+      validate_table_display_columns_and_rows_source (.agent/scripts/react_schema_topology_seed_
+      translator.py), run over every Table node alongside validate_admin_runtime_preview_action_
+      pairing: (1) TABLE_DISPLAY_COLUMNS_MALFORMED -- a malformed/empty/duplicate-key displayColumns
+      segment (missing ':' separator, empty key, empty header, or a key repeated) is a blocking
+      validation error, never silently dropped from validation even though parse_columns' own
+      lenient parsing still omits the malformed entry from the returned column list; (2)
+      TABLE_ROWS_SOURCE_REQUIRED_WITH_DISPLAY_COLUMNS / TABLE_DISPLAY_COLUMNS_REQUIRED_WITH_ROWS_
+      SOURCE -- displayColumns and rowsSource must be authored together; (3) TABLE_ROWS_SOURCE_
+      INVALID -- rowsSource, when present, must match ROWS_SOURCE_SHAPE_RE (^emission\.data(\..+)?$),
+      the same shape frontend/runtime/propBindingResolver.ts's isRecognizedPropBindingSource
+      accepts.
 
   # ===========================================================================
   # 4. react_schema_contract
@@ -381,6 +415,12 @@ react_schema_topology_seed_translator_ssot:
         emits_seed: topology_ui_field
       Table:
         required: [source, display]
+        optional_paired: [displayColumns, rowsSource]
+        optional_paired_note: >-
+          round 3: displayColumns (column list) and rowsSource (propBindings.rows.source JSON
+          traversal path, see input_text_markup_grammar_contract.table_display_and_rows_binding_
+          attributes) are authored together or neither -- table_display_and_rows_binding_validation
+          fails closed on a lone one.
         emits_seed: topology_ui_table
       Workflow:
         required: [steps, authorityMarker]
@@ -486,6 +526,7 @@ react_schema_topology_seed_translator_ssot:
         required: [fieldKey, control, required, validationRefs]
       topology_ui_table:
         required: [tableKey, source, display, columns]
+        optional_paired: [displayColumns, rowsSource]
       topology_ui_workflow:
         required: [workflowKey, steps, authorityMarker]
       topology_ui_modal:
@@ -1204,9 +1245,10 @@ react_schema_topology_seed_translator_ssot:
           membership alone: a Section-owned use of this lane MUST pair with a
           secondaryDisclosureActionType=openModal (never closeModal/toggleModal -- ruleId
           ADMIN_RUNTIME_PREVIEW_ACTION_SECONDARY_OPEN_MODAL_REQUIRED when missing/wrong type), MUST
-          declare payloadFrom.dryRun="literal:true" (ADMIN_RUNTIME_PREVIEW_ACTION_DRYRUN_REQUIRED)
-          and MUST NOT declare a "confirmed" payloadFrom key
-          (ADMIN_RUNTIME_PREVIEW_ACTION_CONFIRMED_NOT_ALLOWED), and the Modal it opens MUST contain
+          declare payloadFrom.dryRun="literal:true" and MUST NOT declare any OTHER member of
+          AUTHORITY_FLAG_KEYS ({dryRun, confirmed} -- the closed mutation_confirmation_contract
+          flag vocabulary; ADMIN_RUNTIME_PREVIEW_ACTION_DRYRUN_REQUIRED /
+          ADMIN_RUNTIME_PREVIEW_ACTION_CONFIRMED_NOT_ALLOWED), and the Modal it opens MUST contain
           exactly one child Action on this SAME lane (the Confirm button --
           ADMIN_RUNTIME_PREVIEW_ACTION_CONFIRM_TARGET_AMBIGUOUS when zero or more than one) whose
           own target_ref (ADMIN_RUNTIME_PREVIEW_ACTION_TARGET_REF_MISMATCH) and business-field
@@ -1216,6 +1258,20 @@ react_schema_topology_seed_translator_ssot:
           enum_group_create_confirm) are exactly this pairing -- a preview that resolved a different
           manifest/layer/action/field set than its own Confirm would silently ship a UI that
           previews one write and executes another.
+        confirm_action_authority_pairing: >-
+          round 3 (preview-gap audit, 2026-08-05). Rules 1-4 above prove the resolved Confirm
+          button (the SAME same-lane child under the opened Modal) is the CORRECT target to pair
+          against -- they do not themselves prove that button actually carries write-confirmation
+          authority; lane membership plus Modal position was previously trusted as sufficient. This
+          additional structural check on the SAME resolved confirm_action closes that gap: its own
+          payloadFrom MUST declare confirmed="literal:true" exactly
+          (ADMIN_RUNTIME_CONFIRM_ACTION_CONFIRMED_LITERAL_TRUE_REQUIRED when absent/wrong value) and
+          MUST NOT declare any OTHER AUTHORITY_FLAG_KEYS member (never a leftover dryRun, never a
+          future third authority flag -- ADMIN_RUNTIME_CONFIRM_ACTION_EXTRA_AUTHORITY_FLAG_NOT_
+          ALLOWED). AUTHORITY_FLAG_KEYS is a closed, generic set (frozenset({"dryRun",
+          "confirmed"})) checked via set difference on both the preview and confirm sides, not two
+          independent single-key checks -- a third authority-shaped flag introduced later to either
+          side fails closed here rather than silently passing.
       disclosure_state_wiring:
         meaning: >-
           UI-local overlay disclosure state (open/close/toggle) for a disclosure/modal target
