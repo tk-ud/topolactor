@@ -1116,14 +1116,63 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     };
 
     /// <summary>
-    /// A layout node's own componentKind identifies it as Field-family authoring content
-    /// (form_input/*) as opposed to Action/Step-family (action/*) -- the flattened layout_patch
-    /// JSON boundary has no surviving "kind": "Field" discriminator (that is a react_schema/
-    /// translator-level concept only), so componentKind prefix is the only signal available here
-    /// to tell a Field-owned dispatchTargetRefByTrigger override apart from an Action/Step-owned
-    /// one when persisting a layout patch directly (bypassing the translator entirely).
+    /// Round 39 bug fix: a layout node's flattened layout_patch_json.nodes[] override entry never
+    /// carries "componentKind" at all -- componentKind is a POST-composition fact (resolved by
+    /// LayoutSchemaTensorComposer from the schema-tree's own componentId -> catalog lookup, see
+    /// LayoutSchemaTensorComposer.NodeLocalData, which has no ComponentKind field) and only exists
+    /// on the composed tensor node the frontend eventually receives, never on the raw override
+    /// delta this save-time validator inspects. The round-37/round-38 code below checked
+    /// node["componentKind"], which is therefore ALWAYS absent here -- both this function's
+    /// read-action-allowlist check (originally rule 3) and the round-39 debounceMs check added
+    /// below were dead code for every node, not just Field nodes, until this fix. What genuinely
+    /// IS present and required on a raw catalog_component override node at THIS validation
+    /// boundary is "componentKey" (see ValidateLayoutPatchNodes's own
+    /// LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED, which already fails a catalog_component node
+    /// closed if componentKey is missing, earlier in the SAME ValidateLayoutPatchAsync chain this
+    /// function is called from) -- FieldFamilyComponentKeys below mirrors
+    /// LayoutSchemaTensorComposer.FieldControlToComponentKey's own value set verbatim (the same
+    /// control -> componentKey convention the composer already uses), so a raw node whose
+    /// componentKey names one of these catalog components is reliably identifiable as Field-family
+    /// authoring content here, unlike componentKind.
+    ///
+    /// Honest scope note (round 39 investigation): this fix genuinely protects a TENSOR-ONLY
+    /// authored layout (e.g. admin-dashboard-style flat layouts), where componentKey is a real
+    /// column on the persisted ui_topology_tensor row and therefore present directly on the raw
+    /// override node this function inspects. It does NOT add a new protection over a
+    /// SCHEMA-COMPOSED layout's own nodes (admin-enum/ae200 included, authored via
+    /// components_layout_design.layout_schema_json.records[] -- see
+    /// LayoutSchemaTensorComposer.Compose): for that authoring mode, layout_patch_json.nodes[]
+    /// holds ONLY per-nodeId override deltas (propsJson/stateJson/propBindings/dispatch fields/
+    /// debounceMs), never componentKind OR componentKey -- both are schema-tree-derived facts
+    /// resolved only inside Compose() at read/render time, and Compose() itself never even
+    /// writes componentKey back onto its own composed output (only componentId/componentKind
+    /// survive; see its ComponentKey: null literal). ae200's own checked-in seed
+    /// (db/seed_empty.sql) is additionally inserted directly via the translator's SQL output,
+    /// never through this ValidateLayoutPatchAsync save API at all -- so ae200's real protection
+    /// remains the translator (layer 1) and frontend runtime (layer 3) exactly as before this
+    /// fix; this persistence-boundary layer protects tensor-only-authored admin_runtime Fields
+    /// specifically.
     /// </summary>
-    private const string FieldComponentKindPrefix = "form_input/";
+    private static readonly IReadOnlySet<string> FieldFamilyComponentKeys = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "select.template",
+        "form_field.template",
+        "input.primitive",
+        "textarea.alias",
+        "search_input.alias",
+    };
+
+    /// <summary>
+    /// The one Field-family componentKey (see FieldFamilyComponentKeys) whose control kind is a
+    /// continuous-typing input (control="form_input/search_input") -- the SAME control kind
+    /// react-schema-topology-seed-translator-ssot.yaml search_filter_input_contract.debounce_policy
+    /// and .agent/scripts/react_schema_topology_seed_translator.py
+    /// FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS scope the debounceMs requirement to.
+    /// A discrete-choice control (select.template, etc.) fires once per selection, never once per
+    /// keystroke, and is deliberately excluded from ValidateFieldOwnedAdminRuntimeSearchDebounce
+    /// below for exactly that reason.
+    /// </summary>
+    private const string SearchInputFieldComponentKey = "search_input.alias";
 
     /// <summary>
     /// Round 37 defense-in-depth layer 2 of 3 (translator authoring-time / THIS backend
@@ -1132,7 +1181,7 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     /// validate_field_admin_runtime_dispatch_wiring rule 3. Even if the translator's own authoring-
     /// time check were bypassed entirely (a hand-authored or directly-DB-inserted layout_patch_json
     /// reaching this save boundary without ever going through the translator), a Field-family node
-    /// (componentKind starting with "form_input/") carrying a dispatchTargetRefByTrigger entry must
+    /// (componentKey in FieldFamilyComponentKeys) carrying a dispatchTargetRefByTrigger entry must
     /// still resolve to a resource:action listed in AdminRuntimeReadActions -- fails the WHOLE patch
     /// closed otherwise, mirroring every other node-level admin_runtime validator's own contract for
     /// this JSON boundary. Only called after ValidateDispatchTargetRefByTrigger's own shape
@@ -1145,10 +1194,10 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             if (node.ValueKind != JsonValueKind.Object) continue;
             if (!node.TryGetProperty("dispatchTargetRefByTrigger", out var byTriggerEl) || byTriggerEl.ValueKind != JsonValueKind.Object)
                 continue;
-            var componentKind = node.TryGetProperty("componentKind", out var componentKindEl) && componentKindEl.ValueKind == JsonValueKind.String
-                ? componentKindEl.GetString()
+            var componentKey = node.TryGetProperty("componentKey", out var componentKeyEl) && componentKeyEl.ValueKind == JsonValueKind.String
+                ? componentKeyEl.GetString()
                 : null;
-            if (componentKind is null || !componentKind.StartsWith(FieldComponentKindPrefix, StringComparison.Ordinal))
+            if (componentKey is null || !FieldFamilyComponentKeys.Contains(componentKey))
                 continue;
             foreach (var triggerEntry in byTriggerEl.EnumerateObject())
             {
@@ -1160,6 +1209,57 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                 var resourceAction = $"{match.Groups[2].Value}:{match.Groups[3].Value}";
                 if (!AdminRuntimeReadActions.Contains(resourceAction))
                     return $"RUNTIME_INTERACTION_FIELD_DISPATCH_TARGET_REF_NOT_READ_ACTION:{resourceAction}";
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Round 39: backend persistence-boundary mirror of
+    /// .agent/scripts/react_schema_topology_seed_translator.py
+    /// validate_field_admin_runtime_dispatch_wiring rule 5
+    /// (FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS) and the runtime enforcement in
+    /// frontend/runtime/runtimeComponentFactory.ts emitBoundEvent -- closes the 3rd of the 3
+    /// defense-in-depth layers this SSOT rule's own doc comment already claimed, which this save
+    /// boundary had never actually enforced (see FieldFamilyComponentKeys's own doc comment for
+    /// why: the componentKind-keyed check this validator used before round 39 could never match
+    /// any real node). A node whose componentKey is exactly "search_input.alias" (the ONE
+    /// continuous-typing Field-family control -- see SearchInputFieldComponentKey) and which
+    /// carries a dispatchTargetRefByTrigger entry must ALSO carry a positive-integer "debounceMs"
+    /// node-level field -- missing, zero, negative, non-integer, boolean, or string all fail the
+    /// WHOLE patch closed, never silently accepted as "no debounce" (the frontend runtime's own
+    /// isValidFieldDebounceMs uses the identical accept rule, so this and the runtime check can
+    /// never disagree on what counts as valid). A select.template (or any other Field-family
+    /// componentKey) node is a discrete-choice control and is never required to declare
+    /// debounceMs, matching rule 5's own SSOT scope exactly.
+    /// </summary>
+    private static string? ValidateFieldOwnedAdminRuntimeSearchDebounce(JsonElement nodes)
+    {
+        foreach (var node in nodes.EnumerateArray())
+        {
+            if (node.ValueKind != JsonValueKind.Object) continue;
+            if (!node.TryGetProperty("dispatchTargetRefByTrigger", out var byTriggerEl) || byTriggerEl.ValueKind != JsonValueKind.Object)
+                continue;
+            var componentKey = node.TryGetProperty("componentKey", out var componentKeyEl) && componentKeyEl.ValueKind == JsonValueKind.String
+                ? componentKeyEl.GetString()
+                : null;
+            if (componentKey != SearchInputFieldComponentKey) continue;
+
+            // JsonElement.TryGetInt32 already returns false for a fractional (1.5) or
+            // exponential-notation (1e2) JSON number literal -- it never silently truncates --
+            // so a plain ValueKind + TryGetInt32 + positive check is the complete accept rule,
+            // matching frontend/runtime/runtimeComponentFactory.ts isValidFieldDebounceMs exactly.
+            var hasDebounceMs = node.TryGetProperty("debounceMs", out var debounceMsEl);
+            var isValidPositiveInteger = hasDebounceMs
+                && debounceMsEl.ValueKind == JsonValueKind.Number
+                && debounceMsEl.TryGetInt32(out var debounceMsValue)
+                && debounceMsValue > 0;
+            if (!isValidPositiveInteger)
+            {
+                var nodeId = node.TryGetProperty("nodeId", out var nodeIdEl) && nodeIdEl.ValueKind == JsonValueKind.String
+                    ? nodeIdEl.GetString()
+                    : "<unknown>";
+                return $"RUNTIME_INTERACTION_FIELD_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS:{nodeId}";
             }
         }
         return null;
@@ -1673,6 +1773,9 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                     var fieldReadOnlyDispatchError = ValidateFieldOwnedAdminRuntimeReadOnlyDispatch(runtimeNodes);
                     if (fieldReadOnlyDispatchError is not null)
                         return normalized with { Ok = false, Valid = false, Message = fieldReadOnlyDispatchError };
+                    var fieldSearchDebounceError = ValidateFieldOwnedAdminRuntimeSearchDebounce(runtimeNodes);
+                    if (fieldSearchDebounceError is not null)
+                        return normalized with { Ok = false, Valid = false, Message = fieldSearchDebounceError };
 
                     var referencedManifestIds = ExtractDispatchTargetRefByTriggerManifestIds(runtimeNodes);
                     if (referencedManifestIds.Count > 0)

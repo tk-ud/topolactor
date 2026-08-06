@@ -1207,4 +1207,133 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
         Assert.True(result.Valid);
     }
 
+    // ─── round 39: Field-owned admin_runtime dispatch persistence-boundary matrix
+    // (ValidateFieldOwnedAdminRuntimeReadOnlyDispatch / ValidateFieldOwnedAdminRuntimeSearchDebounce).
+    // Round 37 authored these two rules against node["componentKind"], a field that is NEVER
+    // present on a raw layout_patch_json.nodes[] override entry (componentKind is a post-
+    // composition fact resolved by LayoutSchemaTensorComposer, see NodeLocalData) -- so both
+    // checks were structurally dead code for every node, not just Field nodes, until this round's
+    // fix switched the identity signal to "componentKey" (which ValidateLayoutPatchNodes already
+    // REQUIRES on every catalog_component node earlier in this SAME validation chain, and which
+    // every node shape below therefore already carries). These tests exercise the real
+    // ValidateLayoutPatchAsync entry point end to end (not the private static methods directly),
+    // proving the fix through the actual save-time validation surface. ──────────────────────────
+
+    private const string SearchReadTargetRef =
+        "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups";
+    private const string SearchWriteTargetRef =
+        "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:create_group";
+    private static readonly AdminRuntimeManifestAuthorizationResult FullyAuthorizedManifest =
+        new(Exists: true, IsActive: true, IsAdminRuntimeDestination: true);
+
+    private static string SearchInputNode(string debounceMsJsonLiteral, string targetRef = SearchReadTargetRef) => $$"""
+        { "nodes": [
+          { "nodeId": "search-1", "componentKey": "search_input.alias",
+            "dispatchTargetRefByTrigger": { "change": "{{targetRef}}" },
+            "dispatchPayloadFromByTrigger": { "change": { "search": "node:search-1.value" } }{{debounceMsJsonLiteral}} }
+        ] }
+        """;
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_FieldSearchInput_DebounceMsAbsent_FailsClose()
+    {
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime", FullyAuthorizedManifest);
+        var result = await repo.ValidateLayoutPatchAsync(
+            Guid.NewGuid(), "/admin/ui-builder", SearchInputNode(""), null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_FIELD_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS:search-1", result.Message);
+    }
+
+    [Theory]
+    [InlineData(", \"debounceMs\": 0")]
+    [InlineData(", \"debounceMs\": -5")]
+    [InlineData(", \"debounceMs\": 1.5")]
+    [InlineData(", \"debounceMs\": true")]
+    [InlineData(", \"debounceMs\": \"300\"")]
+    public async Task ValidateLayoutPatchAsync_FieldSearchInput_DebounceMsInvalidShape_FailsClose(string debounceMsJsonLiteral)
+    {
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime", FullyAuthorizedManifest);
+        var result = await repo.ValidateLayoutPatchAsync(
+            Guid.NewGuid(), "/admin/ui-builder", SearchInputNode(debounceMsJsonLiteral), null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_FIELD_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS:search-1", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_FieldSearchInput_DebounceMsPositiveInteger_Passes()
+    {
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime", FullyAuthorizedManifest);
+        var result = await repo.ValidateLayoutPatchAsync(
+            Guid.NewGuid(), "/admin/ui-builder", SearchInputNode(", \"debounceMs\": 300"), null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_FieldSelect_DebounceMsAbsent_Passes()
+    {
+        // Discrete-choice control (select.template) is exempt from the search debounce
+        // requirement -- it fires once per selection via its own onChange, never once per
+        // keystroke, matching react-schema-topology-seed-translator-ssot.yaml
+        // search_filter_input_contract.debounce_policy's own scope exactly.
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime", FullyAuthorizedManifest);
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "filter-1", "componentKey": "select.template",
+            "dispatchTargetRefByTrigger": { "change": "{{SearchReadTargetRef}}" },
+            "dispatchPayloadFromByTrigger": { "change": { "groupNameFilter": "node:filter-1.value" } } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_ActionOwnedDispatch_DebounceMsAbsent_Passes()
+    {
+        // An Action/Step-owned dispatch (componentKey outside FieldFamilyComponentKeys, e.g. a
+        // button) never has the search debounce rule mis-applied to it, even though it also
+        // dispatches on a "change"-shaped high-frequency-looking trigger name here.
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime", FullyAuthorizedManifest);
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive",
+            "dispatchTargetRefByTrigger": { "change": "{{SearchWriteTargetRef}}" },
+            "dispatchPayloadFromByTrigger": { "change": { "confirmed": "literal:true" } } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_FieldSearchInput_WriteTargetRef_FailsCloseOnReadActionAllowlist_NotDebounce()
+    {
+        // Regression proof for the SAME componentKind -> componentKey bug on the OTHER rule this
+        // round's fix touches (ValidateFieldOwnedAdminRuntimeReadOnlyDispatch, originally rule 3):
+        // before the fix this check could never match ANY node either, so a Field-owned dispatch
+        // targeting a WRITE action would have silently passed. A valid debounceMs is included so
+        // this failure is unambiguously attributable to the read-action-allowlist check, not the
+        // debounce check (which runs after it and would never be reached here).
+        var repo = new AdminRuntimeWiringKindTestRepository("admin_runtime", FullyAuthorizedManifest);
+        var result = await repo.ValidateLayoutPatchAsync(
+            Guid.NewGuid(), "/admin/ui-builder",
+            SearchInputNode(", \"debounceMs\": 300", SearchWriteTargetRef), null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_FIELD_DISPATCH_TARGET_REF_NOT_READ_ACTION:enum_dictionary:create_group", result.Message);
+    }
+
 }

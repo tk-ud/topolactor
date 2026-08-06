@@ -751,6 +751,29 @@ function emitBoundEvent(
     const runtimeDispatch = binding.runtimeDispatch;
     const payloadFrom = runtimeDispatch.payloadFrom;
     const circuitKey = runtimeDispatchCircuitKey(spec, runtimeDispatch.targetRef);
+    // round 39 (search_filter_input_contract debounce_policy, backend persistence-boundary
+    // mirror: NpgsqlUiTopologyRepository.ValidateFieldOwnedAdminRuntimeSearchDebounce):
+    // a search_input Field on this lane fails closed HERE, before scheduling anything, when its
+    // own debounceMs is missing/invalid -- mirrors the externalPortDispatch high_frequency_policy
+    // guard above (isHighFrequencyTrigger + isValidDebounceMs). Without this, an authored node
+    // that somehow reached the frontend with an invalid debounceMs (0/negative/non-integer/
+    // string/boolean, or simply absent on a search_input control) would silently fall through
+    // scheduleOrDispatchRuntimeCommand's own isValidFieldDebounceMs branch to an IMMEDIATE
+    // dispatch -- exactly the "invalid debounceMs interpreted as no-debounce" silent fallback
+    // this round's own governance NG axis prohibits. A non-search_input Field (e.g. select,
+    // discrete-choice) is unaffected: this check is scoped to componentType exactly
+    // "form_input/search_input", never generalized to every Field or every admin_runtime
+    // dispatch.
+    if (
+      spec.componentType === "form_input/search_input" &&
+      !isValidFieldDebounceMs(spec.debounceMs)
+    ) {
+      return {
+        ok: false,
+        error:
+          `FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS — search_input のフィールドが admin_runtime dispatch を使う場合、正の整数の debounceMs が必要です（node: ${spec.nodeId ?? spec.componentId}）`,
+      };
+    }
     // Priority/conflict rule (SSOT remaining_write_payload_capture_gap): when a
     // payloadFrom map is authored, it is the SOLE payload authority for this
     // dispatch — same fail-close contract as dispatchExternalPort/

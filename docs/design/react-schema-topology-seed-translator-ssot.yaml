@@ -1449,19 +1449,35 @@ react_schema_topology_seed_translator_ssot:
                targetRef actually resolves to, rule 4 checks what the author declared they meant it
                to be, and BOTH must hold).
             5. FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS (round 37,
-               search_filter_input_contract debounce_policy) -- a Field with
-               control="form_input/search_input" declaring this lane must carry a valid
-               positive-integer debounceMs. Scoped to search_input specifically: a discrete-choice
-               control (e.g. form_input/select) fires once per selection via its own onChange, never
-               once per keystroke, so it carries none of the "uncontrolled on every keystroke" risk
-               this rule exists to close and is never required to declare one. Runtime enforcement:
-               frontend/runtime/runtimeComponentFactory.ts scheduleOrDispatchRuntimeCommand delays
-               the actual network enqueue by debounceMs, canceling any still-pending timer for the
-               SAME node on a new firing -- collapsing rapid typing to one dispatch per debounce
-               window. A per-node monotonic dispatch sequence number
-               (runtimeDispatchSeqByComponentId) additionally discards a settled response that is no
-               longer the latest fired call for that node (stale-result boundary) -- generic to every
-               admin_runtime dispatch, not scoped to debounced Fields alone.
+               search_filter_input_contract debounce_policy; runtime fail-close added round 39) --
+               a Field with control="form_input/search_input" declaring this lane must carry a
+               valid positive-integer debounceMs. Scoped to search_input specifically: a
+               discrete-choice control (e.g. form_input/select) fires once per selection via its
+               own onChange, never once per keystroke, so it carries none of the "uncontrolled on
+               every keystroke" risk this rule exists to close and is never required to declare
+               one. Round 39 connected this to a matching backend persistence-boundary check
+               (NpgsqlUiTopologyRepository.ValidateFieldOwnedAdminRuntimeSearchDebounce,
+               RUNTIME_INTERACTION_FIELD_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS) and a frontend
+               runtime fail-close (runtimeComponentFactory.ts emitBoundEvent, same error code
+               prefix) that rejects the dispatch outright -- before ever scheduling anything --
+               when spec.componentType is exactly "form_input/search_input" and
+               isValidFieldDebounceMs(spec.debounceMs) is false, rather than silently falling
+               through to an immediate dispatch (see search_filter_input_contract below for the
+               full 3-layer accept/reject matrix these three checks share). Runtime
+               ENFORCEMENT (distinct from the round-39 fail-close guard above, which runs
+               before any scheduling decision): frontend/runtime/runtimeComponentFactory.ts
+               scheduleOrDispatchRuntimeCommand delays the actual network enqueue by
+               debounceMs, canceling any still-pending timer for the SAME
+               runtimeDispatchCircuitKey (round 38 -- targetRef-scoped, so every Field/Action
+               dispatching to the SAME admin_runtime target shares one circuit, never keyed by
+               the catalog componentId two unrelated nodes might share) on a new firing --
+               collapsing rapid typing to one dispatch per debounce window, and correctly
+               canceling a still-pending debounced dispatch when a DIFFERENT field on the SAME
+               circuit (e.g. a filter select) fires immediately during that window. A per-circuit
+               monotonic dispatch sequence number (runtimeDispatchSeqByCircuitId) additionally
+               discards a settled response that is no longer the latest fired call for that
+               circuit (stale-result boundary) -- generic to every admin_runtime dispatch, not
+               scoped to debounced Fields alone.
           A Field satisfying all five restrictions is a legal generic read/filter override (the
           enum_search -> list_groups example above); one that fails any of them is a blocking
           authoring error, never a silent pass-through. Distinct from, and does not replace,

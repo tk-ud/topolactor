@@ -4608,6 +4608,22 @@ Deno.test(
       await waitFor(() => rows().length === 2);
       assertEquals(rows().length, 2, "search='Alpha' alone must match both Alpha and AlphaGamma");
       assertEquals(rows().some((r) => r.textContent?.includes("Beta")), false);
+
+      // round 39: the placeholder option a real browser user must be able to select to reach
+      // the empty/"no filter" value is NOT disabled -- unlike a hand-set .value assignment
+      // (simulateSelectChange above), disabled-ness is exactly the DOM condition a real user's
+      // click/keyboard selection cannot bypass, so this is the genuine reachability proof round
+      // 38's Select.tsx fix (disabled={required}) exists for -- enum_group_filter is authored
+      // required=false.
+      const placeholderOption = groupFilterSelect().querySelector(
+        'option[value=""]',
+      ) as HTMLOptionElement | null;
+      assertExists(placeholderOption, "enum_group_filter must render its own placeholder option");
+      assertEquals(
+        placeholderOption.disabled,
+        false,
+        "enum_group_filter's placeholder option must NOT be disabled -- a disabled option can never be reached by a real user's native <select> interaction, only by test/script code directly assigning .value",
+      );
     } finally {
       globalThis.fetch = originalFetch;
       (globalThis as unknown as { EventSource: unknown }).EventSource =
@@ -4615,6 +4631,418 @@ Deno.test(
       schedulerTestOnly.resetCommandQueue();
       render(null, container);
       cleanup();
+    }
+  },
+);
+
+// ─── round 39: query-circuit production proof battery. enum_search and enum_group_filter share
+// ONE admin_runtime dispatch circuit (both target enum_dictionary:list_groups) --
+// runtimeDispatchCircuitKey(spec, targetRef) resolves to the SAME key for both nodes since
+// targetRef takes priority over nodeId/componentId. These tests mount the REAL canonical
+// backend-captured ae200 fixture through a REAL ProjectionShell and assert not just which
+// requests were SENT, but which response was actually ADOPTED into final DOM state -- the two
+// are distinct questions this round's own governance NG axis requires distinguishing. Each
+// list_groups response below encodes the payload IT received directly into its one returned
+// row's groupName (never real filtering logic), so the rendered <tbody> text is an unambiguous,
+// self-describing trace of exactly which request's response is currently adopted. ──────────────
+
+function markerRow(search: string, groupNameFilter: string) {
+  return {
+    groupId: `g-${search}-${groupNameFilter}`,
+    groupName: `R:search=${search}|filter=${groupNameFilter}`,
+    indexNum: 1,
+    itemsSummary: "",
+  };
+}
+
+const QUERY_CIRCUIT_INITIAL_ROWS = [
+  { groupId: "grp-alpha-11111111", groupName: "Alpha", indexNum: 1, itemsSummary: "1:one" },
+  { groupId: "grp-beta-222222222", groupName: "Beta", indexNum: 2, itemsSummary: "1:uno, 2:dos" },
+];
+const QUERY_CIRCUIT_GROUP_OPTIONS = QUERY_CIRCUIT_INITIAL_ROWS.map((r) => ({
+  groupId: r.groupId,
+  indexNum: r.indexNum,
+  groupName: r.groupName,
+}));
+
+function queryCircuitEmission(rows: Array<Record<string, unknown>>) {
+  return {
+    manifestId: ADMIN_ENUM_MANIFEST_ID,
+    layoutId: "layout-admin-enum-ae200-query-circuit-fixture",
+    projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+    layoutNodes: undefined as unknown as Record<string, unknown>[], // set by caller after fixture load
+    data: { groups: rows, groupOptions: QUERY_CIRCUIT_GROUP_OPTIONS },
+  };
+}
+
+async function mountQueryCircuitFixture(): Promise<Record<string, unknown>[]> {
+  const fixtureText = await Deno.readTextFile(
+    new URL("./fixtures/admin_enum_ae200_layout_nodes.json", import.meta.url),
+  );
+  return JSON.parse(fixtureText) as Record<string, unknown>[];
+}
+
+Deno.test(
+  "ProjectionShell (real mount, canonical ae200 fixture, query circuit): typing into enum_search then selecting enum_group_filter DURING the search debounce window sends exactly ONE list_groups dispatch (the immediate filter-select cancels search's still-pending timer, per the shared query circuit) carrying the FULL combined intent, and the cancelled search timer never fires afterward (round 39)",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    const layoutNodes = await mountQueryCircuitFixture();
+    const emissionWithRows = (rows: Array<Record<string, unknown>>) => ({
+      ...queryCircuitEmission(rows),
+      layoutNodes,
+    });
+
+    const scenario = buildMockScenario((_callIndex, body) => {
+      if (body.action === "Search" && body.layer === "screen_list") {
+        return { success: true, emission: emissionWithRows(QUERY_CIRCUIT_INITIAL_ROWS) };
+      }
+      if (body.layer === "enum_dictionary" && body.action === "list_groups") {
+        const payload = payloadOf(body);
+        const search = typeof payload.search === "string" ? payload.search : "";
+        const groupNameFilter = typeof payload.groupNameFilter === "string" ? payload.groupNameFilter : "";
+        return { success: true, emission: emissionWithRows([markerRow(search, groupNameFilter)]) };
+      }
+      return fallbackDispatchResponse(body);
+    });
+    globalThis.fetch = scenario.fetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+      render(h(ProjectionShell, {}), container);
+
+      const rows = () =>
+        Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
+      const searchInput = () => container.querySelector("input") as HTMLInputElement;
+      const groupFilterSelect = () => container.querySelector("select") as HTMLSelectElement;
+
+      await waitFor(() => rows().length === 2);
+
+      const listGroupsCallsBefore = () =>
+        scenario.capturedDispatchBodies.filter((b) =>
+          b.layer === "enum_dictionary" && b.action === "list_groups"
+        ).length;
+
+      // search's own 300ms debounce timer starts here (NOT yet fired).
+      simulateInput(searchInput(), "typed-first");
+      // Immediately (well within the debounce window) select the filter -- fires IMMEDIATELY
+      // (no debounceMs on enum_group_filter), and per the shared circuit's own debounce
+      // cancellation, this must cancel search's still-pending timer before it ever fires.
+      simulateSelectChange(groupFilterSelect(), "Beta");
+
+      await waitFor(() =>
+        scenario.capturedDispatchBodies.some((b) =>
+          b.layer === "enum_dictionary" && b.action === "list_groups" &&
+          payloadOf(b).groupNameFilter === "Beta"
+        )
+      );
+      await waitFor(() =>
+        rows().some((r) => r.textContent?.includes("search=typed-first|filter=Beta"))
+      );
+      assertEquals(
+        rows().some((r) => r.textContent?.includes("search=typed-first|filter=Beta")),
+        true,
+        "the single dispatch that DID fire must carry the FULL combined intent (search value read fresh at the filter's own immediate fire time, not an empty/stale search)",
+      );
+
+      // Wait well past the original 300ms search debounce window -- the cancelled timer must
+      // never fire a SECOND, superseded dispatch.
+      await waitRealMs(400);
+      assertEquals(
+        listGroupsCallsBefore(),
+        1,
+        "exactly one list_groups dispatch must have fired -- search's own debounced timer must have been cancelled by the filter's immediate dispatch, never firing a second time afterward",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource = originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
+      render(null, container);
+      cleanup();
+    }
+  },
+);
+
+Deno.test(
+  "ProjectionShell (real mount, canonical ae200 fixture, query circuit): selecting enum_group_filter THEN typing into enum_search during its OWN later debounce window sends two list_groups dispatches, and the FINAL adopted DOM state reflects the freshly-resolved combined intent (round 39)",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    const layoutNodes = await mountQueryCircuitFixture();
+    const emissionWithRows = (rows: Array<Record<string, unknown>>) => ({
+      ...queryCircuitEmission(rows),
+      layoutNodes,
+    });
+
+    const scenario = buildMockScenario((_callIndex, body) => {
+      if (body.action === "Search" && body.layer === "screen_list") {
+        return { success: true, emission: emissionWithRows(QUERY_CIRCUIT_INITIAL_ROWS) };
+      }
+      if (body.layer === "enum_dictionary" && body.action === "list_groups") {
+        const payload = payloadOf(body);
+        const search = typeof payload.search === "string" ? payload.search : "";
+        const groupNameFilter = typeof payload.groupNameFilter === "string" ? payload.groupNameFilter : "";
+        return { success: true, emission: emissionWithRows([markerRow(search, groupNameFilter)]) };
+      }
+      return fallbackDispatchResponse(body);
+    });
+    globalThis.fetch = scenario.fetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+      render(h(ProjectionShell, {}), container);
+
+      const rows = () =>
+        Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
+      const searchInput = () => container.querySelector("input") as HTMLInputElement;
+      const groupFilterSelect = () => container.querySelector("select") as HTMLSelectElement;
+
+      await waitFor(() => rows().length === 2);
+
+      // Filter fires immediately -- settles well before search is ever touched.
+      simulateSelectChange(groupFilterSelect(), "Beta");
+      await waitFor(() =>
+        scenario.capturedDispatchBodies.some((b) =>
+          b.layer === "enum_dictionary" && b.action === "list_groups" &&
+          payloadOf(b).groupNameFilter === "Beta" && payloadOf(b).search === ""
+        )
+      );
+      await waitFor(() => rows().some((r) => r.textContent?.includes("search=|filter=Beta")));
+
+      // NOW start typing into search -- its own fresh 300ms debounce window, nothing pending to
+      // cancel this time (filter's own dispatch already fired and settled).
+      simulateInput(searchInput(), "typed-second");
+      await waitRealMs(350);
+      await waitFor(() =>
+        scenario.capturedDispatchBodies.some((b) =>
+          b.layer === "enum_dictionary" && b.action === "list_groups" &&
+          payloadOf(b).search === "typed-second" && payloadOf(b).groupNameFilter === "Beta"
+        )
+      );
+      await waitFor(() =>
+        rows().some((r) => r.textContent?.includes("search=typed-second|filter=Beta"))
+      );
+
+      const listGroupsCalls = scenario.capturedDispatchBodies.filter((b) =>
+        b.layer === "enum_dictionary" && b.action === "list_groups"
+      );
+      assertEquals(listGroupsCalls.length, 2, "filter's immediate dispatch and search's own later debounced dispatch must both fire independently");
+      assertEquals(
+        rows().some((r) => r.textContent?.includes("search=typed-second|filter=Beta")),
+        true,
+        "the FINAL DOM state must reflect the freshly-resolved combined intent (search='typed-second' read at search's OWN fire time, still combined with the filter selection made earlier)",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource = originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
+      render(null, container);
+      cleanup();
+    }
+  },
+);
+
+Deno.test(
+  "ProjectionShell (real mount, canonical ae200 fixture, query circuit): an OLDER list_groups response settling AFTER a NEWER one for the same circuit never overwrites the DOM, warning-free, tracker, or selection state with stale data (round 39)",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    const layoutNodes = await mountQueryCircuitFixture();
+    const emissionWithRows = (rows: Array<Record<string, unknown>>) => ({
+      ...queryCircuitEmission(rows),
+      layoutNodes,
+    });
+
+    const capturedDispatchBodies: Record<string, unknown>[] = [];
+    // Custom fetch (not buildMockScenario) -- the OLDER request's response is artificially
+    // delayed so it settles AFTER the newer one, deterministically reproducing an out-of-order
+    // network arrival without relying on real network nondeterminism.
+    const mockFetch = ((url: string, init?: RequestInit) => {
+      const path = url.toString();
+      if (path.startsWith("/api/auth/session") || path === "/api/auth/refresh") {
+        return Promise.resolve(new Response(JSON.stringify({ success: true }), { status: 200 }));
+      }
+      if (path !== "/api/dispatch") {
+        return Promise.resolve(new Response(JSON.stringify({ success: true }), { status: 200 }));
+      }
+      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      capturedDispatchBodies.push(body);
+      if (body.action === "Search" && body.layer === "screen_list") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ success: true, emission: emissionWithRows(QUERY_CIRCUIT_INITIAL_ROWS) }),
+            { status: 200 },
+          ),
+        );
+      }
+      if (body.layer === "enum_dictionary" && body.action === "list_groups") {
+        const payload = payloadOf(body);
+        const search = typeof payload.search === "string" ? payload.search : "";
+        const responseBody = {
+          success: true,
+          emission: emissionWithRows([markerRow(search, "")]),
+        };
+        if (search === "stale-older") {
+          // Artificial network delay -- resolves well after the newer "fresh-newer" request.
+          return new Promise((resolve) =>
+            setTimeout(
+              () => resolve(new Response(JSON.stringify(responseBody), { status: 200 })),
+              500,
+            )
+          );
+        }
+        return Promise.resolve(new Response(JSON.stringify(responseBody), { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ success: true }), { status: 200 }));
+    }) as typeof fetch;
+    globalThis.fetch = mockFetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+      render(h(ProjectionShell, {}), container);
+
+      const rows = () =>
+        Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
+      const searchInput = () => container.querySelector("input") as HTMLInputElement;
+
+      await waitFor(() => rows().length === 2);
+
+      // Older, slower request: fires after its own 300ms debounce -- ITS OWN dispatch is
+      // then queued and its fetch() call starts immediately (the api_command_lane FIFO queue
+      // was idle), but that fetch()'s RESPONSE is artificially delayed 500ms by the mock above.
+      simulateInput(searchInput(), "stale-older");
+      await waitRealMs(350);
+      await waitFor(() =>
+        capturedDispatchBodies.some((b) =>
+          b.layer === "enum_dictionary" && b.action === "list_groups" &&
+          payloadOf(b).search === "stale-older"
+        )
+      );
+
+      // Newer request: its OWN 300ms debounce elapses and it is PUSHED onto the SAME FIFO
+      // command queue well before the older request's artificial delay ends -- incrementing
+      // the shared circuit's dispatch sequence number at push time (before either settles).
+      // Because api_command_lane serializes ALL commands (frontendScheduler.ts
+      // drainClientCommandQueue awaits each entry fully before starting the next), this
+      // newer request's own fetch() call cannot physically START until the older one's
+      // artificially-delayed fetch() finally resolves -- so BOTH responses only become
+      // available after that ~500ms delay elapses, in strict queue order (older settles
+      // first, then newer). The proof this test cares about is NOT which one's network call
+      // fires first (queue order already guarantees that) but that the OLDER one's
+      // settlement -- despite resolving BEFORE the newer one in the queue -- is discarded by
+      // the sequence guard (its captured seq no longer matches the circuit's current seq,
+      // since the newer request already incremented it at push time) and never reaches
+      // onRuntimeDispatchResult/the DOM at all.
+      simulateInput(searchInput(), "fresh-newer");
+      await waitRealMs(900);
+      await waitFor(() =>
+        rows().some((r) => r.textContent?.includes("search=fresh-newer|filter="))
+      );
+      assertEquals(
+        rows().some((r) => r.textContent?.includes("search=fresh-newer|filter=")),
+        true,
+        "the newer request's own response must be adopted once BOTH requests have settled through the serialized command queue",
+      );
+      assertEquals(
+        rows().some((r) => r.textContent?.includes("search=stale-older|filter=")),
+        false,
+        "the older, now-stale response must never overwrite the DOM even though it settles FIRST in queue order -- the sequence guard discards it because a newer dispatch for the SAME circuit was already pushed before it settled",
+      );
+      assertEquals(searchInput().value, "fresh-newer", "the live tracked search value must remain the user's actual latest typed value, never reverted by the stale response");
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource = originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
+      render(null, container);
+      cleanup();
+    }
+  },
+);
+
+Deno.test(
+  "ProjectionShell (real mount, canonical ae200 fixture, query circuit): unmounting while a search debounce is still pending never dispatches after unmount (round 39)",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    const layoutNodes = await mountQueryCircuitFixture();
+    const emissionWithRows = (rows: Array<Record<string, unknown>>) => ({
+      ...queryCircuitEmission(rows),
+      layoutNodes,
+    });
+
+    const scenario = buildMockScenario((_callIndex, body) => {
+      if (body.action === "Search" && body.layer === "screen_list") {
+        return { success: true, emission: emissionWithRows(QUERY_CIRCUIT_INITIAL_ROWS) };
+      }
+      if (body.layer === "enum_dictionary" && body.action === "list_groups") {
+        const payload = payloadOf(body);
+        const search = typeof payload.search === "string" ? payload.search : "";
+        return { success: true, emission: emissionWithRows([markerRow(search, "")]) };
+      }
+      return fallbackDispatchResponse(body);
+    });
+    globalThis.fetch = scenario.fetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+      render(h(ProjectionShell, {}), container);
+
+      const rows = () =>
+        Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
+      const searchInput = () => container.querySelector("input") as HTMLInputElement;
+
+      await waitFor(() => rows().length === 2);
+
+      const listGroupsCallCount = () =>
+        scenario.capturedDispatchBodies.filter((b) =>
+          b.layer === "enum_dictionary" && b.action === "list_groups"
+        ).length;
+
+      // Starts a 300ms debounce timer, then unmounts BEFORE it ever fires.
+      simulateInput(searchInput(), "never-should-dispatch");
+      render(null, container);
+      cleanup();
+
+      // Wait well past the debounce window -- if the timer were NOT cleared on unmount, it
+      // would fire here.
+      await waitRealMs(400);
+      assertEquals(
+        listGroupsCallCount(),
+        0,
+        "a pending debounce timer must be cleared on unmount (clearAllPendingRuntimeDispatchDebounceTimers) -- it must never fire a dispatch into an unmounted projection",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource = originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
     }
   },
 );

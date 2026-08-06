@@ -965,3 +965,141 @@ Deno.test("emitBoundEvent: two DISTINCT layout nodes sharing the SAME catalog co
     schedulerTestOnly.resetCommandQueue();
   }
 });
+
+// round 39: search_filter_input_contract debounce_policy runtime enforcement -- a
+// componentType="form_input/search_input" Field on the admin_runtime dispatch lane must fail
+// closed BEFORE any dispatch attempt when its own debounceMs is missing/invalid, never falling
+// through to an immediate dispatch (the silent "invalid debounceMs == no debounce" fallback the
+// governance NG axis prohibits). Mirrors the backend persistence-boundary matrix
+// (NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs) and the translator's own
+// FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS rule. ────────────────────────────────
+
+function buildSearchInputSpec(
+  debounceMs: unknown,
+  componentType = "form_input/search_input",
+): RuntimeComponentSpec {
+  return {
+    componentId: "comp-search-input-debounce-fail-close-001",
+    nodeId: "search-debounce-fail-close",
+    packageId: null,
+    layoutId: "layout-search-debounce-fail-close-001",
+    wiringId: null,
+    componentType,
+    props: { data: { value: "" } },
+    debounceMs: debounceMs as RuntimeComponentSpec["debounceMs"],
+    eventBinding: {
+      change: {
+        eventType: "change",
+        runtimeDispatch: {
+          operationType: "list_x",
+          target: "manifest",
+          layer: "layer_a",
+          action: "list_x",
+          targetRef: `manifest:${ADMIN_ENUM_MANIFEST_ID}:layer_a:list_x`,
+          payloadFrom: { q: "node:search-debounce-fail-close.value" },
+        },
+      },
+    },
+    payloadFromNodeValues: { "search-debounce-fail-close": "typed value" },
+  };
+}
+
+Deno.test("emitBoundEvent: a form_input/search_input Field on the admin_runtime dispatch lane fails closed (no dispatch, no timer scheduled) when its own debounceMs is missing, zero, negative, non-integer, boolean, or a string -- never silently falls through to an immediate dispatch", async () => {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  let fetchCallCount = 0;
+  globalThis.fetch = (() => {
+    fetchCallCount++;
+    return Promise.resolve(
+      new Response(JSON.stringify({ success: true, errors: [] }), { status: 200 }),
+    );
+  }) as typeof fetch;
+  try {
+    const invalidDebounceValues: unknown[] = [
+      undefined,
+      0,
+      -5,
+      1.5,
+      true,
+      "300",
+    ];
+    for (const invalid of invalidDebounceValues) {
+      fetchCallCount = 0;
+      const spec = buildSearchInputSpec(invalid);
+      const result = __testOnly.emitBoundEvent(spec, "change", { value: "x" });
+      assertEquals(
+        result.ok,
+        false,
+        `debounceMs=${JSON.stringify(invalid)} must fail close synchronously, never schedule or dispatch`,
+      );
+      if (!result.ok) {
+        assertEquals(
+          result.error.includes("FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS"),
+          true,
+          `error must carry the FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS code, got: ${result.error}`,
+        );
+      }
+      // Give any (incorrectly) scheduled timer a chance to fire before asserting it never did.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      assertEquals(
+        fetchCallCount,
+        0,
+        `debounceMs=${JSON.stringify(invalid)} must never reach the network, immediately or after a delay`,
+      );
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
+});
+
+Deno.test("emitBoundEvent: a form_input/search_input Field with a valid positive-integer debounceMs dispatches normally (fail-close does not regress the legitimate case)", async () => {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  let fetchCallCount = 0;
+  globalThis.fetch = (() => {
+    fetchCallCount++;
+    return Promise.resolve(
+      new Response(JSON.stringify({ success: true, errors: [] }), { status: 200 }),
+    );
+  }) as typeof fetch;
+  try {
+    const spec = buildSearchInputSpec(20);
+    const result = __testOnly.emitBoundEvent(spec, "change", { value: "x" });
+    assertEquals(result.ok, true);
+    for (let i = 0; i < 40 && fetchCallCount === 0; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assertEquals(fetchCallCount, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
+});
+
+Deno.test("emitBoundEvent: a NON-search_input Field (e.g. form_input/select, discrete-choice) on the admin_runtime dispatch lane is NEVER required to declare debounceMs -- dispatches immediately with no debounceMs authored, matching the discrete-choice exemption exactly", async () => {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  let fetchCallCount = 0;
+  globalThis.fetch = (() => {
+    fetchCallCount++;
+    return Promise.resolve(
+      new Response(JSON.stringify({ success: true, errors: [] }), { status: 200 }),
+    );
+  }) as typeof fetch;
+  try {
+    const spec = buildSearchInputSpec(undefined, "form_input/select");
+    const result = __testOnly.emitBoundEvent(spec, "change", { value: "x" });
+    assertEquals(result.ok, true);
+    for (let i = 0; i < 40 && fetchCallCount === 0; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assertEquals(fetchCallCount, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
+});

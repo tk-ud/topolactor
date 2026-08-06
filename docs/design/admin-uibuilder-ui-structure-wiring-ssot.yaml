@@ -1723,6 +1723,18 @@ admin_uibuilder_ui_structure_wiring_ssot:
         high-frequency and the binding's debounceMs is missing/invalid —
         authoring/apply policy guard alone does not stop an out-of-band
         persisted interaction from reaching the dispatch lane at runtime
+      - round 39 cross-reference (a distinct, narrower policy — not a duplicate of
+        this one): the admin_runtime dispatch lane's own Field-owned search_input
+        debounce requirement (docs/design/react-schema-topology-seed-translator-
+        ssot.yaml search_filter_input_contract.debounce_policy /
+        wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring.
+        field_participation rule 5) follows this SAME 3-layer shape (authoring
+        fail-close, backend persistence-boundary fail-close, and — added round 39
+        — a frontend runtime dispatch-time fail-close in emitBoundEvent, never a
+        silent fallback to immediate dispatch on a missing/invalid debounceMs) but
+        is scoped to componentType="form_input/search_input" specifically, not to
+        this section's trigger-name-based high-frequency classification —
+        intentionally NOT merged into high_frequency_policy's own rule set
     fail_close:
       - high_frequency_trigger_with_backend_or_external_dispatch_without_debounce_ms
       - runtime_dispatch_of_high_frequency_trigger_without_debounce_ms_at_event_time

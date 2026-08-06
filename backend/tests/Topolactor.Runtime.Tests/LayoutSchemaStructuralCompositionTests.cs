@@ -1211,4 +1211,75 @@ public class LayoutSchemaStructuralCompositionTests
         var section = Assert.Single(composed, n => n.NodeId == "sec1");
         Assert.Null(section.DispatchTargetRefByTriggerJson);
     }
+
+    // ─── round 39: debounceMs round-trip through the SAME schema-tree + tensor-override merge
+    // boundary round 37 itself found silently dropping this field (NodeLocalData originally
+    // lacked a DebounceMs field entirely) — proves a search_input Field's authored debounceMs
+    // survives BuildNodeLocalDataByNodeId -> Compose exactly like propsJson/dispatchTargetRef
+    // ByTrigger/dispatchPayloadFromByTrigger already do, and that the COMPOSED node (unlike the
+    // raw pre-composition tensor node NpgsqlUiTopologyRepository's save-time validators inspect)
+    // genuinely does carry componentKind/componentKey -- the post-composition fact the frontend
+    // actually receives and depends on (spec.componentType in
+    // frontend/runtime/runtimeComponentFactory.ts). ────────────────────────────────────────────
+
+    private const string SearchFieldRecordsJson = """
+    {
+      "records": [
+        {"type":"topology_ui_seed_record","parentKey":"implicit_virtual_root","record":{"recordType":"topology_ui_category","key":"cat1","label":"Category One","sourceReactPath":"$.test.cat1","sourceYamlRefs":["ref"],"knownGapRefs":[]}},
+        {"type":"topology_ui_seed_record","parentKey":"cat1","record":{"recordType":"topology_ui_section","key":"sec1","label":"Section One","sourceReactPath":"$.test.sec1","sourceYamlRefs":["ref"],"knownGapRefs":[]}},
+        {"type":"topology_ui_seed_record","parentKey":"sec1","record":{"recordType":"topology_ui_field","key":"search1","label":"Search","control":"form_input/search_input","sourceReactPath":"$.test.search1","sourceYamlRefs":["ref"],"knownGapRefs":[]}}
+      ]
+    }
+    """;
+
+    [Fact]
+    public void ComposeLayoutSchemaWithTensor_SearchInputFieldDebounceMs_SurvivesNodeLocalDataMerge_AndComposedNodeCarriesComponentKindKey()
+    {
+        var records = ParseValidRows(SearchFieldRecordsJson);
+        var componentKeyToId = new Dictionary<string, string>
+        {
+            ["search_input.alias"] = "00000000-0000-0000-0001-000000000099",
+        };
+        var componentIdToKind = new Dictionary<string, string>
+        {
+            ["00000000-0000-0000-0001-000000000099"] = "form_input/search_input",
+        };
+        var tensorNodes = new List<LayoutNodeRecord>
+        {
+            new(NodeId: "search1", NodeKind: "catalog_component", HtmlTag: null,
+                ComponentKey: null, ComponentId: null, ParentNodeId: null,
+                SlotKey: null, OrderIndex: 0, X: 0, Y: 0, Width: null, Height: null,
+                LayoutClassRefs: null,
+                DispatchTargetRefByTriggerJson: """{"change":"manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups"}""",
+                DebounceMs: 300),
+        };
+        var nodeLocalDataByNodeId = LayoutSchemaTensorComposer.BuildNodeLocalDataByNodeId(tensorNodes);
+        Assert.Equal(300, nodeLocalDataByNodeId["search1"].DebounceMs);
+
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records,
+            interactionsBySourceActionKey: new Dictionary<string, string>(),
+            componentKeyToId,
+            componentIdToKind,
+            nodeLocalDataByNodeId);
+
+        var search = Assert.Single(composed, n => n.NodeId == "search1");
+        Assert.Equal(300, search.DebounceMs);
+        // ComponentKind (resolved via componentId -> kind lookup) is the schema-composer's own
+        // identity carrier for a catalog_component leaf -- this is what the frontend actually
+        // receives and keys spec.componentType off (frontend/runtime/runtimeComponentAdapter.ts
+        // adaptComponentDataHub: componentType: hub.componentKind). Compose() never populates
+        // ComponentKey on its OWN output (ComponentKey: null is hardcoded for every composed
+        // leaf) -- componentKey is only ever a transient internal lookup key used to resolve
+        // componentId/componentKind here, never itself persisted onto the composed
+        // LayoutNodeRecord. This is exactly why NpgsqlUiTopologyRepository's save-time
+        // validators, which inspect the RAW pre-composition layout_patch_json.nodes[] (not
+        // this composed output), cannot use ComponentKind as an identity signal for a
+        // schema-composed surface like admin-enum/ae200 either -- only a tensor-only-authored
+        // node (whose componentKey is a real DB column, see NpgsqlUiTopologyRepository's other
+        // LoadLayoutNodesAsync-family readers) carries componentKey directly on its own raw
+        // override JSON.
+        Assert.Equal("form_input/search_input", search.ComponentKind);
+        Assert.Contains("list_groups", search.DispatchTargetRefByTriggerJson);
+    }
 }
