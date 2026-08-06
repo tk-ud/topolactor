@@ -308,7 +308,7 @@ react_schema_topology_seed_translator_ssot:
       category: '[category key=.. label=.. sourceYamlRefs=..] ... [/category]'
       section: '[section key=.. label=.. sectionKind=.. sourceYamlRefs=..] ... [/section]'
       form: '[form key=.. label=.. target=.. mode=.. authorityMarker=.. sourceYamlRefs=..] ... [/form]'
-      field: '[field key=.. label=.. control=.. required=true|false sourceYamlRefs=.. knownGapRefs=.. valueFrom=.. wiringLane=.. actionRef=.. trigger=.. payloadFrom=.. optionsSource=.. optionsLabelPath=.. optionsValuePath=.. authorityMarker=..]'
+      field: '[field key=.. label=.. control=.. required=true|false sourceYamlRefs=.. knownGapRefs=.. valueFrom=.. wiringLane=.. actionRef=.. trigger=.. payloadFrom=.. optionsSource=.. optionsLabelPath=.. optionsValuePath=.. authorityMarker=.. debounceMs=..]'
       table: '[table key=.. label=.. source=.. display=.. displayColumns=.. rowsSource=.. sourceYamlRefs=..]'
       workflow: '[workflow key=.. label=.. authorityMarker=.. sourceYamlRefs=..] ... [/workflow]'
       modal: '[modal key=.. label=.. title=.. body=.. sourceYamlRefs=..] ... [/modal]'
@@ -497,7 +497,7 @@ react_schema_topology_seed_translator_ssot:
         emits_seed: topology_ui_form
       Field:
         required: [control, required]
-        optional: [valueFrom, eventBinding, authorityMarker]
+        optional: [valueFrom, eventBinding, authorityMarker, debounceMs]
         optional_paired: [optionsSource, optionsLabelPath, optionsValuePath]
         optional_note: >-
           admin-enum subBundle closure round. valueFrom is the authored propBindings.value.source
@@ -511,8 +511,16 @@ react_schema_topology_seed_translator_ssot:
           below for the read-only fail-close restriction this participation is subject to. Both are
           absent for the common case (most Fields author neither). round 37: authorityMarker becomes
           REQUIRED (not merely optional) the moment a Field also carries wiringLane -- see
-          authorityMarker.required_on_conditional.field above and field_participation rule 4;
-          absent for the common case (a Field with no wiringLane never needs it).
+          authorityMarker.required_on_conditional.field above and field_participation rule 4.
+          debounceMs (round 37, search_filter_input_contract debounce_policy) becomes REQUIRED
+          (a positive integer, milliseconds) the moment control="form_input/search_input" AND
+          wiringLane is authored -- see field_participation rule 5; absent for the common case (a
+          Field with no wiringLane, or a non-search_input control, never needs it). Mirrors
+          Step/Action's pre-existing debounceMs authoring_metadata_field
+          (admin-uibuilder-ui-structure-wiring-ssot.yaml high_frequency_policy) but travels through
+          a DIFFERENT runtime lane (admin_runtime, not externalPortDispatch/
+          instanceOperationDispatch) -- see frontend/runtime/runtimeComponentFactory.ts
+          scheduleOrDispatchRuntimeCommand for the runtime behavior it drives.
         optional_paired_note: >-
           round 36: optionsSource/optionsLabelPath/optionsValuePath (authored together or none --
           see input_text_markup_grammar_contract.field_options_source_attributes below) become this
@@ -1440,7 +1448,21 @@ react_schema_topology_seed_translator_ssot:
                Field closed (they are not redundant with each other -- rule 3 checks what the
                targetRef actually resolves to, rule 4 checks what the author declared they meant it
                to be, and BOTH must hold).
-          A Field satisfying all four restrictions is a legal generic read/filter override (the
+            5. FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS (round 37,
+               search_filter_input_contract debounce_policy) -- a Field with
+               control="form_input/search_input" declaring this lane must carry a valid
+               positive-integer debounceMs. Scoped to search_input specifically: a discrete-choice
+               control (e.g. form_input/select) fires once per selection via its own onChange, never
+               once per keystroke, so it carries none of the "uncontrolled on every keystroke" risk
+               this rule exists to close and is never required to declare one. Runtime enforcement:
+               frontend/runtime/runtimeComponentFactory.ts scheduleOrDispatchRuntimeCommand delays
+               the actual network enqueue by debounceMs, canceling any still-pending timer for the
+               SAME node on a new firing -- collapsing rapid typing to one dispatch per debounce
+               window. A per-node monotonic dispatch sequence number
+               (runtimeDispatchSeqByComponentId) additionally discards a settled response that is no
+               longer the latest fired call for that node (stale-result boundary) -- generic to every
+               admin_runtime dispatch, not scoped to debounced Fields alone.
+          A Field satisfying all five restrictions is a legal generic read/filter override (the
           enum_search -> list_groups example above); one that fails any of them is a blocking
           authoring error, never a silent pass-through. Distinct from, and does not replace,
           validate_wiring_node's existing generic lane/source/completeness checks (payloadFrom

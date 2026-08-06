@@ -79,6 +79,18 @@ export type RuntimeComponentSpec = {
   localStateStore?: RuntimeGuardedStateStore;
   /** Snapshot used by dispatchExternalPort payloadFrom node:<nodeId>.value resolution. */
   payloadFromNodeValues?: Record<string, unknown>;
+  /**
+   * round 37 (search_filter_input_contract debounce_policy): a Field's own declared
+   * debounceMs (translator-authored, react-schema-topology-seed-translator-ssot.yaml
+   * Field grammar) — when present and a valid positive integer, emitBoundEvent's
+   * admin_runtime Lane 2 dispatch (binding.runtimeDispatch) on an "input" trigger delays
+   * the actual network enqueue by this many ms, collapsing rapid keystrokes to the LAST
+   * value only (a new keystroke cancels the previous pending timer). Absent/invalid on
+   * every pre-existing node (no authored source sets it yet) — behavior for those nodes
+   * is byte-for-byte unchanged (immediate dispatch), so this is additive/opt-in, not a
+   * generic behavior change to every input.
+   */
+  debounceMs?: number;
   /** Fires with this node's own latest scalar value on a value-bearing trigger (change/input/select). */
   onNodeValueChange?: (value: unknown) => void;
   /** Fires with the settled result of this node's own admin_runtime dispatch. See ComponentDataHub. */
@@ -262,6 +274,7 @@ export function adaptComponentDataHub(hub: ComponentDataHub): AdaptResult {
       payloadFromNodeValues: hub.payloadFromNodeValues,
       onNodeValueChange: hub.onNodeValueChange,
       onRuntimeDispatchResult: hub.onRuntimeDispatchResult,
+      debounceMs: hub.debounceMs,
       className,
       design,
     },

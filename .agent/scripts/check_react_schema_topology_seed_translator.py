@@ -2251,11 +2251,11 @@ def main():
         )
         ae200_nodes_by_id = {n["nodeId"]: n for n in ae200_tensor_nodes}
         expect(
-            "121. real admin-enum-ae200 fixture's generate-topology-seed run alone (no post-generation manual patch) produces enum_table's own propsJson (columns) and propBindings (rows: emission.data) -- the content round 30 could only reproduce by hand-extracting it from the previous seed",
+            "121. real admin-enum-ae200 fixture's generate-topology-seed run alone (no post-generation manual patch) produces enum_table's own propsJson (columns) and propBindings (rows: emission.data.groups) -- the content round 30 could only reproduce by hand-extracting it from the previous seed; round 37 moved rowsSource from emission.data to emission.data.groups (list_groups' response envelope became {groups, groupOptions} so enum_group_filter's own options no longer self-shrink to the same narrowed array enum_table's rows read from)",
             "enum_table" in ae200_nodes_by_id
             and ae200_nodes_by_id["enum_table"].get("propsJson") is not None
             and "groupName" in ae200_nodes_by_id["enum_table"]["propsJson"]
-            and ae200_nodes_by_id["enum_table"].get("propBindings") == {"rows": {"source": "emission.data"}},
+            and ae200_nodes_by_id["enum_table"].get("propBindings") == {"rows": {"source": "emission.data.groups"}},
         )
         ae200_modal_ids = [nid for nid in ae200_nodes_by_id if nid.endswith("_confirm_modal")]
         expect(
@@ -2371,18 +2371,25 @@ def main():
             translator_impl.validate_field_admin_runtime_dispatch_wiring(node, errs)
             return [e["ruleId"] for e in errs]
 
+        _UNSET = object()
+
         def build_field_dispatch_node(
             payload_from=None,
             secondary=None,
             target_ref="manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
             authority_marker="draft_or_projection_only",
             event_binding_authority="draft_or_projection_only",
+            control=None,
+            debounce_ms=_UNSET,
         ):
             # round 37: defaults are the CORRECT authorityMarker/authority pair (rule 4's required
             # value) so every negative test below isolates the ONE violation its own name/comment
             # describes, rather than incidentally also tripping FIELD_ADMIN_RUNTIME_DISPATCH_
             # AUTHORITY_MARKER_REQUIRED/MISMATCH alongside it. Tests that specifically target rule 4
-            # override authority_marker/event_binding_authority explicitly.
+            # override authority_marker/event_binding_authority explicitly. control defaults to None
+            # (absent) -- rule 5 (debounceMs) only fires for control=="form_input/search_input", so
+            # every pre-existing test above (126-130) that never passes control is unaffected by
+            # rule 5's addition, same as before it existed.
             node = {
                 "kind": "Field", "key": "test_dispatch_field", "_path": "$.test.test_dispatch_field",
                 "authorityMarker": authority_marker,
@@ -2394,6 +2401,10 @@ def main():
                     "payloadFrom": payload_from or {},
                 },
             }
+            if control is not None:
+                node["control"] = control
+            if debounce_ms is not _UNSET:
+                node["debounceMs"] = debounce_ms
             if secondary is not None:
                 node["secondaryDisclosureAction"] = secondary
             return node
@@ -2517,6 +2528,58 @@ def main():
         expect(
             "130. validate_field_admin_runtime_dispatch_wiring positive control: a Field dispatching to a read action (list_groups) with no authority flag, no secondaryDisclosureAction, and the correct authorityMarker produces zero errors, proving 126-129o fail for the right reason and not because every Field-owned use of this lane fails",
             run_field_dispatch_check(field_valid_read_node) == [],
+        )
+
+        # 130a-130d (round 37): FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS -- a
+        # continuous-typing search Field (control="form_input/search_input") on this lane must
+        # declare a valid positive-integer debounceMs; a discrete-choice control (e.g. select) is
+        # never required to.
+        field_search_no_debounce_node = build_field_dispatch_node(
+            payload_from={"search": "node:test_dispatch_field.value"},
+            control="form_input/search_input",
+        )
+        expect(
+            "130a. validate_field_admin_runtime_dispatch_wiring rejects a search_input Field on this lane with NO debounceMs at all via FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS -- a continuous-typing search field must never dispatch uncontrolled on every keystroke",
+            "FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS" in run_field_dispatch_check(field_search_no_debounce_node),
+        )
+
+        field_search_zero_debounce_node = build_field_dispatch_node(
+            payload_from={"search": "node:test_dispatch_field.value"},
+            control="form_input/search_input",
+            debounce_ms=0,
+        )
+        expect(
+            "130b. validate_field_admin_runtime_dispatch_wiring rejects a search_input Field whose debounceMs is 0 (non-positive) via FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS -- zero is not a valid debounce window, never silently treated as 'no delay'",
+            "FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS" in run_field_dispatch_check(field_search_zero_debounce_node),
+        )
+
+        field_search_negative_debounce_node = build_field_dispatch_node(
+            payload_from={"search": "node:test_dispatch_field.value"},
+            control="form_input/search_input",
+            debounce_ms=-100,
+        )
+        expect(
+            "130c. validate_field_admin_runtime_dispatch_wiring rejects a search_input Field whose debounceMs is negative via FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS",
+            "FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS" in run_field_dispatch_check(field_search_negative_debounce_node),
+        )
+
+        field_search_valid_debounce_node = build_field_dispatch_node(
+            payload_from={"search": "node:test_dispatch_field.value"},
+            control="form_input/search_input",
+            debounce_ms=300,
+        )
+        expect(
+            "130d. validate_field_admin_runtime_dispatch_wiring positive control: a search_input Field with a valid positive-integer debounceMs (300) produces zero errors, proving 130a-130c fail for the right reason",
+            run_field_dispatch_check(field_search_valid_debounce_node) == [],
+        )
+
+        field_select_no_debounce_node = build_field_dispatch_node(
+            payload_from={"groupNameFilter": "node:test_dispatch_field.value"},
+            control="form_input/select",
+        )
+        expect(
+            "130e. validate_field_admin_runtime_dispatch_wiring does NOT require debounceMs for a discrete-choice control (form_input/select) on this lane -- rule 5 is scoped to search_input specifically, since a select fires once per selection, never once per keystroke",
+            run_field_dispatch_check(field_select_no_debounce_node) == [],
         )
 
         # 131: the REAL admin-enum-ae200 fixture's own enum_search Field (the actual production

@@ -32,28 +32,45 @@ public record EnumDictionaryGroupWithItemsSummaryDto(
 public record EnumDictionaryGetGroupRequestDto(
     [property: JsonPropertyName("groupId")] string GroupId);
 
-// generic list_groups search/filter (admin-enum subBundle closure round; extended round 36 to
-// the owning SSOT's full declared search/filter target field set -- docs/design/
-// admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.enum.
-// capability_requirements.search/filter): two data-defined OPTIONAL payload fields on the
-// EXISTING list_groups read action, never a new action or enum-specific lane.
+// generic list_groups search/filter (admin-enum subBundle closure round; extended round 36 to the
+// owning SSOT's full declared search target field set, and round 37 to the owning SSOT's own
+// declared FILTER target field set -- docs/design/admin-normal-surface-projection-seed-ssot.yaml
+// surface_axes.admin.surfaces.enum.capability_requirements.search/filter): data-defined OPTIONAL
+// payload fields on the EXISTING list_groups read action, never a new action or enum-specific
+// lane.
 // Search (free-text substring match) covers ALL FIVE owning-SSOT-declared search target fields
 // across enum.groups/enum.items/enum.group_items -- see
 // NpgsqlEnumDictionaryRepository.ListGroupsWithItemsSummaryAsync for the exact per-field match
-// shape (group_name/groups.index_num on the group row itself; items.name/items.index_num/
-// group_items.position on ANY member item, matching the group that contains it). Absent/null/
-// empty Search means no filter (the canonical full list).
-// GroupIdFilter (exact match, the enum_group_filter select control's own selected groupId) scopes
-// the roster to a single group -- the owning SSOT's declared filter target fields
-// (groups.group_name/groups.index_num identify the group; group_items.position is inherently
-// preserved by itemsSummary's existing position-ordering once scoped to that one group, not a
-// second independent filter input). Absent/null means no group scoping (the canonical full list).
-// A payload key present but carrying a non-string JSON value fails the request's own JSON
-// deserialization (System.Text.Json raises before this record is ever constructed), so
-// DataEnumDictionaryListGroupsAsync's own malformed-payload branch already fails closed for that
-// case -- no extra check needed here. A present-but-non-UUID-parseable GroupIdFilter string is
-// checked explicitly by DataEnumDictionaryListGroupsAsync (JSON deserialization alone cannot
-// catch that -- a non-UUID string is still valid JSON).
+// shape. Absent/null/empty Search means no filter (the canonical full list).
+// GroupNameFilter/GroupIndexNumFilter/ItemPositionFilter (round 37) are the owning SSOT's own
+// THREE declared filter target fields (enum.groups.group_name, enum.groups.index_num,
+// enum.group_items.position) as three independent, combinable, exact-match payload fields --
+// replacing round 36's GroupIdFilter (an exact-match on enum.groups.group_id, a field the owning
+// SSOT never actually declares as part of capability_requirements.filter; keeping it would have
+// been a substitute for the declared fields, not an implementation of them). The
+// enum_group_filter select control drives GroupNameFilter (its own option value IS the group's
+// name now, not an opaque id -- see propBindings.options.valuePath="groupName" on that node).
+// GroupIndexNumFilter/ItemPositionFilter are declared-field-complete backend capability with no
+// dedicated UI control yet (same shape as Search's five fields, all reachable through one input).
+// Absent/null on any of the three means that field does not narrow the result (the canonical full
+// list when none are supplied). A payload key present but carrying a non-string/non-integer JSON
+// value fails the request's own JSON deserialization (System.Text.Json raises before this record
+// is ever constructed), so DataEnumDictionaryListGroupsAsync's own malformed-payload branch
+// already fails closed for that case -- no extra check needed here.
 public record EnumDictionaryListGroupsRequestDto(
     [property: JsonPropertyName("search")] string? Search,
-    [property: JsonPropertyName("groupIdFilter")] string? GroupIdFilter);
+    [property: JsonPropertyName("groupNameFilter")] string? GroupNameFilter,
+    [property: JsonPropertyName("groupIndexNumFilter")] int? GroupIndexNumFilter,
+    [property: JsonPropertyName("itemPositionFilter")] int? ItemPositionFilter);
+
+// round 37: list_groups' full response envelope -- Groups is the (possibly search/filter-
+// narrowed) roster enum_table's own rows bind to; GroupOptions is the SAME shape ListGroupsAsync
+// already returns (group_id/index_num/group_name, always unfiltered) so enum_group_filter's own
+// select options never self-narrow to whatever the CURRENT search/filter happens to match --
+// closing the options-self-shrinking gap the shared single-array response shape had (both rows
+// and options previously read the SAME "emission.data" array, so filtering the roster also
+// filtered the filter control's own choices, including making it impossible to pick a different
+// group, or leaving zero options, once any filter narrowed the result to nothing).
+public record EnumDictionaryListGroupsResponseDto(
+    [property: JsonPropertyName("groups")] IReadOnlyList<EnumDictionaryGroupWithItemsSummaryDto> Groups,
+    [property: JsonPropertyName("groupOptions")] IReadOnlyList<EnumDictionaryGroupDto> GroupOptions);

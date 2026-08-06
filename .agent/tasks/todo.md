@@ -1652,6 +1652,38 @@ PR #600（round14〜24、コミット履歴は上記の各round実装記録を�
 - ProjectionShellの直接mountをroute wrapperのproofとして扱う——route moduleの実mountでdefault/明示的selectionの優先順位を証明すること。
 - 新規SSOT属性（今回はField `valueFrom`/`optionsSource`等）を、実装が先行してSSOT定義が後追いで欠落したまま複数roundにわたって放置する——round36は"実装済みなのにSSOT未定義"という状態が1 round以上残っていたことを、governance gapとして扱った。
 
+### admin-enum subBundle 実装記録（2026-08-06 round 37 — Field-owned admin_runtime dispatch read/filter authorityをverb-heuristic denylistから明示的SSOT分類へ置換し3層防御へ接続、owning SSOTが宣言するdeclared filter field（group_name/index_num/position）を実配線、optionsSourceの自己縮小を解消、debounce/stale-result境界を新設、route/package選択の優先順位を証明）
+
+**round37の指示**: `MUTATION_ACTION_VERB_PREFIXES`という動詞ヒューリスティックのdenylist（round36で新設）を、admin_enums SSOTのadmin_runtime_actions分類から導出する明示的なpositive allowlistへ置換し、この分類をtranslator/backend layout-patch保存/frontend runtime dispatchの3層すべてで共有すること、base SSOTのUX契約をOwner承認無く縮小しないこと、宣言済みsearch/filter field・debounce・empty/reset・malformed payload fail-close・route選択優先順位のすべてをproduction DOM/live-DB証明で閉じることが指示された。
+
+**1. 分類authorityの置換（3層防御接続）**: `ADMIN_RUNTIME_READ_ACTIONS`という新規positive allowlist（`admin-master-roster-management-ssot.yaml`の`admin_runtime_actions`ブロックが定義する`*_read`グループそのものをmirror）を、python translator（`.agent/scripts/react_schema_topology_seed_translator.py`）・backend（`NpgsqlUiTopologyRepository.cs`の新規`ValidateFieldOwnedAdminRuntimeReadOnlyDispatch`、layout-patch保存時）・frontend（新規`frontend/runtime/adminRuntimeReadActions.ts`、`renderEmission.ts`のdispatch-wiring時）の3箇所へ同一集合として配線した。`admin_runtime_actions`自身も`auth_users`を`auth_users_read`/`auth_users_write`へ分割し、機械可読な形へ整えた。`manifest:promote`/`layout_patch:apply`/`seed_runtime:import`/`package_generator:promote_package`等、旧denylistの動詞リストには一度も含まれず素通りしていたaction群に対するnegative proofを追加した。
+
+**2. Field専用authorityMarker（`draft_or_projection_only`）の新設**: Fieldが`admin_runtime_dispatch_override_wiring`を使う際、`authorityMarker`が明示的にこの値と一致することを要求するrule 4を追加し、eventBinding.authorityとの一致も検査した（このlaneの`allowed_authority_mapping_values`へFieldのみの追加legal値として登録、Action/Stepの既存3値は無変更）。
+
+**3. owning SSOT UX契約の縮小監査**: base branch（PR起点）のSSOTと現行実装を比較し、「Show All」ボタンと行クリックで展開するinline update panelが実際に縮小されていることを確認した。実装するには汎用runtime機構として存在しない`setState statePath="value"` actionTypeとTable行クリック開閉配線が必要であり、臆測で新設せず、`ux_contract_shrinkage_owner_decision_pending`としてSSOTへ明示的なOwner決定待ち注記を記録した（無言の縮小放置ではなく、正直な未解決記録）。
+
+**4. 宣言済みfilter fieldの実配線**: `groupIdFilter`（`enum.groups.group_id`、宣言されていないfield）を、owning SSOTが実際に宣言する3フィールド（`enum.groups.group_name`/`enum.groups.index_num`/`enum.group_items.position`）——`groupNameFilter`/`groupIndexNumFilter`/`itemPositionFilter`として置換し、それぞれ独立・AND結合可能・exact matchとして実装した（`EnumDictionaryListGroupsRequestDto`/`NpgsqlEnumDictionaryRepository.ListGroupsWithItemsSummaryAsync`拡張）。
+
+**5. optionsSourceの自己縮小解消**: `list_groups`の応答envelopeを`{groups, groupOptions}`へ変更し、`groups`はsearch/filterで絞り込まれた結果、`groupOptions`は常に既存`ListGroupsAsync()`を再利用したfull unfiltered rosterとした（filter適用中でも`enum_group_filter`自身の選択肢が縮小しない）。frontendの`rowsSource`/`optionsSource`をそれぞれ`emission.data.groups`/`emission.data.groupOptions`へ更新（既存正規表現`ROWS_SOURCE_SHAPE_RE`はvalue変更のみで対応、grammar変更不要）。
+
+**6. debounce carrierとstale-result境界の新設**: Field grammar（`react-schema-topology-seed-translator-ssot.yaml`）へ`debounceMs`をoptional属性として追加し、`control="form_input/search_input"`かつこのlaneを使うFieldには必須とするrule 5（`FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS`）を新設した（select等discrete-choice controlは対象外——選択は1回のchangeイベントであり、キーストロークのような高頻度dispatchのリスクを持たないため）。frontend側は`RuntimeComponentSpec.debounceMs`という新規opt-inフィールドを追加し、`emitBoundEvent`のadmin_runtime dispatchブランチが有効なpositive integer debounceMsを見つけた場合のみ実際のネットワーク送出を遅延（同一node向けの新しいfiringが前回のtimerをcancelし、debounce窓内では最後の値だけが実際に送出される）——debounceMs未宣言のnode（既存の全node）は完全に無変更（即座に送出）。stale-result境界として`runtimeDispatchSeqByComponentId`という汎用（debounce専用ではない）monotonic per-node sequence guardを新設し、同一nodeに対して新しいdispatchが発行された後に決着した古いdispatchの応答は静かに破棄する。`enum_search`自身（`db/seed_empty.sql`のae204/ae206、および翻訳fixture）へ`debounceMs=300`を実配線した。unmount時に未決着のdebounce timerを一括clearする`clearAllPendingRuntimeDispatchDebounceTimers`を新設し、`ProjectionShell.tsx`のunmount cleanupへ接続した（本round自身が発見した潜在的leakのpreventive fix、production上のdangling-callbackリスクを閉じる）。backend側の`ENUM_LIST_GROUPS_PAYLOAD_NOT_OBJECT`（non-object payloadのfail-close）はbackend unit test/live-DB testで既に証明済み。
+
+**7. route/package選択の優先順位証明**: `frontend/tests/adminEnumsRouteEntry.test.ts`（round36で新設）へ2件のtest（`?route=`/`?package=`）を追加し、round36が証明した`?manifest=`に加えて、`?route=`がaxes.targetを上書きしae200 default target_refを注入させないこと、`?package=`単独でも同様にdefault target_refを注入させないことを、実route module mountで証明した。
+
+**8. backend runtime layer merge層のgap発見・修正（本round自身が発見した実装バグ）**: `debounceMs`をnode-level scalar fieldとして`LayoutNodeRecord`/`LayoutNode`（backend）と`LayoutNode`（frontend `dispatch.ts`）へ追加後、実dispatchでは値が最終出力から欠落する現象を発見した。原因は`LayoutSchemaTensorComposer.cs`の`NodeLocalData`構造体（schema-composed nodeへtensor overrideをmergeする際のフィールド許可リスト）が`dispatchTargetRefByTrigger`/`dispatchPayloadFromByTrigger`等は転送するが`debounceMs`を含んでいなかったこと——`ParseNodesFromLayoutPatchJson`は正しくparseしていたが、schema-tree由来のnodeとのmerge段階で drop されていた。`NodeLocalData`/`BuildNodeLocalDataByNodeId`/`Compose`の3箇所へ`DebounceMs`を追加して解消した。
+
+**test証明の全体像（round37）**: python translator check script 223 check（既知の無関係flake"7a"のみ残存）、うち新規追加ADMIN_RUNTIME_READ_ACTIONS negative/positive proof群・authorityMarker rule 4 proof群・debounceMs rule 5 proof群（130a-130e）を含む。backend: `dotnet build`solution全体0 error、`Topolactor.Runtime.Tests`1576/1576 pass、`Topolactor.Integration.Tests`229/230 pass（既知の無関係failure`ApplyConfirmedLayoutPatchAsync_TensorMissing_RollsBackLayoutUpdate`のみ、`ui_layout_registry`という存在しないtableを参照する事前から存在する不具合、git stash A/B比較で本round非関連であることを確認）。実PostgreSQL経由で`AdminEnumHubRelationUiProjectionLiveDbTests`36/36 pass（filter field替え・options non-shrinking・malformed payload fail-closeの新規live-DB test含む）。frontend: `deno check`clean、新規追加した3 DOM test（`selecting enum_group_filter scopes ... round 37`/`?route=`/`?package=`）はassertion自体は全てpassすることを`--trace-leaks`で確認済み（leak sanitizerが検出する2種のtimer/interval——happy-domの`AsyncTaskManager.resolveWhenComplete`とmodule-level`frontendScheduler.ts`の`startComponentEventRuntime`interval——はいずれも本round着手前から存在する既知のchronic flakeであることをgit stash A/B比較で再確認、debounce機構自身が原因ではないことを確認済み）。governance check（`check-admin-uibuilder-wiring.sh`/`check-static-ssot-purity.sh`/`check-ssot-vocabulary-contract.sh`/`check-docs-ssot-connectivity.sh`/`agent-ui-local-test run-worktype-tests`）いずれもpass。
+
+**未解決のまま正直に残す項目**: (a) `ux_contract_shrinkage_owner_decision_pending`（Show Allボタン・inline update panelのUX契約縮小）はOwner決定待ちのまま——実装には新規汎用runtime機構（`setState statePath="value"` actionType、Table行クリック開閉配線）が必要であり、本round範囲では新設しなかった。(b) 既知のchronic leak-sanitizer flakiness（`frontendScheduler.ts`のmodule-level interval由来、round35以前から存在）は本round・過去round問わず未解消のまま——product runtime影響は無く、test環境固有のnoise。
+
+### Governance NG boundary追記（round 37）
+
+- 分類authorityの置換を1層（translator）のみで行い、backend/frontend runtime dispatchへ接続しないまま「防御が強化された」と主張する——本round は3層すべてへの接続を必須とした。
+- owning SSOTが宣言する複数のdeclared filter fieldのうち、実装容易な1つ（`groupId`、実は宣言されていないfield）だけを実装して「filter実装済み」と扱う——宣言された全フィールドを実装するか、未実装分を正直にgapとして記録すること。
+- 検索/filterのoptions sourceを、現在適用中のfilterと同じqueryから供給し、結果的にoptions自体がfilter適用のたびに縮小する——options sourceは常にunfiltered fullリストから供給すること。
+- 高頻度trigger（continuous typing search field）を、debounce宣言なしで実際のnetwork dispatchへ直結する——`control="form_input/search_input"`かつadmin_runtime dispatchを使うFieldは明示的debounceMs宣言を必須とすること。
+- backendのnode-level scalar field追加を、parse層のみで完結したと判断し、schema-tree mergeの別レイヤ（`NodeLocalData`のような中間構造体）を経由する実際のデータフローを終端まで追跡しない——本round自身がこの見落としでdebounceMsが実出力から欠落するバグを一度作り込んだ。
+
 ---
 
 ## Bundle `admin-runtime-operation-dispatch-lane-determination`

@@ -29,14 +29,17 @@ public class NpgsqlEnumDictionaryRepository : EnumDictionaryRepository
     }
 
     public override async Task<IReadOnlyList<EnumDictionaryGroupWithItemsSummaryDto>> ListGroupsWithItemsSummaryAsync(
-        string? search = null, Guid? groupIdFilter = null, CancellationToken ct = default)
+        string? search = null, string? groupNameFilter = null, int? groupIndexNumFilter = null,
+        int? itemPositionFilter = null, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
-        var trimmedSearch = search?.Trim();
-        var hasSearch = !string.IsNullOrEmpty(trimmedSearch);
-        var hasGroupIdFilter = groupIdFilter.HasValue;
+        var trimmedGroupNameFilter = groupNameFilter?.Trim();
+        var hasSearch = !string.IsNullOrEmpty(search?.Trim());
+        var hasGroupNameFilter = !string.IsNullOrEmpty(trimmedGroupNameFilter);
+        var hasGroupIndexNumFilter = groupIndexNumFilter.HasValue;
+        var hasItemPositionFilter = itemPositionFilter.HasValue;
 
         var whereClauses = new List<string>();
         if (hasSearch)
@@ -64,13 +67,33 @@ public class NpgsqlEnumDictionaryRepository : EnumDictionaryRepository
                  ))
                 """);
         }
-        if (hasGroupIdFilter)
+        // round 37: the owning SSOT's own three declared filter target fields (enum.groups.
+        // group_name, enum.groups.index_num, enum.group_items.position), each an independent
+        // exact-match clause, AND-combined -- replaces round 36's groupIdFilter (an exact match on
+        // enum.groups.group_id, a field the owning SSOT never actually declares as part of
+        // capability_requirements.filter). enum_group_filter drives groupNameFilter (its own
+        // option value is now the group's name, not an opaque id).
+        if (hasGroupNameFilter)
         {
-            // enum_group_filter select control (admin-enum subBundle closure round 36): exact-
-            // match scope to a single group, identified by its groupId -- the select's own option
-            // value, sourced from group_name/index_num as label/identity per the owning SSOT's
-            // declared filter target fields.
-            whereClauses.Add("g.group_id = @groupIdFilter");
+            whereClauses.Add("g.group_name = @groupNameFilter");
+        }
+        if (hasGroupIndexNumFilter)
+        {
+            whereClauses.Add("g.index_num = @groupIndexNumFilter");
+        }
+        if (hasItemPositionFilter)
+        {
+            // group_items.position lives on the per-item membership row, not the group row itself
+            // -- an EXISTS subquery scopes to "this group has SOME member at exactly this
+            // position", the same "matches via a member, but the group's FULL itemsSummary is
+            // still returned" shape search's own EXISTS clause above already uses.
+            whereClauses.Add(
+                """
+                EXISTS (
+                    SELECT 1 FROM enum.group_items gi3
+                    WHERE gi3.group_id = g.group_id AND gi3.position = @itemPositionFilter
+                )
+                """);
         }
 
         cmd.CommandText =
@@ -92,11 +115,19 @@ public class NpgsqlEnumDictionaryRepository : EnumDictionaryRepository
             """;
         if (hasSearch)
         {
-            cmd.Parameters.AddWithValue("search", $"%{trimmedSearch}%");
+            cmd.Parameters.AddWithValue("search", $"%{search!.Trim()}%");
         }
-        if (hasGroupIdFilter)
+        if (hasGroupNameFilter)
         {
-            cmd.Parameters.AddWithValue("groupIdFilter", groupIdFilter!.Value);
+            cmd.Parameters.AddWithValue("groupNameFilter", trimmedGroupNameFilter!);
+        }
+        if (hasGroupIndexNumFilter)
+        {
+            cmd.Parameters.AddWithValue("groupIndexNumFilter", groupIndexNumFilter!.Value);
+        }
+        if (hasItemPositionFilter)
+        {
+            cmd.Parameters.AddWithValue("itemPositionFilter", itemPositionFilter!.Value);
         }
         var list = new List<EnumDictionaryGroupWithItemsSummaryDto>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);

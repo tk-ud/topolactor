@@ -1542,6 +1542,7 @@ export function renderEmission(
             ? (result: DispatchResponse, context: RuntimeDispatchResultContext) =>
               options.onRuntimeDispatchResult!(node.nodeId!, result, context)
             : undefined,
+          debounceMs: typeof node.debounceMs === "number" ? node.debounceMs : undefined,
           design: hubDesign,
         };
         const adapted = adaptComponentDataHub(hub);

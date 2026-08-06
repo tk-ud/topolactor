@@ -460,6 +460,79 @@ function isTruthyDryRunPayloadFlag(payload: Record<string, unknown> | undefined)
 let enqueueRuntimeComponentCommandImpl: typeof enqueueRuntimeComponentCommand =
   enqueueRuntimeComponentCommand;
 
+/**
+ * round 37 stale-result boundary: a component may fire more than one admin_runtime
+ * dispatch for the SAME node before an earlier one's response lands (debounced search
+ * still allows two dispatches across two separate debounce windows, and any other
+ * rapid re-trigger of the same node's own admin_runtime binding is possible in
+ * principle). Keyed by componentId — a monotonic per-node sequence number captured at
+ * the moment the network call actually fires; a settled response is only forwarded if
+ * it is still the LATEST fired call for that node, so an older, slower response can
+ * never overwrite what a newer, faster-resolving one already applied. Generic (not
+ * scoped to search/filter Fields) since it is a correctness property of the dispatch
+ * lane itself, not a search-specific behavior.
+ */
+const runtimeDispatchSeqByComponentId = new Map<string, number>();
+
+/**
+ * round 37 (search_filter_input_contract debounce_policy): pending debounce timers for
+ * a debounced admin_runtime Lane 2 dispatch, keyed by componentId — a NEW firing of the
+ * SAME node's own dispatch cancels and replaces any still-pending timer so only the
+ * LAST value within a debounce window ever actually dispatches (collapses rapid typing
+ * to one network call, never "uncontrolled on every keystroke"). Opt-in per node via
+ * debounceMs — never gated by a specific trigger name: inputFactory's onChange handler
+ * always calls emitBoundEvent with the literal trigger key "change" regardless of
+ * whether the underlying native DOM event was "input" or "change" (see Input.tsx), so
+ * gating on a trigger string here would be wrong; gating on the node's OWN declared
+ * debounceMs is trigger-shape-independent and correct for both a typed search field and
+ * any other admin_runtime-dispatching Field that opts in.
+ */
+const pendingDebounceTimerByComponentId = new Map<string, number>();
+
+function isValidFieldDebounceMs(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+/**
+ * Immediate dispatch unless the node declares a valid positive-integer debounceMs
+ * (round 37) — in which case the actual network enqueue is delayed by that many ms,
+ * canceling any still-pending timer for the SAME componentId. payloadFrom has already
+ * been resolved by the caller at keystroke time (current values, fail-close preserved)
+ * — only the ENQUEUE is deferred, never the value capture. A node with no declared
+ * debounceMs (every pre-existing authored node) is completely unaffected — this is
+ * additive/opt-in, not a default behavior change.
+ */
+function scheduleOrDispatchRuntimeCommand(
+  spec: RuntimeComponentSpec,
+  dispatchSpec: Parameters<typeof enqueueRuntimeComponentCommand>[0],
+  onSettled?: (result: DispatchResponse, context: RuntimeDispatchResultContext) => void,
+): void {
+  if (isValidFieldDebounceMs(spec.debounceMs)) {
+    const existing = pendingDebounceTimerByComponentId.get(spec.componentId);
+    if (existing !== undefined) clearTimeout(existing);
+    const timerId = setTimeout(() => {
+      pendingDebounceTimerByComponentId.delete(spec.componentId);
+      dispatchRuntimeComponentCommandAndForwardResult(spec, dispatchSpec, onSettled);
+    }, spec.debounceMs) as unknown as number;
+    pendingDebounceTimerByComponentId.set(spec.componentId, timerId);
+    return;
+  }
+  dispatchRuntimeComponentCommandAndForwardResult(spec, dispatchSpec, onSettled);
+}
+
+/**
+ * round 37: clears every still-pending debounce timer (e.g. on ProjectionShell unmount) so a
+ * debounced dispatch never fires after the component that owns it is gone, and so no timer is
+ * ever left running past the lifetime of the mount that scheduled it (leak-sanitizer-visible in
+ * tests, a real dangling-callback risk in production).
+ */
+export function clearAllPendingRuntimeDispatchDebounceTimers(): void {
+  for (const timerId of pendingDebounceTimerByComponentId.values()) {
+    clearTimeout(timerId);
+  }
+  pendingDebounceTimerByComponentId.clear();
+}
+
 function dispatchRuntimeComponentCommandAndForwardResult(
   spec: RuntimeComponentSpec,
   dispatchSpec: Parameters<typeof enqueueRuntimeComponentCommand>[0],
@@ -474,12 +547,18 @@ function dispatchRuntimeComponentCommandAndForwardResult(
     targetRef: dispatchSpec.targetRef,
     dryRun: isTruthyDryRunPayloadFlag(dispatchSpec.payload),
   };
+  const seq = (runtimeDispatchSeqByComponentId.get(spec.componentId) ?? 0) + 1;
+  runtimeDispatchSeqByComponentId.set(spec.componentId, seq);
   enqueueRuntimeComponentCommandImpl(dispatchSpec)
     .then((result) => {
+      // Stale/superseded: a newer dispatch for this same node has fired since this one
+      // was sent — silently discard (never overwrites the newer in-flight/settled state).
+      if (runtimeDispatchSeqByComponentId.get(spec.componentId) !== seq) return;
       spec.onRuntimeDispatchResult?.(result, context);
       onSettled?.(result, context);
     })
     .catch((err) => {
+      if (runtimeDispatchSeqByComponentId.get(spec.componentId) !== seq) return;
       // preview-gap round 3: a queue/network-level rejection (never a normal {success:false}
       // response) previously reached NEITHER onRuntimeDispatchResult NOR onSettled — Modal state
       // correctly never mutated (onSettled never fired), but no warning ever reached the DOM
@@ -622,7 +701,7 @@ function emitBoundEvent(
       if (!resolved.ok) {
         return { ok: false, error: resolved.errors.join("; ") };
       }
-      dispatchRuntimeComponentCommandAndForwardResult(
+      scheduleOrDispatchRuntimeCommand(
         spec,
         { ...binding.runtimeDispatch, payload: resolved.payload },
         deferLocalStateMutationToDispatchSuccess
@@ -630,7 +709,7 @@ function emitBoundEvent(
           : undefined,
       );
     } else {
-      dispatchRuntimeComponentCommandAndForwardResult(
+      scheduleOrDispatchRuntimeCommand(
         spec,
         {
           ...binding.runtimeDispatch,

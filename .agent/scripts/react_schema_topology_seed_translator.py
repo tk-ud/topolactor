@@ -662,6 +662,22 @@ def build_node(kind, attrs, source_refs, known_gaps):
         node["optionsSource"] = attrs.get("optionsSource", "")
         node["optionsLabelPath"] = attrs.get("optionsLabelPath", "")
         node["optionsValuePath"] = attrs.get("optionsValuePath", "")
+        # round 37 (search_filter_input_contract debounce_policy, admin-normal-surface-projection-
+        # seed-ssot.yaml): a Field participating in admin_runtime_dispatch_override_wiring may
+        # declare its own debounceMs (positive integer ms) -- mirrors Step/Action's pre-existing
+        # debounceMs authoring_metadata_fields attribute (admin-uibuilder-ui-structure-wiring-ssot
+        # .yaml high_frequency_policy), extended to Field grammar here since a Field's own dispatch
+        # runs through a DIFFERENT lane (admin_runtime, not externalPortDispatch/
+        # instanceOperationDispatch) that high_frequency_policy's own trigger-name gate never
+        # covered. See validate_field_admin_runtime_dispatch_wiring rule 5 for when this becomes
+        # REQUIRED (a search/filter Field's own read-action dispatch), and
+        # frontend/runtime/runtimeComponentFactory.ts scheduleOrDispatchRuntimeCommand for the
+        # runtime behavior. Absent when not authored -- never invented.
+        if attrs.get("debounceMs") is not None:
+            try:
+                node["debounceMs"] = int(attrs.get("debounceMs"))
+            except (TypeError, ValueError):
+                node["debounceMs"] = attrs.get("debounceMs")
         # generic list_groups search/filter (admin-enum subBundle closure round): a Field may ALSO
         # carry an admin_runtime_dispatch_override_wiring eventBinding on its own trigger (default
         # "change", matching a typed field's own keystroke event) -- the SAME override lane/shape
@@ -1520,6 +1536,11 @@ def validate_field_admin_runtime_dispatch_wiring(node, errors, path="$.root"):
          ("draft_or_projection_only"), and its own eventBinding.authority (set from that SAME
          authorityMarker at build_node time) must agree -- an independent author-asserted-intent
          signal checked alongside, not instead of, rule 3's allowlist-derived classification.
+      5. FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS (round 37,
+         search_filter_input_contract debounce_policy) -- a continuous-typing search Field
+         (control="form_input/search_input") must declare a valid positive-integer debounceMs.
+         Scoped to search_input only: a discrete-choice control (e.g. form_input/select) fires
+         once per selection, never per keystroke, and is never required to declare one.
     """
     if node.get("kind") == "Field":
         eb = node.get("eventBinding")
@@ -1573,6 +1594,26 @@ def validate_field_admin_runtime_dispatch_wiring(node, errors, path="$.root"):
                     f"\"{FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER}\" but its own "
                     f"eventBinding.authority is {eb.get('authority')!r} -- the two must agree",
                 ))
+            # 5 (round 37, search_filter_input_contract debounce_policy): a continuous-typing
+            # search Field (control="form_input/search_input") dispatching through this lane must
+            # declare a valid positive-integer debounceMs -- without it, every keystroke would
+            # reach the backend uncontrolled (NG-axis: "letting a search/filter dispatch fire
+            # uncontrolled on every keystroke"). Scoped to search_input specifically, not every
+            # Field on this lane: a discrete-choice control (e.g. form_input/select) fires once per
+            # selection, not once per keystroke, so it carries none of the risk this rule exists to
+            # close and is never required to declare one.
+            if node.get("control") == "form_input/search_input":
+                debounce_ms = node.get("debounceMs")
+                if not isinstance(debounce_ms, int) or isinstance(debounce_ms, bool) or debounce_ms <= 0:
+                    errors.append(err(
+                        "FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS", node_path, "blocking",
+                        f"Field '{key}' is a form_input/search_input dispatching through "
+                        f"admin_runtime_dispatch_override_wiring but declares no valid positive-integer "
+                        f"debounceMs -- a continuous-typing search field's own dispatch must declare an "
+                        f"explicit debounce policy (admin-normal-surface-projection-seed-ssot.yaml "
+                        f"search_filter_input_contract.required_shape debounce_policy), never fire "
+                        f"uncontrolled on every keystroke",
+                    ))
     for c in node.get("children") or []:
         validate_field_admin_runtime_dispatch_wiring(c, errors, path)
 
@@ -1597,7 +1638,7 @@ KIND_SPECIFIC_CONSUMED_KEYS = {
     "Category": set(),
     "Section": {"sectionKind"},
     "Form": {"target", "mode", "fields", "actions"},
-    "Field": {"control", "required", "valueFrom", "eventBinding", "optionsSource", "optionsLabelPath", "optionsValuePath"},
+    "Field": {"control", "required", "valueFrom", "eventBinding", "optionsSource", "optionsLabelPath", "optionsValuePath", "debounceMs"},
     "Table": {"source", "display", "displayColumns", "rowsSource", "_rawDisplayColumns"},
     "Workflow": {"steps"},
     "Modal": {"componentKind", "title", "body"},
@@ -1673,6 +1714,8 @@ def convert_node_to_seed_record(node, schema_to_seed_map, target_surface, loss_e
         record["optionsValuePath"] = node.get("optionsValuePath") or ""
         if node.get("eventBinding") is not None:
             record["eventBinding"] = node["eventBinding"]
+        if "debounceMs" in node:
+            record["debounceMs"] = node["debounceMs"]
         admin_runtime_override = build_admin_runtime_dispatch_override_candidate(node)
         if admin_runtime_override is not None:
             record["adminRuntimeDispatchOverride"] = admin_runtime_override

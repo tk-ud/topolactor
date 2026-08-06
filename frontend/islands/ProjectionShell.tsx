@@ -38,6 +38,7 @@ import {
   createLiveNodeValueTracker,
   type LiveNodeValueTracker,
   seedTrackerFromPropBindingsValue,
+  seedTrackerWithEmptyDefaultsForFieldDispatchParticipants,
 } from "../runtime/liveNodeValueTracker.ts";
 import { resolveRuntimeDataPath } from "../runtime/propBindingResolver.ts";
 import { resolveNodeValueReferenceSource } from "../runtime/payloadFromResolver.ts";
@@ -53,6 +54,7 @@ import {
 import type { DispatchResponse, Emission, LayoutNode } from "../api/dispatch.ts";
 import type { RuntimeDispatchResultContext } from "../runtime/runtimeComponentAdapter.ts";
 import { resolveRuntimeDispatchSettlement } from "../runtime/runtimeDispatchSettlement.ts";
+import { clearAllPendingRuntimeDispatchDebounceTimers } from "../runtime/runtimeComponentFactory.ts";
 import { RecommendNavigationIsland } from "../components/RecommendNavigationIsland.tsx";
 import { LayoutProjectionTree } from "../components/LayoutProjectionTree.tsx";
 
@@ -318,6 +320,10 @@ const ProjectionShell: FunctionComponent<ProjectionShellProps> = (
         nextEmission.data ?? {},
         resolveRuntimeDataPath,
       );
+      seedTrackerWithEmptyDefaultsForFieldDispatchParticipants(
+        nodeValueTrackerRef.current,
+        nextEmission.layoutNodes ?? [],
+      );
       if (!stateDispatcherRef.current) {
         stateDispatcherRef.current = createProjectionStateDispatcher(
           runnerNodes,
@@ -489,6 +495,10 @@ const ProjectionShell: FunctionComponent<ProjectionShellProps> = (
           dispatched.data ?? {},
           resolveRuntimeDataPath,
           { forceOverwrite: true },
+        );
+        seedTrackerWithEmptyDefaultsForFieldDispatchParticipants(
+          nodeValueTrackerRef.current,
+          dispatched.layoutNodes ?? [],
         );
         setSpecs(renderEmission(dispatched, defaultComponentRegistry, {
           localStateStore: stateDispatcherRef.current ?? undefined,
@@ -709,6 +719,10 @@ const ProjectionShell: FunctionComponent<ProjectionShellProps> = (
             resolveRuntimeDataPath,
             { forceOverwrite: intent === "canonical_reread" },
           );
+          seedTrackerWithEmptyDefaultsForFieldDispatchParticipants(
+            nodeValueTrackerRef.current,
+            updated.layoutNodes ?? [],
+          );
           if (effectRunnerRef.current) {
             effectRunnerRef.current.updateNodes(refreshedNodes);
             for (
@@ -813,6 +827,9 @@ const ProjectionShell: FunctionComponent<ProjectionShellProps> = (
       storeUnsubscribeRef.current = null;
       sseReceiverRef.current?.disconnect();
       sseReceiverRef.current = null;
+      // round 37: a debounced Field dispatch's pending timer must never fire after this mount
+      // is gone — it would otherwise dispatch/setState against a component that no longer exists.
+      clearAllPendingRuntimeDispatchDebounceTimers();
     };
   }, []);
 

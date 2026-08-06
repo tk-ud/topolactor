@@ -878,9 +878,17 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             IdOrHubId: null, Payload: searchDataPayload, Context: null, TriggerKind: "client", Role: "admin");
         var searchDataResponse = await dispatcher.DispatchAsync(searchDataRequest);
         Assert.True(searchDataResponse.Success, string.Join(";", searchDataResponse.Errors.Select(e => e.Code + ":" + e.Message)));
-        var searchDataText = searchDataResponse.Emission!.Data!.Value.GetRawText();
-        Assert.Contains("demo_status", searchDataText);
-        Assert.DoesNotContain("user_status", searchDataText);
+        // round 37: list_groups' response envelope is {groups, groupOptions} -- groups is the
+        // search-narrowed roster, groupOptions is ALWAYS the full unfiltered list (closes the
+        // options-self-shrinking gap where enum_group_filter's own select choices previously came
+        // from this SAME narrowed array).
+        using var searchDataDoc = System.Text.Json.JsonDocument.Parse(searchDataResponse.Emission!.Data!.Value.GetRawText());
+        var searchGroupsText = searchDataDoc.RootElement.GetProperty("groups").GetRawText();
+        Assert.Contains("demo_status", searchGroupsText);
+        Assert.DoesNotContain("user_status", searchGroupsText);
+        var searchGroupOptionsText = searchDataDoc.RootElement.GetProperty("groupOptions").GetRawText();
+        Assert.Contains("demo_status", searchGroupOptionsText);
+        Assert.Contains("user_status", searchGroupOptionsText);
 
         // STEP 3: an empty search returns the SAME canonical full list an absent payload does.
         var emptySearchDataPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
@@ -910,21 +918,38 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         var malformedDataResponse = await dispatcher.DispatchAsync(malformedDataRequest);
         Assert.False(malformedDataResponse.Success);
         Assert.Contains(malformedDataResponse.Errors, e => e.Code == "ENUM_LIST_GROUPS_PAYLOAD_MALFORMED");
+
+        // STEP 5 (round 37): fail-close -- a payload whose OWN shape is not a JSON object (here a
+        // bare array) must never be silently treated as "no search"/"no filter" either, through
+        // the real dispatch chain.
+        var nonObjectPayload = System.Text.Json.JsonSerializer.SerializeToElement(new[] { "not", "an", "object" });
+        var nonObjectRequest = new EndpointRequestDto(
+            "list_groups", "manifest", "enum_dictionary", "list_groups",
+            IdOrHubId: null, Payload: nonObjectPayload, Context: null, TriggerKind: "client", Role: "admin");
+        var nonObjectResponse = await dispatcher.DispatchAsync(nonObjectRequest);
+        Assert.False(nonObjectResponse.Success);
+        Assert.Contains(nonObjectResponse.Errors, e => e.Code == "ENUM_LIST_GROUPS_PAYLOAD_NOT_OBJECT");
     }
 
     /// <summary>
     /// round 36 (admin-enum subBundle closure): the owning SSOT (docs/design/
     /// admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.enum.
-    /// capability_requirements.search/filter) declares FIVE search target fields (not group_name
-    /// alone) and a groupIdFilter exact-match scope. Proves against REAL PostgreSQL: (1) search
-    /// matches via group_items.position specifically (an item whose own name/index_num do NOT
-    /// contain the search term, only its position within a freshly created group does), (2)
-    /// groupIdFilter scopes the roster to exactly one group, excluding db/enum_seed.sql's own
-    /// demo_status/user_status rows, and (3) a malformed (non-UUID) groupIdFilter fails close
-    /// through the real dispatch chain.
+    /// capability_requirements.search) declares FIVE search target fields (not group_name alone),
+    /// and capability_requirements.filter declares its OWN three fields (enum.groups.group_name,
+    /// enum.groups.index_num, enum.group_items.position -- round 37 replaced round 36's
+    /// groupIdFilter, an exact match on enum.groups.group_id, a field the owning SSOT never
+    /// actually declares as part of capability_requirements.filter). Proves against REAL
+    /// PostgreSQL: (1) search matches via group_items.position specifically (an item whose own
+    /// name/index_num do NOT contain the search term, only its position within a freshly created
+    /// group does), (2) groupNameFilter/groupIndexNumFilter/itemPositionFilter each independently
+    /// scope the roster to exactly this one group, excluding db/enum_seed.sql's own demo_status/
+    /// user_status rows, while groupOptions stays the full unfiltered list throughout (proves the
+    /// options-self-shrinking gap is closed against real Postgres, not only the in-memory
+    /// fixture), and (3) a malformed (non-integer) groupIndexNumFilter fails close through the
+    /// real dispatch chain.
     /// </summary>
     [Fact]
-    public async Task DispatchAsync_AdminEnumManagementManifest_ListGroupsSearchAndGroupIdFilter_MatchPositionAndScopeToExactGroupRealRows()
+    public async Task DispatchAsync_AdminEnumManagementManifest_ListGroupsSearchAndFilterFields_MatchPositionAndScopeToExactGroupRealRows()
     {
         var cs = GetConnectionString();
         if (cs is null) return;
@@ -950,6 +975,12 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         var itemAIndex = NextIndexNumAvoidingDigit('2');
         var itemBIndex = NextIndexNumAvoidingDigit('2');
         var itemCIndex = NextIndexNumAvoidingDigit('2'); // lands at position 2 (3rd in enumIndexNums order)
+        var itemDIndex = NextIndexNumAvoidingDigit('2');
+        // round 37: db/enum_seed.sql's own demo_status carries positions 0-2 and user_status
+        // carries positions 0-3 -- itemEIndex lands at position 4 (5th in enumIndexNums order), the
+        // lowest position value NEITHER real seed group has, so itemPositionFilter=4 below can only
+        // match this freshly created group.
+        var itemEIndex = NextIndexNumAvoidingDigit('2');
         string? groupId = null;
         var createdItemIndexes = new List<int>();
 
@@ -961,7 +992,7 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             using (var doc = System.Text.Json.JsonDocument.Parse(createdGroup.Emission!.Data!.Value.GetRawText()))
                 groupId = doc.RootElement.GetProperty("groupId").GetString();
 
-            foreach (var idx in new[] { itemAIndex, itemBIndex, itemCIndex })
+            foreach (var idx in new[] { itemAIndex, itemBIndex, itemCIndex, itemDIndex, itemEIndex })
             {
                 var createdItem = await DispatchViaOwnWriteManifestAsync(dispatcher, "create_item",
                     new { name = $"position-proof-item-{idx}", indexNum = idx, confirmed = true });
@@ -970,7 +1001,7 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             }
 
             var setItems = await DispatchViaOwnWriteManifestAsync(dispatcher, "set_group_items",
-                new { groupId, enumIndexNums = $"{itemAIndex},{itemBIndex},{itemCIndex}", confirmed = true });
+                new { groupId, enumIndexNums = $"{itemAIndex},{itemBIndex},{itemCIndex},{itemDIndex},{itemEIndex}", confirmed = true });
             Assert.True(setItems.Success, string.Join(";", setItems.Errors.Select(e => e.Code + ":" + e.Message)));
 
             // Sanity: none of this group's own identity fields (name/indexNum) or any of its
@@ -991,35 +1022,60 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
                 "list_groups", "manifest", "enum_dictionary", "list_groups",
                 IdOrHubId: null, Payload: positionSearchPayload, Context: null, TriggerKind: "client", Role: "admin"));
             Assert.True(positionSearchResponse.Success, string.Join(";", positionSearchResponse.Errors.Select(e => e.Code + ":" + e.Message)));
-            Assert.Contains(groupName, positionSearchResponse.Emission!.Data!.Value.GetRawText());
+            using (var positionSearchDoc = System.Text.Json.JsonDocument.Parse(positionSearchResponse.Emission!.Data!.Value.GetRawText()))
+            {
+                Assert.Contains(groupName, positionSearchDoc.RootElement.GetProperty("groups").GetRawText());
+            }
 
-            // groupIdFilter: exact-match scope to this one group, excluding the real
-            // db/enum_seed.sql demo_status/user_status rows.
-            var groupIdFilterPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            // round 37: the owning SSOT's own three declared filter target fields, each
+            // independently exact-match scoping to this one group, excluding the real
+            // db/enum_seed.sql demo_status/user_status rows -- while groupOptions stays the FULL
+            // unfiltered list every time (proves the options-self-shrinking gap is closed against
+            // real Postgres, not only the in-memory fixture).
+            async Task AssertFilterScopesToThisGroupAndOptionsStayFullAsync(System.Text.Json.JsonElement payload)
+            {
+                var response = await dispatcher.DispatchAsync(new EndpointRequestDto(
+                    "list_groups", "manifest", "enum_dictionary", "list_groups",
+                    IdOrHubId: null, Payload: payload, Context: null, TriggerKind: "client", Role: "admin"));
+                Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
+                using var doc = System.Text.Json.JsonDocument.Parse(response.Emission!.Data!.Value.GetRawText());
+                var groupsText = doc.RootElement.GetProperty("groups").GetRawText();
+                Assert.Contains(groupName, groupsText);
+                Assert.DoesNotContain("demo_status", groupsText);
+                Assert.DoesNotContain("user_status", groupsText);
+                var groupOptionsText = doc.RootElement.GetProperty("groupOptions").GetRawText();
+                Assert.Contains(groupName, groupOptionsText);
+                Assert.Contains("demo_status", groupOptionsText);
+                Assert.Contains("user_status", groupOptionsText);
+            }
+
+            await AssertFilterScopesToThisGroupAndOptionsStayFullAsync(System.Text.Json.JsonSerializer.SerializeToElement(new
             {
                 target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups",
-                groupIdFilter = groupId,
-            });
-            var groupIdFilterResponse = await dispatcher.DispatchAsync(new EndpointRequestDto(
-                "list_groups", "manifest", "enum_dictionary", "list_groups",
-                IdOrHubId: null, Payload: groupIdFilterPayload, Context: null, TriggerKind: "client", Role: "admin"));
-            Assert.True(groupIdFilterResponse.Success, string.Join(";", groupIdFilterResponse.Errors.Select(e => e.Code + ":" + e.Message)));
-            var groupIdFilterText = groupIdFilterResponse.Emission!.Data!.Value.GetRawText();
-            Assert.Contains(groupName, groupIdFilterText);
-            Assert.DoesNotContain("demo_status", groupIdFilterText);
-            Assert.DoesNotContain("user_status", groupIdFilterText);
-
-            // fail-close: a non-UUID groupIdFilter through the real dispatch chain.
-            var malformedGroupIdFilterPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+                groupNameFilter = groupName,
+            }));
+            await AssertFilterScopesToThisGroupAndOptionsStayFullAsync(System.Text.Json.JsonSerializer.SerializeToElement(new
             {
                 target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups",
-                groupIdFilter = "not-a-uuid",
+                groupIndexNumFilter = groupIndexNum,
+            }));
+            await AssertFilterScopesToThisGroupAndOptionsStayFullAsync(System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups",
+                itemPositionFilter = 4,
+            }));
+
+            // fail-close: a non-integer groupIndexNumFilter through the real dispatch chain.
+            var malformedFilterPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups",
+                groupIndexNumFilter = "not-a-number",
             });
-            var malformedGroupIdFilterResponse = await dispatcher.DispatchAsync(new EndpointRequestDto(
+            var malformedFilterResponse = await dispatcher.DispatchAsync(new EndpointRequestDto(
                 "list_groups", "manifest", "enum_dictionary", "list_groups",
-                IdOrHubId: null, Payload: malformedGroupIdFilterPayload, Context: null, TriggerKind: "client", Role: "admin"));
-            Assert.False(malformedGroupIdFilterResponse.Success);
-            Assert.Contains(malformedGroupIdFilterResponse.Errors, e => e.Code == "ENUM_LIST_GROUPS_GROUP_ID_FILTER_MALFORMED");
+                IdOrHubId: null, Payload: malformedFilterPayload, Context: null, TriggerKind: "client", Role: "admin"));
+            Assert.False(malformedFilterResponse.Success);
+            Assert.Contains(malformedFilterResponse.Errors, e => e.Code == "ENUM_LIST_GROUPS_PAYLOAD_MALFORMED");
         }
         finally
         {

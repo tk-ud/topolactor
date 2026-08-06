@@ -180,6 +180,54 @@ Deno.test(
 );
 
 Deno.test(
+  "AdminEnumsRoute (real /admin/enums route mount): an explicit ?route= query param overrides the route's manifestId prop default -- axes.target carries the route value and the ae200 default target_ref is never injected (round 37)",
+  async () => {
+    const { dispatchBodies, cleanup } = await mountAdminEnumsRoute(
+      "http://localhost/admin/enums?route=custom_dispatcher_mapping_target",
+    );
+    try {
+      assert(dispatchBodies.length > 0, "expected at least one /api/dispatch call");
+      const first = dispatchBodies[0];
+      assertEquals(
+        first.target,
+        "custom_dispatcher_mapping_target",
+        "expected explicit ?route= to override the axes' own default target",
+      );
+      const payload = first.payload as Record<string, unknown> | undefined;
+      assertEquals(
+        payload?.target_ref,
+        undefined,
+        "a manifestId prop only ever fills in a DEFAULT entry (projectionEntry.ts isDefaultProjectionEntry) -- ?route= makes this a non-default entry, so the route's ae200 manifestId prop must NOT be silently injected as payload.target_ref",
+      );
+    } finally {
+      cleanup();
+    }
+  },
+);
+
+Deno.test(
+  "AdminEnumsRoute (real /admin/enums route mount): an explicit ?package= query param ALSO overrides the route's manifestId prop default -- the ae200 default target_ref is never injected, even though ?package= alone does not itself change axes.target (round 37)",
+  async () => {
+    const OTHER_PACKAGE_ID = "00000000-0000-0000-0000-000000000def";
+    const { dispatchBodies, cleanup } = await mountAdminEnumsRoute(
+      `http://localhost/admin/enums?package=${OTHER_PACKAGE_ID}`,
+    );
+    try {
+      assert(dispatchBodies.length > 0, "expected at least one /api/dispatch call");
+      const first = dispatchBodies[0];
+      const payload = first.payload as Record<string, unknown> | undefined;
+      assertEquals(
+        payload?.target_ref,
+        undefined,
+        "a manifestId prop only ever fills in a DEFAULT entry -- ?package= alone makes this a non-default entry (isDefaultProjectionEntry checks routeTarget/manifestId/packageId together), so the route's ae200 manifestId prop must NOT be silently injected as payload.target_ref",
+      );
+    } finally {
+      cleanup();
+    }
+  },
+);
+
+Deno.test(
   "frontend/routes/admin/enums.tsx no longer imports the retired AdminEnumsRoster island (deleted this round), and the island file itself is gone",
   async () => {
     const source = await Deno.readTextFile("frontend/routes/admin/enums.tsx");

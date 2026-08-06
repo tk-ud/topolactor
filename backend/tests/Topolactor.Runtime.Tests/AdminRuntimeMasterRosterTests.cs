@@ -10,6 +10,15 @@ namespace Topolactor.Runtime.Tests;
 
 public class AdminRuntimeMasterRosterTests
 {
+    // round 37: list_groups' response envelope is {groups, groupOptions} (EnumDictionaryListGroups
+    // ResponseDto), not a bare array -- groups is the search/filter-narrowed roster,
+    // groupOptions is ALWAYS the full unfiltered list (closes the options-self-shrinking gap).
+    // This extracts just the "groups" array's own raw JSON text so a search/filter test's
+    // DoesNotContain assertion checks the actually-narrowed field, not the whole envelope (which
+    // legitimately still contains an excluded group's name inside groupOptions).
+    private static string GroupsJson(JsonElement data) =>
+        data.GetProperty("groups").GetRawText();
+
     [Fact]
     public async Task AuthUsersCreate_WithInvalidStatus_ReturnsBlockingError()
     {
@@ -72,10 +81,14 @@ public class AdminRuntimeMasterRosterTests
             null);
         var (searchData, searchError) = await runtime.ExecuteDataAsync(searchVector);
         Assert.Null(searchError);
-        var searchJson = searchData!.Value.GetRawText();
+        var searchJson = GroupsJson(searchData!.Value);
         Assert.Contains("alpha_search_roster", searchJson);
         Assert.Contains("beta_search_roster", searchJson);
         Assert.DoesNotContain("gamma_other_roster", searchJson);
+        // round 37: groupOptions is never search-narrowed -- the excluded group's name still
+        // appears somewhere in the FULL envelope (inside groupOptions), proving this isn't merely
+        // an artifact of the fixture never having created gamma_other_roster in the first place.
+        Assert.Contains("gamma_other_roster", searchData.Value.GetRawText());
     }
 
     [Fact]
@@ -140,7 +153,7 @@ public class AdminRuntimeMasterRosterTests
 
         var (data, error) = await runtime.ExecuteDataAsync(vector);
         Assert.Null(error);
-        var json = data!.Value.GetRawText();
+        var json = GroupsJson(data!.Value);
         // fixture_status is the ONLY group carrying an item named fixture_active; its own
         // group_name/index_num do not otherwise match "fixture_active" -- proves this is a
         // genuine item.name match, not a group-identity match.
@@ -159,7 +172,7 @@ public class AdminRuntimeMasterRosterTests
 
         var (data, error) = await runtime.ExecuteDataAsync(vector);
         Assert.Null(error);
-        var json = data!.Value.GetRawText();
+        var json = GroupsJson(data!.Value);
         // Only user_status carries a member item with indexNum 13 (archived); neither group's own
         // group_name/index_num nor any OTHER member item's name/index_num/position contains "13"
         // -- proves this is a genuine item.index_num match.
@@ -167,56 +180,133 @@ public class AdminRuntimeMasterRosterTests
         Assert.DoesNotContain("fixture_status", json);
     }
 
-    // groupIdFilter (round 36): the enum_group_filter select control's own selected groupId --
-    // exact-match scope to a single group, independent of (and combinable with) search.
+    // round 37: the owning SSOT's own three declared filter target fields (enum.groups.
+    // group_name, enum.groups.index_num, enum.group_items.position) replace round 36's
+    // groupIdFilter (an exact match on enum.groups.group_id, a field the owning SSOT never
+    // actually declares as part of capability_requirements.filter -- keeping it would have been a
+    // substitute for the declared fields, not an implementation of them).
     [Fact]
-    public async Task EnumDictionaryListGroups_WithGroupIdFilter_ScopesToExactGroup()
+    public async Task EnumDictionaryListGroups_WithGroupNameFilter_ScopesToExactGroup()
     {
         var vector = new OperationVector(
             "admin", "enum_dictionary", "list_groups", null, "admin",
-            JsonSerializer.SerializeToElement(new
-            {
-                groupIdFilter = InMemoryEnumDictionaryRepository.FixtureGroupId.ToString(),
-            }),
+            JsonSerializer.SerializeToElement(new { groupNameFilter = "fixture_status" }),
             null);
 
         var runtime = CreateRuntime();
         var (data, error) = await runtime.ExecuteDataAsync(vector);
         Assert.Null(error);
-        var json = data!.Value.GetRawText();
+        var json = GroupsJson(data!.Value);
+        Assert.Contains("fixture_status", json);
+        Assert.DoesNotContain("user_status", json);
+        // groupOptions must still carry the excluded group -- proves the filter narrows the
+        // roster without narrowing the filter control's own available choices.
+        Assert.Contains("user_status", data.Value.GetRawText());
+    }
+
+    [Fact]
+    public async Task EnumDictionaryListGroups_WithGroupIndexNumFilter_ScopesToExactGroup()
+    {
+        var runtime = CreateRuntime();
+        // fixture_status seeds with indexNum 1 (InMemoryEnumDictionaryRepository.WithFixtureSeed).
+        var vector = new OperationVector(
+            "admin", "enum_dictionary", "list_groups", null, "admin",
+            JsonSerializer.SerializeToElement(new { groupIndexNumFilter = 1 }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+        Assert.Null(error);
+        var json = GroupsJson(data!.Value);
         Assert.Contains("fixture_status", json);
         Assert.DoesNotContain("user_status", json);
     }
 
     [Fact]
-    public async Task EnumDictionaryListGroups_WithMalformedGroupIdFilter_FailsCloseAndDoesNotSilentlyIgnore()
+    public async Task EnumDictionaryListGroups_WithItemPositionFilter_ScopesToGroupContainingThatPosition()
+    {
+        var runtime = CreateRuntime();
+        // user_status seeds 4 items (position 0-3, InMemoryEnumDictionaryRepository.WithFixtureSeed);
+        // fixture_status seeds only 3 (position 0-2) -- position 3 exists ONLY in user_status.
+        var vector = new OperationVector(
+            "admin", "enum_dictionary", "list_groups", null, "admin",
+            JsonSerializer.SerializeToElement(new { itemPositionFilter = 3 }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+        Assert.Null(error);
+        var json = GroupsJson(data!.Value);
+        Assert.Contains("user_status", json);
+        Assert.DoesNotContain("fixture_status", json);
+    }
+
+    [Fact]
+    public async Task EnumDictionaryListGroups_WithMalformedGroupIndexNumFilter_FailsCloseAndDoesNotSilentlyIgnore()
     {
         var runtime = CreateRuntime();
         var vector = new OperationVector(
             "admin", "enum_dictionary", "list_groups", null, "admin",
-            JsonSerializer.SerializeToElement(new { groupIdFilter = "not-a-uuid" }),
+            JsonSerializer.SerializeToElement(new { groupIndexNumFilter = "not-a-number" }),
             null);
 
         var (data, error) = await runtime.ExecuteDataAsync(vector);
         Assert.Null(data);
         Assert.NotNull(error);
-        Assert.Equal("ENUM_LIST_GROUPS_GROUP_ID_FILTER_MALFORMED", error!.Code);
+        Assert.Equal("ENUM_LIST_GROUPS_PAYLOAD_MALFORMED", error!.Code);
     }
 
     [Fact]
-    public async Task EnumDictionaryListGroups_WithNullGroupIdFilter_ReturnsCanonicalFullList()
+    public async Task EnumDictionaryListGroups_WithNullGroupNameFilter_ReturnsCanonicalFullList()
     {
         var runtime = CreateRuntime();
         var vector = new OperationVector(
             "admin", "enum_dictionary", "list_groups", null, "admin",
-            JsonSerializer.SerializeToElement(new { groupIdFilter = (string?)null }),
+            JsonSerializer.SerializeToElement(new { groupNameFilter = (string?)null }),
             null);
 
         var (data, error) = await runtime.ExecuteDataAsync(vector);
         Assert.Null(error);
-        var json = data!.Value.GetRawText();
+        var json = GroupsJson(data!.Value);
         Assert.Contains("fixture_status", json);
         Assert.Contains("user_status", json);
+    }
+
+    [Fact]
+    public async Task EnumDictionaryListGroups_WithNonObjectPayload_FailsCloseAndDoesNotSilentlyReturnFullList()
+    {
+        var runtime = CreateRuntime();
+        // round 37: a payload that deserializes to a non-object JSON value (here a bare array)
+        // was previously silently treated as "no search"/"no filter" (vector.Payload is
+        // { ValueKind: JsonValueKind.Object } simply evaluated false and fell through to the
+        // canonical full list) -- must now fail closed instead.
+        var vector = new OperationVector(
+            "admin", "enum_dictionary", "list_groups", null, "admin",
+            JsonSerializer.SerializeToElement(new[] { "not", "an", "object" }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("ENUM_LIST_GROUPS_PAYLOAD_NOT_OBJECT", error!.Code);
+    }
+
+    [Fact]
+    public async Task EnumDictionaryListGroups_GroupOptions_AlwaysReturnsFullUnfilteredRosterEvenWhenGroupsIsEmpty()
+    {
+        var runtime = CreateRuntime();
+        // round 37: a filter that matches ZERO groups must still return every group as a
+        // groupOptions choice -- proves the options source can never self-shrink to nothing, even
+        // in the narrowest possible case (an empty result set).
+        var vector = new OperationVector(
+            "admin", "enum_dictionary", "list_groups", null, "admin",
+            JsonSerializer.SerializeToElement(new { groupNameFilter = "no_such_group_anywhere" }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+        Assert.Null(error);
+        Assert.Equal("[]", GroupsJson(data!.Value));
+        var groupOptionsJson = data.Value.GetProperty("groupOptions").GetRawText();
+        Assert.Contains("fixture_status", groupOptionsJson);
+        Assert.Contains("user_status", groupOptionsJson);
     }
 
     [Fact]
@@ -474,7 +564,7 @@ public class AdminRuntimeMasterRosterTests
         var (listData, listError) = await runtime.ExecuteDataAsync(listVector);
         Assert.Null(listError);
         using var listDoc = JsonDocument.Parse(listData!.Value.GetRawText());
-        var groupId = listDoc.RootElement[0].GetProperty("groupId").GetString();
+        var groupId = listDoc.RootElement.GetProperty("groups")[0].GetProperty("groupId").GetString();
 
         var setVector = new OperationVector(
             "admin", "enum_dictionary", "set_group_items", null, "admin",
@@ -504,7 +594,7 @@ public class AdminRuntimeMasterRosterTests
         var (listData, listError) = await runtime.ExecuteDataAsync(listVector);
         Assert.Null(listError);
         using var listDoc = JsonDocument.Parse(listData!.Value.GetRawText());
-        var groupId = listDoc.RootElement[0].GetProperty("groupId").GetString();
+        var groupId = listDoc.RootElement.GetProperty("groups")[0].GetProperty("groupId").GetString();
 
         var setVector = new OperationVector(
             "admin", "enum_dictionary", "set_group_items", null, "admin",
@@ -530,7 +620,7 @@ public class AdminRuntimeMasterRosterTests
         var (listData, listError) = await runtime.ExecuteDataAsync(listVector);
         Assert.Null(listError);
         using var listDoc = JsonDocument.Parse(listData!.Value.GetRawText());
-        var groupId = listDoc.RootElement[0].GetProperty("groupId").GetString();
+        var groupId = listDoc.RootElement.GetProperty("groups")[0].GetProperty("groupId").GetString();
 
         var dryRunVector = new OperationVector(
             "admin", "enum_dictionary", "set_group_items", null, "admin",
@@ -560,7 +650,7 @@ public class AdminRuntimeMasterRosterTests
         var (listData, listError) = await runtime.ExecuteDataAsync(listVector);
         Assert.Null(listError);
         using var listDoc = JsonDocument.Parse(listData!.Value.GetRawText());
-        var groupId = listDoc.RootElement[0].GetProperty("groupId").GetString();
+        var groupId = listDoc.RootElement.GetProperty("groups")[0].GetProperty("groupId").GetString();
 
         var writeVector = new OperationVector(
             "admin", "enum_dictionary", "set_group_items", null, "admin",

@@ -304,6 +304,13 @@ public record LayoutNodeRecord(
     /// layout's own uniform target, unchanged.
     /// </summary>
     string? DispatchTargetRefByTriggerJson = null,
+    /// <summary>
+    /// round 37 (search_filter_input_contract debounce_policy): this node's own declared
+    /// debounceMs from layout_patch_json.nodes[].debounceMs — a Field grammar attribute
+    /// (react-schema-topology-seed-translator-ssot.yaml). Null when not authored — the node
+    /// then dispatches immediately, unchanged.
+    /// </summary>
+    int? DebounceMs = null,
     /// <summary>Sizing mode from layout_patch_json: auto | preset | custom.</summary>
     string? WidthMode = null,
     string? HeightMode = null,

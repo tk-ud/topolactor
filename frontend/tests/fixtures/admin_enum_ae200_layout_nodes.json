@@ -34,12 +34,14 @@
     "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
     "dispatchPayloadFromByTrigger": {
       "change": {
-        "search": "node:enum_search.value"
+        "search": "node:enum_search.value",
+        "groupNameFilter": "node:enum_group_filter.value"
       }
     },
     "dispatchTargetRefByTrigger": {
       "change": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups"
     },
+    "debounceMs": 300,
     "label": "Enum search"
   },
   {
@@ -58,15 +60,16 @@
     "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
     "propBindings": {
       "options": {
-        "source": "emission.data",
+        "source": "emission.data.groupOptions",
         "labelPath": "groupName",
         "transform": "rowsToOptions",
-        "valuePath": "groupId"
+        "valuePath": "groupName"
       }
     },
     "dispatchPayloadFromByTrigger": {
       "change": {
-        "groupIdFilter": "node:enum_group_filter.value"
+        "search": "node:enum_search.value",
+        "groupNameFilter": "node:enum_group_filter.value"
       }
     },
     "dispatchTargetRefByTrigger": {
@@ -91,7 +94,7 @@
     "propsJson": "{\u0022table\u0022: null, \u0022columns\u0022: [{\u0022key\u0022: \u0022groupName\u0022, \u0022header\u0022: \u0022Group name\u0022}, {\u0022key\u0022: \u0022indexNum\u0022, \u0022header\u0022: \u0022Index\u0022}, {\u0022key\u0022: \u0022groupId\u0022, \u0022header\u0022: \u0022Group ID\u0022}, {\u0022key\u0022: \u0022itemsSummary\u0022, \u0022header\u0022: \u0022Items\u0022}]}",
     "propBindings": {
       "rows": {
-        "source": "emission.data"
+        "source": "emission.data.groups"
       }
     },
     "label": "Enum groups and items table"

@@ -234,9 +234,44 @@ export function seedTrackerFromPropBindingsValue(
   }
 }
 
+/**
+ * round 37: seeds an empty-string default for every Field-family node (componentKind starting
+ * with "form_input/") that owns a dispatchPayloadFromByTrigger and is not yet tracked -- closes
+ * an ordering-dependency gap this round's own combined search+filter payloadFrom introduced
+ * (see docs/design/admin-master-roster-management-ssot.yaml canonical_routes.admin_enums.
+ * ux_contract_shrinkage_owner_decision_pending's sibling note and
+ * frontend/tests/projectionShellAdminRuntimeWritePayloadCapture.test.ts's "selecting
+ * enum_group_filter" DOM test): when a Field's own payloadFrom references ANOTHER Field's value
+ * (e.g. enum_search's payloadFrom now also reads node:enum_group_filter.value, and vice versa, so
+ * either field's own change dispatch carries both current values combined), the referenced field
+ * previously had NO tracked value at all until a user had ALREADY typed/selected into it at least
+ * once, so touching field B before ever touching field A failed closed
+ * (PAYLOAD_FROM_NODE_NOT_FOUND) even though "field A was simply never touched" is a legitimate,
+ * common state whose natural payload value is an empty string -- not a missing-record error like
+ * an unselected table row (node:<table>.value.<field>, deliberately NOT seeded here or anywhere
+ * else, and still correctly fails closed).
+ * Scoped strictly to Field-family componentKinds with their OWN dispatchPayloadFromByTrigger --
+ * never touches a Table/Action node's tracked value, and never overwrites an already-tracked
+ * value (a user's real keystroke always wins over this one-time empty default).
+ */
+export function seedTrackerWithEmptyDefaultsForFieldDispatchParticipants(
+  tracker: LiveNodeValueTracker,
+  layoutNodes: readonly LayoutNodeForValueSeeding[],
+): void {
+  const tracked = tracker.snapshot();
+  for (const node of layoutNodes) {
+    if (!node.nodeId) continue;
+    if (!node.componentKind?.startsWith("form_input/")) continue;
+    if (!node.dispatchPayloadFromByTrigger) continue;
+    if (Object.prototype.hasOwnProperty.call(tracked, node.nodeId)) continue;
+    tracker.set(node.nodeId, "");
+  }
+}
+
 /** Minimal shape seedTrackerFromPropBindingsValue needs from a LayoutNode (api/dispatch.ts). */
 export type LayoutNodeForValueSeeding = {
   nodeId?: string;
   componentKind?: string;
   propBindings?: Record<string, { source?: string }> | null;
+  dispatchPayloadFromByTrigger?: unknown;
 };

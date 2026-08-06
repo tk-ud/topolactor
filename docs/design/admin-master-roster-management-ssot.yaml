@@ -44,6 +44,33 @@ admin_master_roster_management_ssot:
         because of a hardcoded EXEMPT_KEYS test carve-out, which round 36 also removed --
         frontend/components/catalog.ts no longer carries an admin_enum_roster.admin_operation
         entry at all).
+      ux_contract_shrinkage_owner_decision_pending: >-
+        round 37 base-vs-head audit (git diff against this PR's base commit, not against this
+        already-edited branch) found the two ux_contract lines below were genuinely reworded
+        during this PR, not merely relabeled: base declared
+        show_all_button_clears_filter_and_lists_full_roster (AdminEnumsRoster.tsx had a real
+        "全件出力" button wired to handleShowAll, distinct from the search input) and
+        row_click_opens_inline_update_panel (the update section was conditionally rendered --
+        `{selectedId && detail && (<section>...)}`  -- only mounted after a row click, not
+        always-present). The generic ProjectionShell/manifest architecture this route now uses has
+        NO existing mechanism for either: (1) a button programmatically resetting a DIFFERENT
+        Field's own live/displayed value as a click side effect (checked
+        frontend/runtime/liveNodeValueTracker.ts / applyLiveNodeValueOverride -- flows DOM->tracker
+        for payload-building only, never tracker->DOM on demand; checked backend's setState
+        actionType -- statePath is restricted to "open"/"activeKey" only, never a Field's own
+        value); (2) a Table's row click opening a disclosure/Modal (Table has no
+        disclosureActionType/runtimeInteractions authoring attribute today, only Action/Step do).
+        Both are buildable (a new setState statePath="value" actionType across translator+backend+
+        frontend for (1); extending Table's grammar with row-click disclosure attributes for (2),
+        following the same "new actionType/container kind needs its full stack in one round"
+        precedent wiring_lane_contract.lanes.disclosure_state_wiring already documents for a future
+        Drawer/Dialog addition) but neither is uniquely derivable as "the" design without inventing
+        new generic surface area no other part of this codebase has needed yet -- per this round's
+        own instruction ("設計が一意でなければ実装せずOwnerへ質問する"), this is recorded here as an
+        open Owner design decision rather than guessed at. The two ux_contract lines below are left
+        at their round-36 (current-implementation-accurate) wording in the meantime -- NOT restored
+        to the base wording (which would misdescribe current behavior) and NOT silently accepted as
+        the final intended design either.
       ux_contract:
         - text_search_at_top
         - clearing_the_search_field_restores_full_roster

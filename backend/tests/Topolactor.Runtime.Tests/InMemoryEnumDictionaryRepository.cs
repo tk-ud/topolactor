@@ -59,9 +59,11 @@ public sealed class InMemoryEnumDictionaryRepository : EnumDictionaryRepository
                 .ToList());
 
     public override Task<IReadOnlyList<EnumDictionaryGroupWithItemsSummaryDto>> ListGroupsWithItemsSummaryAsync(
-        string? search = null, Guid? groupIdFilter = null, CancellationToken ct = default)
+        string? search = null, string? groupNameFilter = null, int? groupIndexNumFilter = null,
+        int? itemPositionFilter = null, CancellationToken ct = default)
     {
         var trimmedSearch = search?.Trim();
+        var trimmedGroupNameFilter = groupNameFilter?.Trim();
         IEnumerable<EnumDictionaryGroupDetailDto> groups = _groups.Values;
         if (!string.IsNullOrEmpty(trimmedSearch))
         {
@@ -77,9 +79,20 @@ public sealed class InMemoryEnumDictionaryRepository : EnumDictionaryRepository
                     || t.item.IndexNum.ToString().Contains(trimmedSearch, StringComparison.OrdinalIgnoreCase)
                     || t.position.ToString().Contains(trimmedSearch, StringComparison.OrdinalIgnoreCase)));
         }
-        if (groupIdFilter.HasValue)
+        // round 37: the owning SSOT's three declared filter target fields, mirroring
+        // NpgsqlEnumDictionaryRepository's exact-match SQL clauses.
+        if (!string.IsNullOrEmpty(trimmedGroupNameFilter))
         {
-            groups = groups.Where(g => g.GroupId == groupIdFilter.Value);
+            groups = groups.Where(g => g.GroupName == trimmedGroupNameFilter);
+        }
+        if (groupIndexNumFilter.HasValue)
+        {
+            groups = groups.Where(g => g.IndexNum == groupIndexNumFilter.Value);
+        }
+        if (itemPositionFilter.HasValue)
+        {
+            groups = groups.Where(g =>
+                g.Items.Select((item, position) => position).Any(position => position == itemPositionFilter.Value));
         }
         return Task.FromResult<IReadOnlyList<EnumDictionaryGroupWithItemsSummaryDto>>(
             groups

@@ -229,6 +229,15 @@ function simulateInput(inputEl: HTMLInputElement, value: string) {
   inputEl.dispatchEvent(event);
 }
 
+function simulateSelectChange(selectEl: HTMLSelectElement, value: string) {
+  selectEl.value = value;
+  const event = new (globalThis as unknown as { Event: typeof Event }).Event(
+    "change",
+    { bubbles: true },
+  );
+  selectEl.dispatchEvent(event);
+}
+
 function simulateClick(buttonEl: HTMLButtonElement) {
   const event = new (globalThis as unknown as { Event: typeof Event }).Event(
     "click",
@@ -253,6 +262,19 @@ async function waitFor(
   for (let i = 0; i < maxIterations && !predicate(); i++) {
     await flushUpdates();
   }
+}
+
+/**
+ * round 37 (search_filter_input_contract debounce_policy): enum_search's own fixture-declared
+ * debounceMs (300, see db/seed_empty.sql / admin_enum_ae200_layout_nodes.json) delays the ACTUAL
+ * network enqueue via a real setTimeout — flushUpdates()'s single macrotask await (or even 40 of
+ * them) does not reliably accumulate 300ms of real wall-clock time. A genuine real-time wait past
+ * the debounce window is the only correct way to prove the debounced dispatch actually fires (or,
+ * for the "collapses to last keystroke" proof, that an EARLIER dispatch within the window never
+ * fires at all).
+ */
+function waitRealMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 Deno.test(
@@ -4220,6 +4242,16 @@ Deno.test(
       { groupId: "grp-alpha-11111111", groupName: "Alpha", indexNum: 1, itemsSummary: "1:one" },
       { groupId: "grp-beta-222222222", groupName: "Beta", indexNum: 2, itemsSummary: "1:uno, 2:dos" },
     ];
+    // round 37: list_groups' response envelope is {groups, groupOptions} -- groupOptions is
+    // ALWAYS the full unfiltered roster (enum_table.propBindings.rows.source is
+    // "emission.data.groups", enum_group_filter.propBindings.options.source is
+    // "emission.data.groupOptions" -- both read from the SAME dispatch response, per the
+    // checked-in fixture this test loads directly, never a hand-simplified substitute).
+    const ALL_GROUP_OPTIONS = ALL_ROWS.map((r) => ({
+      groupId: r.groupId,
+      indexNum: r.indexNum,
+      groupName: r.groupName,
+    }));
 
     function emissionWithRows(rows: typeof ALL_ROWS) {
       return {
@@ -4227,7 +4259,7 @@ Deno.test(
         layoutId: "layout-admin-enum-ae200-canonical-fixture",
         projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
         layoutNodes,
-        data: rows,
+        data: { groups: rows, groupOptions: ALL_GROUP_OPTIONS },
       };
     }
 
@@ -4235,18 +4267,32 @@ Deno.test(
       if (body.action === "Search" && body.layer === "screen_list") {
         return { success: true, emission: emissionWithRows(ALL_ROWS) };
       }
-      // enum_search's OWN change-triggered dispatch is the only same-manifest list_groups call
-      // that ever carries a "search" payload field -- mirrors the real backend's ILIKE substring
-      // filter (backend/repository/NpgsqlEnumDictionaryRepository.cs) so this mock proves the
-      // SAME contract the live-DB test proves against real PostgreSQL, without duplicating it.
-      if (
-        body.layer === "enum_dictionary" && body.action === "list_groups" &&
-        typeof payloadOf(body).search === "string"
-      ) {
-        const q = (payloadOf(body).search as string).trim().toLowerCase();
-        const filtered = q
-          ? ALL_ROWS.filter((r) => r.groupName.toLowerCase().includes(q))
-          : ALL_ROWS;
+      // Both enum_search and enum_group_filter's OWN change-triggered dispatch carry BOTH
+      // search and groupNameFilter together (round 37: each Field's payloadFrom reads both
+      // nodes' current values, not only its own -- see db/seed_empty.sql's enum_search/
+      // enum_group_filter dispatchPayloadFromByTrigger) so either field's own change combines
+      // with whatever the OTHER field currently holds, AND-combined -- mirrors the real
+      // backend's exact contract (backend/repository/NpgsqlEnumDictionaryRepository.cs) so this
+      // mock proves the SAME contract the live-DB test proves against real PostgreSQL, without
+      // duplicating it.
+      if (body.layer === "enum_dictionary" && body.action === "list_groups") {
+        const payload = payloadOf(body);
+        if (
+          typeof payload.search !== "string" &&
+          typeof payload.groupNameFilter !== "string"
+        ) {
+          return fallbackDispatchResponse(body);
+        }
+        const q = typeof payload.search === "string"
+          ? payload.search.trim().toLowerCase()
+          : "";
+        const groupNameFilter = typeof payload.groupNameFilter === "string"
+          ? payload.groupNameFilter
+          : "";
+        const filtered = ALL_ROWS.filter((r) =>
+          (!q || r.groupName.toLowerCase().includes(q)) &&
+          (!groupNameFilter || r.groupName === groupNameFilter)
+        );
         return { success: true, emission: emissionWithRows(filtered) };
       }
       return fallbackDispatchResponse(body);
@@ -4266,7 +4312,10 @@ Deno.test(
       const searchInput = container.querySelector("input") as HTMLInputElement;
       assertExists(searchInput, "enum_search must render as a real input");
 
+      // round 37: enum_search's own fixture-declared debounceMs (300) delays the actual dispatch
+      // enqueue -- a real wait past the debounce window is required before the dispatch fires.
       simulateInput(searchInput, "Alpha");
+      await waitRealMs(350);
       await waitFor(() =>
         scenario.capturedDispatchBodies.some((b) =>
           b.layer === "enum_dictionary" && b.action === "list_groups" &&
@@ -4283,6 +4332,7 @@ Deno.test(
       assertEquals(rows()[0].textContent?.includes("Beta"), false);
 
       simulateInput(searchInput, "");
+      await waitRealMs(350);
       await waitFor(() =>
         scenario.capturedDispatchBodies.some((b) =>
           b.layer === "enum_dictionary" && b.action === "list_groups" &&
@@ -4295,6 +4345,203 @@ Deno.test(
         2,
         "clearing enum_search must restore the canonical full list",
       );
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource =
+        originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
+      render(null, container);
+      cleanup();
+    }
+  },
+);
+
+Deno.test(
+  "ProjectionShell (real mount, canonical ae200 fixture): selecting enum_group_filter scopes enum_table via list_groups' own groupNameFilter payload, its OWN options never self-shrink to the filtered result, clearing restores the full list, reselecting a different group re-scopes, and combining with enum_search AND-narrows (round 37)",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource =
+      FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    const fixtureText = await Deno.readTextFile(
+      new URL("./fixtures/admin_enum_ae200_layout_nodes.json", import.meta.url),
+    );
+    const layoutNodes = JSON.parse(fixtureText) as Record<string, unknown>[];
+
+    const ALL_ROWS = [
+      { groupId: "grp-alpha-11111111", groupName: "Alpha", indexNum: 1, itemsSummary: "1:one" },
+      { groupId: "grp-beta-222222222", groupName: "Beta", indexNum: 2, itemsSummary: "1:uno, 2:dos" },
+      { groupId: "grp-alphagamma-333", groupName: "AlphaGamma", indexNum: 3, itemsSummary: "1:tri" },
+    ];
+    // round 37: groupOptions is ALWAYS the full unfiltered roster -- the fixed data this test
+    // asserts the <select>'s OWN option list against, regardless of what the CURRENT
+    // search/filter narrows enum_table's rows to.
+    const ALL_GROUP_OPTIONS = ALL_ROWS.map((r) => ({
+      groupId: r.groupId,
+      indexNum: r.indexNum,
+      groupName: r.groupName,
+    }));
+
+    function emissionWithRows(rows: typeof ALL_ROWS) {
+      return {
+        manifestId: ADMIN_ENUM_MANIFEST_ID,
+        layoutId: "layout-admin-enum-ae200-canonical-fixture",
+        projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
+        layoutNodes,
+        data: { groups: rows, groupOptions: ALL_GROUP_OPTIONS },
+      };
+    }
+
+    const scenario = buildMockScenario((_callIndex, body) => {
+      if (body.action === "Search" && body.layer === "screen_list") {
+        return { success: true, emission: emissionWithRows(ALL_ROWS) };
+      }
+      if (body.layer === "enum_dictionary" && body.action === "list_groups") {
+        const payload = payloadOf(body);
+        if (
+          typeof payload.search !== "string" &&
+          typeof payload.groupNameFilter !== "string"
+        ) {
+          return fallbackDispatchResponse(body);
+        }
+        const q = typeof payload.search === "string"
+          ? payload.search.trim().toLowerCase()
+          : "";
+        const groupNameFilter = typeof payload.groupNameFilter === "string"
+          ? payload.groupNameFilter
+          : "";
+        const filtered = ALL_ROWS.filter((r) =>
+          (!q || r.groupName.toLowerCase().includes(q)) &&
+          (!groupNameFilter || r.groupName === groupNameFilter)
+        );
+        return { success: true, emission: emissionWithRows(filtered) };
+      }
+      return fallbackDispatchResponse(body);
+    });
+    globalThis.fetch = scenario.fetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+      render(h(ProjectionShell, {}), container);
+
+      const rows = () =>
+        Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
+      const groupFilterSelect = () =>
+        container.querySelector("select") as HTMLSelectElement;
+      const groupFilterOptionValues = () =>
+        Array.from(groupFilterSelect()?.options ?? []).map((o) => o.value)
+          .filter((v) => v !== "");
+
+      await waitFor(() => rows().length === 3);
+      assertEquals(rows().length, 3, "the canonical full list must render initially");
+      assertExists(groupFilterSelect(), "enum_group_filter must render as a real <select>");
+      await waitFor(() => groupFilterOptionValues().length === 3);
+      assertEquals(
+        new Set(groupFilterOptionValues()),
+        new Set(["Alpha", "Beta", "AlphaGamma"]),
+        "enum_group_filter's own options must list every group before any filter is applied",
+      );
+
+      // 1. Filter-select: choosing "Alpha" scopes enum_table to that one group via
+      // list_groups' own groupNameFilter payload.
+      simulateSelectChange(groupFilterSelect(), "Alpha");
+      await waitFor(() =>
+        scenario.capturedDispatchBodies.some((b) =>
+          b.layer === "enum_dictionary" && b.action === "list_groups" &&
+          payloadOf(b).groupNameFilter === "Alpha"
+        )
+      );
+      await waitFor(() => rows().length === 1);
+      assertEquals(rows().length, 1, "selecting Alpha must scope enum_table to that one group");
+      assertEquals(rows()[0].textContent?.includes("Alpha"), true);
+      assertEquals(rows()[0].textContent?.includes("Beta"), false);
+
+      // 2. Options must NOT self-shrink: even while enum_table is scoped to one group, the
+      // filter <select> itself must still offer every group as a choice.
+      await waitFor(() => groupFilterOptionValues().length === 3);
+      assertEquals(
+        new Set(groupFilterOptionValues()),
+        new Set(["Alpha", "Beta", "AlphaGamma"]),
+        "enum_group_filter's own options must stay the full unfiltered list even while enum_table is filter-scoped",
+      );
+
+      // 3. Clear/reset: selecting the empty placeholder option restores the full list.
+      simulateSelectChange(groupFilterSelect(), "");
+      await waitFor(() =>
+        scenario.capturedDispatchBodies.some((b) =>
+          b.layer === "enum_dictionary" && b.action === "list_groups" &&
+          payloadOf(b).groupNameFilter === ""
+        )
+      );
+      await waitFor(() => rows().length === 3);
+      assertEquals(rows().length, 3, "clearing enum_group_filter must restore the canonical full list");
+
+      // 4. Reselect a DIFFERENT group re-scopes correctly (not stuck on the first selection).
+      simulateSelectChange(groupFilterSelect(), "Beta");
+      await waitFor(() =>
+        scenario.capturedDispatchBodies.some((b) =>
+          b.layer === "enum_dictionary" && b.action === "list_groups" &&
+          payloadOf(b).groupNameFilter === "Beta"
+        )
+      );
+      await waitFor(() => rows().length === 1);
+      assertEquals(rows()[0].textContent?.includes("Beta"), true);
+      assertEquals(rows()[0].textContent?.includes("Alpha"), false);
+      await waitFor(() => groupFilterOptionValues().length === 3);
+      assertEquals(
+        new Set(groupFilterOptionValues()),
+        new Set(["Alpha", "Beta", "AlphaGamma"]),
+        "options must still be the full list after reselecting a different group",
+      );
+
+      // 5. Combine with search: typing "Alpha" into enum_search while enum_group_filter is
+      // still set to "Beta" AND-combines both -- zero rows, since no group is named Beta AND
+      // matches "Alpha".
+      const searchInput = container.querySelector("input") as HTMLInputElement;
+      assertExists(searchInput, "enum_search must render as a real input");
+      // round 37: enum_search's own fixture-declared debounceMs (300) delays the actual
+      // dispatch enqueue -- a real wait past the debounce window is required.
+      simulateInput(searchInput, "Alpha");
+      await waitRealMs(350);
+      await waitFor(() =>
+        scenario.capturedDispatchBodies.some((b) =>
+          b.layer === "enum_dictionary" && b.action === "list_groups" &&
+          payloadOf(b).search === "Alpha" && payloadOf(b).groupNameFilter === "Beta"
+        )
+      );
+      // The table's empty state renders an explicit "No data." placeholder row rather than
+      // zero <tr> elements (see Table.tsx), so absence is checked by content, not row count --
+      // same convention as this file's existing round-27 redispatch empty-state proof.
+      await waitFor(() =>
+        (container.querySelector("tbody")?.textContent ?? "").includes("No data.")
+      );
+      const tbodyTextAfterCombine = container.querySelector("tbody")?.textContent ?? "";
+      assertEquals(
+        tbodyTextAfterCombine.includes("No data."),
+        true,
+        "search='Alpha' AND groupNameFilter='Beta' must AND-combine to zero rows (no group matches both)",
+      );
+      assertEquals(rows().length, 1, "the empty state renders exactly one placeholder row");
+
+      // Now clear the group filter while search='Alpha' is still active -- AlphaGamma also
+      // contains "alpha" as a substring, so BOTH Alpha and AlphaGamma must appear.
+      simulateSelectChange(groupFilterSelect(), "");
+      await waitFor(() =>
+        scenario.capturedDispatchBodies.some((b) =>
+          b.layer === "enum_dictionary" && b.action === "list_groups" &&
+          payloadOf(b).search === "Alpha" && payloadOf(b).groupNameFilter === ""
+        )
+      );
+      await waitFor(() => rows().length === 2);
+      assertEquals(rows().length, 2, "search='Alpha' alone must match both Alpha and AlphaGamma");
+      assertEquals(rows().some((r) => r.textContent?.includes("Beta")), false);
     } finally {
       globalThis.fetch = originalFetch;
       (globalThis as unknown as { EventSource: unknown }).EventSource =

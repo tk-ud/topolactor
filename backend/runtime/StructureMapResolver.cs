@@ -276,6 +276,7 @@ public class StructureMapResolver
         DispatchTargetRefByTrigger: row.DispatchTargetRefByTriggerJson != null
             ? JsonSerializer.Deserialize<JsonElement>(row.DispatchTargetRefByTriggerJson)
             : null,
+        DebounceMs: row.DebounceMs,
         RecordType: row.RecordType,
         Label: row.Label,
         KnownGapRefs: row.KnownGapRefs

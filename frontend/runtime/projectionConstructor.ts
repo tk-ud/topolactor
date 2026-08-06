@@ -83,6 +83,12 @@ export type ComponentDataHub = {
     result: DispatchResponse,
     context: RuntimeDispatchResultContext,
   ) => void;
+  /**
+   * round 37 (search_filter_input_contract debounce_policy): this node's own declared
+   * debounceMs (Field grammar, react-schema-topology-seed-translator-ssot.yaml) — see
+   * RuntimeComponentSpec.debounceMs for the runtime behavior this drives.
+   */
+  debounceMs?: number;
 };
 
 type RuntimeTopologyComponentProps = JsonObject & {

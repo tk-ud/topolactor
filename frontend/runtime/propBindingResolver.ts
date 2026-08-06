@@ -360,6 +360,22 @@ export function resolvePropBindings(
     }
 
     props[propName] = finalValue;
+    // round 37: some component factories (selectFactory/checkboxFactory/radioGroupFactory/
+    // checkboxGroupFactory -- see COMPONENT_ARRAY_PROP_CAPABILITIES' form_input/* entries) read
+    // their own data-carrying props from a nested props.data object when one is present
+    // (buildProductionCatalogComponentProps's own default props for these kinds already wrap
+    // value/options/etc under data:{...}), falling back to flat top-level props only when
+    // props.data is absent (the shape data_display/table's own factory uses instead). A
+    // top-level-only write above is silently shadowed by that nested-data default for every
+    // form_input/* kind -- this mirrors the resolved value into props.data[propName] too so
+    // BOTH factory-reading conventions see the SAME freshly-resolved value, never a stale
+    // default. Never mutates the pre-existing props.data reference (a new object each time).
+    if (
+      typeof props.data === "object" && props.data !== null &&
+      !Array.isArray(props.data)
+    ) {
+      props.data = { ...(props.data as Record<string, unknown>), [propName]: finalValue };
+    }
   }
 
   return { ok: true, props };
