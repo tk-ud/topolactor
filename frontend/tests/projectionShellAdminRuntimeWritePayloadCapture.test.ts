@@ -4038,13 +4038,25 @@ Deno.test(
       "enum_update_group_name_input must be one of the fixture's own visible input nodes",
     );
 
+    // round 37: list_groups' response envelope is {groups, groupOptions} -- enum_table's own
+    // rowsSource is "emission.data.groups" and enum_group_filter's own optionsSource is
+    // "emission.data.groupOptions" (both read from this SAME canonical mount emission, not a
+    // separate list_groups dispatch -- this test never types into search/filter, so groupOptions
+    // is simply the same roster).
     function canonicalEmission() {
       return {
         manifestId: ADMIN_ENUM_MANIFEST_ID,
         layoutId: "layout-admin-enum-ae200-canonical-fixture",
         projectionDefinition: MINIMAL_PROJECTION_DEFINITION,
         layoutNodes,
-        data: ROWS,
+        data: {
+          groups: ROWS,
+          groupOptions: ROWS.map((r) => ({
+            groupId: r.groupId,
+            indexNum: r.indexNum,
+            groupName: r.groupName,
+          })),
+        },
       };
     }
 
