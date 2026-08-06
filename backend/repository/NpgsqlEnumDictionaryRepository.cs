@@ -102,7 +102,11 @@ public class NpgsqlEnumDictionaryRepository : EnumDictionaryRepository
                    COALESCE(
                        string_agg(i.index_num || ':' || i.name, ', ' ORDER BY gi.position),
                        ''
-                   ) AS items_summary
+                   ) AS items_summary,
+                   COALESCE(
+                       string_agg(CAST(i.index_num AS TEXT), ',' ORDER BY gi.position),
+                       ''
+                   ) AS items_index_nums
             FROM enum.groups g
             LEFT JOIN enum.group_items gi ON gi.group_id = g.group_id
             LEFT JOIN enum.items i ON i.index_num = gi.enum_index_num
@@ -137,7 +141,8 @@ public class NpgsqlEnumDictionaryRepository : EnumDictionaryRepository
                 reader.GetGuid(0),
                 reader.GetInt32(1),
                 reader.GetString(2),
-                reader.GetString(3)));
+                reader.GetString(3),
+                reader.GetString(4)));
         }
 
         return list;

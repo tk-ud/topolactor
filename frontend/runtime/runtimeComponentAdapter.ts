@@ -46,6 +46,15 @@ export type RuntimeDispatchResultContext = {
 
 export type RuntimeComponentSpec = {
   componentId: string;
+  /**
+   * round 38: the layout node's own stable structural identity, when known -- see
+   * ComponentDataHub.nodeId's own doc comment for why this must be the identity any per-instance
+   * runtime state (debounce timers, dispatch sequence guards) keys on instead of componentId.
+   * Absent for specs built outside the normal ComponentDataHub->adaptComponentDataHub path (e.g.
+   * some unit-test-constructed specs) -- callers needing instance identity must fall back to
+   * componentId only when nodeId is genuinely unavailable, never prefer componentId when both exist.
+   */
+  nodeId?: string;
   packageId?: string | null;
   layoutId?: string | null;
   wiringId?: string | null;
@@ -264,6 +273,7 @@ export function adaptComponentDataHub(hub: ComponentDataHub): AdaptResult {
     ok: true,
     value: {
       componentId: hub.componentId,
+      nodeId: hub.nodeId,
       packageId: hub.packageId,
       layoutId: hub.layoutId,
       wiringId: hub.wiringId,

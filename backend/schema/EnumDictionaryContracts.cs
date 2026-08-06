@@ -23,11 +23,21 @@ public record EnumDictionaryGroupDetailDto(
 // list_groups' own query) -- no new list_items action, no cross-manifest dispatch, no direct
 // child-Emission adoption. itemsSummary is a flattened, human-readable "index:name, ..." string
 // (empty for a group with no items) rendered as an ordinary enum_table column.
+// itemsIndexNums (round 38): the SAME membership, as a bare comma-separated index-num list
+// (empty string for a group with no items) -- the exact CSV shape
+// AdminRuntimeMasterRoster.TryParseSetGroupItemsPayload's own string branch already accepts for
+// enumIndexNums. This is what makes the selected group's CURRENT membership available as a real,
+// generic node:enum_table.value.itemsIndexNums prefill source for enum_set_group_items_input
+// (the same node-value-prefill mechanism enum_update_group_name_input's
+// propBindings.value.source="node:enum_table.value.groupName" already uses) -- without it, a user
+// editing group membership had to blindly retype the full member list from scratch, since
+// itemsSummary's "index:name, ..." display text is not itself valid enumIndexNums input.
 public record EnumDictionaryGroupWithItemsSummaryDto(
     [property: JsonPropertyName("groupId")] Guid GroupId,
     [property: JsonPropertyName("indexNum")] int IndexNum,
     [property: JsonPropertyName("groupName")] string GroupName,
-    [property: JsonPropertyName("itemsSummary")] string ItemsSummary);
+    [property: JsonPropertyName("itemsSummary")] string ItemsSummary,
+    [property: JsonPropertyName("itemsIndexNums")] string ItemsIndexNums);
 
 public record EnumDictionaryGetGroupRequestDto(
     [property: JsonPropertyName("groupId")] string GroupId);

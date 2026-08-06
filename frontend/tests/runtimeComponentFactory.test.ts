@@ -884,3 +884,84 @@ Deno.test("emitBoundEvent: malformed payloadFrom at the dispatch-time parse boun
     schedulerTestOnly.resetCommandQueue();
   }
 });
+
+Deno.test("emitBoundEvent: two DISTINCT layout nodes sharing the SAME catalog componentId (e.g. two Fields both instantiating form_input/search_input, whose componentId is the CATALOG component definition's own registry identity, not a per-instance one) maintain fully independent debounce timers and dispatch sequencing -- neither node's debounced dispatch cancels or overwrites the other's (round 38)", async () => {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  const capturedBodies: Record<string, unknown>[] = [];
+  globalThis.fetch = ((_url: string, init?: RequestInit) => {
+    capturedBodies.push(JSON.parse(String(init?.body ?? "{}")));
+    return Promise.resolve(
+      new Response(JSON.stringify({ success: true, errors: [] }), { status: 200 }),
+    );
+  }) as typeof fetch;
+  try {
+    const SHARED_CATALOG_COMPONENT_ID = "comp-shared-search-input-catalog-001";
+    const buildSpec = (
+      nodeId: string,
+      inputNodeId: string,
+      targetLayer: string,
+    ): RuntimeComponentSpec => ({
+      // SAME componentId on both specs -- the exact shape two independent Fields both
+      // instantiating the same catalog component (e.g. "search_input.alias") actually have
+      // in production, since componentId is the catalog registry's own identity.
+      componentId: SHARED_CATALOG_COMPONENT_ID,
+      nodeId,
+      packageId: null,
+      layoutId: "layout-shared-componentid-001",
+      wiringId: null,
+      componentType: "form_input/search_input",
+      props: { data: { value: "" } },
+      debounceMs: 30,
+      eventBinding: {
+        change: {
+          eventType: "change",
+          runtimeDispatch: {
+            operationType: "list_x",
+            target: "manifest",
+            layer: targetLayer,
+            action: "list_x",
+            targetRef: `manifest:${ADMIN_ENUM_MANIFEST_ID}:${targetLayer}:list_x`,
+            payloadFrom: { q: `node:${inputNodeId}.value` },
+          },
+        },
+      },
+      payloadFromNodeValues: { [inputNodeId]: nodeId === "node-A" ? "alpha" : "beta" },
+    });
+    const specA = buildSpec("node-A", "input-A", "layer_a");
+    const specB = buildSpec("node-B", "input-B", "layer_b");
+
+    // Fire A's own debounced dispatch, then IMMEDIATELY fire B's own debounced dispatch
+    // (before A's 30ms timer has elapsed). If componentId were still used as the identity
+    // (the round-37 bug this proves fixed), scheduling B would cancel A's still-pending
+    // timer since both specs share one componentId -- A's dispatch would then never fire
+    // at all.
+    const resultA = __testOnly.emitBoundEvent(specA, "change", { value: "alpha" });
+    assertEquals(resultA.ok, true);
+    const resultB = __testOnly.emitBoundEvent(specB, "change", { value: "beta" });
+    assertEquals(resultB.ok, true);
+
+    for (let i = 0; i < 40 && capturedBodies.length < 2; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assertEquals(
+      capturedBodies.length,
+      2,
+      "both A's and B's own debounced dispatch must independently fire -- neither node's own componentId-sharing with the other silently cancels its timer",
+    );
+    const layers = capturedBodies.map((b) => b.layer);
+    assertEquals(
+      new Set(layers),
+      new Set(["layer_a", "layer_b"]),
+      "each node's dispatch must reach ITS OWN targetRef/layer, not the other node's",
+    );
+    const bodyA = capturedBodies.find((b) => b.layer === "layer_a")!;
+    const bodyB = capturedBodies.find((b) => b.layer === "layer_b")!;
+    assertEquals((bodyA.payload as Record<string, unknown>).q, "alpha");
+    assertEquals((bodyB.payload as Record<string, unknown>).q, "beta");
+  } finally {
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
+});

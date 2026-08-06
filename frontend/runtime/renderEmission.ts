@@ -1523,6 +1523,7 @@ export function renderEmission(
           }
           : undefined;
         const hub: ComponentDataHub = {
+          nodeId: node.nodeId,
           componentId: node.componentId,
           componentKind: node.componentKind,
           packageId: emission.packageId ?? null,

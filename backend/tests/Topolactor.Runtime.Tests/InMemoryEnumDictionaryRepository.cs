@@ -101,7 +101,8 @@ public sealed class InMemoryEnumDictionaryRepository : EnumDictionaryRepository
                     g.GroupId,
                     g.IndexNum,
                     g.GroupName,
-                    string.Join(", ", g.Items.Select(i => $"{i.IndexNum}:{i.Name}"))))
+                    string.Join(", ", g.Items.Select(i => $"{i.IndexNum}:{i.Name}")),
+                    string.Join(",", g.Items.Select(i => i.IndexNum))))
                 .ToList());
     }
 

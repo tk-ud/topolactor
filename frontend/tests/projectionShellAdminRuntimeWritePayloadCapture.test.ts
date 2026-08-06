@@ -4002,8 +4002,20 @@ Deno.test(
     );
 
     const ROWS = [
-      { groupId: "grp-alpha-11111111", groupName: "Alpha", indexNum: 1, itemsSummary: "1:one" },
-      { groupId: "grp-beta-222222222", groupName: "Beta", indexNum: 2, itemsSummary: "1:uno, 2:dos" },
+      {
+        groupId: "grp-alpha-11111111",
+        groupName: "Alpha",
+        indexNum: 1,
+        itemsSummary: "1:one",
+        itemsIndexNums: "1",
+      },
+      {
+        groupId: "grp-beta-222222222",
+        groupName: "Beta",
+        indexNum: 2,
+        itemsSummary: "1:uno, 2:dos",
+        itemsIndexNums: "1,2",
+      },
     ];
 
     // Input.tsx only renders a <label> when data.label is set, and the default production props
@@ -4036,6 +4048,18 @@ Deno.test(
     assert(
       nameInputIndex >= 0,
       "enum_update_group_name_input must be one of the fixture's own visible input nodes",
+    );
+    // round 38: enum_set_group_items_input now carries the SAME kind of selected-row-relative
+    // prefill (propBindings.value.source = "node:enum_table.value.itemsIndexNums") as
+    // enum_update_group_name_input above -- proving the selected group's CURRENT membership is
+    // part of the same one-selection-context projection, not something a user must blindly
+    // retype from scratch.
+    const membershipInputIndex = visibleInputNodeIds.indexOf(
+      "enum_set_group_items_input",
+    );
+    assert(
+      membershipInputIndex >= 0,
+      "enum_set_group_items_input must be one of the fixture's own visible input nodes",
     );
 
     // round 37: list_groups' response envelope is {groups, groupOptions} -- enum_table's own
@@ -4098,16 +4122,40 @@ Deno.test(
         return input;
       };
 
+      const findMembershipInput = (): HTMLInputElement => {
+        const inputs = Array.from(
+          container.querySelectorAll("input"),
+        ) as HTMLInputElement[];
+        const input = inputs[membershipInputIndex];
+        assertExists(
+          input,
+          `expected a real <input> at position ${membershipInputIndex} among the fixture's own visible input nodes (enum_set_group_items_input) -- its absence would mean the node failed closed into a componentType:"error" spec instead of rendering`,
+        );
+        return input;
+      };
+
       const nameInput = findNameInput();
       assertEquals(nameInput.value, "", "no row selected yet -- no invented value");
+      assertEquals(
+        findMembershipInput().value,
+        "",
+        "no row selected yet -- no invented membership value",
+      );
 
-      // (a) selecting row A prefills the update field with A's own tracked groupName.
+      // (a) selecting row A prefills the update field with A's own tracked groupName, AND the
+      // membership field with A's own tracked itemsIndexNums (round 38 -- the SAME node-value-
+      // prefill mechanism, a second Field simply pointed at a different node:enum_table.value.<path>).
       simulateRowClick(rows()[0]);
       await waitFor(() => findNameInput().value === "Alpha");
       assertEquals(
         findNameInput().value,
         "Alpha",
         "selecting row A must prefill the update field via node:enum_table.value.groupName (cascadeNodeValueReferences + applyLiveNodeValueOverride)",
+      );
+      assertEquals(
+        findMembershipInput().value,
+        "1",
+        "selecting row A must prefill the membership field via node:enum_table.value.itemsIndexNums with A's OWN current membership",
       );
 
       // (b) an in-progress edit must survive an UNRELATED rerender (an SSE passive refresh) --
@@ -4137,9 +4185,15 @@ Deno.test(
 
       // (c) selecting a DIFFERENT row (B) destructively overwrites the field to B's own value --
       // explicit reselection always wins over whatever was typed for the previously-selected row.
+      // The SAME holds for the membership field's own itemsIndexNums prefill (round 38).
       simulateRowClick(rows()[1]);
       await waitFor(() => findNameInput().value === "Beta");
       assertEquals(findNameInput().value, "Beta");
+      assertEquals(
+        findMembershipInput().value,
+        "1,2",
+        "selecting row B must fully replace the membership field with B's OWN current membership, not merge with A's",
+      );
 
       // (d) a fresh edit for B, then clicking the write action button dispatches a dryRun PREVIEW
       // carrying B's own selected-row groupId plus the FRESH typed groupName.

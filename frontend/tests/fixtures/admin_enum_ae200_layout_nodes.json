@@ -932,6 +932,11 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+    "propBindings": {
+      "value": {
+        "source": "node:enum_table.value.itemsIndexNums"
+      }
+    },
     "label": "Item indexes (comma-separated)"
   },
   {

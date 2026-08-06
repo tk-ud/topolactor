@@ -461,33 +461,63 @@ let enqueueRuntimeComponentCommandImpl: typeof enqueueRuntimeComponentCommand =
   enqueueRuntimeComponentCommand;
 
 /**
- * round 37 stale-result boundary: a component may fire more than one admin_runtime
- * dispatch for the SAME node before an earlier one's response lands (debounced search
- * still allows two dispatches across two separate debounce windows, and any other
- * rapid re-trigger of the same node's own admin_runtime binding is possible in
- * principle). Keyed by componentId — a monotonic per-node sequence number captured at
- * the moment the network call actually fires; a settled response is only forwarded if
- * it is still the LATEST fired call for that node, so an older, slower response can
- * never overwrite what a newer, faster-resolving one already applied. Generic (not
- * scoped to search/filter Fields) since it is a correctness property of the dispatch
- * lane itself, not a search-specific behavior.
+ * round 38: identity for admin_runtime dispatch coordination (debounce cancellation +
+ * stale-result sequencing) — the SHARED QUERY CIRCUIT a dispatch belongs to, never the
+ * catalog componentId (round 37's key, found to be UNSOUND: componentId is the CATALOG
+ * component definition's own registry identity, e.g. "search_input.alias"'s UUID —
+ * every layout node instantiating that same catalog component shares ONE componentId,
+ * possibly across unrelated manifests/screens entirely; keying per-instance state on it
+ * let two distinct layout nodes silently share timers/sequence state). Prefers the
+ * dispatch's own resolved targetRef (e.g. "manifest:<ae200>:enum_dictionary:list_groups")
+ * when present — this is what makes search and filter Fields, which dispatch to the
+ * SAME targetRef, coordinate as ONE query circuit (a filter selection cancels a
+ * still-pending search debounce timer and vice versa, and a stale response from either
+ * one is discarded once the OTHER has fired a newer dispatch to that same targetRef) —
+ * falling back to the node's own stable structural identity (nodeId), then finally
+ * componentId only when neither is available (defensive; every production node has at
+ * least a componentId).
  */
-const runtimeDispatchSeqByComponentId = new Map<string, number>();
+function runtimeDispatchCircuitKey(
+  spec: RuntimeComponentSpec,
+  targetRef: string | undefined,
+): string {
+  return targetRef ?? spec.nodeId ?? spec.componentId;
+}
 
 /**
- * round 37 (search_filter_input_contract debounce_policy): pending debounce timers for
- * a debounced admin_runtime Lane 2 dispatch, keyed by componentId — a NEW firing of the
- * SAME node's own dispatch cancels and replaces any still-pending timer so only the
- * LAST value within a debounce window ever actually dispatches (collapses rapid typing
- * to one network call, never "uncontrolled on every keystroke"). Opt-in per node via
- * debounceMs — never gated by a specific trigger name: inputFactory's onChange handler
- * always calls emitBoundEvent with the literal trigger key "change" regardless of
- * whether the underlying native DOM event was "input" or "change" (see Input.tsx), so
- * gating on a trigger string here would be wrong; gating on the node's OWN declared
- * debounceMs is trigger-shape-independent and correct for both a typed search field and
- * any other admin_runtime-dispatching Field that opts in.
+ * round 37 stale-result boundary (round 38: rekeyed from componentId to the shared query
+ * circuit — see runtimeDispatchCircuitKey): a component may fire more than one
+ * admin_runtime dispatch for the SAME circuit before an earlier one's response lands
+ * (debounced search still allows two dispatches across two separate debounce windows,
+ * a filter selection racing a search's own debounced dispatch, or any other rapid
+ * re-trigger). A monotonic per-circuit sequence number captured at the moment the
+ * network call actually fires; a settled response is only forwarded if it is still the
+ * LATEST fired call for that circuit, so an older, slower response can never overwrite
+ * what a newer, faster-resolving one already applied — regardless of which NODE fired
+ * which call, or which order the two responses actually settle in. Generic (not scoped
+ * to search/filter Fields) since it is a correctness property of the dispatch lane
+ * itself, not a search-specific behavior.
  */
-const pendingDebounceTimerByComponentId = new Map<string, number>();
+const runtimeDispatchSeqByCircuitId = new Map<string, number>();
+
+/**
+ * round 37 (search_filter_input_contract debounce_policy; round 38: rekeyed to the
+ * shared query circuit): pending debounce timers for a debounced admin_runtime Lane 2
+ * dispatch. A NEW firing for the SAME CIRCUIT — whether from the SAME node (another
+ * keystroke) or a DIFFERENT node sharing the same dispatch targetRef (e.g. a filter
+ * selection while a search field's own debounce is still pending) — cancels and
+ * replaces any still-pending timer, so only the LAST value within a debounce window
+ * ever actually dispatches, and a filter/search change during another field's debounce
+ * window is never silently overwritten by that field's own stale captured payload once
+ * its timer eventually fires. Opt-in per node via debounceMs — never gated by a
+ * specific trigger name: inputFactory's onChange handler always calls emitBoundEvent
+ * with the literal trigger key "change" regardless of whether the underlying native DOM
+ * event was "input" or "change" (see Input.tsx), so gating on a trigger string here
+ * would be wrong; gating on the node's OWN declared debounceMs is trigger-shape-
+ * independent and correct for both a typed search field and any other
+ * admin_runtime-dispatching Field that opts in.
+ */
+const pendingDebounceTimerByCircuitId = new Map<string, number>();
 
 function isValidFieldDebounceMs(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value > 0;
@@ -495,29 +525,61 @@ function isValidFieldDebounceMs(value: unknown): value is number {
 
 /**
  * Immediate dispatch unless the node declares a valid positive-integer debounceMs
- * (round 37) — in which case the actual network enqueue is delayed by that many ms,
- * canceling any still-pending timer for the SAME componentId. payloadFrom has already
- * been resolved by the caller at keystroke time (current values, fail-close preserved)
- * — only the ENQUEUE is deferred, never the value capture. A node with no declared
- * debounceMs (every pre-existing authored node) is completely unaffected — this is
+ * (round 37) — in which case the actual network enqueue is delayed by that many ms.
+ * round 38: `buildFreshDispatchSpec` is called to build the ACTUAL payload sent — at
+ * FIRE time for a debounced dispatch (re-reading whatever is currently live in the
+ * node value tracker, so a value that changed DURING the debounce window is what
+ * actually ships, never the stale snapshot captured back when the timer was scheduled)
+ * and immediately for a non-debounced dispatch (fire time == schedule time, so this is
+ * simply the caller's already-resolved payload). Any still-pending timer for the SAME
+ * circuit (see runtimeDispatchCircuitKey) is canceled first, whether this call itself
+ * ends up debounced or immediate — an immediate trigger (e.g. selecting a filter) is by
+ * definition a newer user intent than whatever an earlier same-circuit debounce window
+ * captured, so that older timer must never be allowed to still fire later with a
+ * combined payload that has since gone stale. A node with no declared debounceMs
+ * (every pre-round-37 authored node) is completely unaffected by the debounce branch —
  * additive/opt-in, not a default behavior change.
  */
 function scheduleOrDispatchRuntimeCommand(
   spec: RuntimeComponentSpec,
-  dispatchSpec: Parameters<typeof enqueueRuntimeComponentCommand>[0],
+  circuitKey: string,
+  buildFreshDispatchSpec: () =>
+    | { ok: true; value: Parameters<typeof enqueueRuntimeComponentCommand>[0] }
+    | { ok: false; error: string },
   onSettled?: (result: DispatchResponse, context: RuntimeDispatchResultContext) => void,
 ): void {
+  const existing = pendingDebounceTimerByCircuitId.get(circuitKey);
+  if (existing !== undefined) {
+    clearTimeout(existing);
+    pendingDebounceTimerByCircuitId.delete(circuitKey);
+  }
   if (isValidFieldDebounceMs(spec.debounceMs)) {
-    const existing = pendingDebounceTimerByComponentId.get(spec.componentId);
-    if (existing !== undefined) clearTimeout(existing);
     const timerId = setTimeout(() => {
-      pendingDebounceTimerByComponentId.delete(spec.componentId);
-      dispatchRuntimeComponentCommandAndForwardResult(spec, dispatchSpec, onSettled);
+      pendingDebounceTimerByCircuitId.delete(circuitKey);
+      const built = buildFreshDispatchSpec();
+      if (!built.ok) {
+        // A live value the debounced dispatch depended on became unresolvable by fire
+        // time (e.g. its source node was reconciled away by an intervening refresh) --
+        // fail closed with an explicit warning through the SAME channel a queue
+        // rejection uses, never a silent drop and never a fallback to a stale payload.
+        console.error(
+          "[runtimeComponentFactory] debounced admin_runtime dispatch payload could not be resolved at fire time:",
+          built.error,
+        );
+        spec.onRuntimeDispatchResult?.(
+          { success: false, errors: [{ message: built.error }] },
+          { targetRef: undefined, dryRun: false },
+        );
+        return;
+      }
+      dispatchRuntimeComponentCommandAndForwardResult(spec, built.value, onSettled);
     }, spec.debounceMs) as unknown as number;
-    pendingDebounceTimerByComponentId.set(spec.componentId, timerId);
+    pendingDebounceTimerByCircuitId.set(circuitKey, timerId);
     return;
   }
-  dispatchRuntimeComponentCommandAndForwardResult(spec, dispatchSpec, onSettled);
+  const built = buildFreshDispatchSpec();
+  if (!built.ok) return; // caller already surfaced this synchronously before scheduling.
+  dispatchRuntimeComponentCommandAndForwardResult(spec, built.value, onSettled);
 }
 
 /**
@@ -527,10 +589,10 @@ function scheduleOrDispatchRuntimeCommand(
  * tests, a real dangling-callback risk in production).
  */
 export function clearAllPendingRuntimeDispatchDebounceTimers(): void {
-  for (const timerId of pendingDebounceTimerByComponentId.values()) {
+  for (const timerId of pendingDebounceTimerByCircuitId.values()) {
     clearTimeout(timerId);
   }
-  pendingDebounceTimerByComponentId.clear();
+  pendingDebounceTimerByCircuitId.clear();
 }
 
 function dispatchRuntimeComponentCommandAndForwardResult(
@@ -547,18 +609,20 @@ function dispatchRuntimeComponentCommandAndForwardResult(
     targetRef: dispatchSpec.targetRef,
     dryRun: isTruthyDryRunPayloadFlag(dispatchSpec.payload),
   };
-  const seq = (runtimeDispatchSeqByComponentId.get(spec.componentId) ?? 0) + 1;
-  runtimeDispatchSeqByComponentId.set(spec.componentId, seq);
+  const circuitKey = runtimeDispatchCircuitKey(spec, dispatchSpec.targetRef);
+  const seq = (runtimeDispatchSeqByCircuitId.get(circuitKey) ?? 0) + 1;
+  runtimeDispatchSeqByCircuitId.set(circuitKey, seq);
   enqueueRuntimeComponentCommandImpl(dispatchSpec)
     .then((result) => {
-      // Stale/superseded: a newer dispatch for this same node has fired since this one
-      // was sent — silently discard (never overwrites the newer in-flight/settled state).
-      if (runtimeDispatchSeqByComponentId.get(spec.componentId) !== seq) return;
+      // Stale/superseded: a newer dispatch for this same circuit has fired since this
+      // one was sent — silently discard (never overwrites the newer in-flight/settled
+      // state), regardless of which node fired which call or response arrival order.
+      if (runtimeDispatchSeqByCircuitId.get(circuitKey) !== seq) return;
       spec.onRuntimeDispatchResult?.(result, context);
       onSettled?.(result, context);
     })
     .catch((err) => {
-      if (runtimeDispatchSeqByComponentId.get(spec.componentId) !== seq) return;
+      if (runtimeDispatchSeqByCircuitId.get(circuitKey) !== seq) return;
       // preview-gap round 3: a queue/network-level rejection (never a normal {success:false}
       // response) previously reached NEITHER onRuntimeDispatchResult NOR onSettled — Modal state
       // correctly never mutated (onSettled never fired), but no warning ever reached the DOM
@@ -684,7 +748,9 @@ function emitBoundEvent(
   // aggregate/create/update/delete wiringKinds ignore it (their payload comes
   // from wiring/screen_data_shape configuration instead).
   if (binding.runtimeDispatch) {
-    const payloadFrom = binding.runtimeDispatch.payloadFrom;
+    const runtimeDispatch = binding.runtimeDispatch;
+    const payloadFrom = runtimeDispatch.payloadFrom;
+    const circuitKey = runtimeDispatchCircuitKey(spec, runtimeDispatch.targetRef);
     // Priority/conflict rule (SSOT remaining_write_payload_capture_gap): when a
     // payloadFrom map is authored, it is the SOLE payload authority for this
     // dispatch — same fail-close contract as dispatchExternalPort/
@@ -693,28 +759,51 @@ function emitBoundEvent(
     // authored, the pre-existing raw event-time payload passthrough (static
     // config payload + Lane 1's merged payload) is unchanged.
     if (payloadFrom && Object.keys(payloadFrom).length > 0) {
-      const resolved = resolvePayloadFrom(
+      // Synchronous check-now resolution: preserves the existing fail-close contract
+      // (a payloadFrom that cannot resolve RIGHT NOW throws synchronously here, exactly
+      // as before) — this is a validity probe, not what necessarily gets sent later.
+      const resolvedNow = resolvePayloadFrom(
         payloadFrom,
         spec.payloadFromNodeValues ?? {},
         payload,
       );
-      if (!resolved.ok) {
-        return { ok: false, error: resolved.errors.join("; ") };
+      if (!resolvedNow.ok) {
+        return { ok: false, error: resolvedNow.errors.join("; ") };
       }
       scheduleOrDispatchRuntimeCommand(
         spec,
-        { ...binding.runtimeDispatch, payload: resolved.payload },
+        circuitKey,
+        () => {
+          // round 38: re-resolve from the LIVE tracker at ACTUAL fire time (immediately
+          // for a non-debounced dispatch, or after the debounce delay) — payloadFromNodeValues
+          // is a stable-reference object the tracker mutates in place (see
+          // liveNodeValueTracker.ts snapshot()'s own doc comment), so reading it again
+          // here picks up whatever the CURRENT values are, including a value changed by
+          // a DIFFERENT field (e.g. a filter selection) during this field's own debounce
+          // window — never resending the stale snapshot captured back at schedule time.
+          const fresh = resolvePayloadFrom(
+            payloadFrom,
+            spec.payloadFromNodeValues ?? {},
+            payload,
+          );
+          if (!fresh.ok) return { ok: false, error: fresh.errors.join("; ") };
+          return { ok: true, value: { ...runtimeDispatch, payload: fresh.payload } };
+        },
         deferLocalStateMutationToDispatchSuccess
           ? applyDeferredLocalStateMutationOnSuccess
           : undefined,
       );
     } else {
+      // No payloadFrom: the raw event-time payload passthrough has no live source to
+      // re-read later, so the same value is correct whether sent now or after a delay.
+      const dispatchSpecValue = {
+        ...runtimeDispatch,
+        payload: { ...runtimeDispatch.payload, ...binding.payload, ...payload },
+      };
       scheduleOrDispatchRuntimeCommand(
         spec,
-        {
-          ...binding.runtimeDispatch,
-          payload: { ...binding.runtimeDispatch.payload, ...binding.payload, ...payload },
-        },
+        circuitKey,
+        () => ({ ok: true, value: dispatchSpecValue }),
         deferLocalStateMutationToDispatchSuccess
           ? applyDeferredLocalStateMutationOnSuccess
           : undefined,
