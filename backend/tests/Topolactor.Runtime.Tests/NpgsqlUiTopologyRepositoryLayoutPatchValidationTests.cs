@@ -1336,4 +1336,277 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
         Assert.Equal("RUNTIME_INTERACTION_FIELD_DISPATCH_TARGET_REF_NOT_READ_ACTION:enum_dictionary:create_group", result.Message);
     }
 
+    // ─── round 40: SCHEMA-COMPOSED authoring persistence boundary. Round 39's fix (componentKey
+    // instead of componentKind) genuinely protects only TENSOR-ONLY authoring, where componentKey
+    // is a real column present directly on the raw override node. A schema-composed layout's own
+    // ui_topology_tensor.layout_patch_json.nodes[] override-delta entries carry NEITHER
+    // componentKind NOR componentKey -- identity for them lives only in the owning layoutId's
+    // components_layout_design.layout_schema_json.records[] structural tree. These tests prove
+    // ValidateLayoutPatchAsync now resolves that identity via
+    // LayoutSchemaTensorComposer.ResolveCatalogComponentKeysByNodeId (the SAME NodeId/componentKey
+    // authority LayoutSchemaTensorComposer.Compose itself uses to render) and applies the
+    // IDENTICAL two validators (read-action allowlist, search debounceMs) with the same meaning as
+    // the round-39 tensor-only tests above -- test names below are deliberately parallel to their
+    // tensor-only counterparts to make that convergence explicit. ──────────────────────────────
+
+    private const string SchemaComposedSearchFieldNodeId = "schema_search_field";
+    private const string SchemaComposedFilterFieldNodeId = "schema_filter_field";
+    private const string SchemaComposedUnknownNodeId = "not_in_schema_tree";
+
+    // Minimal well-formed records[] tree (record_common_required_fields satisfied for both rows):
+    // one search_input Field and one select Field, both parentless (ResolveCatalogComponentKeysByNodeId
+    // needs no parent chain — it only walks record_common fields + control convention resolution).
+    private const string SchemaComposedRecordsJson = """
+        {"records":[
+          {"type":"topology_ui_seed_record","seedKey":"test.schema.composed","parentKey":null,
+           "record":{"recordType":"topology_ui_field","key":"schema_search_field","label":"Test search",
+             "sourceYamlRefs":["test-ssot.yaml#x"],"sourceReactPath":"$.root.children[0]","knownGapRefs":[],
+             "control":"form_input/search_input"}},
+          {"type":"topology_ui_seed_record","seedKey":"test.schema.composed","parentKey":null,
+           "record":{"recordType":"topology_ui_field","key":"schema_filter_field","label":"Test filter",
+             "sourceYamlRefs":["test-ssot.yaml#x"],"sourceReactPath":"$.root.children[1]","knownGapRefs":[],
+             "control":"form_input/select"}}
+        ]}
+        """;
+
+    private const string SchemaComposedMalformedRecordsJson = """{"records": "not-an-array"}""";
+
+    /// <summary>
+    /// Combines AdminRuntimeWiringKindTestRepository's own stubs with LoadLayoutSchemaJsonAsync,
+    /// so a schema-composed layout can be exercised without a live database — mirrors the SAME
+    /// test-doubling pattern this file already uses for the DB-backed
+    /// ListInstanceOperationAuthoringCandidatesAsync / LoadWiringKindForLayoutAsync checks.
+    /// </summary>
+    private sealed class SchemaComposedTestRepository(
+        string? wiringKind,
+        string? layoutSchemaJson,
+        AdminRuntimeManifestAuthorizationResult? manifestAuthorization = null)
+        : NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none")
+    {
+        public override Task<string?> LoadWiringKindForLayoutAsync(Guid layoutId, CancellationToken ct = default)
+            => Task.FromResult(wiringKind);
+
+        public override Task<AdminRuntimeManifestAuthorizationResult> LoadAdminRuntimeManifestAuthorizationAsync(
+            Guid manifestId, CancellationToken ct = default)
+            => Task.FromResult(manifestAuthorization ??
+                new AdminRuntimeManifestAuthorizationResult(Exists: true, IsActive: true, IsAdminRuntimeDestination: true));
+
+        public override Task<string?> LoadLayoutSchemaJsonAsync(Guid layoutId, CancellationToken ct = default)
+            => Task.FromResult(layoutSchemaJson);
+    }
+
+    /// <summary>
+    /// Throws if LoadLayoutSchemaJsonAsync is ever called — used to PROVE the gating pre-check
+    /// (ContainsNodeMissingComponentKey) genuinely skips the DB round trip when every node already
+    /// carries its own explicit componentKey (tensor-only authoring), rather than merely asserting
+    /// a correct result that could also happen to hold if the DB call ran and returned null.
+    /// </summary>
+    private sealed class SchemaJsonLookupForbiddenRepository(string? wiringKind, AdminRuntimeManifestAuthorizationResult? manifestAuthorization = null)
+        : NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none")
+    {
+        public override Task<string?> LoadWiringKindForLayoutAsync(Guid layoutId, CancellationToken ct = default)
+            => Task.FromResult(wiringKind);
+
+        public override Task<AdminRuntimeManifestAuthorizationResult> LoadAdminRuntimeManifestAuthorizationAsync(
+            Guid manifestId, CancellationToken ct = default)
+            => Task.FromResult(manifestAuthorization ??
+                new AdminRuntimeManifestAuthorizationResult(Exists: true, IsActive: true, IsAdminRuntimeDestination: true));
+
+        public override Task<string?> LoadLayoutSchemaJsonAsync(Guid layoutId, CancellationToken ct = default)
+            => throw new InvalidOperationException("LoadLayoutSchemaJsonAsync must not be called when every node already carries its own componentKey.");
+    }
+
+    private static string SchemaComposedSearchInputNode(string debounceMsJsonLiteral, string targetRef = SearchReadTargetRef, string nodeId = SchemaComposedSearchFieldNodeId) => $$"""
+        { "nodes": [
+          { "nodeId": "{{nodeId}}", "nodeKind": "catalog_component",
+            "dispatchTargetRefByTrigger": { "change": "{{targetRef}}" },
+            "dispatchPayloadFromByTrigger": { "change": { "search": "node:{{nodeId}}.value" } }{{debounceMsJsonLiteral}} }
+        ] }
+        """;
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_SchemaComposedFieldSearchInput_DebounceMsAbsent_FailsClose()
+    {
+        var repo = new SchemaComposedTestRepository("admin_runtime", SchemaComposedRecordsJson, FullyAuthorizedManifest);
+        var result = await repo.ValidateLayoutPatchAsync(
+            Guid.NewGuid(), "/admin/ui-builder", SchemaComposedSearchInputNode(""), null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal($"RUNTIME_INTERACTION_FIELD_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS:{SchemaComposedSearchFieldNodeId}", result.Message);
+    }
+
+    [Theory]
+    [InlineData(", \"debounceMs\": 0")]
+    [InlineData(", \"debounceMs\": -5")]
+    [InlineData(", \"debounceMs\": 1.5")]
+    [InlineData(", \"debounceMs\": true")]
+    [InlineData(", \"debounceMs\": \"300\"")]
+    public async Task ValidateLayoutPatchAsync_SchemaComposedFieldSearchInput_DebounceMsInvalidShape_FailsClose(string debounceMsJsonLiteral)
+    {
+        var repo = new SchemaComposedTestRepository("admin_runtime", SchemaComposedRecordsJson, FullyAuthorizedManifest);
+        var result = await repo.ValidateLayoutPatchAsync(
+            Guid.NewGuid(), "/admin/ui-builder", SchemaComposedSearchInputNode(debounceMsJsonLiteral), null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal($"RUNTIME_INTERACTION_FIELD_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS:{SchemaComposedSearchFieldNodeId}", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_SchemaComposedFieldSearchInput_DebounceMsPositiveInteger_Passes()
+    {
+        var repo = new SchemaComposedTestRepository("admin_runtime", SchemaComposedRecordsJson, FullyAuthorizedManifest);
+        var result = await repo.ValidateLayoutPatchAsync(
+            Guid.NewGuid(), "/admin/ui-builder", SchemaComposedSearchInputNode(", \"debounceMs\": 300"), null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_SchemaComposedFieldSelect_DebounceMsAbsent_Passes()
+    {
+        // Discrete-choice control (form_input/select -> select.template) is exempt, exactly as in
+        // the tensor-only case above — the SAME componentKey vocabulary, resolved from the schema
+        // tree instead of a raw node property, drives the SAME exemption.
+        var repo = new SchemaComposedTestRepository("admin_runtime", SchemaComposedRecordsJson, FullyAuthorizedManifest);
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "{{SchemaComposedFilterFieldNodeId}}", "nodeKind": "catalog_component",
+            "dispatchTargetRefByTrigger": { "change": "{{SearchReadTargetRef}}" },
+            "dispatchPayloadFromByTrigger": { "change": { "groupNameFilter": "node:{{SchemaComposedFilterFieldNodeId}}.value" } } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_SchemaComposedFieldSearchInput_ReadAction_Passes()
+    {
+        var repo = new SchemaComposedTestRepository("admin_runtime", SchemaComposedRecordsJson, FullyAuthorizedManifest);
+        var result = await repo.ValidateLayoutPatchAsync(
+            Guid.NewGuid(), "/admin/ui-builder", SchemaComposedSearchInputNode(", \"debounceMs\": 300"), null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_SchemaComposedFieldSearchInput_WriteAction_FailsCloseOnReadActionAllowlist_NotDebounce()
+    {
+        // Parallel to the tensor-only WriteTargetRef regression proof above: a valid debounceMs is
+        // included so this failure is unambiguously attributable to the read-action-allowlist
+        // check, not the debounce check (which runs after it and would never be reached here).
+        var repo = new SchemaComposedTestRepository("admin_runtime", SchemaComposedRecordsJson, FullyAuthorizedManifest);
+        var result = await repo.ValidateLayoutPatchAsync(
+            Guid.NewGuid(), "/admin/ui-builder",
+            SchemaComposedSearchInputNode(", \"debounceMs\": 300", SearchWriteTargetRef), null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_FIELD_DISPATCH_TARGET_REF_NOT_READ_ACTION:enum_dictionary:create_group", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_SchemaComposedFieldSearchInput_UnknownResourceAction_FailsClose()
+    {
+        // A resource:action that is neither a known read action nor a recognizable write verb —
+        // the positive allowlist rejects anything not explicitly listed, not merely "looks like a
+        // write."
+        var repo = new SchemaComposedTestRepository("admin_runtime", SchemaComposedRecordsJson, FullyAuthorizedManifest);
+        const string unknownTargetRef = "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:frobnicate";
+        var result = await repo.ValidateLayoutPatchAsync(
+            Guid.NewGuid(), "/admin/ui-builder",
+            SchemaComposedSearchInputNode(", \"debounceMs\": 300", unknownTargetRef), null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_FIELD_DISPATCH_TARGET_REF_NOT_READ_ACTION:enum_dictionary:frobnicate", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_SchemaComposedNode_MissingComponentKey_ExemptFromCatalogComponentKeyRequired_WhenPresentInSchemaTree()
+    {
+        // Structural proof independent of the two Field validators above: a catalog_component node
+        // with NO componentKey of its own no longer fails LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED
+        // outright, as long as its nodeId is a real catalog leaf in the owning layoutId's schema
+        // tree — this node carries no dispatch fields at all, so passing here proves the structural
+        // exemption itself, not a side effect of the Field validators short-circuiting.
+        var repo = new SchemaComposedTestRepository("admin_runtime", SchemaComposedRecordsJson, FullyAuthorizedManifest);
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "{{SchemaComposedSearchFieldNodeId}}", "nodeKind": "catalog_component" }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_TensorOnlyNode_MissingComponentKey_NotInSchemaTree_StillFailsClose()
+    {
+        // Regression guard: the round-40 exemption is scoped to nodeIds that are REAL schema-tree
+        // catalog leaves for THIS layoutId — a brand-new tensor-only node whose nodeId is absent
+        // from the schema tree entirely still requires an explicit componentKey exactly as before
+        // this round. This is not a blanket "any node missing componentKey passes" exemption.
+        var repo = new SchemaComposedTestRepository("admin_runtime", SchemaComposedRecordsJson, FullyAuthorizedManifest);
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "{{SchemaComposedUnknownNodeId}}", "nodeKind": "catalog_component" }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_SchemaComposedLayout_MalformedRecords_FailsWholePatchClosed()
+    {
+        // A malformed layout_schema_json.records[] must surface as its own explicit diagnostic
+        // (matching NpgsqlTopologyRepository.LoadLayoutNodesAsync's own read-time severity for the
+        // exact same malformed shape) rather than being silently treated as "no schema, no
+        // exemption" — which would instead surface a confusing
+        // LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED that obscures the real defect.
+        var repo = new SchemaComposedTestRepository("admin_runtime", SchemaComposedMalformedRecordsJson, FullyAuthorizedManifest);
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "{{SchemaComposedSearchFieldNodeId}}", "nodeKind": "catalog_component" }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.StartsWith("LAYOUT_SCHEMA_RECORDS_INVALID:", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_TensorOnlyPatch_EveryNodeHasComponentKey_NeverQueriesLayoutSchemaJson()
+    {
+        // Proves the gating pre-check (ContainsNodeMissingComponentKey) genuinely skips the DB
+        // round trip — not merely that a correct result happens to occur — for the SAME round-39
+        // tensor-only search-input scenario already proven above, now against a repository whose
+        // LoadLayoutSchemaJsonAsync throws if ever invoked. This is the "Round 39 tensor-only
+        // behavior is not weakened by adding schema-composed support" proof at the DB-access-shape
+        // level, not just the outcome level.
+        var repo = new SchemaJsonLookupForbiddenRepository("admin_runtime", FullyAuthorizedManifest);
+        var result = await repo.ValidateLayoutPatchAsync(
+            Guid.NewGuid(), "/admin/ui-builder", SearchInputNode(", \"debounceMs\": 300"), null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
 }

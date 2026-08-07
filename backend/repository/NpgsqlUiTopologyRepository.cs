@@ -671,7 +671,22 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         return refs;
     }
 
-    private static string? ValidateLayoutPatchNodes(string tensorPatchJson)
+    /// <summary>
+    /// Round 40: <paramref name="schemaComposedComponentKeysByNodeId"/> is the owning layoutId's
+    /// resolved schema-tree catalog-leaf NodeId -&gt; componentKey map (empty for a tensor-only
+    /// layout — see LayoutSchemaTensorComposer.ResolveCatalogComponentKeysByNodeId and its caller
+    /// in ValidateLayoutPatchAsync). A catalog_component node missing its own componentKey is
+    /// exempted from LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED ONLY when its exact nodeId is a
+    /// real catalog leaf in THAT layout's schema tree — i.e. a legitimate schema-composed
+    /// override-delta entry, whose identity is resolved from
+    /// components_layout_design.layout_schema_json.records[] rather than carried on this raw
+    /// node. A brand-new tensor-only node absent from the schema tree still requires an explicit
+    /// componentKey exactly as before this round — this is not a blanket exemption for "any node
+    /// missing componentKey."
+    /// </summary>
+    private static string? ValidateLayoutPatchNodes(
+        string tensorPatchJson,
+        IReadOnlyDictionary<string, string> schemaComposedComponentKeysByNodeId)
     {
         using var doc = JsonDocument.Parse(tensorPatchJson);
         if (!doc.RootElement.TryGetProperty("nodes", out var nodes) ||
@@ -719,8 +734,11 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                     keyEl.ValueKind == JsonValueKind.String
                     ? keyEl.GetString()?.Trim()
                     : null;
-                if (string.IsNullOrWhiteSpace(componentKey))
+                if (string.IsNullOrWhiteSpace(componentKey) &&
+                    !schemaComposedComponentKeysByNodeId.ContainsKey(nodeId!))
+                {
                     return "LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED";
+                }
             }
             else
             {
@@ -1135,23 +1153,34 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     /// componentKey names one of these catalog components is reliably identifiable as Field-family
     /// authoring content here, unlike componentKind.
     ///
-    /// Honest scope note (round 39 investigation): this fix genuinely protects a TENSOR-ONLY
-    /// authored layout (e.g. admin-dashboard-style flat layouts), where componentKey is a real
-    /// column on the persisted ui_topology_tensor row and therefore present directly on the raw
-    /// override node this function inspects. It does NOT add a new protection over a
+    /// Round 39 scope note, closed in round 40: this fix alone genuinely protected only a
+    /// TENSOR-ONLY authored layout (e.g. admin-dashboard-style flat layouts), where componentKey
+    /// is a real column on the persisted ui_topology_tensor row and therefore present directly on
+    /// the raw override node this function inspects. It did NOT add protection over a
     /// SCHEMA-COMPOSED layout's own nodes (admin-enum/ae200 included, authored via
     /// components_layout_design.layout_schema_json.records[] -- see
     /// LayoutSchemaTensorComposer.Compose): for that authoring mode, layout_patch_json.nodes[]
     /// holds ONLY per-nodeId override deltas (propsJson/stateJson/propBindings/dispatch fields/
-    /// debounceMs), never componentKind OR componentKey -- both are schema-tree-derived facts
-    /// resolved only inside Compose() at read/render time, and Compose() itself never even
+    /// debounceMs), never componentKind OR componentKey on the raw node itself -- both are
+    /// schema-tree-derived facts Compose() resolves only at read/render time from
+    /// components_layout_design.layout_schema_json.records[], and Compose() itself never even
     /// writes componentKey back onto its own composed output (only componentId/componentKind
-    /// survive; see its ComponentKey: null literal). ae200's own checked-in seed
-    /// (db/seed_empty.sql) is additionally inserted directly via the translator's SQL output,
-    /// never through this ValidateLayoutPatchAsync save API at all -- so ae200's real protection
-    /// remains the translator (layer 1) and frontend runtime (layer 3) exactly as before this
-    /// fix; this persistence-boundary layer protects tensor-only-authored admin_runtime Fields
-    /// specifically.
+    /// survive; see its ComponentKey: null literal).
+    ///
+    /// Round 40 closes this gap generically (no admin-enum-specific branch): ValidateLayoutPatchAsync
+    /// now loads the owning layoutId's own layout_schema_json.records[] and resolves each schema
+    /// leaf's canonical control/display componentKey via
+    /// LayoutSchemaTensorComposer.ResolveCatalogComponentKeysByNodeId (the SAME NodeId/
+    /// componentKey resolution Compose() itself uses to render — one authority, not a mirrored
+    /// literal list) into schemaComposedComponentKeysByNodeId, passed to both this function and
+    /// ValidateFieldOwnedAdminRuntimeSearchDebounce below. A raw override node's own componentKey
+    /// (tensor-only authoring) is still preferred when present; the schema-tree-resolved value is
+    /// consulted only as a fallback for a node with no componentKey of its own. ae200's own
+    /// checked-in seed (db/seed_empty.sql) is still inserted directly via the translator's SQL
+    /// output, bypassing this save API entirely — but any FUTURE save through
+    /// ApplyConfirmedLayoutPatchAsync against a schema-composed layoutId (e.g. an admin editing
+    /// ae200's own debounceMs live) is now genuinely checked here too, not merely by the
+    /// translator (layer 1) and frontend runtime (layer 3).
     /// </summary>
     private static readonly IReadOnlySet<string> FieldFamilyComponentKeys = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -1187,16 +1216,41 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     /// this JSON boundary. Only called after ValidateDispatchTargetRefByTrigger's own shape
     /// validation has already passed (guarantees each value matches AdminRuntimeTargetRefRe).
     /// </summary>
-    private static string? ValidateFieldOwnedAdminRuntimeReadOnlyDispatch(JsonElement nodes)
+    /// <summary>
+    /// Round 40: a node's own raw "componentKey" (tensor-only authoring) is always preferred when
+    /// present. When absent, falls back to the owning layoutId's schema-tree-resolved componentKey
+    /// for this exact nodeId (schema-composed override-delta authoring — see
+    /// LayoutSchemaTensorComposer.ResolveCatalogComponentKeysByNodeId). A nodeId present in neither
+    /// resolves to null, exactly as before this round (never matches FieldFamilyComponentKeys /
+    /// SearchInputFieldComponentKey, so the two Field validators below correctly skip it).
+    /// </summary>
+    private static string? ResolveEffectiveComponentKey(
+        JsonElement node,
+        IReadOnlyDictionary<string, string> schemaComposedComponentKeysByNodeId)
+    {
+        var rawComponentKey = node.TryGetProperty("componentKey", out var componentKeyEl) && componentKeyEl.ValueKind == JsonValueKind.String
+            ? componentKeyEl.GetString()
+            : null;
+        if (rawComponentKey is not null) return rawComponentKey;
+
+        var nodeId = node.TryGetProperty("nodeId", out var nodeIdEl) && nodeIdEl.ValueKind == JsonValueKind.String
+            ? nodeIdEl.GetString()
+            : null;
+        return nodeId is not null && schemaComposedComponentKeysByNodeId.TryGetValue(nodeId, out var schemaKey)
+            ? schemaKey
+            : null;
+    }
+
+    private static string? ValidateFieldOwnedAdminRuntimeReadOnlyDispatch(
+        JsonElement nodes,
+        IReadOnlyDictionary<string, string> schemaComposedComponentKeysByNodeId)
     {
         foreach (var node in nodes.EnumerateArray())
         {
             if (node.ValueKind != JsonValueKind.Object) continue;
             if (!node.TryGetProperty("dispatchTargetRefByTrigger", out var byTriggerEl) || byTriggerEl.ValueKind != JsonValueKind.Object)
                 continue;
-            var componentKey = node.TryGetProperty("componentKey", out var componentKeyEl) && componentKeyEl.ValueKind == JsonValueKind.String
-                ? componentKeyEl.GetString()
-                : null;
+            var componentKey = ResolveEffectiveComponentKey(node, schemaComposedComponentKeysByNodeId);
             if (componentKey is null || !FieldFamilyComponentKeys.Contains(componentKey))
                 continue;
             foreach (var triggerEntry in byTriggerEl.EnumerateObject())
@@ -1233,16 +1287,16 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     /// componentKey) node is a discrete-choice control and is never required to declare
     /// debounceMs, matching rule 5's own SSOT scope exactly.
     /// </summary>
-    private static string? ValidateFieldOwnedAdminRuntimeSearchDebounce(JsonElement nodes)
+    private static string? ValidateFieldOwnedAdminRuntimeSearchDebounce(
+        JsonElement nodes,
+        IReadOnlyDictionary<string, string> schemaComposedComponentKeysByNodeId)
     {
         foreach (var node in nodes.EnumerateArray())
         {
             if (node.ValueKind != JsonValueKind.Object) continue;
             if (!node.TryGetProperty("dispatchTargetRefByTrigger", out var byTriggerEl) || byTriggerEl.ValueKind != JsonValueKind.Object)
                 continue;
-            var componentKey = node.TryGetProperty("componentKey", out var componentKeyEl) && componentKeyEl.ValueKind == JsonValueKind.String
-                ? componentKeyEl.GetString()
-                : null;
+            var componentKey = ResolveEffectiveComponentKey(node, schemaComposedComponentKeysByNodeId);
             if (componentKey != SearchInputFieldComponentKey) continue;
 
             // JsonElement.TryGetInt32 already returns false for a fractional (1.5) or
@@ -1703,6 +1757,45 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     public override Task<LayoutPatchResult> PreviewLayoutPatchAsync(Guid layoutId, string routeKey, string? tensorPatchJson, IReadOnlyList<string>? cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs, CancellationToken ct = default)
         => Task.FromResult(NormalizeLayoutPatch(layoutId, routeKey, tensorPatchJson, cssTokenRefs, responsiveTokenRefs));
 
+    /// <summary>
+    /// Round 40: the same structural-authority column NpgsqlTopologyRepository.LoadLayoutNodesAsync
+    /// reads by layoutId primary key — used here so ValidateLayoutPatchAsync can determine, before
+    /// inspecting any node, whether this layoutId is schema-composed (layout_schema_json.records[]
+    /// populated) and if so resolve its catalog leaves' canonical componentKey per NodeId.
+    /// </summary>
+    /// <summary>
+    /// Cheap pre-check gating LoadLayoutSchemaJsonAsync's DB round trip: true when at least one
+    /// node object in the patch has no non-empty "componentKey" of its own (a real candidate for
+    /// schema-tree-resolved identity — see ValidateLayoutPatchAsync's own caller). A patch where
+    /// every node already declares its own componentKey (any purely tensor-only save, i.e. every
+    /// test fixture and real save predating round 40) never needs the schema map at all.
+    /// </summary>
+    private static bool ContainsNodeMissingComponentKey(string tensorPatchJson)
+    {
+        using var doc = JsonDocument.Parse(tensorPatchJson);
+        if (!doc.RootElement.TryGetProperty("nodes", out var nodes) || nodes.ValueKind != JsonValueKind.Array)
+            return false;
+        foreach (var node in nodes.EnumerateArray())
+        {
+            if (node.ValueKind != JsonValueKind.Object) continue;
+            var hasComponentKey = node.TryGetProperty("componentKey", out var keyEl) &&
+                keyEl.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(keyEl.GetString());
+            if (!hasComponentKey) return true;
+        }
+        return false;
+    }
+
+    public virtual async Task<string?> LoadLayoutSchemaJsonAsync(Guid layoutId, CancellationToken ct)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT layout_schema_json::text FROM topology.components_layout_design WHERE layout_id=@layoutId";
+        cmd.Parameters.AddWithValue("layoutId", layoutId);
+        var scalar = await cmd.ExecuteScalarAsync(ct);
+        return scalar is null or DBNull ? null : (string)scalar;
+    }
+
     public override async Task<LayoutPatchResult> ValidateLayoutPatchAsync(Guid layoutId, string routeKey, string? tensorPatchJson, IReadOnlyList<string>? cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs, CancellationToken ct = default)
     {
         var normalized = NormalizeLayoutPatch(layoutId, routeKey, tensorPatchJson, cssTokenRefs, responsiveTokenRefs);
@@ -1720,7 +1813,32 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             return normalized with { Ok = false, Valid = false, Message = "TOPOLOGY_LAYOUT_CLASS_VOCABULARY_UNAVAILABLE" };
         try
         {
-            var nodeError = ValidateLayoutPatchNodes(normalized.TensorPatchJson);
+            // Round 40: resolve this layoutId's authoring mode BEFORE inspecting any node, so
+            // schema-composed override deltas (whose raw nodes carry neither componentKey nor
+            // componentKind — see ResolveEffectiveComponentKey's own doc comment) are identified
+            // by the SAME control/display convention LayoutSchemaTensorComposer.Compose uses at
+            // render time, not by a second hardcoded literal list. Only queried when at least one
+            // node in the patch is missing its own componentKey — a patch where every node already
+            // carries an explicit componentKey (the overwhelming majority: any purely tensor-only
+            // save) can never need schema-tree-resolved identity for either the structural check or
+            // the two Field validators below, so it never pays for this DB round trip. A malformed
+            // layout_schema_json.records[] fails the WHOLE patch closed here rather than being
+            // silently treated as "no schema, no exemption" (which would surface a confusing
+            // LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED instead of the real defect) — matches
+            // NpgsqlTopologyRepository.LoadLayoutNodesAsync's own Invalid handling.
+            var schemaComposedComponentKeysByNodeId = new Dictionary<string, string>(StringComparer.Ordinal);
+            if (ContainsNodeMissingComponentKey(normalized.TensorPatchJson))
+            {
+                var layoutSchemaJson = await LoadLayoutSchemaJsonAsync(layoutId, ct);
+                var schemaRecordsParseResult = LayoutSchemaTensorComposer.ParseRecords(layoutSchemaJson);
+                if (schemaRecordsParseResult is LayoutSchemaTensorComposer.RecordsParseResult.Invalid invalidSchemaRecords)
+                    return normalized with { Ok = false, Valid = false, Message = $"LAYOUT_SCHEMA_RECORDS_INVALID:{invalidSchemaRecords.Reason}" };
+                if (schemaRecordsParseResult is LayoutSchemaTensorComposer.RecordsParseResult.Valid { Rows: var schemaRows })
+                    schemaComposedComponentKeysByNodeId = new Dictionary<string, string>(
+                        LayoutSchemaTensorComposer.ResolveCatalogComponentKeysByNodeId(schemaRows), StringComparer.Ordinal);
+            }
+
+            var nodeError = ValidateLayoutPatchNodes(normalized.TensorPatchJson, schemaComposedComponentKeysByNodeId);
             if (nodeError is not null)
                 return normalized with { Ok = false, Valid = false, Message = nodeError };
             using (var runtimeInteractionDoc = JsonDocument.Parse(normalized.TensorPatchJson))
@@ -1770,10 +1888,10 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                     var dispatchTargetRefByTriggerError = ValidateDispatchTargetRefByTrigger(runtimeNodes, layoutWiringKind);
                     if (dispatchTargetRefByTriggerError is not null)
                         return normalized with { Ok = false, Valid = false, Message = dispatchTargetRefByTriggerError };
-                    var fieldReadOnlyDispatchError = ValidateFieldOwnedAdminRuntimeReadOnlyDispatch(runtimeNodes);
+                    var fieldReadOnlyDispatchError = ValidateFieldOwnedAdminRuntimeReadOnlyDispatch(runtimeNodes, schemaComposedComponentKeysByNodeId);
                     if (fieldReadOnlyDispatchError is not null)
                         return normalized with { Ok = false, Valid = false, Message = fieldReadOnlyDispatchError };
-                    var fieldSearchDebounceError = ValidateFieldOwnedAdminRuntimeSearchDebounce(runtimeNodes);
+                    var fieldSearchDebounceError = ValidateFieldOwnedAdminRuntimeSearchDebounce(runtimeNodes, schemaComposedComponentKeysByNodeId);
                     if (fieldSearchDebounceError is not null)
                         return normalized with { Ok = false, Valid = false, Message = fieldSearchDebounceError };
 
@@ -1893,8 +2011,36 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         await conn.OpenAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
         var responsiveJson = System.Text.Json.JsonSerializer.Serialize(valid.ResponsiveTokenRefs);
+        // Round 40: for a TENSOR-ONLY layout, components_layout_design.layout_schema_json legitimately
+        // mirrors the same flat nodes[] shape written to ui_topology_tensor.layout_patch_json below
+        // (or stays the default '{"records":[]}') — the unconditional overwrite below is correct and
+        // unchanged for that case. For a SCHEMA-COMPOSED layout, layout_schema_json.records[] is the
+        // structural authority tree (Category/Section/Form/Field/... — see
+        // LayoutSchemaTensorComposer), and valid.TensorPatchJson here is only the tensor's own
+        // per-nodeId OVERRIDE-DELTA carrier (propsJson/stateJson/propBindings/dispatch fields/
+        // debounceMs), never a records[] replacement. Overwriting layout_schema_json with it would
+        // silently destroy the schema tree — flipping this layoutId from schema-composed to "no
+        // records[]" on its very next read (NpgsqlTopologyRepository.LoadLayoutNodesAsync), losing
+        // every structural node and componentKind resolution. This was unreachable before round 40
+        // (a schema-composed override delta could never pass ValidateLayoutPatchAsync's own node
+        // shape check at all), so this CASE guard closes the exact write-path hazard round 40's own
+        // persistence-boundary acceptance newly opens: layout_schema_json is preserved as-is whenever
+        // it already carries a non-empty records[] array; only a genuinely tensor-only layout's
+        // layout_schema_json is replaced.
         var updateLayout = new NpgsqlCommand(
-            "UPDATE topology.components_layout_design SET layout_schema_json=@schema::jsonb, css_token_refs=@css::jsonb, responsive_token_refs=@resp::jsonb, updated_at=now() WHERE layout_id=@layoutId", conn, tx);
+            """
+            UPDATE topology.components_layout_design
+            SET layout_schema_json = CASE
+                    WHEN jsonb_typeof(layout_schema_json->'records') = 'array'
+                         AND jsonb_array_length(layout_schema_json->'records') > 0
+                    THEN layout_schema_json
+                    ELSE @schema::jsonb
+                END,
+                css_token_refs = @css::jsonb,
+                responsive_token_refs = @resp::jsonb,
+                updated_at = now()
+            WHERE layout_id = @layoutId
+            """, conn, tx);
         updateLayout.Parameters.AddWithValue("schema", valid.TensorPatchJson);
         updateLayout.Parameters.AddWithValue("css", System.Text.Json.JsonSerializer.Serialize(valid.CssTokenRefs));
         updateLayout.Parameters.AddWithValue("resp", responsiveJson);

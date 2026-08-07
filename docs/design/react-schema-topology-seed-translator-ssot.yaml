@@ -1478,6 +1478,39 @@ react_schema_topology_seed_translator_ssot:
                discards a settled response that is no longer the latest fired call for that
                circuit (stale-result boundary) -- generic to every admin_runtime dispatch, not
                scoped to debounced Fields alone.
+          Round 40 (schema-composed authoring persistence-boundary parity): rules 3 and 5 above,
+          keyed off a raw layout_patch_json.nodes[] override entry's own "componentKey", only ever
+          matched a TENSOR-ONLY-authored node — a SCHEMA-COMPOSED layout's own override-delta
+          entries (authored via components_layout_design.layout_schema_json.records[] — see
+          storage_adoption_contract below) carry neither "componentKind" nor "componentKey" on the
+          raw node at all; both are schema-tree-derived facts LayoutSchemaTensorComposer.Compose
+          resolves only at read/render time. NpgsqlUiTopologyRepository.ValidateLayoutPatchAsync
+          now resolves this identity generically before applying rules 3/5: it loads the owning
+          layoutId's own layout_schema_json.records[] and calls the NEW
+          LayoutSchemaTensorComposer.ResolveCatalogComponentKeysByNodeId(schemaRecords) — sharing
+          the SAME NodeId/duplicate-key/parent-tracking walk (ResolveNodeIdentities) Compose()
+          itself uses to render, so there is exactly one NodeId/componentKey resolution
+          implementation, not two hand-kept-in-sync mirrors — into a NodeId -> componentKey map. A
+          raw node's own componentKey (tensor-only authoring) is always preferred when present;
+          this map is consulted only as a fallback for a node missing one, and ONLY exempts
+          LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED for a nodeId that is a REAL schema-tree
+          catalog leaf for that exact layoutId — a genuinely new tensor-only node absent from the
+          schema tree still requires an explicit componentKey exactly as before. Both authoring
+          modes therefore converge on the identical rule 3/5 semantics at this save boundary; see
+          NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs's parallel
+          "SchemaComposed*"/tensor-only test name pairs for the convergence proof. A malformed
+          layout_schema_json.records[] fails the WHOLE patch closed with
+          LAYOUT_SCHEMA_RECORDS_INVALID rather than silently falling back to "no schema, no
+          exemption". Also closed as part of the same round: ApplyConfirmedLayoutPatchAsync
+          previously overwrote components_layout_design.layout_schema_json unconditionally with
+          the same tensorPatchJson it writes to ui_topology_tensor.layout_patch_json — harmless
+          for a tensor-only layout (whose layout_schema_json never carries a meaningful records[]
+          either way) but, once a schema-composed override delta could pass validation at all (the
+          round-40 change above), would have silently destroyed that layoutId's records[]
+          structural authority on its very next save. The UPDATE now preserves layout_schema_json
+          unchanged whenever it already carries a non-empty records[] array, writing the applied
+          patch only into ui_topology_tensor.layout_patch_json (the correct override-delta
+          carrier) for that case.
           A Field satisfying all five restrictions is a legal generic read/filter override (the
           enum_search -> list_groups example above); one that fails any of them is a blocking
           authoring error, never a silent pass-through. Distinct from, and does not replace,

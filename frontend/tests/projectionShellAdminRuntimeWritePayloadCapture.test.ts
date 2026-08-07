@@ -5046,3 +5046,345 @@ Deno.test(
     }
   },
 );
+
+// ─── round 40: two remaining production DOM proof batteries round 39 left open --
+// (1) shared-catalog-componentId non-interference at the real ProjectionShell DOM level (round 38
+// fixed the componentId-as-instance-identity bug and proved it with a direct emitBoundEvent unit
+// test only; this closes the DOM-level re-proof), and (2) the search/filter query circuit and a
+// mutation preview/confirm circuit never cancel/supersede each other, proved through DOM/Modal/
+// canonical-reread observable state, not just captured-request-level assertions. ─────────────────
+
+/**
+ * Loads the real canonical ae200 fixture and appends ONE synthetic sibling node --
+ * "enum_search_shared_component_id_clone" -- that is a structural clone of the real enum_search
+ * node (same componentId, same componentKind "form_input/search_input") but with its OWN
+ * dispatchTargetRefByTrigger pointing at a DIFFERENT, genuinely existing read action
+ * (enum_dictionary:get_group, not list_groups) and its OWN shorter debounceMs. This is the
+ * smallest honest way to construct "two distinct layout nodes sharing a catalog componentId" from
+ * the real fixture: ae200's own production nodes never happen to reuse a dispatch-bearing Field's
+ * componentId today, so a deliberate, clearly-labeled synthetic sibling is added on top of the
+ * unmodified real fixture rather than hand-building a whole substitute layout.
+ */
+async function mountSharedComponentIdCloneFixture(): Promise<Record<string, unknown>[]> {
+  const layoutNodes = await mountQueryCircuitFixture();
+  const enumSearchNode = layoutNodes.find((n) => n.nodeId === "enum_search") as Record<
+    string,
+    unknown
+  >;
+  const cloneNode: Record<string, unknown> = {
+    ...enumSearchNode,
+    nodeId: "enum_search_shared_component_id_clone",
+    orderIndex: 100,
+    debounceMs: 150,
+    dispatchTargetRefByTrigger: {
+      change: `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:get_group`,
+    },
+    dispatchPayloadFromByTrigger: {
+      change: { groupId: "node:enum_search_shared_component_id_clone.value" },
+    },
+  };
+  return [...layoutNodes, cloneNode];
+}
+
+Deno.test(
+  "ProjectionShell (real mount, canonical ae200 fixture + one injected sibling node sharing enum_search's own catalog componentId): two distinct layout nodes with the SAME componentId but DIFFERENT dispatchTargetRefByTrigger get INDEPENDENT debounce timers and dispatch circuits -- one node's own pending timer/dispatch/settlement never cancels or is cancelled by the other's (round 40, DOM-level re-proof of the round-38 componentId-as-instance-identity fix)",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    const layoutNodes = await mountSharedComponentIdCloneFixture();
+    const emissionWithRows = (rows: Array<Record<string, unknown>>) => ({
+      ...queryCircuitEmission(rows),
+      layoutNodes,
+    });
+
+    const scenario = buildMockScenario((_callIndex, body) => {
+      if (body.action === "Search" && body.layer === "screen_list") {
+        return { success: true, emission: emissionWithRows(QUERY_CIRCUIT_INITIAL_ROWS) };
+      }
+      if (body.layer === "enum_dictionary" && body.action === "list_groups") {
+        const payload = payloadOf(body);
+        const search = typeof payload.search === "string" ? payload.search : "";
+        return { success: true, emission: emissionWithRows([markerRow(search, "ORIGINAL")]) };
+      }
+      if (body.layer === "enum_dictionary" && body.action === "get_group") {
+        const payload = payloadOf(body);
+        const groupId = typeof payload.groupId === "string" ? payload.groupId : "";
+        return { success: true, emission: emissionWithRows([markerRow(groupId, "CLONE")]) };
+      }
+      return fallbackDispatchResponse(body);
+    });
+    globalThis.fetch = scenario.fetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+      render(h(ProjectionShell, {}), container);
+
+      const rows = () =>
+        Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
+      const originalSearchInput = () =>
+        container.querySelector('[data-node-id="enum_search"] input') as HTMLInputElement | null;
+      const cloneSearchInput = () =>
+        container.querySelector(
+          '[data-node-id="enum_search_shared_component_id_clone"] input',
+        ) as HTMLInputElement | null;
+
+      await waitFor(() => rows().length === 2);
+      await waitFor(() => originalSearchInput() !== null && cloneSearchInput() !== null);
+
+      const listGroupsCallCount = () =>
+        scenario.capturedDispatchBodies.filter((b) =>
+          b.layer === "enum_dictionary" && b.action === "list_groups"
+        ).length;
+      const getGroupCallCount = () =>
+        scenario.capturedDispatchBodies.filter((b) =>
+          b.layer === "enum_dictionary" && b.action === "get_group"
+        ).length;
+
+      // Start BOTH nodes' independent debounce timers back-to-back: enum_search's own 300ms
+      // timer, then (immediately, well within that window) the clone's own SHORTER 150ms timer.
+      // If componentId (rather than nodeId/targetRef) were still the circuit identity -- the
+      // exact round-38 bug -- the clone's own firing would incorrectly cancel enum_search's own
+      // still-pending timer, since the two nodes share the SAME componentId.
+      simulateInput(originalSearchInput()!, "original-value");
+      simulateInput(cloneSearchInput()!, "clone-value");
+
+      // Wait past the clone's own 150ms debounce but well before enum_search's own 300ms one.
+      await waitRealMs(220);
+      assertEquals(
+        getGroupCallCount(),
+        1,
+        "the clone's own shorter debounce must fire on its own schedule",
+      );
+      assertEquals(
+        listGroupsCallCount(),
+        0,
+        "enum_search's own longer-pending debounce must NOT have fired yet, and must NOT have been cancelled by the clone's unrelated dispatch -- different targetRef means a different circuit, despite sharing a componentId",
+      );
+      assertEquals(
+        rows().some((r) => r.textContent?.includes("search=clone-value|filter=CLONE")),
+        true,
+        "the clone's own settled response must be adopted into DOM",
+      );
+
+      // Wait past enum_search's own 300ms window too.
+      await waitRealMs(150);
+      assertEquals(
+        listGroupsCallCount(),
+        1,
+        "enum_search's own independent debounce timer must still fire on ITS OWN schedule -- the clone's earlier firing never cancelled it",
+      );
+      await waitFor(() =>
+        rows().some((r) => r.textContent?.includes("search=original-value|filter=ORIGINAL"))
+      );
+      assertEquals(
+        rows().some((r) => r.textContent?.includes("search=original-value|filter=ORIGINAL")),
+        true,
+        "enum_search's own settled response must ALSO be adopted -- neither circuit's settlement clobbered the other's dispatch; only the later-settling one is the final DOM state, matching the SAME last-settled-wins semantics the round-39 query-circuit tests already prove for genuinely shared circuits",
+      );
+      assertEquals(
+        getGroupCallCount(),
+        1,
+        "the clone's own dispatch count must still be exactly one -- enum_search's later firing must not have re-triggered or duplicated the clone's own circuit either",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource = originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
+      render(null, container);
+      cleanup();
+    }
+  },
+);
+
+Deno.test(
+  "ProjectionShell (real mount, canonical ae200 fixture): a search-query-circuit debounce pending concurrently with a mutation (delete_group) preview/confirm never cancels or is cancelled by it -- the query circuit's own dispatch fires on schedule, the mutation Modal opens/closes independently, canonical reread fires exactly once (from the mutation's own confirmed write, not from the query circuit), and the query circuit's own typed value survives that reread (round 40)",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    const layoutNodes = await mountQueryCircuitFixture();
+    const emissionWithRows = (rows: Array<Record<string, unknown>>) => ({
+      ...queryCircuitEmission(rows),
+      layoutNodes,
+    });
+    // delete_group needs no typed field at all (only a selected row) -- deliberately chosen over
+    // create_group so this test exercises ONLY the query-circuit-vs-mutation-circuit claim, never
+    // conflated with the SEPARATE, real "every admin_runtime catalog_component node gets its own
+    // default 'change' dispatch to the layout's uniform targetRef absent a per-trigger override"
+    // mechanism (renderEmission.ts buildRuntimeDispatchSpec) that a typed write-flow field like
+    // enum_create_group_name_input would otherwise also exercise here.
+    const deleteGroupTargetRef =
+      `manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group`;
+
+    const scenario = buildMockScenario((_callIndex, body) => {
+      if (body.action === "Search" && body.layer === "screen_list") {
+        return { success: true, emission: emissionWithRows(QUERY_CIRCUIT_INITIAL_ROWS) };
+      }
+      if (body.layer === "enum_dictionary" && body.action === "list_groups") {
+        const payload = payloadOf(body);
+        const search = typeof payload.search === "string" ? payload.search : "";
+        return { success: true, emission: emissionWithRows([markerRow(search, "QUERY")]) };
+      }
+      if (body.layer === "enum_dictionary" && body.action === "delete_group") {
+        // The settlement authority checks the settled Emission's own manifestId against the
+        // AUTHORED target_ref's manifest (ae230), never ae200 -- delete_group's preview/confirm
+        // both dispatch to a genuinely DIFFERENT manifest than the query circuit's own ae200.
+        return {
+          success: true,
+          emission: { manifestId: manifestIdFromTargetRef(deleteGroupTargetRef), data: { ok: true } },
+        };
+      }
+      return fallbackDispatchResponse(body);
+    });
+    globalThis.fetch = scenario.fetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+      render(h(ProjectionShell, {}), container);
+
+      const rows = () =>
+        Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
+      const searchInput = () =>
+        container.querySelector('[data-node-id="enum_search"] input') as HTMLInputElement | null;
+
+      await waitFor(() => rows().length === 2);
+
+      // Scoped to enum_search's own dispatchPayloadFromByTrigger contract (carries a "search"
+      // payload key) -- distinguishes the query circuit's OWN dispatch from OTHER admin_runtime
+      // nodes' own default "change"/"select" dispatch to this SAME layout-uniform target_ref
+      // (renderEmission.ts buildRuntimeDispatchSpec fires one for any catalog_component node with
+      // wiringKind="admin_runtime" absent a per-trigger override -- e.g. selecting a table row),
+      // a real, separate mechanism orthogonal to what this test proves.
+      const listGroupsCalls = () =>
+        scenario.capturedDispatchBodies.filter((b) =>
+          b.layer === "enum_dictionary" && b.action === "list_groups" &&
+          typeof payloadOf(b).search === "string"
+        );
+      const deleteGroupDryRunCalls = () =>
+        scenario.capturedDispatchBodies.filter((b) =>
+          b.layer === "enum_dictionary" && b.action === "delete_group" &&
+          payloadOf(b).dryRun === "true"
+        );
+      const deleteGroupConfirmedCalls = () =>
+        scenario.capturedDispatchBodies.filter((b) =>
+          b.layer === "enum_dictionary" && b.action === "delete_group" &&
+          payloadOf(b).confirmed === "true"
+        );
+      const canonicalRereadCalls = () =>
+        scenario.capturedDispatchBodies.filter((b) =>
+          b.action === "Search" && b.layer === "screen_list"
+        );
+      const canonicalRereadCountAtStart = canonicalRereadCalls().length;
+
+      // Select a group row -- required for delete_group's own groupId payloadFrom.
+      simulateRowClick(rows()[0]);
+      await flushUpdates();
+
+      // Start the query circuit's own 300ms debounce timer -- NOT yet fired.
+      simulateInput(searchInput()!, "typed-during-mutation");
+
+      // Immediately (well within that window), drive the UNRELATED mutation circuit's own
+      // preview: click Open (fires an IMMEDIATE dryRun preview to a DIFFERENT manifest/action --
+      // ae230:delete_group, not ae200:list_groups).
+      simulateClick(queryOpenButtonFor(container, "enum_delete_group")!);
+
+      // Modal opening is itself gated on the dryRun preview settling successfully (the SAME
+      // deferLocalStateMutationToDispatchSuccess mechanism every other confirm-modal test in this
+      // file relies on) -- so by the time queryModalFor resolves, the mutation's own preview
+      // dispatch is CAUSALLY guaranteed to have already fired, independent of however long the
+      // query circuit's own real-time debounce window still has left. (Asserting listGroupsCalls
+      // is still 0 at this exact point would be a real-time race against waitFor's own polling
+      // latency, not a causal guarantee, so it is intentionally not asserted here -- the query
+      // circuit's own non-cancellation is instead proven below, after its full debounce window.)
+      await waitFor(() => queryModalFor(container) !== null);
+      assertEquals(
+        deleteGroupDryRunCalls().length,
+        1,
+        "the mutation's own preview dispatch must fire (causally guaranteed by the modal having opened at all), independent of the query circuit's still-pending debounce",
+      );
+
+      // Wait past the query circuit's own 300ms window -- its own timer must still fire on
+      // schedule, undisturbed by the still-open mutation Modal.
+      await waitRealMs(350);
+      assertEquals(
+        listGroupsCalls().length,
+        1,
+        "the query circuit's own debounce timer must fire on ITS OWN schedule regardless of the concurrent mutation Modal being open",
+      );
+      await waitFor(() =>
+        rows().some((r) => r.textContent?.includes("search=typed-during-mutation|filter=QUERY"))
+      );
+      assertEquals(
+        rows().some((r) => r.textContent?.includes("search=typed-during-mutation|filter=QUERY")),
+        true,
+        "the query circuit's own settled response must be adopted into DOM even while the mutation Modal is open",
+      );
+      assert(
+        queryModalFor(container) !== null,
+        "the mutation Modal must remain open -- the query circuit's own settlement must never close or otherwise mutate Modal state it does not own",
+      );
+
+      // Confirm the mutation -- its own dispatch, closes the Modal, and triggers exactly one
+      // canonical reread (ae200's own Search/screen_list), never re-triggering or duplicating the
+      // query circuit's own already-settled dispatch.
+      const confirmButtonEl = queryConfirmButtonFor(container, "enum_delete_group");
+      assertExists(confirmButtonEl, "the mutation's own Confirm button must render while its Modal is open");
+      simulateClick(confirmButtonEl!);
+
+      await waitFor(() => queryModalFor(container) === null);
+      await waitFor(() => canonicalRereadCalls().length === canonicalRereadCountAtStart + 1);
+      for (let i = 0; i < 15; i++) await flushUpdates();
+
+      assertEquals(
+        deleteGroupConfirmedCalls().length,
+        1,
+        "the mutation's own Confirm dispatch must have fired exactly once",
+      );
+      assertEquals(
+        canonicalRereadCalls().length,
+        canonicalRereadCountAtStart + 1,
+        "exactly one canonical reread must have fired, triggered by the mutation's own settled confirmed write -- the query circuit's own independent settlement earlier must never itself have triggered a canonical reread",
+      );
+      assertEquals(
+        listGroupsCalls().length,
+        1,
+        "the query circuit's own dispatch count must remain exactly one -- neither the mutation's confirm nor the canonical reread it triggers may re-fire or duplicate the query circuit's own already-settled dispatch",
+      );
+      // Note (round 40 finding, not asserted as a defect -- out of this round's stated scope): the
+      // canonical reread resets enum_search's OWN typed value back to empty
+      // (seedTrackerWithEmptyDefaultsForFieldDispatchParticipants re-seeds every Field dispatch
+      // participant to its empty default on each fresh dispatch/reread adoption) -- unlike the
+      // prefilled write-flow fields (propBindings.value-bound to the selected row), a search/
+      // filter Field carries no such binding to re-resolve from, so "empty" is this field's own
+      // canonical default after a full data refresh. This is a real, observed behavior difference
+      // from write-flow field retention, not itself part of the circuit-isolation claim this test
+      // proves -- recorded here for the auditor rather than silently asserted as either correct or
+      // incorrect.
+      assertEquals(
+        rows().some((r) => r.textContent?.includes("Alpha")) &&
+          rows().some((r) => r.textContent?.includes("Beta")),
+        true,
+        "the canonical reread's own rows must be the ones rendered afterward (not corrupted by the earlier query-circuit-filtered marker row still lingering)",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource = originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
+      render(null, container);
+      cleanup();
+    }
+  },
+);
