@@ -410,6 +410,130 @@ admin_uibuilder_ui_structure_wiring_ssot:
           the hardcoded /admin/enums retirement previously tracked here as open is done --
           see round_27_28_settled_child_dispatch_result_authority below for the current,
           single-source record (this paragraph is not restated there as owning authority).
+        owner_decision_2026_08_13_explicit_dispatch_participation_required: >-
+          SUPERSEDES read_circuit_consumed_and_proven's "layout=one-canonical-operation
+          model" rationale above (dated 2026-07-23) FOR FIELD-FAMILY NODES ONLY (see scope
+          note below) -- that rationale is now WRONG for Fields and must not be relied on
+          by new Field-authoring work. Owner decision (admin-enum subBundle closure, round
+          41): a layout merely HAVING a default admin_runtime target/business operation
+          must NOT, by itself, cause a Field's click/change/select/submit/toggle trigger to
+          inherit a dispatch binding to that target. This does not touch, and must never be
+          conflated with, the separate common-request-context auto-attach contract (JWT
+          Authorization, role authority, client-origin, canonical scheduler selection),
+          which remains fully automatic at the frontendScheduler/API-client boundary
+          regardless of this change; only the layout-default-implies-per-Field-dispatch
+          inference is retired. Going forward, a Field's Event executes an admin_runtime
+          business operation ONLY when that Field's own authoring/topology data explicitly
+          participates in dispatch for that trigger -- i.e. carries its own
+          dispatchTargetRefByTrigger entry for that trigger (reusing the layout's own
+          default target literal is allowed and remains the common case for the 16
+          legitimately-dispatching ae200 nodes) OR its own dispatchPayloadFromByTrigger
+          entry for that trigger (a payload-shape customization that still falls back to
+          the node's own base spec as the dispatch target, since authoring a payload shape
+          for a specific trigger is itself an explicit, per-trigger authoring signal --
+          e.g. a button whose own node.targetRef already IS its intended target and only
+          needs its payload shaped; this pre-existing generic pattern, used outside
+          admin-enum, is preserved unchanged, not narrowed to "targetRefOverrideByTrigger
+          only"). It is the IMPLICIT inheritance with NEITHER authored for a given trigger
+          that is retired, not reuse of the same target value nor the
+          payload-only-customization pattern.
+          SCOPE (Field-family only, not every admin_runtime catalog_component): the fix is
+          applied ONLY when isFieldFamilyComponentKind(node.componentKind) is true -- the
+          SAME generic, componentKind-prefix ("form_input/") classification already used
+          for Field read-action/debounce policy elsewhere (adminRuntimeReadActions.ts),
+          reused here rather than invented fresh. A first draft retired the fallback for
+          EVERY admin_runtime catalog_component regardless of kind and was reverted after
+          it broke ~40 pre-existing, established, passing tests spanning rounds 3 through
+          40 of this subBundle's own history -- most centrally enum_table's own "select"
+          trigger (row click) re-dispatching list_groups as documented, asserted,
+          intentional "harmless idempotent read" behavior on selection, plus every
+          settlement-authority/canonical-reread/preview-confirm test's own preview-button
+          click relying on the SAME base-spec fallback for Action/button nodes. The
+          concretely user-reported symptom this round exists to close (typing into a
+          write Field firing spurious list_groups / interfering with a pending search
+          debounce) is specific to Field "change" events; broadening the fix to
+          non-Field nodes (tables, buttons, modals) would have reintroduced exactly the
+          "must not regress round 40's [and earlier rounds'] established contracts"
+          violation the OK axis forbids, for no concretely-reported benefit. Non-Field
+          admin_runtime nodes (tables, buttons, modals, structural containers) therefore
+          keep their pre-existing implicit base-spec-fallback dispatch behavior for every
+          trigger completely unchanged by this round -- a disclosed, deliberate boundary,
+          not a silent gap: those nodes were never the reported problem, and their
+          existing test coverage treats the current behavior as correct.
+          Mechanism: frontend/runtime/renderEmission.ts buildCatalogComponentEventBinding's
+          `targetRefOverrideByTrigger[trigger] ?? spec` fallback previously gave every
+          admin_runtime catalog_component node (Field or not) a binding for all 5 standard
+          triggers even absent any authored dispatchTargetRefByTrigger OR
+          dispatchPayloadFromByTrigger entry (confirmed via the real
+          admin_enum_ae200_layout_nodes.json fixture: every typed write-only Field --
+          form_input/* componentKind -- had neither of its own and was nonetheless
+          receiving an implicit binding to ae200's own list_groups target under the old
+          fallback). Fixed strictly when nodeWiringKind === "admin_runtime" AND
+          isFieldFamilyComponentKind(nodeComponentKind): for that combination only, a
+          trigger's dispatch target now resolves to (targetRefOverrideByTrigger[trigger]
+          ?? spec) ONLY when EITHER targetRefOverrideByTrigger[trigger] OR
+          payloadFromByTrigger[trigger] is authored for that trigger; a trigger with
+          NEITHER now gets an eventType-only binding entry (`{ eventType: trigger }`, no
+          runtimeDispatch key) rather than a real business-operation dispatch. Omitting
+          the entry entirely (for the no-participation case) was tried first and
+          reverted: runtimeComponentFactory.ts's requireBinding (inputFactory,
+          buttonFactory, etc.) fails a component's ENTIRE render closed when its own
+          required trigger key is missing from eventBinding at all -- which would have
+          made every real write-only Field (e.g. enum_create_group_name_input, which
+          authors neither dispatchTargetRefByTrigger nor dispatchPayloadFromByTrigger)
+          stop rendering as an `<input>` entirely, a functional regression worse than the
+          spurious-dispatch bug being fixed. A companion fail-close requiring
+          dispatchTargetRefByTrigger whenever dispatchPayloadFromByTrigger is authored on
+          the same trigger was ALSO tried first and reverted: it rejected the legitimate
+          base-spec-plus-payloadFrom-only pattern above (proven still in production use
+          by an existing, unmodified test in
+          projectionShellAdminRuntimeWritePayloadCapture.test.ts predating this round),
+          which is exactly the kind of established contract this round's own OK axis
+          requires preserving -- so no such fail-close exists. The eventType-only entry
+          keeps requireBinding satisfied and keeps emitBoundEvent's pre-dispatch lanes
+          (onNodeValueChange, calcTriggerCallback, the observation log) working
+          unchanged; parseEventBinding's own optional runtimeDispatch field is what
+          actually prevents any business dispatch from firing, not the binding entry's
+          presence or absence. Other wiringKinds (search/aggregate/create/update/delete),
+          and non-Field-family admin_runtime nodes, are untouched -- their own
+          one-canonical-operation-per-layout design (buildRuntimeDispatchSpec's base
+          fallback) is a separate, pre-existing contract this decision does not revisit.
+          Schema-composed node identity: canonical node/component identity resolved from
+          layout_schema_json.records[] (see react-schema-topology-seed-translator-ssot.yaml
+          round 40/41 addenda) is authoritative for any nodeId that is a real schema-tree
+          catalog leaf; a raw tensor override's own componentKey for that same nodeId must
+          match canonical exactly or the whole patch fails closed
+          (LAYOUT_PATCH_SCHEMA_COMPOSED_COMPONENT_KEY_IDENTITY_MISMATCH) -- this closes the
+          spoof path round 40's ResolveEffectiveComponentKey (raw-preferred-when-present)
+          would otherwise leave open for evading Field read-action/debounce policy.
+          Tensor-only nodes (no schema-tree catalog leaf for that nodeId) keep their
+          pre-round-40 raw-componentKey authority unchanged. Disclosed scope limit: the
+          schema-tree map this check consults is only ever loaded when the SAME patch also
+          contains at least one other node genuinely missing componentKey (the round-40
+          DB-round-trip gate, ContainsNodeMissingComponentKey, is deliberately left
+          unwidened -- see its own doc comment in NpgsqlUiTopologyRepository.cs; widening it
+          to fire on any admin_runtime dispatch field was tried and reverted because it made
+          the DB round trip unconditional for the overwhelming majority of ordinary,
+          non-schema-composed dispatch-authoring saves). This covers the realistic authored
+          shape of a schema-composed override-delta save (such a save's own nodes normally
+          omit componentKey entirely -- see storage_adoption_contract) but does not catch a
+          maximally-adversarial single-node patch supplying only one forged componentKey
+          with no other node present; recorded here as a known, deliberate boundary rather
+          than a silent gap. Field-family classification:
+          NpgsqlUiTopologyRepository.FieldFamilyComponentKeys is derived directly from
+          LayoutSchemaTensorComposer.FieldControlToComponentKey.Values (visibility widened
+          to internal) rather than maintained as an independent literal HashSet -- the two
+          Field-family sets can no longer drift apart. Proof obligations: production
+          ProjectionShell DOM tests against the real ae200 fixture proving (a) typing into
+          a real write-only typed Field during a pending search debounce fires no
+          list_groups dispatch and does not cancel the pending debounce, (b) explicitly-
+          participating search/read Events still dispatch correctly post-debounce with
+          correct payload, (c) Preview/Confirm for all 7 write operations still resolve
+          freshly-typed node values and dispatch the correct business operation with
+          mutation/settlement authority unregressed; backend negative-case tests proving
+          schema-composed componentKey spoof/mismatch/Field-policy-bypass attempts fail
+          closed. See .agent/tasks/todo.md admin-enum subBundle round 41 record for the
+          concrete implementation/test inventory.
     admin_runtime_payload_binding_contract:
       payload_source_grammar_authority: >-
         Round 22 correction: this contract governs WHERE dispatchPayloadFromByTrigger is

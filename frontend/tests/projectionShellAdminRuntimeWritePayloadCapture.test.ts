@@ -5388,3 +5388,221 @@ Deno.test(
     }
   },
 );
+
+// ─── round 41 (Owner decision closure, owner_decision_2026_08_13_explicit_dispatch_participation_required):
+// renderEmission.ts's buildCatalogComponentEventBinding no longer falls back to the layout's own
+// base dispatch spec for any admin_runtime catalog_component node's trigger absent an explicitly
+// authored dispatchTargetRefByTrigger entry for that SAME trigger. Round 40's own
+// query-circuit-vs-mutation-circuit test (above) had to deliberately choose delete_group over
+// create_group specifically to AVOID this then-still-present bug (typing into
+// enum_create_group_name_input -- a write-only Field authoring NO dispatchTargetRefByTrigger of
+// its own -- used to ALSO fire an implicit "change" dispatch to the layout's own uniform
+// list_groups target, confounding any test that also drives the search-debounce circuit). This
+// test proves the fix directly against the REAL, unmodified ae200 fixture: typing into that same
+// write-only Field, DURING a pending enum_search debounce window, fires ZERO list_groups
+// dispatches (not merely a payload-shape-distinguishable one) and does not cancel the pending
+// debounce -- while enum_search's own explicit dispatch participation still fires correctly on
+// schedule afterward. ─────────────────────────────────────────────────────────────────────────
+
+Deno.test(
+  "ProjectionShell (real mount, canonical ae200 fixture, round 41): typing into the write-only enum_create_group_name_input Field (no dispatchTargetRefByTrigger of its own) during a pending enum_search debounce fires NO list_groups dispatch at all and does not cancel the pending debounce; enum_search's own explicit dispatch still fires correctly afterward with the original typed value",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    const layoutNodes = await mountQueryCircuitFixture();
+    const emissionWithRows = (rows: Array<Record<string, unknown>>) => ({
+      ...queryCircuitEmission(rows),
+      layoutNodes,
+    });
+
+    const scenario = buildMockScenario((_callIndex, body) => {
+      if (body.action === "Search" && body.layer === "screen_list") {
+        return { success: true, emission: emissionWithRows(QUERY_CIRCUIT_INITIAL_ROWS) };
+      }
+      if (body.layer === "enum_dictionary" && body.action === "list_groups") {
+        const payload = payloadOf(body);
+        const search = typeof payload.search === "string" ? payload.search : "";
+        return { success: true, emission: emissionWithRows([markerRow(search, "QUERY")]) };
+      }
+      return fallbackDispatchResponse(body);
+    });
+    globalThis.fetch = scenario.fetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+      render(h(ProjectionShell, {}), container);
+
+      const rows = () =>
+        Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
+      const searchInput = () =>
+        container.querySelector('[data-node-id="enum_search"] input') as HTMLInputElement | null;
+      const createGroupNameInput = () =>
+        container.querySelector(
+          '[data-node-id="enum_create_group_name_input"] input',
+        ) as HTMLInputElement | null;
+
+      await waitFor(() => rows().length === 2);
+      await waitFor(() => searchInput() !== null && createGroupNameInput() !== null);
+
+      const listGroupsCalls = () =>
+        scenario.capturedDispatchBodies.filter((b) =>
+          b.layer === "enum_dictionary" && b.action === "list_groups"
+        );
+
+      // Start enum_search's own 300ms debounce timer -- NOT yet fired.
+      simulateInput(searchInput()!, "Widgets");
+
+      // Immediately (well within that window), type into the write-only Field. Prior to the
+      // round-41 fix this ALSO fired an implicit list_groups dispatch (a spurious, generic-fallback
+      // "change" binding every admin_runtime catalog_component node received absent its own
+      // explicit dispatchTargetRefByTrigger) -- and, being a DIFFERENT node, would resolve to a
+      // DIFFERENT runtimeDispatchCircuitKey than enum_search's own, so it could not have cancelled
+      // enum_search's pending timer either way; what round 41 actually eliminates is the spurious
+      // dispatch itself; this test proves that.
+      simulateInput(createGroupNameInput()!, "Gizmos");
+      await flushUpdates();
+
+      assertEquals(
+        listGroupsCalls().length,
+        0,
+        "typing into the write-only Field must fire NO list_groups dispatch at all -- not merely one distinguishable by payload shape from enum_search's own",
+      );
+
+      // Wait past enum_search's own 300ms debounce window -- its own timer must still fire on
+      // schedule, undisturbed by the write-only Field's typing.
+      await waitRealMs(350);
+      assertEquals(
+        listGroupsCalls().length,
+        1,
+        "enum_search's own debounce timer must fire on schedule -- the write-only Field's typing must not have cancelled it",
+      );
+      assertEquals(
+        payloadOf(listGroupsCalls()[0]).search,
+        "Widgets",
+        "the ONE list_groups dispatch that does fire must carry enum_search's own original typed value, not anything derived from the write-only Field",
+      );
+      await waitFor(() =>
+        rows().some((r) => r.textContent?.includes("search=Widgets|filter=QUERY"))
+      );
+      assertEquals(
+        createGroupNameInput()!.value,
+        "Gizmos",
+        "the write-only Field's own typed value must remain exactly as typed -- unaffected by enum_search's own settled dispatch/re-render",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource = originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
+      render(null, container);
+      cleanup();
+    }
+  },
+);
+
+Deno.test(
+  "ProjectionShell (real mount, canonical ae200 fixture, round 41): enum_search and enum_group_filter -- both explicit dispatch participants (author their own dispatchTargetRefByTrigger) -- still dispatch list_groups correctly after the round-41 fallback removal, and Cancel/table/modal nodes with no dispatchTargetRefByTrigger of their own never spuriously dispatch",
+  async () => {
+    ensureRuntimeComponentRegistryInitialized();
+    schedulerTestOnly.resetCommandQueue();
+    FakeEventSource.instances = [];
+    const { container, cleanup } = setupDom();
+    const originalEventSource =
+      (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
+    const originalFetch = globalThis.fetch;
+
+    const layoutNodes = await mountQueryCircuitFixture();
+    const emissionWithRows = (rows: Array<Record<string, unknown>>) => ({
+      ...queryCircuitEmission(rows),
+      layoutNodes,
+    });
+
+    const scenario = buildMockScenario((_callIndex, body) => {
+      if (body.action === "Search" && body.layer === "screen_list") {
+        return { success: true, emission: emissionWithRows(QUERY_CIRCUIT_INITIAL_ROWS) };
+      }
+      if (body.layer === "enum_dictionary" && body.action === "list_groups") {
+        const payload = payloadOf(body);
+        const search = typeof payload.search === "string" ? payload.search : "";
+        const groupNameFilter = typeof payload.groupNameFilter === "string"
+          ? payload.groupNameFilter
+          : "";
+        return {
+          success: true,
+          emission: emissionWithRows([markerRow(search, groupNameFilter || "none")]),
+        };
+      }
+      return fallbackDispatchResponse(body);
+    });
+    globalThis.fetch = scenario.fetch;
+
+    try {
+      globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+      render(h(ProjectionShell, {}), container);
+
+      const rows = () =>
+        Array.from(container.querySelectorAll("tbody tr")) as HTMLTableRowElement[];
+      const searchInput = () =>
+        container.querySelector('[data-node-id="enum_search"] input') as HTMLInputElement | null;
+      const groupFilterSelect = () =>
+        container.querySelector(
+          '[data-node-id="enum_group_filter"] select',
+        ) as HTMLSelectElement | null;
+
+      await waitFor(() => rows().length === 2);
+      await waitFor(() => searchInput() !== null && groupFilterSelect() !== null);
+
+      const listGroupsCalls = () =>
+        scenario.capturedDispatchBodies.filter((b) =>
+          b.layer === "enum_dictionary" && b.action === "list_groups"
+        );
+
+      // enum_search's own explicit dispatch participation still fires correctly.
+      simulateInput(searchInput()!, "Alpha");
+      await waitRealMs(350);
+      assertEquals(
+        listGroupsCalls().length,
+        1,
+        "enum_search's own explicit dispatchTargetRefByTrigger must still produce a real dispatch",
+      );
+      await waitFor(() =>
+        rows().some((r) => r.textContent?.includes("search=Alpha|filter=none"))
+      );
+
+      // enum_group_filter's own explicit dispatch participation (an immediate "change", no
+      // debounce) still fires correctly too. The <select>'s own option values are groupName
+      // literals (see the round-37 filter-select tests above), not groupId.
+      simulateSelectChange(groupFilterSelect()!, "Beta");
+      await waitFor(() => listGroupsCalls().length === 2);
+      assertEquals(
+        payloadOf(listGroupsCalls()[1]).groupNameFilter,
+        "Beta",
+        "enum_group_filter's own explicit dispatch must carry its own selected group's groupName",
+      );
+
+      // No OTHER node's trigger silently generated a stray list_groups/other admin_runtime
+      // dispatch -- exactly two real dispatches fired, matching the two explicit interactions
+      // above (not three, four, or more from any of the 26 non-participating nodes the round-41
+      // fix scopes out -- structural containers, enum_table's own non-select triggers, all
+      // confirm-modals, all cancel-buttons, all typed write-only inputs).
+      assertEquals(
+        listGroupsCalls().length,
+        2,
+        "exactly the two explicitly-driven dispatches must have fired -- no non-participating node contributed a spurious extra one",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource = originalEventSource;
+      schedulerTestOnly.resetCommandQueue();
+      render(null, container);
+      cleanup();
+    }
+  },
+);

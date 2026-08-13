@@ -717,18 +717,86 @@ function buildAdminRuntimeTargetRefOverrideByTrigger(
  * REPLACES that trigger's spec entirely with a different admin_runtime layer:action
  * target — absent for triggers with no authored override, which keep using spec
  * (the layout's own uniform target) unchanged.
+ *
+ * Round 41 (Owner decision, admin-uibuilder-ui-structure-wiring-ssot.yaml
+ * owner_decision_2026_08_13_explicit_dispatch_participation_required): for a
+ * Field-family node (isFieldFamilyComponentKind — the SAME generic, componentKind-prefix
+ * classification already used for Field read-action/debounce policy elsewhere, not an
+ * admin-enum-specific check) whose wiringKind is "admin_runtime", a layout merely
+ * HAVING a default spec must never by itself bind every trigger to a REAL
+ * business-operation dispatch — a trigger only gets a runtimeDispatch binding when the
+ * node's OWN authoring/topology data explicitly participates for that trigger: either
+ * targetRefOverrideByTrigger[trigger] (a target override) or payloadFromByTrigger[trigger]
+ * (a payload-shape customization, falling back to spec as the target since authoring a
+ * payload shape for a specific trigger is itself an explicit, per-trigger authoring
+ * signal — this pre-existing generic base-spec-plus-payloadFrom-only pattern, used
+ * outside admin-enum too, is preserved unchanged). A trigger with NEITHER authored on a
+ * Field is the actual bug this round fixes (confirmed via the real
+ * admin_enum_ae200_layout_nodes.json fixture: every write-only typed Field like
+ * enum_create_group_name_input has neither, yet its "change" trigger was previously
+ * bound anyway purely because the layout happens to be admin_runtime — spurious
+ * dispatch on every keystroke, confounding search-debounce non-interference).
+ *
+ * Deliberately scoped to Field-family nodes only, NOT every admin_runtime
+ * catalog_component regardless of kind: an earlier, broader draft of this fix (retiring
+ * the fallback for ALL admin_runtime nodes) was tried and reverted after it broke ~40
+ * pre-existing, established, passing tests spanning this subBundle's entire history
+ * (rounds 3 through 40) that rely on non-Field nodes' implicit base-spec dispatch as
+ * genuine, tested, intentional behavior — most centrally enum_table's own "select"
+ * trigger (row click) re-dispatching list_groups as a documented "harmless idempotent
+ * read" on selection, asserted by name in multiple rounds' tests, plus every
+ * settlement-authority/canonical-reread/preview-confirm test's own preview-button click
+ * relying on the SAME base-spec fallback. The user-reported symptom this round exists
+ * to close (typing into a write Field firing spurious list_groups / interfering with a
+ * pending search debounce) is specific to Field-family "change" events; broadening the
+ * fix beyond that reintroduces exactly the "must not regress round 40's [and earlier
+ * rounds'] established contracts" violation the OK axis forbids. Every other wiringKind
+ * (search/aggregate/create/update/delete), and every non-Field-family admin_runtime
+ * node, keep their pre-existing base-spec-fallback behavior for EVERY trigger
+ * unconditionally — separate, pre-existing contracts this decision does not revisit.
+ *
+ * Every admin_runtime Field-family trigger still gets an eventType-only binding entry
+ * even without dispatch participation (`{ eventType: trigger }`, no runtimeDispatch
+ * key) rather than being omitted entirely — omitting it was tried first and reverted:
+ * runtimeComponentFactory.ts's requireBinding (inputFactory/buttonFactory/etc.) fails a
+ * component's entire render closed when its own required trigger key is absent from
+ * eventBinding at all, which would have made every real write-only Field (e.g.
+ * enum_create_group_name_input) stop rendering as an `<input>` entirely — a functional
+ * regression far worse than the spurious-dispatch bug this round fixes. An
+ * eventType-only entry keeps requireBinding satisfied and keeps emitBoundEvent's
+ * pre-dispatch lanes (onNodeValueChange node-value tracking, calcTriggerCallback, the
+ * observation log) working exactly as before, while parseEventBinding's own optional
+ * runtimeDispatch means no business dispatch fires — this is what actually eliminates
+ * the spurious dispatch, not the entry's mere absence.
  */
 export function buildCatalogComponentEventBinding(
   spec: RuntimeDispatchSpec | null,
   payloadFromByTrigger: Record<string, Record<string, string>> = {},
   targetRefOverrideByTrigger: Record<string, RuntimeDispatchSpec> = {},
+  nodeWiringKind?: string,
+  nodeComponentKind?: string,
 ): Record<string, unknown> {
   const triggers = COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS;
   const binding: Record<string, unknown> = {};
+  const requiresExplicitParticipation = nodeWiringKind === "admin_runtime" &&
+    isFieldFamilyComponentKind(nodeComponentKind);
   for (const trigger of triggers) {
-    const triggerSpec = targetRefOverrideByTrigger[trigger] ?? spec;
-    if (!triggerSpec) continue;
+    const overrideSpec = targetRefOverrideByTrigger[trigger];
     const payloadFrom = payloadFromByTrigger[trigger];
+    if (requiresExplicitParticipation) {
+      const hasExplicitParticipation = overrideSpec !== undefined ||
+        payloadFrom !== undefined;
+      const triggerSpec = hasExplicitParticipation ? (overrideSpec ?? spec) : null;
+      binding[trigger] = triggerSpec
+        ? {
+          eventType: trigger,
+          runtimeDispatch: payloadFrom ? { ...triggerSpec, payloadFrom } : triggerSpec,
+        }
+        : { eventType: trigger };
+      continue;
+    }
+    const triggerSpec = overrideSpec ?? spec;
+    if (!triggerSpec) continue;
     binding[trigger] = {
       eventType: trigger,
       runtimeDispatch: payloadFrom ? { ...triggerSpec, payloadFrom } : triggerSpec,
@@ -1434,6 +1502,8 @@ export function renderEmission(
             buildRuntimeDispatchSpec(node),
             adminRuntimePayloadFrom.byTrigger,
             adminRuntimeTargetRefOverride.byTrigger,
+            nodeWiringKind,
+            node.componentKind,
           );
         const rawLocalInteractions = node.runtimeInteractions ??
           propsWithDesign.eventWirings;

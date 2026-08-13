@@ -66,7 +66,10 @@ public static class LayoutSchemaTensorComposer
 
     // Canonical control -> ui_component_registry.component_key convention for Field leaves.
     // Reuses the existing preset catalog rows; does not invent new registry entries.
-    private static readonly IReadOnlyDictionary<string, string> FieldControlToComponentKey =
+    // Round 41: widened from private to internal so NpgsqlUiTopologyRepository.
+    // FieldFamilyComponentKeys can derive directly from this map's Values instead of
+    // maintaining an independently hand-kept mirror of the same Field-family set.
+    internal static readonly IReadOnlyDictionary<string, string> FieldControlToComponentKey =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["form_input/select"] = "select.template",

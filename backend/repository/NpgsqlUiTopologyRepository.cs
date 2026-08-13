@@ -734,10 +734,25 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                     keyEl.ValueKind == JsonValueKind.String
                     ? keyEl.GetString()?.Trim()
                     : null;
-                if (string.IsNullOrWhiteSpace(componentKey) &&
-                    !schemaComposedComponentKeysByNodeId.ContainsKey(nodeId!))
+                var isSchemaComposedCatalogLeaf = schemaComposedComponentKeysByNodeId
+                    .TryGetValue(nodeId!, out var canonicalComponentKey);
+                if (string.IsNullOrWhiteSpace(componentKey) && !isSchemaComposedCatalogLeaf)
                 {
                     return "LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED";
+                }
+                // Round 41 (Owner decision closure): for a nodeId that IS a real
+                // schema-tree catalog leaf, canonical identity is authoritative. A raw
+                // override entry for that SAME nodeId carrying its own, DIFFERENT
+                // componentKey is a spoof attempt — round 40's ResolveEffectiveComponentKey
+                // (raw-preferred-when-present) would otherwise let it win outright and
+                // evade Field read-action/debounce policy for a nodeId the schema tree
+                // says is a Field. Fail the whole patch closed rather than silently
+                // preferring the raw value; this makes ResolveEffectiveComponentKey
+                // safe-by-construction with no change needed there.
+                if (isSchemaComposedCatalogLeaf && !string.IsNullOrWhiteSpace(componentKey) &&
+                    !string.Equals(componentKey, canonicalComponentKey, StringComparison.Ordinal))
+                {
+                    return $"LAYOUT_PATCH_SCHEMA_COMPOSED_COMPONENT_KEY_IDENTITY_MISMATCH:{nodeId}";
                 }
             }
             else
@@ -1181,15 +1196,15 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     /// ApplyConfirmedLayoutPatchAsync against a schema-composed layoutId (e.g. an admin editing
     /// ae200's own debounceMs live) is now genuinely checked here too, not merely by the
     /// translator (layer 1) and frontend runtime (layer 3).
+    ///
+    /// Round 41: derived directly from LayoutSchemaTensorComposer.FieldControlToComponentKey's own
+    /// Values (that map widened from private to internal for this purpose) rather than maintained
+    /// as an independent hand-kept literal set -- the two Field-family sets can no longer drift
+    /// apart because there is exactly one authority left, not a drift-detection test bolted onto
+    /// two authorities.
     /// </summary>
-    private static readonly IReadOnlySet<string> FieldFamilyComponentKeys = new HashSet<string>(StringComparer.Ordinal)
-    {
-        "select.template",
-        "form_field.template",
-        "input.primitive",
-        "textarea.alias",
-        "search_input.alias",
-    };
+    private static readonly IReadOnlySet<string> FieldFamilyComponentKeys =
+        new HashSet<string>(LayoutSchemaTensorComposer.FieldControlToComponentKey.Values, StringComparer.Ordinal);
 
     /// <summary>
     /// The one Field-family componentKey (see FieldFamilyComponentKeys) whose control kind is a
@@ -1769,6 +1784,22 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     /// schema-tree-resolved identity — see ValidateLayoutPatchAsync's own caller). A patch where
     /// every node already declares its own componentKey (any purely tensor-only save, i.e. every
     /// test fixture and real save predating round 40) never needs the schema map at all.
+    ///
+    /// Round 41 scope note (Owner decision closure, identity-mismatch fail-close in
+    /// ValidateLayoutPatchNodes): this gate is deliberately left UNCHANGED rather than widened to
+    /// "any node with an admin_runtime dispatch field" — that broader trigger was tried and
+    /// reverted because it made the DB round trip unconditional for the overwhelming majority of
+    /// existing dispatch-authoring saves (every componentKey-carrying Field/Action/Step node with
+    /// its own dispatchTargetRefByTrigger — the normal, non-schema-composed case), which is
+    /// exactly the "unnecessary DB dependency" this gate exists to avoid. The practical
+    /// consequence: the new LAYOUT_PATCH_SCHEMA_COMPOSED_COMPONENT_KEY_IDENTITY_MISMATCH check can
+    /// only catch a spoofed componentKey when the SAME patch also contains at least one other node
+    /// legitimately missing componentKey (which is the realistic shape of an authored
+    /// schema-composed override-delta save — see storage_adoption_contract: such a save's own
+    /// nodes normally omit componentKey entirely, since it is schema-tree-derived). A
+    /// maximally-adversarial single-node patch that supplies ONLY a forged componentKey for one
+    /// schema-tree nodeId, with no other node in the same patch, is not caught by this mechanism —
+    /// documented here rather than silently left as an unstated gap.
     /// </summary>
     private static bool ContainsNodeMissingComponentKey(string tensorPatchJson)
     {

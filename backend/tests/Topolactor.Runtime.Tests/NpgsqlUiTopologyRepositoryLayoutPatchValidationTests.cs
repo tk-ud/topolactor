@@ -1601,10 +1601,136 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
         // tensor-only search-input scenario already proven above, now against a repository whose
         // LoadLayoutSchemaJsonAsync throws if ever invoked. This is the "Round 39 tensor-only
         // behavior is not weakened by adding schema-composed support" proof at the DB-access-shape
-        // level, not just the outcome level.
+        // level, not just the outcome level. Round 41 note: this gate is deliberately left
+        // unchanged (see ContainsNodeMissingComponentKey's own round-41 doc comment) even though it
+        // means the new identity-mismatch check cannot fire for a single-node, all-componentKey
+        // patch like this one — widening the gate to also cover this shape was tried and reverted
+        // because it made this exact guarantee (never query when every node has componentKey) false
+        // for the overwhelming majority of ordinary dispatch-authoring saves.
         var repo = new SchemaJsonLookupForbiddenRepository("admin_runtime", FullyAuthorizedManifest);
         var result = await repo.ValidateLayoutPatchAsync(
             Guid.NewGuid(), "/admin/ui-builder", SearchInputNode(", \"debounceMs\": 300"), null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
+    // ── Round 41 (Owner decision closure): schema-composed canonical identity spoof/mismatch
+    // negative cases. Round 40's ResolveEffectiveComponentKey preferred a raw override node's own
+    // componentKey whenever present, even for a nodeId that IS a real schema-tree catalog leaf --
+    // letting a crafted layout_patch_json.nodes[] entry claim a DIFFERENT componentKey for a nodeId
+    // the schema tree says is a Field, evading ValidateFieldOwnedAdminRuntimeReadOnlyDispatch /
+    // ValidateFieldOwnedAdminRuntimeSearchDebounce entirely (those two validators only ever see
+    // whichever componentKey ResolveEffectiveComponentKey resolves). These tests prove
+    // ValidateLayoutPatchNodes now closes that path at the earliest validation point, before either
+    // Field validator runs. ──────────────────────────────────────────────────────────────────────
+
+    // Round 41 scope note: ValidateLayoutPatchNodes's identity-mismatch check only ever runs
+    // against the schema-tree map (schemaComposedComponentKeysByNodeId), which is only ever loaded
+    // when ContainsNodeMissingComponentKey finds at least one node in the SAME patch missing its
+    // own componentKey (the gate is deliberately unchanged from round 40 -- see its own doc
+    // comment). Every test below therefore includes schema_filter_field, missing its own
+    // componentKey, purely as that trigger -- matching the realistic authored shape of a
+    // schema-composed override-delta save (most of whose nodes normally omit componentKey
+    // entirely; see storage_adoption_contract).
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_SchemaComposedNode_RawComponentKeyMismatchesCanonical_FailsWholePatchClosed()
+    {
+        // schema_search_field's canonical componentKey (resolved from control="form_input/search_input"
+        // via LayoutSchemaTensorComposer.FieldControlToComponentKey) is "search_input.alias". A raw
+        // override entry for that SAME nodeId claiming a DIFFERENT componentKey (a spoof attempt --
+        // e.g. one outside FieldFamilyComponentKeys entirely, which would let this node evade Field
+        // policy at the two Field validators below) must fail the WHOLE patch closed, not silently
+        // let the raw value win.
+        var repo = new SchemaComposedTestRepository("admin_runtime", SchemaComposedRecordsJson, FullyAuthorizedManifest);
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "{{SchemaComposedSearchFieldNodeId}}", "nodeKind": "catalog_component",
+            "componentKey": "button.primary" },
+          { "nodeId": "{{SchemaComposedFilterFieldNodeId}}", "nodeKind": "catalog_component" }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal(
+            $"LAYOUT_PATCH_SCHEMA_COMPOSED_COMPONENT_KEY_IDENTITY_MISMATCH:{SchemaComposedSearchFieldNodeId}",
+            result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_SchemaComposedNode_RawComponentKeyMatchesCanonical_Passes()
+    {
+        // A raw override entry is still tolerated for a schema-tree catalog leaf as long as it is
+        // CONSISTENT with canonical identity -- this is not a blanket ban on authoring componentKey
+        // on a schema-composed node, only on a mismatching one.
+        var repo = new SchemaComposedTestRepository("admin_runtime", SchemaComposedRecordsJson, FullyAuthorizedManifest);
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "{{SchemaComposedSearchFieldNodeId}}", "nodeKind": "catalog_component",
+            "componentKey": "search_input.alias" },
+          { "nodeId": "{{SchemaComposedFilterFieldNodeId}}", "nodeKind": "catalog_component" }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_SchemaComposedNode_RawComponentKeyMismatch_BlocksFieldPolicyBypassAttempt()
+    {
+        // End-to-end spoof-attempt proof: without the round-41 identity-mismatch fail-close, a raw
+        // override claiming a non-Field componentKey ("button.primary" is outside
+        // FieldFamilyComponentKeys) for this Field-family nodeId would make
+        // ValidateFieldOwnedAdminRuntimeSearchDebounce treat it as Action/Step-owned and skip the
+        // debounceMs requirement entirely -- letting a search dispatch through with NO debounce
+        // policy applied. Proves the patch fails closed BEFORE that bypass could take effect, even
+        // though this node also violates the debounceMs requirement it would otherwise be exempted
+        // from (the identity check must fire first / independently, not merely as a side effect of
+        // some other validator also rejecting it).
+        var repo = new SchemaComposedTestRepository("admin_runtime", SchemaComposedRecordsJson, FullyAuthorizedManifest);
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "{{SchemaComposedSearchFieldNodeId}}", "nodeKind": "catalog_component",
+            "componentKey": "button.primary",
+            "dispatchTargetRefByTrigger": { "change": "{{SearchReadTargetRef}}" },
+            "dispatchPayloadFromByTrigger": { "change": { "search": "node:{{SchemaComposedSearchFieldNodeId}}.value" } } },
+          { "nodeId": "{{SchemaComposedFilterFieldNodeId}}", "nodeKind": "catalog_component" }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal(
+            $"LAYOUT_PATCH_SCHEMA_COMPOSED_COMPONENT_KEY_IDENTITY_MISMATCH:{SchemaComposedSearchFieldNodeId}",
+            result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_TensorOnlyNode_NotInSchemaTree_RawComponentKeyNeverCheckedAgainstCanonical()
+    {
+        // Regression guard: the identity-mismatch check only applies to a nodeId that IS a real
+        // schema-tree catalog leaf. A genuinely tensor-only node (absent from the schema tree
+        // entirely) keeps its pre-round-40/pre-round-41 raw-componentKey authority completely
+        // unchanged -- any componentKey value is accepted, there is no canonical value to compare
+        // against.
+        var repo = new SchemaComposedTestRepository("admin_runtime", SchemaComposedRecordsJson, FullyAuthorizedManifest);
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "{{SchemaComposedUnknownNodeId}}", "nodeKind": "catalog_component",
+            "componentKey": "button.primary" }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
 
         Assert.True(result.Ok, result.Message);
         Assert.True(result.Valid);
