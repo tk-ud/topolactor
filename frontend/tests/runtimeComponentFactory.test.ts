@@ -966,6 +966,92 @@ Deno.test("emitBoundEvent: two DISTINCT layout nodes sharing the SAME catalog co
   }
 });
 
+Deno.test("emitBoundEvent: two DISTINCT layout nodes (different nodeId AND different componentId) that author the SAME targetRef literal share ONE dispatch circuit -- scheduling the second node's debounced dispatch cancels the first node's still-pending timer, per runtimeDispatchCircuitKey's targetRef-priority resolution (round 42 correction: round 41's own test comments had incorrectly assumed different nodes always resolve to different circuits; this proves the opposite is true whenever they share a targetRef, exactly the shape enum_search/enum_group_filter/enum_create_group_name_input share in the real ae200 fixture via the layout's own list_groups target)", async () => {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  const capturedBodies: Record<string, unknown>[] = [];
+  globalThis.fetch = ((_url: string, init?: RequestInit) => {
+    capturedBodies.push(JSON.parse(String(init?.body ?? "{}")));
+    return Promise.resolve(
+      new Response(JSON.stringify({ success: true, errors: [] }), { status: 200 }),
+    );
+  }) as typeof fetch;
+  try {
+    const SHARED_TARGET_REF =
+      `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:list_groups`;
+    const buildSpec = (
+      nodeId: string,
+      componentId: string,
+      inputNodeId: string,
+      debounceMs: number,
+    ): RuntimeComponentSpec => ({
+      // DIFFERENT nodeId AND DIFFERENT componentId on both specs -- unlike the round-38 test
+      // above, node identity here is fully distinct on every axis EXCEPT targetRef, isolating
+      // targetRef itself as the one shared thing that should determine circuit identity.
+      componentId,
+      nodeId,
+      packageId: null,
+      layoutId: "layout-shared-targetref-001",
+      wiringId: null,
+      componentType: "form_input/search_input",
+      props: { data: { value: "" } },
+      debounceMs,
+      eventBinding: {
+        change: {
+          eventType: "change",
+          runtimeDispatch: {
+            operationType: "list_groups",
+            target: "manifest",
+            layer: "enum_dictionary",
+            action: "list_groups",
+            targetRef: SHARED_TARGET_REF,
+            payloadFrom: { q: `node:${inputNodeId}.value` },
+          },
+        },
+      },
+      payloadFromNodeValues: { [inputNodeId]: nodeId === "node-A" ? "alpha" : "beta" },
+    });
+    // node-A's own longer debounce starts first; node-B (a fully distinct node/component)
+    // shares node-A's targetRef and fires shortly after, well within node-A's own window.
+    const specA = buildSpec("node-A", "comp-A", "input-A", 300);
+    const specB = buildSpec("node-B", "comp-B", "input-B", 10);
+
+    const resultA = __testOnly.emitBoundEvent(specA, "change", { value: "alpha" });
+    assertEquals(resultA.ok, true);
+    const resultB = __testOnly.emitBoundEvent(specB, "change", { value: "beta" });
+    assertEquals(resultB.ok, true);
+
+    // Wait past B's own short debounce but well before A's own longer one.
+    for (let i = 0; i < 40 && capturedBodies.length < 1; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assertEquals(
+      capturedBodies.length,
+      1,
+      "only B's own shorter debounce must have fired so far",
+    );
+    assertEquals((capturedBodies[0].payload as Record<string, unknown>).q, "beta");
+
+    // Wait past A's own original window too -- if A and B were on independent circuits (the
+    // round-38 shape), A's own timer would still fire here. Because they share ONE targetRef
+    // (and therefore ONE runtimeDispatchCircuitKey), B's later scheduling must have cancelled
+    // A's still-pending timer instead.
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    assertEquals(
+      capturedBodies.length,
+      1,
+      "node-A's own debounced dispatch must NEVER fire -- node-B's dispatch on the SAME " +
+        "targetRef-derived circuit cancelled it, exactly the same-circuit cancellation " +
+        "semantics runtimeDispatchCircuitKey exists to implement, regardless of node/component " +
+        "identity differing on every other axis",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
+});
+
 // round 39: search_filter_input_contract debounce_policy runtime enforcement -- a
 // componentType="form_input/search_input" Field on the admin_runtime dispatch lane must fail
 // closed BEFORE any dispatch attempt when its own debounceMs is missing/invalid, never falling

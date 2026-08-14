@@ -498,6 +498,110 @@ admin_uibuilder_ui_structure_wiring_ssot:
           and non-Field-family admin_runtime nodes, are untouched -- their own
           one-canonical-operation-per-layout design (buildRuntimeDispatchSpec's base
           fallback) is a separate, pre-existing contract this decision does not revisit.
+        owner_decision_2026_08_14_general_dispatch_participation_contract_round42: >-
+          SUPERSEDES owner_decision_2026_08_13_explicit_dispatch_participation_required's
+          "SCOPE (Field-family only, not every admin_runtime catalog_component)" paragraph
+          above in full -- that scope limitation is now WRONG and must not be relied on by
+          new work. Owner clarification (admin-enum subBundle closure, round 42): the
+          round-41 decision was never a Field-specific rule -- it is a general
+          business-operation-dispatch-participation contract for every admin_runtime
+          catalog_component node, Field or not (Table, Button, Modal, structural leaf
+          alike). Round 41 narrowed the contract to Field-family nodes ONLY because a
+          Field-family-unscoped draft broke ~40 pre-existing tests (most centrally
+          enum_table's own implicit "select"-triggered list_groups re-dispatch); the Owner
+          has now made explicit what round 41's own OK/NG axis should already have implied:
+          an existing test asserting the OLD implicit-inheritance behavior is not itself
+          design authority once that behavior is the exact thing a new Owner decision
+          retires -- such a test must be UPDATED to assert the new contract (or, where the
+          capability it protects is still needed, the capability must be re-authored as
+          EXPLICIT topology participation and the test updated to assert that), never used
+          as a reason to keep the SSOT narrower than the Owner's actual decision. Round 41's
+          own reverted-first-draft framing ("broke pre-existing tests" as the stated reason
+          for narrowing) is the precise anti-pattern this correction closes: test
+          compatibility is evidence to weigh when deciding HOW to reach a contract, never
+          evidence for deciding WHAT the contract is.
+          General contract (replaces the Field-family-only SCOPE paragraph): for every node
+          whose wiringKind is "admin_runtime" -- regardless of componentKind -- a trigger
+          only produces a real runtimeDispatch business-operation binding when that node's
+          own authoring/topology data explicitly participates for that SPECIFIC trigger:
+          dispatchTargetRefByTrigger[trigger] (a target override, reusing the layout's own
+          default target literal remains allowed and is the common case) OR
+          dispatchPayloadFromByTrigger[trigger] (payload-shape customization falling back to
+          the node's own base spec as target, per owner_decision_2026_08_13's own
+          base-spec-plus-payloadFrom-only preservation -- unchanged by this round). A
+          trigger with NEITHER authored gets no business dispatch, regardless of
+          componentKind. This does not touch, and must never be conflated with, the separate
+          common-request-context auto-attach contract (JWT Authorization, role authority,
+          client-origin, canonical scheduler selection), which remains fully automatic at
+          the frontendScheduler/API-client boundary -- business-dispatch-participation and
+          common-request-context auto-attach are different concepts operating at different
+          layers (per-node topology authoring vs. every-request transport boundary) and
+          collapsing them into one policy question is exactly the confusion the NG axis
+          prohibits.
+          Preserving legitimate non-Field capabilities under the general contract: a
+          capability round 41 preserved only because Field-family scoping left non-Field
+          nodes on the old implicit fallback (most concretely enum_table's own row-select
+          re-issuing list_groups as a scoped re-read) is preserved going forward by
+          AUTHORING explicit dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger on
+          that node for that trigger in the real ae200 fixture/seed, exactly the same
+          authoring shape the 16 already-explicit ae200 nodes already use -- not by
+          componentKind branching in the runtime mechanism itself. This is authoring-data
+          work (adding an explicit entry to a real production node), not a mechanism
+          exception; the mechanism (buildCatalogComponentEventBinding) has no
+          componentKind conditional left in it at all after this round.
+          Mechanism (round 42): frontend/runtime/renderEmission.ts
+          buildCatalogComponentEventBinding's requiresExplicitParticipation gate is
+          `nodeWiringKind === "admin_runtime"` unconditionally -- the
+          isFieldFamilyComponentKind(nodeComponentKind) conjunct round 41 added is removed.
+          The eventType-only inert-binding fallback (`{ eventType: trigger }`, no
+          runtimeDispatch key, keeping runtimeComponentFactory.ts's requireBinding satisfied
+          and emitBoundEvent's pre-dispatch lanes working) is unaffected by this
+          widening -- it already applied per-trigger, not per-componentKind, so no new
+          rendering regression is introduced by removing the Field-family conjunct.
+          runtimeDispatchCircuitKey correction (round 42): round 41's own test comments and
+          reasoning in projectionShellAdminRuntimeWritePayloadCapture.test.ts incorrectly
+          asserted that two different NODES are necessarily on two different dispatch
+          circuits ("being a DIFFERENT node, would resolve to a DIFFERENT
+          runtimeDispatchCircuitKey"). This contradicts
+          frontend/runtime/runtimeComponentFactory.ts's actual implementation:
+          `runtimeDispatchCircuitKey(spec, targetRef) { return targetRef ?? spec.nodeId ??
+          spec.componentId; }` -- targetRef is the TOP priority key, and nodeId/componentId
+          are only fallbacks used when targetRef itself is absent. Two DIFFERENT nodes that
+          happen to share the SAME targetRef (the ae200 layout's own default target,
+          exactly the literal every Field-family node without its own override was
+          implicitly bound to before round 41) are on the SAME circuit, not different ones,
+          by design (see the pre-existing round-38 doc comment on this same function: "a
+          component may fire more than one admin_runtime dispatch for the SAME circuit...
+          regardless of which NODE fired which call"). This means the pre-round-41 bug's
+          real severity was understated in round 41's own report: typing into a write-only
+          Field sharing the layout's default targetRef with a pending search Field's own
+          debounce was not merely a spurious EXTRA dispatch on an unrelated circuit -- it
+          was a dispatch on the SAME circuit as the pending debounced search, genuinely
+          capable of cancelling/racing that pending debounce per the same-circuit
+          cancellation semantics runtimeDispatchCircuitKey's own callers implement. Proof
+          reasoning and test comments must state this correctly; a corrected proof asserting
+          same-targetRef-different-node collapses to one circuit is required (see
+          runtimeComponentFactory.test.ts / projectionShellAdminRuntimeWritePayloadCapture.test.ts).
+          Schema-composed single-node spoof closure (round 42): owner_decision_2026_08_13's
+          own "Disclosed scope limit" paragraph below (schema-tree map only loaded when the
+          SAME patch contains another node missing componentKey) is NOT an acceptable
+          permanent boundary -- canonical schema/catalog identity must be authoritative
+          against ANY raw componentKey spoof for a schema-tree leaf nodeId, including a
+          single-node patch with no other node present. The DB-round-trip optimization
+          (ContainsNodeMissingComponentKey gating LoadLayoutSchemaJsonAsync) may be kept for
+          efficiency, but the optimization strategy itself must not leave an authority
+          bypass: any implementation that closes this gap without also keeping the
+          tensor-only fast path efficient is acceptable, but leaving the gap open to protect
+          the fast path is not. A test proving closure must not add a synthetic
+          componentKey-missing sibling node merely to force the existing gate to fire (that
+          would prove the OLD narrower mechanism, not a genuine single-node fix) -- the
+          negative proof must be a literal single-node patch.
+          Field-family classification, common-request-context auto-attach, and the
+          base-spec-plus-payloadFrom-only preservation from owner_decision_2026_08_13 are
+          all UNCHANGED by this round -- only the Field-family SCOPE limitation and the
+          schema-composed single-node spoof gap are corrected. See .agent/tasks/todo.md
+          admin-enum subBundle round 42 record for the concrete implementation/test
+          inventory.
           Schema-composed node identity: canonical node/component identity resolved from
           layout_schema_json.records[] (see react-schema-topology-seed-translator-ssot.yaml
           round 40/41 addenda) is authoritative for any nodeId that is a real schema-tree
@@ -507,7 +611,10 @@ admin_uibuilder_ui_structure_wiring_ssot:
           spoof path round 40's ResolveEffectiveComponentKey (raw-preferred-when-present)
           would otherwise leave open for evading Field read-action/debounce policy.
           Tensor-only nodes (no schema-tree catalog leaf for that nodeId) keep their
-          pre-round-40 raw-componentKey authority unchanged. Disclosed scope limit: the
+          pre-round-40 raw-componentKey authority unchanged. Disclosed scope limit
+          (round 41, CLOSED in round 42 -- see owner_decision_2026_08_14_general_dispatch_participation_contract_round42
+          above; text below is kept as historical record of the gap that existed between
+          round 40 and round 42, not current authority): the
           schema-tree map this check consults is only ever loaded when the SAME patch also
           contains at least one other node genuinely missing componentKey (the round-40
           DB-round-trip gate, ContainsNodeMissingComponentKey, is deliberately left

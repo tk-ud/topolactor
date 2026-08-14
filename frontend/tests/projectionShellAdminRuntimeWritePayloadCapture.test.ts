@@ -1127,8 +1127,17 @@ Deno.test(
             componentKind: "data_display/table",
             componentKey: "table.primitive",
             orderIndex: 0,
-            // The LAYOUT's own uniform binding (ae205's real target_ref, list_groups) — a row
-            // select re-issues this same idempotent read, exactly like production.
+            // The LAYOUT's own uniform target (ae205's real target_ref, list_groups) — round 42
+            // (Owner clarification, general dispatch-participation contract, admin-uibuilder
+            // wiring SSOT owner_decision_2026_08_14_general_dispatch_participation_contract_round42):
+            // enum_table authors NEITHER dispatchTargetRefByTrigger NOR dispatchPayloadFromByTrigger
+            // for its own "select" trigger (exactly the real ae200 fixture's own shape), so a row
+            // select no longer re-issues an implicit list_groups dispatch — that implicit
+            // re-dispatch was never a deliberately-authored capability, only a side effect of the
+            // pre-round-41 fallback bug this whole contract retires. The row's own value is still
+            // tracked (onNodeValueChange fires unconditionally, independent of whether the trigger
+            // produces a real dispatch), which is all this test's own payloadFrom assertion below
+            // actually needs.
             wiringKind: "admin_runtime",
             targetSurface: "manifest",
             targetRef:
@@ -1180,8 +1189,9 @@ Deno.test(
       if (callIndex === 1) {
         return { success: true, emission: tableAndDeleteButtonEmission() };
       }
-      // callIndex 2: the row select's own list_groups re-dispatch (harmless, idempotent read).
-      // callIndex 3: the delete button's override dispatch.
+      // Round 42: no more implicit row-select re-dispatch (enum_table has no explicit
+      // participation authored, matching the real ae200 fixture) -- callIndex 2 is now the
+      // delete button's own override dispatch, callIndex 3 the canonical reread.
       return fallbackDispatchResponse(body);
     });
     globalThis.fetch = scenario.fetch;
@@ -1209,13 +1219,16 @@ Deno.test(
       assertEquals(rows().length, 2);
 
       // Select the SECOND row — proves the tracked value reflects whichever row was
-      // actually clicked, not just always the first.
+      // actually clicked, not just always the first. Round 42: selecting a row no longer fires
+      // any dispatch at all (enum_table has no explicit dispatch participation of its own) —
+      // only the node's own tracked value updates, proven below via the delete button's
+      // resolved payload rather than a dispatch-count assertion here.
       simulateRowClick(rows()[1]);
-      await waitFor(() => scenario.capturedDispatchBodies.length >= 2);
+      await flushUpdates();
       assertEquals(
         scenario.capturedDispatchBodies.length,
-        2,
-        "the row select must have triggered enum_table's own list_groups re-dispatch",
+        1,
+        "selecting a row must fire NO dispatch -- enum_table authors no explicit dispatch participation of its own, matching the real ae200 fixture",
       );
 
       simulateClick(buttonEl!);
@@ -1224,16 +1237,16 @@ Deno.test(
       // instead of the old fixture's unrealistic no-emission fallback — so
       // round_27_28_settled_child_dispatch_result_authority's OWN documented behavior (a settled
       // cross-manifest write's success re-reads ae200's own canonical identity) now actually
-      // fires, adding a 4th dispatch (the canonical reread) this test does not otherwise inspect.
-      await waitFor(() => scenario.capturedDispatchBodies.length >= 4);
+      // fires, adding a 3rd dispatch (the canonical reread) this test does not otherwise inspect.
+      await waitFor(() => scenario.capturedDispatchBodies.length >= 3);
       assertEquals(
         scenario.capturedDispatchBodies.length,
-        4,
-        "expected the row-select dispatch, the delete button's override dispatch, and the " +
-          "confirmed write's own canonical-reread redispatch",
+        3,
+        "expected the initial load, the delete button's override dispatch, and the " +
+          "confirmed write's own canonical-reread redispatch (round 42: no row-select dispatch)",
       );
 
-      const deleteDispatchBody = scenario.capturedDispatchBodies[2];
+      const deleteDispatchBody = scenario.capturedDispatchBodies[1];
       // Layer/action must reflect the OVERRIDE's own embedded layer:action
       // (enum_dictionary:delete_group), NOT the layout's own uniform binding
       // (enum_dictionary:list_groups).
@@ -1897,8 +1910,11 @@ Deno.test(
 
     // ae200's own re-dispatch (round 27's redispatch, replaying the SAME entry axes
     // resolveProjectionEntryAxes produced for the initial mount: layer="screen_list",
-    // action="Search") must be distinguishable from both the confirm dispatch (layer/action =
-    // enum_dictionary/delete_group) and the row-select reissue (enum_dictionary/list_groups).
+    // action="Search") must be distinguishable from the confirm dispatch (layer/action =
+    // enum_dictionary/delete_group). Round 42: row selection no longer reissues
+    // enum_dictionary/list_groups implicitly (enum_table authors no explicit dispatch
+    // participation of its own, matching the real ae200 fixture) -- the fallback branch below
+    // is retained defensively but is not expected to be reached by this scenario.
     let redispatchCount = 0;
     const scenario = buildMockScenario((callIndex, body) => {
       const layer = body.layer as string | undefined;
@@ -1944,7 +1960,7 @@ Deno.test(
           },
         };
       }
-      // Row-select reissue (enum_dictionary/list_groups) — irrelevant to this test, no-op.
+      // Defensive fallback -- not expected to be reached under round 42's contract.
       return fallbackDispatchResponse(body);
     });
     globalThis.fetch = scenario.fetch;
@@ -5462,10 +5478,24 @@ Deno.test(
       // Immediately (well within that window), type into the write-only Field. Prior to the
       // round-41 fix this ALSO fired an implicit list_groups dispatch (a spurious, generic-fallback
       // "change" binding every admin_runtime catalog_component node received absent its own
-      // explicit dispatchTargetRefByTrigger) -- and, being a DIFFERENT node, would resolve to a
-      // DIFFERENT runtimeDispatchCircuitKey than enum_search's own, so it could not have cancelled
-      // enum_search's pending timer either way; what round 41 actually eliminates is the spurious
-      // dispatch itself; this test proves that.
+      // explicit dispatchTargetRefByTrigger, falling back to the node's own base-spec targetRef).
+      // CORRECTION (round 42): enum_create_group_name_input's own base targetRef in the real
+      // ae200 fixture is the exact SAME literal
+      // ("manifest:...:enum_dictionary:list_groups") as enum_search's own explicit
+      // dispatchTargetRefByTrigger.change target -- and runtimeDispatchCircuitKey(spec, targetRef)
+      // resolves `targetRef ?? spec.nodeId ?? spec.componentId`, i.e. targetRef takes TOP priority
+      // over node identity. So the pre-round-41 implicit dispatch was NOT on a different circuit
+      // from enum_search's -- it was on the exact SAME circuit, and genuinely could have
+      // cancelled/raced enum_search's own pending debounced dispatch per the same-circuit
+      // cancellation semantics runtimeDispatchCircuitKey's own callers implement. (Round 41's
+      // original comment here claimed the opposite -- "being a DIFFERENT node, would resolve to a
+      // DIFFERENT runtimeDispatchCircuitKey" -- which was wrong; see
+      // owner_decision_2026_08_14_general_dispatch_participation_contract_round42 in
+      // admin-uibuilder-ui-structure-wiring-ssot.yaml.) What round 41 actually eliminates is the
+      // spurious dispatch itself, which is what this test proves -- and the assertions below (zero
+      // list_groups calls from the write-only Field's typing, followed by enum_search's own
+      // undisturbed on-schedule dispatch) are exactly the proof that the SAME-circuit race the old
+      // implicit fallback exposed enum_search's debounce to can no longer happen.
       simulateInput(createGroupNameInput()!, "Gizmos");
       await flushUpdates();
 
@@ -5507,7 +5537,7 @@ Deno.test(
 );
 
 Deno.test(
-  "ProjectionShell (real mount, canonical ae200 fixture, round 41): enum_search and enum_group_filter -- both explicit dispatch participants (author their own dispatchTargetRefByTrigger) -- still dispatch list_groups correctly after the round-41 fallback removal, and Cancel/table/modal nodes with no dispatchTargetRefByTrigger of their own never spuriously dispatch",
+  "ProjectionShell (real mount, canonical ae200 fixture, round 41/42): enum_search and enum_group_filter -- both explicit dispatch participants (author their own dispatchTargetRefByTrigger) -- still dispatch list_groups correctly under the general admin_runtime dispatch-participation contract, and Table/Button/Modal nodes with no dispatchTargetRefByTrigger of their own never spuriously dispatch, including a REAL table-row-select interaction against the unmodified ae200 fixture",
   async () => {
     ensureRuntimeComponentRegistryInitialized();
     schedulerTestOnly.resetCommandQueue();
@@ -5589,13 +5619,53 @@ Deno.test(
 
       // No OTHER node's trigger silently generated a stray list_groups/other admin_runtime
       // dispatch -- exactly two real dispatches fired, matching the two explicit interactions
-      // above (not three, four, or more from any of the 26 non-participating nodes the round-41
-      // fix scopes out -- structural containers, enum_table's own non-select triggers, all
-      // confirm-modals, all cancel-buttons, all typed write-only inputs).
+      // above (not three, four, or more from any of the 22 non-participating admin_runtime
+      // nodes in the real ae200 fixture -- enum_table itself, all 7 typed write-only inputs,
+      // all 7 confirm-modals, all 7 cancel-buttons -- under the round-42 general contract this
+      // covers EVERY componentKind, not just Fields).
       assertEquals(
         listGroupsCalls().length,
         2,
         "exactly the two explicitly-driven dispatches must have fired -- no non-participating node contributed a spurious extra one",
+      );
+
+      // round 42: make the Table/Modal/Button non-participation claim above an actual DIRECT
+      // interaction proof, not merely an absence-of-side-effect inference -- click a REAL
+      // enum_table row (a Table-kind node authoring neither dispatchTargetRefByTrigger nor
+      // dispatchPayloadFromByTrigger for its own "select" trigger in the unmodified ae200
+      // fixture, per owner_decision_2026_08_14_general_dispatch_participation_contract_round42)
+      // and open a mutation's confirm Modal via its own action/button (whose OWN click IS an
+      // explicit dispatch participant -- the preview -- but whose Cancel button and the Modal's
+      // own rendering are not) and Cancel it, then assert list_groups' own dispatch count is
+      // STILL exactly 2 throughout (the preview dispatch targets a DIFFERENT layer/action, so it
+      // never contributes to list_groups' own count either).
+      simulateRowClick(rows()[0]);
+      await flushUpdates();
+      assertEquals(
+        listGroupsCalls().length,
+        2,
+        "selecting a real enum_table row must fire NO list_groups dispatch -- Table-kind nodes are non-participating same as any other componentKind absent explicit authoring",
+      );
+      const deleteGroupOpenButton = () =>
+        container.querySelector(
+          '[data-node-id="enum_delete_group_button"] button',
+        ) as HTMLButtonElement | null;
+      assertExists(deleteGroupOpenButton(), "enum_delete_group_button must be rendered");
+      deleteGroupOpenButton()!.click();
+      await waitFor(() =>
+        container.querySelector('[data-node-id="enum_delete_group_cancel_button"] button') !==
+          null
+      );
+      const deleteGroupCancelButton = () =>
+        container.querySelector(
+          '[data-node-id="enum_delete_group_cancel_button"] button',
+        ) as HTMLButtonElement | null;
+      deleteGroupCancelButton()!.click();
+      await flushUpdates();
+      assertEquals(
+        listGroupsCalls().length,
+        2,
+        "opening delete_group's confirm Modal (via its own explicit preview dispatch, a DIFFERENT layer/action) and Cancelling it must never fire an extra list_groups dispatch -- the Modal's own rendering and its Cancel button are both non-participating triggers under the general contract",
       );
     } finally {
       globalThis.fetch = originalFetch;

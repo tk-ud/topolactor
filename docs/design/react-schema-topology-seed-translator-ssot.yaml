@@ -1532,7 +1532,10 @@ react_schema_topology_seed_translator_ssot:
           safe-by-construction for both call sites with no change to ResolveEffectiveComponentKey
           itself. Tensor-only nodes (no schema-tree catalog leaf for that nodeId at all) are
           unaffected -- their pre-round-40 raw-componentKey authority is unchanged. Disclosed
-          scope limit: the schema-tree map is only ever loaded when ContainsNodeMissingComponentKey
+          scope limit (round 41, CLOSED in round 42 -- see
+          admin-uibuilder-ui-structure-wiring-ssot.yaml
+          owner_decision_2026_08_14_general_dispatch_participation_contract_round42; text
+          kept below as historical record only): the schema-tree map is only ever loaded when ContainsNodeMissingComponentKey
           finds some OTHER node in the same patch genuinely missing componentKey (that gate was
           deliberately left unwidened -- widening it to also fire on any admin_runtime dispatch
           field was tried and reverted, since it made the DB round trip unconditional for the
@@ -1541,7 +1544,10 @@ react_schema_topology_seed_translator_ssot:
           realistic authored shape of a schema-composed override-delta save (whose own nodes
           normally omit componentKey entirely) but not a maximally-adversarial single-node patch
           supplying only one forged componentKey with no other node present -- a disclosed,
-          deliberate boundary, not a silent gap. Also in round
+          deliberate boundary, not a silent gap (round 42 closes this gap generically; see the
+          round-42 SSOT entry for the accepted implementation-freedom constraint: the DB
+          round-trip optimization may be kept, but not at the cost of leaving the authority
+          bypass open). Also in round
           41: NpgsqlUiTopologyRepository.FieldFamilyComponentKeys, previously an independently
           hand-kept HashSet mirroring LayoutSchemaTensorComposer's own Field
           control-to-componentKey mapping, is now derived directly from

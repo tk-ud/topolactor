@@ -782,6 +782,20 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     }
 
     /// <summary>
+    /// Round 42: string-parsing overload of ContainsAdminRuntimeNodeLevelDispatchField, used
+    /// earlier in ValidateLayoutPatchAsync (before the "nodes" array is otherwise parsed) to gate
+    /// the schema-composed single-node spoof check. Same predicate, different parse entry point —
+    /// not a second definition of the rule.
+    /// </summary>
+    private static bool ContainsAdminRuntimeNodeLevelDispatchField(string tensorPatchJson)
+    {
+        using var doc = JsonDocument.Parse(tensorPatchJson);
+        if (!doc.RootElement.TryGetProperty("nodes", out var nodes) || nodes.ValueKind != JsonValueKind.Array)
+            return false;
+        return ContainsAdminRuntimeNodeLevelDispatchField(nodes);
+    }
+
+    /// <summary>
     /// Loads the wiring_kind currently bound to this layout_id via
     /// topology.ui_topology_tensor -> topology.ui_wiring_registry (the SAME join
     /// NpgsqlTopologyRepository.LoadLayoutNodesAsync uses to resolve a layout's own uniform
@@ -1827,6 +1841,26 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         return scalar is null or DBNull ? null : (string)scalar;
     }
 
+    /// <summary>
+    /// Round 42: cheap dedicated boolean check (never fetches the schema body itself) — see the
+    /// base class's own doc comment for the full rationale. Evaluated in SQL so it costs a single
+    /// scalar round trip regardless of records[] size, distinct from LoadLayoutSchemaJsonAsync's
+    /// own full-body fetch used only once this returns true.
+    /// </summary>
+    public override async Task<bool> LayoutHasSchemaComposedRecordsAsync(Guid layoutId, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT jsonb_typeof(layout_schema_json->'records') = 'array' " +
+            "AND jsonb_array_length(layout_schema_json->'records') > 0 " +
+            "FROM topology.components_layout_design WHERE layout_id=@layoutId";
+        cmd.Parameters.AddWithValue("layoutId", layoutId);
+        var scalar = await cmd.ExecuteScalarAsync(ct);
+        return scalar is bool hasRecords && hasRecords;
+    }
+
     public override async Task<LayoutPatchResult> ValidateLayoutPatchAsync(Guid layoutId, string routeKey, string? tensorPatchJson, IReadOnlyList<string>? cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs, CancellationToken ct = default)
     {
         var normalized = NormalizeLayoutPatch(layoutId, routeKey, tensorPatchJson, cssTokenRefs, responsiveTokenRefs);
@@ -1848,17 +1882,36 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             // schema-composed override deltas (whose raw nodes carry neither componentKey nor
             // componentKind — see ResolveEffectiveComponentKey's own doc comment) are identified
             // by the SAME control/display convention LayoutSchemaTensorComposer.Compose uses at
-            // render time, not by a second hardcoded literal list. Only queried when at least one
-            // node in the patch is missing its own componentKey — a patch where every node already
-            // carries an explicit componentKey (the overwhelming majority: any purely tensor-only
-            // save) can never need schema-tree-resolved identity for either the structural check or
-            // the two Field validators below, so it never pays for this DB round trip. A malformed
+            // render time, not by a second hardcoded literal list. A malformed
             // layout_schema_json.records[] fails the WHOLE patch closed here rather than being
             // silently treated as "no schema, no exemption" (which would surface a confusing
             // LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED instead of the real defect) — matches
             // NpgsqlTopologyRepository.LoadLayoutNodesAsync's own Invalid handling.
+            //
+            // Round 42 (schema-composed single-node spoof closure, admin-uibuilder wiring SSOT
+            // owner_decision_2026_08_14_general_dispatch_participation_contract_round42): round
+            // 40's own gate here (ContainsNodeMissingComponentKey alone) left a real gap open — a
+            // single-node patch supplying its OWN forged componentKey for a nodeId that IS a real
+            // schema-tree catalog leaf never triggered this load at all (no OTHER node in the same
+            // patch was missing componentKey), so the identity-mismatch check inside
+            // ValidateLayoutPatchNodes below could never fire for it. Closed by ALSO loading the
+            // map whenever the patch authors an admin_runtime node-level dispatch field
+            // (ContainsAdminRuntimeNodeLevelDispatchField) AND this layoutId is actually
+            // schema-composed (LayoutHasSchemaComposedRecordsAsync — a cheap dedicated boolean
+            // check, never the full schema fetch, so an ordinary tensor-only dispatch-authoring
+            // save pays only one extra scalar round trip, not the full LoadLayoutSchemaJsonAsync
+            // cost). This directly targets the vulnerable case (a node with dispatch fields, since
+            // that's the only place resolved identity ever matters — the Field validators below and
+            // this same structural check) without reviving the earlier, reverted "any admin_runtime
+            // dispatch field always loads the full schema" draft that broke the established
+            // "tensor-only patch never queries layout_schema_json at all" guarantee for the
+            // overwhelming majority of ordinary, non-schema-composed dispatch-authoring saves —
+            // those still resolve LayoutHasSchemaComposedRecordsAsync to false and stop there.
             var schemaComposedComponentKeysByNodeId = new Dictionary<string, string>(StringComparer.Ordinal);
-            if (ContainsNodeMissingComponentKey(normalized.TensorPatchJson))
+            var mayBeSchemaComposed = ContainsNodeMissingComponentKey(normalized.TensorPatchJson);
+            if (!mayBeSchemaComposed && ContainsAdminRuntimeNodeLevelDispatchField(normalized.TensorPatchJson))
+                mayBeSchemaComposed = await LayoutHasSchemaComposedRecordsAsync(layoutId, ct);
+            if (mayBeSchemaComposed)
             {
                 var layoutSchemaJson = await LoadLayoutSchemaJsonAsync(layoutId, ct);
                 var schemaRecordsParseResult = LayoutSchemaTensorComposer.ParseRecords(layoutSchemaJson);

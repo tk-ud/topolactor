@@ -1145,6 +1145,17 @@ Deno.test("emitBoundEvent: admin_runtime runtimeDispatch forwards event-time pay
         wiringKind: "admin_runtime",
         targetSurface: "manifest",
         targetRef: `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:create_group`,
+        // Round 42 (admin-uibuilder wiring SSOT
+        // owner_decision_2026_08_14_general_dispatch_participation_contract_round42): every
+        // admin_runtime node's trigger now requires its own explicit dispatch participation --
+        // a node's own wiringKind/targetRef alone no longer implies a dispatch binding, even
+        // when (as here) the node's own targetRef already IS its intended target. Reusing that
+        // same literal via dispatchTargetRefByTrigger is the explicitly-authored form of
+        // exactly this same base case (SSOT: "reusing the layout's own default target literal
+        // is allowed").
+        dispatchTargetRefByTrigger: {
+          click: `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:create_group`,
+        },
       }],
     };
     const specs = renderEmission(emission, emptyRegistry);

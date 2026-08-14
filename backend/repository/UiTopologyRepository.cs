@@ -313,6 +313,26 @@ public class UiTopologyRepository
     }
 
     /// <summary>
+    /// Round 42 (admin-uibuilder wiring SSOT
+    /// owner_decision_2026_08_14_general_dispatch_participation_contract_round42, schema-composed
+    /// single-node spoof closure): true when layoutId's own
+    /// topology.components_layout_design.layout_schema_json carries a non-empty records[] array —
+    /// i.e. this layoutId is genuinely schema-composed, not tensor-only. A cheap, dedicated
+    /// boolean check (never the full schema fetch) used to gate LoadLayoutSchemaJsonAsync/
+    /// ResolveCatalogComponentKeysByNodeId generically for ANY admin_runtime dispatch-field-bearing
+    /// save — including a single-node patch supplying its own componentKey for what may be a
+    /// schema-tree catalog leaf nodeId — so a raw componentKey spoof for a schema-composed layout
+    /// can never be reached, whether or not another node in the SAME patch happens to be missing
+    /// componentKey. Virtual so unit tests can stub this without a live database — mirrors
+    /// LoadWiringKindForLayoutAsync's own test-doubling pattern.
+    /// </summary>
+    public virtual Task<bool> LayoutHasSchemaComposedRecordsAsync(
+        Guid layoutId, CancellationToken ct = default)
+    {
+        throw new NotImplementedException("UiTopologyRepository.LayoutHasSchemaComposedRecordsAsync must be overridden.");
+    }
+
+    /// <summary>
     /// Loads existence/active-status/runtime_destination authorization facts for a
     /// dispatchTargetRefByTrigger-referenced manifest_id (public.manifest, status +
     /// topology[runtime_mapping].runtime_destination -- the SAME facts ManifestDispatcher's

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Topolactor.Repository;
 using Topolactor.Schema;
@@ -544,6 +545,11 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
             Guid manifestId, CancellationToken ct = default)
             => Task.FromResult(manifestAuthorization ??
                 new AdminRuntimeManifestAuthorizationResult(Exists: true, IsActive: true, IsAdminRuntimeDestination: true));
+
+        // Round 42: this test double represents ordinary (non-schema-composed) tensor-only
+        // dispatch-authoring scenarios -- never schema-composed.
+        public override Task<bool> LayoutHasSchemaComposedRecordsAsync(Guid layoutId, CancellationToken ct = default)
+            => Task.FromResult(false);
     }
 
     private sealed class InstanceCandidateSourceFailureRepository()
@@ -1099,6 +1105,11 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     {
         public override Task<string?> LoadWiringKindForLayoutAsync(Guid layoutId, CancellationToken ct = default)
             => throw new InvalidOperationException($"LAYOUT_NODES_AMBIGUOUS_SELECTOR: multiple tensor rows for layout_id='{layoutId}'.");
+
+        // Round 42: this scenario's own componentKey is always present (never triggers the
+        // schema-composed spoof check's own gate) -- not schema-composed.
+        public override Task<bool> LayoutHasSchemaComposedRecordsAsync(Guid layoutId, CancellationToken ct = default)
+            => Task.FromResult(false);
     }
 
     [Fact]
@@ -1393,19 +1404,50 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
 
         public override Task<string?> LoadLayoutSchemaJsonAsync(Guid layoutId, CancellationToken ct = default)
             => Task.FromResult(layoutSchemaJson);
+
+        // Round 42: mirrors the real LayoutHasSchemaComposedRecordsAsync's own SQL semantics
+        // (jsonb_typeof(records)='array' AND length>0) against this fixture's own layoutSchemaJson
+        // string, so this ONE test double covers both the "genuinely schema-composed" and
+        // "malformed/absent records -- not schema-composed" scenarios correctly without a second,
+        // independently-hand-kept truth table.
+        public override Task<bool> LayoutHasSchemaComposedRecordsAsync(Guid layoutId, CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(layoutSchemaJson)) return Task.FromResult(false);
+            try
+            {
+                using var doc = JsonDocument.Parse(layoutSchemaJson);
+                return Task.FromResult(
+                    doc.RootElement.TryGetProperty("records", out var records) &&
+                    records.ValueKind == JsonValueKind.Array &&
+                    records.GetArrayLength() > 0);
+            }
+            catch (JsonException)
+            {
+                return Task.FromResult(false);
+            }
+        }
     }
 
     /// <summary>
     /// Throws if LoadLayoutSchemaJsonAsync is ever called — used to PROVE the gating pre-check
-    /// (ContainsNodeMissingComponentKey) genuinely skips the DB round trip when every node already
-    /// carries its own explicit componentKey (tensor-only authoring), rather than merely asserting
-    /// a correct result that could also happen to hold if the DB call ran and returned null.
+    /// genuinely skips the FULL schema-body round trip when every node already carries its own
+    /// explicit componentKey AND this layoutId is not actually schema-composed (round 42:
+    /// LayoutHasSchemaComposedRecordsAsync's own cheap boolean check IS still invoked for any
+    /// dispatch-field-bearing patch -- see its own override below returning false -- only the FULL
+    /// LoadLayoutSchemaJsonAsync fetch remains forbidden here), rather than merely asserting a
+    /// correct result that could also happen to hold if the full fetch ran and returned null.
     /// </summary>
     private sealed class SchemaJsonLookupForbiddenRepository(string? wiringKind, AdminRuntimeManifestAuthorizationResult? manifestAuthorization = null)
         : NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none")
     {
         public override Task<string?> LoadWiringKindForLayoutAsync(Guid layoutId, CancellationToken ct = default)
             => Task.FromResult(wiringKind);
+
+        // Round 42: this repository's whole scenario is genuinely tensor-only (not
+        // schema-composed) -- the cheap check may run, but must truthfully report false so the
+        // FULL LoadLayoutSchemaJsonAsync fetch below is never reached.
+        public override Task<bool> LayoutHasSchemaComposedRecordsAsync(Guid layoutId, CancellationToken ct = default)
+            => Task.FromResult(false);
 
         public override Task<AdminRuntimeManifestAuthorizationResult> LoadAdminRuntimeManifestAuthorizationAsync(
             Guid manifestId, CancellationToken ct = default)
@@ -1596,17 +1638,22 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [Fact]
     public async Task ValidateLayoutPatchAsync_TensorOnlyPatch_EveryNodeHasComponentKey_NeverQueriesLayoutSchemaJson()
     {
-        // Proves the gating pre-check (ContainsNodeMissingComponentKey) genuinely skips the DB
-        // round trip — not merely that a correct result happens to occur — for the SAME round-39
-        // tensor-only search-input scenario already proven above, now against a repository whose
+        // Proves the FULL-body gating pre-check genuinely skips LoadLayoutSchemaJsonAsync — not
+        // merely that a correct result happens to occur — for the SAME round-39 tensor-only
+        // search-input scenario already proven above, now against a repository whose
         // LoadLayoutSchemaJsonAsync throws if ever invoked. This is the "Round 39 tensor-only
         // behavior is not weakened by adding schema-composed support" proof at the DB-access-shape
-        // level, not just the outcome level. Round 41 note: this gate is deliberately left
-        // unchanged (see ContainsNodeMissingComponentKey's own round-41 doc comment) even though it
-        // means the new identity-mismatch check cannot fire for a single-node, all-componentKey
-        // patch like this one — widening the gate to also cover this shape was tried and reverted
-        // because it made this exact guarantee (never query when every node has componentKey) false
-        // for the overwhelming majority of ordinary dispatch-authoring saves.
+        // level, not just the outcome level.
+        // Round 42 update: SearchInputNode's own node DOES carry an admin_runtime dispatch field
+        // (dispatchTargetRefByTrigger), so ContainsAdminRuntimeNodeLevelDispatchField now DOES
+        // trigger the new cheap LayoutHasSchemaComposedRecordsAsync boolean check (closing the
+        // single-node schema-composed spoof gap — see
+        // owner_decision_2026_08_14_general_dispatch_participation_contract_round42). What this
+        // test still proves is narrower but just as load-bearing: that cheap check truthfully
+        // reports false for a genuinely tensor-only layout, so the EXPENSIVE full-body
+        // LoadLayoutSchemaJsonAsync fetch is still never reached — the DB-round-trip optimization
+        // this test protects is "never fetch the full schema tree for an ordinary tensor-only
+        // save," not "never touch the DB at all," and round 42 does not weaken it.
         var repo = new SchemaJsonLookupForbiddenRepository("admin_runtime", FullyAuthorizedManifest);
         var result = await repo.ValidateLayoutPatchAsync(
             Guid.NewGuid(), "/admin/ui-builder", SearchInputNode(", \"debounceMs\": 300"), null, null);
@@ -1712,6 +1759,181 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
         Assert.Equal(
             $"LAYOUT_PATCH_SCHEMA_COMPOSED_COMPONENT_KEY_IDENTITY_MISMATCH:{SchemaComposedSearchFieldNodeId}",
             result.Message);
+    }
+
+    // ── Round 42 (Owner clarification,
+    // owner_decision_2026_08_14_general_dispatch_participation_contract_round42): closes the
+    // disclosed round-41 scope limit above -- the identity-mismatch check must be reachable for a
+    // SINGLE-NODE patch too, not only when a companion node in the SAME patch happens to be
+    // missing its own componentKey. Every test below is a literal single-node patch (no
+    // schema_filter_field or any other sibling) -- per the round-42 NG axis, a dummy
+    // componentKey-missing sibling added merely to force the OLD/narrower gate to fire would prove
+    // the old mechanism, not a genuine single-node fix, so none is present here. These tests only
+    // pass because ValidateLayoutPatchAsync's new combined gate
+    // (mayBeSchemaComposed = ContainsNodeMissingComponentKey(...) || (ContainsAdminRuntimeNodeLevelDispatchField(...)
+    // && await LayoutHasSchemaComposedRecordsAsync(...))) loads the schema-tree map even though
+    // this single node already carries its own componentKey and no other node is present. ─────────
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_SchemaComposedNode_SingleNodePatch_RawComponentKeyMismatchesCanonical_FailsClosed()
+    {
+        // The literal single-node spoof proof the round-42 NG axis requires: ONE node in the
+        // patch, no sibling missing componentKey to trip the round-41 gate instead. This node
+        // alone both supplies its own componentKey (so ContainsNodeMissingComponentKey is false)
+        // and authors an admin_runtime dispatch field (so ContainsAdminRuntimeNodeLevelDispatchField
+        // is true), which is exactly the shape that must fall through to the new
+        // LayoutHasSchemaComposedRecordsAsync-gated path rather than silently passing.
+        var repo = new SchemaComposedTestRepository("admin_runtime", SchemaComposedRecordsJson, FullyAuthorizedManifest);
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "{{SchemaComposedSearchFieldNodeId}}", "nodeKind": "catalog_component",
+            "componentKey": "button.primary",
+            "dispatchTargetRefByTrigger": { "change": "{{SearchReadTargetRef}}" },
+            "dispatchPayloadFromByTrigger": { "change": { "search": "node:{{SchemaComposedSearchFieldNodeId}}.value" } } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal(
+            $"LAYOUT_PATCH_SCHEMA_COMPOSED_COMPONENT_KEY_IDENTITY_MISMATCH:{SchemaComposedSearchFieldNodeId}",
+            result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_SchemaComposedNode_SingleNodePatch_RawComponentKeyMatchesCanonical_Passes()
+    {
+        // Complementary single-node positive case: a single node whose own componentKey matches
+        // canonical identity exactly must still pass -- the new gate loads the schema-tree map for
+        // this shape too, but the identity check itself is unaffected (consistent, not banned).
+        var repo = new SchemaComposedTestRepository("admin_runtime", SchemaComposedRecordsJson, FullyAuthorizedManifest);
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "{{SchemaComposedSearchFieldNodeId}}", "nodeKind": "catalog_component",
+            "componentKey": "search_input.alias",
+            "dispatchTargetRefByTrigger": { "change": "{{SearchReadTargetRef}}" },
+            "dispatchPayloadFromByTrigger": { "change": { "search": "node:{{SchemaComposedSearchFieldNodeId}}.value" } },
+            "debounceMs": 300 }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_SchemaComposedNode_SingleNodePatch_NoComponentKeyAtAll_StillCatchesNothingToSpoofButLoadsSchemaTree()
+    {
+        // A single node with an admin_runtime dispatch field but NO componentKey at all (the
+        // ordinary round-40 shape, not a spoof attempt) still passes -- ContainsNodeMissingComponentKey
+        // alone already covered this shape before round 42; this test pins that the new
+        // dispatch-field-triggered path does not regress the missing-componentKey-is-fine-when-a-
+        // real-schema-leaf-exists case down to a single node with no sibling.
+        var repo = new SchemaComposedTestRepository("admin_runtime", SchemaComposedRecordsJson, FullyAuthorizedManifest);
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "{{SchemaComposedSearchFieldNodeId}}", "nodeKind": "catalog_component",
+            "dispatchTargetRefByTrigger": { "change": "{{SearchReadTargetRef}}" },
+            "dispatchPayloadFromByTrigger": { "change": { "search": "node:{{SchemaComposedSearchFieldNodeId}}.value" } },
+            "debounceMs": 300 }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_TensorOnlyNode_SingleNodePatch_WithDispatchField_NotInSchemaTree_RawComponentKeyStillNeverCheckedAgainstCanonical()
+    {
+        // Genuinely tensor-only single node (absent from the schema tree, unlike
+        // SchemaComposedSearchFieldNodeId) that ALSO authors an admin_runtime dispatch field --
+        // the new gate's cheap LayoutHasSchemaComposedRecordsAsync check reports TRUE for this
+        // repository (its layout genuinely has schema-composed records elsewhere), so the schema
+        // tree map IS loaded, but this specific nodeId is not a member of it -- preserving the
+        // legitimate tensor-only raw-componentKey authority the round-42 SSOT explicitly requires
+        // not to regress, even under the new gate.
+        var repo = new SchemaComposedTestRepository("admin_runtime", SchemaComposedRecordsJson, FullyAuthorizedManifest);
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "{{SchemaComposedUnknownNodeId}}", "nodeKind": "catalog_component",
+            "componentKey": "button.primary",
+            "dispatchTargetRefByTrigger": { "change": "{{SearchReadTargetRef}}" },
+            "dispatchPayloadFromByTrigger": { "change": { "search": "node:{{SchemaComposedUnknownNodeId}}.value" } } }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_TensorOnlyLayout_SingleNodePatch_WithDispatchField_LayoutHasNoSchemaComposedRecords_NeverLoadsFullSchemaJson()
+    {
+        // The DB-round-trip optimization this round preserves, pinned at the access-shape level:
+        // for a layout that is genuinely and entirely tensor-only (LayoutHasSchemaComposedRecordsAsync
+        // truthfully reports false), a single node with its own componentKey AND an admin_runtime
+        // dispatch field still triggers the cheap boolean check (unlike the pre-round-42 gate,
+        // which would have skipped even that) but must NEVER reach the expensive full-body
+        // LoadLayoutSchemaJsonAsync fetch -- SchemaJsonLookupForbiddenRepository throws if that
+        // happens.
+        var repo = new SchemaJsonLookupForbiddenRepository("admin_runtime", FullyAuthorizedManifest);
+        var result = await repo.ValidateLayoutPatchAsync(
+            Guid.NewGuid(), "/admin/ui-builder", SearchInputNode(", \"debounceMs\": 300"), null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_TensorOnlyPatch_EveryNodeHasComponentKey_NoDispatchField_NeverCallsLayoutHasSchemaComposedRecords()
+    {
+        // Complementary access-shape pin: a node with its own componentKey and NO admin_runtime
+        // dispatch field at all (neither dispatchTargetRefByTrigger nor
+        // dispatchPayloadFromByTrigger) must not trigger even the CHEAP
+        // LayoutHasSchemaComposedRecordsAsync check -- ContainsAdminRuntimeNodeLevelDispatchField
+        // itself must be false for this shape, keeping the ordinary "no dispatch authoring at all"
+        // save path exactly as cheap as it always was. A repository whose
+        // LayoutHasSchemaComposedRecordsAsync throws proves this directly.
+        var repo = new SchemaComposedRecordsCheckForbiddenRepository("admin_runtime", FullyAuthorizedManifest);
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "plain-node-no-dispatch", "componentKey": "box.primitive" }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
+    private sealed class SchemaComposedRecordsCheckForbiddenRepository(
+        string? wiringKind, AdminRuntimeManifestAuthorizationResult? manifestAuthorization = null)
+        : NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none")
+    {
+        public override Task<string?> LoadWiringKindForLayoutAsync(Guid layoutId, CancellationToken ct = default)
+            => Task.FromResult(wiringKind);
+
+        public override Task<AdminRuntimeManifestAuthorizationResult> LoadAdminRuntimeManifestAuthorizationAsync(
+            Guid manifestId, CancellationToken ct = default)
+            => Task.FromResult(manifestAuthorization ??
+                new AdminRuntimeManifestAuthorizationResult(Exists: true, IsActive: true, IsAdminRuntimeDestination: true));
+
+        public override Task<bool> LayoutHasSchemaComposedRecordsAsync(Guid layoutId, CancellationToken ct = default)
+            => throw new InvalidOperationException(
+                "LayoutHasSchemaComposedRecordsAsync must not be called when no node in the patch has componentKey missing AND no node carries an admin_runtime dispatch field.");
+
+        public override Task<string?> LoadLayoutSchemaJsonAsync(Guid layoutId, CancellationToken ct = default)
+            => throw new InvalidOperationException("LoadLayoutSchemaJsonAsync must not be called for this scenario.");
     }
 
     [Fact]
