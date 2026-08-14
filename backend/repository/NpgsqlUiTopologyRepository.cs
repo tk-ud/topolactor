@@ -1830,6 +1830,33 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         return false;
     }
 
+    /// <summary>
+    /// Round 43: true when at least one node in the patch carries its own non-empty componentKey.
+    /// Used alongside ContainsNodeMissingComponentKey to gate the schema-composed identity map
+    /// load: a node's componentKey can only ever be a canonical-identity SPOOF when it is actually
+    /// PRESENT (a raw claim to verify) -- a patch with no nodes at all, or whose only nodes are
+    /// already caught by ContainsNodeMissingComponentKey, has nothing new for this predicate to
+    /// add. This is NOT a business-dispatch signal (unlike the round-42
+    /// ContainsAdminRuntimeNodeLevelDispatchField conjunct this round removes from the identity
+    /// gate) -- componentKey is the exact field the identity-mismatch check itself compares
+    /// against canonical, so gating on its presence is proportional to the actual condition being
+    /// verified, not a proxy for "does this node happen to also dispatch."
+    /// </summary>
+    private static bool ContainsNodeWithComponentKeyPresent(string tensorPatchJson)
+    {
+        using var doc = JsonDocument.Parse(tensorPatchJson);
+        if (!doc.RootElement.TryGetProperty("nodes", out var nodes) || nodes.ValueKind != JsonValueKind.Array)
+            return false;
+        foreach (var node in nodes.EnumerateArray())
+        {
+            if (node.ValueKind != JsonValueKind.Object) continue;
+            if (node.TryGetProperty("componentKey", out var keyEl) &&
+                keyEl.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(keyEl.GetString()))
+                return true;
+        }
+        return false;
+    }
+
     public virtual async Task<string?> LoadLayoutSchemaJsonAsync(Guid layoutId, CancellationToken ct)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
@@ -1894,23 +1921,42 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             // single-node patch supplying its OWN forged componentKey for a nodeId that IS a real
             // schema-tree catalog leaf never triggered this load at all (no OTHER node in the same
             // patch was missing componentKey), so the identity-mismatch check inside
-            // ValidateLayoutPatchNodes below could never fire for it. Closed by ALSO loading the
-            // map whenever the patch authors an admin_runtime node-level dispatch field
-            // (ContainsAdminRuntimeNodeLevelDispatchField) AND this layoutId is actually
-            // schema-composed (LayoutHasSchemaComposedRecordsAsync — a cheap dedicated boolean
-            // check, never the full schema fetch, so an ordinary tensor-only dispatch-authoring
-            // save pays only one extra scalar round trip, not the full LoadLayoutSchemaJsonAsync
-            // cost). This directly targets the vulnerable case (a node with dispatch fields, since
-            // that's the only place resolved identity ever matters — the Field validators below and
-            // this same structural check) without reviving the earlier, reverted "any admin_runtime
-            // dispatch field always loads the full schema" draft that broke the established
-            // "tensor-only patch never queries layout_schema_json at all" guarantee for the
-            // overwhelming majority of ordinary, non-schema-composed dispatch-authoring saves —
-            // those still resolve LayoutHasSchemaComposedRecordsAsync to false and stop there.
+            // ValidateLayoutPatchNodes below could never fire for it. Round 42 closed this only for
+            // nodes that ALSO authored an admin_runtime dispatch field
+            // (ContainsAdminRuntimeNodeLevelDispatchField) — a genuine improvement, but still an
+            // authority gap for a spoofed componentKey on a node with NO dispatch field at all,
+            // since canonical schema-tree identity is a structural property of the node itself, not
+            // conditional on whether that node happens to also dispatch a business operation.
+            //
+            // Round 43 (owner clarification, same SSOT key, "schema-composed node identity" text):
+            // canonical schema/catalog identity is authoritative for ANY schema-tree catalog leaf
+            // nodeId regardless of whether its raw override carries a dispatch field or
+            // participates in any Event — dispatch-field presence was never the right signal for
+            // whether identity resolution is needed, only for whether *business dispatch* needs the
+            // resolved identity (that conflation was the precise category error
+            // ContainsAdminRuntimeNodeLevelDispatchField introduced into this gate; it is removed
+            // here entirely and remains used, unchanged, only at its OTHER call site below gating
+            // the wiringKind="admin_runtime" authorization check, a genuinely different question).
+            // The gate is now: ContainsNodeMissingComponentKey (unchanged, still catches the
+            // ordinary schema-composed override-delta shape without any DB round trip) OR
+            // (ContainsNodeWithComponentKeyPresent AND this layoutId is actually schema-composed —
+            // LayoutHasSchemaComposedRecordsAsync, the SAME cheap dedicated boolean check round 42
+            // introduced, never the full schema fetch). ContainsNodeWithComponentKeyPresent (NOT a
+            // business-dispatch signal — it is the exact field the identity-mismatch check itself
+            // compares against canonical) keeps a patch with NO nodes at all, or whose only nodes
+            // already fall under ContainsNodeMissingComponentKey, from paying the cheap check for
+            // nothing to verify; every patch that DOES carry a componentKey-bearing node now pays
+            // it regardless of dispatch-field presence, closing the round-42 gap for a spoofed
+            // componentKey on a node with no dispatch field at all. A genuinely tensor-only layout
+            // (the overwhelming majority of ordinary saves) still resolves
+            // LayoutHasSchemaComposedRecordsAsync to false and never reaches the expensive
+            // LoadLayoutSchemaJsonAsync fetch below — that guarantee is preserved; only the
+            // narrower round-42 guarantee "never even run the cheap check without a dispatch field"
+            // is retired, because that guarantee is exactly what left the spoof open.
             var schemaComposedComponentKeysByNodeId = new Dictionary<string, string>(StringComparer.Ordinal);
-            var mayBeSchemaComposed = ContainsNodeMissingComponentKey(normalized.TensorPatchJson);
-            if (!mayBeSchemaComposed && ContainsAdminRuntimeNodeLevelDispatchField(normalized.TensorPatchJson))
-                mayBeSchemaComposed = await LayoutHasSchemaComposedRecordsAsync(layoutId, ct);
+            var mayBeSchemaComposed = ContainsNodeMissingComponentKey(normalized.TensorPatchJson) ||
+                (ContainsNodeWithComponentKeyPresent(normalized.TensorPatchJson) &&
+                    await LayoutHasSchemaComposedRecordsAsync(layoutId, ct));
             if (mayBeSchemaComposed)
             {
                 var layoutSchemaJson = await LoadLayoutSchemaJsonAsync(layoutId, ct);

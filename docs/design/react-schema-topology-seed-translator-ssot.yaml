@@ -1532,22 +1532,25 @@ react_schema_topology_seed_translator_ssot:
           safe-by-construction for both call sites with no change to ResolveEffectiveComponentKey
           itself. Tensor-only nodes (no schema-tree catalog leaf for that nodeId at all) are
           unaffected -- their pre-round-40 raw-componentKey authority is unchanged. Disclosed
-          scope limit (round 41, CLOSED in round 42 -- see
+          scope limit (round 41, CLOSED in round 43 -- see
           admin-uibuilder-ui-structure-wiring-ssot.yaml
-          owner_decision_2026_08_14_general_dispatch_participation_contract_round42; text
-          kept below as historical record only): the schema-tree map is only ever loaded when ContainsNodeMissingComponentKey
-          finds some OTHER node in the same patch genuinely missing componentKey (that gate was
-          deliberately left unwidened -- widening it to also fire on any admin_runtime dispatch
-          field was tried and reverted, since it made the DB round trip unconditional for the
-          overwhelming majority of ordinary, non-schema-composed dispatch-authoring saves, which
-          is exactly the "unnecessary DB dependency" the gate exists to avoid). This protects the
-          realistic authored shape of a schema-composed override-delta save (whose own nodes
-          normally omit componentKey entirely) but not a maximally-adversarial single-node patch
-          supplying only one forged componentKey with no other node present -- a disclosed,
-          deliberate boundary, not a silent gap (round 42 closes this gap generically; see the
-          round-42 SSOT entry for the accepted implementation-freedom constraint: the DB
-          round-trip optimization may be kept, but not at the cost of leaving the authority
-          bypass open). Also in round
+          owner_decision_2026_08_15_schema_composed_identity_independent_of_dispatch_field_round43;
+          text kept below as historical record only. CORRECTION: this paragraph previously
+          claimed "CLOSED in round 42" -- round 42 only closed this for a single-node patch that
+          ALSO authored an admin_runtime dispatch field, not the no-dispatch-field case described
+          below, which round 43 actually closes): the schema-tree map was, prior to round 43,
+          only ever loaded when ContainsNodeMissingComponentKey
+          found some OTHER node in the same patch genuinely missing componentKey, OR (round 42
+          only) the patch additionally authored an admin_runtime dispatch field on a
+          schema-composed layout. This protected the realistic authored shape of a
+          schema-composed override-delta save (whose own nodes normally omit componentKey
+          entirely) and, after round 42, the dispatch-field-bearing spoof case, but not a
+          maximally-adversarial single-node patch supplying only one forged componentKey with NO
+          dispatch field and no other node present -- round 43 closes this last case generically
+          by dropping the dispatch-field conjunct from the gate entirely (see the round-43 SSOT
+          entry: the DB round-trip optimization for genuinely tensor-only layouts is preserved,
+          but not at the cost of leaving the authority bypass open for schema-composed layouts
+          regardless of dispatch-field presence). Also in round
           41: NpgsqlUiTopologyRepository.FieldFamilyComponentKeys, previously an independently
           hand-kept HashSet mirroring LayoutSchemaTensorComposer's own Field
           control-to-componentKey mapping, is now derived directly from

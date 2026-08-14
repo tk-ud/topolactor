@@ -612,21 +612,26 @@ admin_uibuilder_ui_structure_wiring_ssot:
           would otherwise leave open for evading Field read-action/debounce policy.
           Tensor-only nodes (no schema-tree catalog leaf for that nodeId) keep their
           pre-round-40 raw-componentKey authority unchanged. Disclosed scope limit
-          (round 41, CLOSED in round 42 -- see owner_decision_2026_08_14_general_dispatch_participation_contract_round42
-          above; text below is kept as historical record of the gap that existed between
-          round 40 and round 42, not current authority): the
-          schema-tree map this check consults is only ever loaded when the SAME patch also
-          contains at least one other node genuinely missing componentKey (the round-40
-          DB-round-trip gate, ContainsNodeMissingComponentKey, is deliberately left
-          unwidened -- see its own doc comment in NpgsqlUiTopologyRepository.cs; widening it
-          to fire on any admin_runtime dispatch field was tried and reverted because it made
-          the DB round trip unconditional for the overwhelming majority of ordinary,
-          non-schema-composed dispatch-authoring saves). This covers the realistic authored
-          shape of a schema-composed override-delta save (such a save's own nodes normally
-          omit componentKey entirely -- see storage_adoption_contract) but does not catch a
-          maximally-adversarial single-node patch supplying only one forged componentKey
-          with no other node present; recorded here as a known, deliberate boundary rather
-          than a silent gap. Field-family classification:
+          (round 41, CLOSED in round 43 -- see
+          owner_decision_2026_08_15_schema_composed_identity_independent_of_dispatch_field_round43
+          above; text below is kept as historical record of the gap that existed between round
+          40 and round 43, not current authority. CORRECTION: this same paragraph previously
+          claimed "CLOSED in round 42" -- that was inaccurate; round 42 only closed this gap for
+          a single-node patch that ALSO authored an admin_runtime dispatch field, not for the
+          maximally-adversarial single-node-with-no-dispatch-field case described immediately
+          below, which round 43 actually closes): the
+          schema-tree map this check consults was, prior to round 43, only ever loaded when the
+          SAME patch also contained at least one other node genuinely missing componentKey (the
+          round-40 DB-round-trip gate, ContainsNodeMissingComponentKey) OR (round 42 only) the
+          patch additionally authored an admin_runtime dispatch field on a schema-composed
+          layout. This covered the realistic authored shape of a schema-composed override-delta
+          save (such a save's own nodes normally omit componentKey entirely -- see
+          storage_adoption_contract) and, after round 42, the dispatch-field-bearing spoof case,
+          but did not catch a maximally-adversarial single-node patch supplying only one forged
+          componentKey with NO dispatch field and no other node present -- round 43 closes this
+          last remaining case by dropping the dispatch-field conjunct entirely (see
+          owner_decision_2026_08_15_schema_composed_identity_independent_of_dispatch_field_round43
+          for the current mechanism). Field-family classification:
           NpgsqlUiTopologyRepository.FieldFamilyComponentKeys is derived directly from
           LayoutSchemaTensorComposer.FieldControlToComponentKey.Values (visibility widened
           to internal) rather than maintained as an independent literal HashSet -- the two
@@ -641,6 +646,89 @@ admin_uibuilder_ui_structure_wiring_ssot:
           schema-composed componentKey spoof/mismatch/Field-policy-bypass attempts fail
           closed. See .agent/tasks/todo.md admin-enum subBundle round 41 record for the
           concrete implementation/test inventory.
+        owner_decision_2026_08_15_schema_composed_identity_independent_of_dispatch_field_round43: >-
+          CORRECTS owner_decision_2026_08_14_general_dispatch_participation_contract_round42's
+          own "Schema-composed single-node spoof closure (round 42)" paragraph above: that
+          paragraph declared "canonical schema/catalog identity must be authoritative against
+          ANY raw componentKey spoof for a schema-tree leaf nodeId, including a single-node
+          patch with no other node present" -- but round 42's own implementation
+          (NpgsqlUiTopologyRepository.ValidateLayoutPatchAsync) only actually closed this for a
+          single-node patch that ALSO authored an admin_runtime dispatch field
+          (dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger) -- gated by
+          ContainsAdminRuntimeNodeLevelDispatchField(...) as a prerequisite before even
+          consulting LayoutHasSchemaComposedRecordsAsync. A single-node patch supplying a
+          forged componentKey for a real schema-tree catalog leaf nodeId, authoring NEITHER
+          dispatch field at all, still bypassed the canonical identity check entirely --
+          ContainsNodeMissingComponentKey is false (a componentKey IS present, just wrong) and
+          ContainsAdminRuntimeNodeLevelDispatchField is also false, so mayBeSchemaComposed never
+          became true and the schema-tree map was never loaded. Round 42's own report and this
+          SSOT's own round-42 text both overstated the closure's actual scope; this is a
+          correction, not a new decision reached independently.
+          Owner clarification (admin-enum subBundle closure, round 43): canonical schema-tree
+          catalog leaf identity is a STRUCTURAL property of the node itself (which real DB row /
+          catalog component that nodeId composes to), never a property of what that node's
+          Events do. Whether a raw override authors a dispatch field, which trigger it
+          participates on, or whether it participates in dispatch AT ALL, is completely
+          irrelevant to whether its OWN componentKey must match canonical identity -- conflating
+          "does this node need identity resolved for dispatch purposes" with "is this node's
+          claimed identity even legitimate" was the precise category error
+          ContainsAdminRuntimeNodeLevelDispatchField introduced into the gate. The general
+          contract: for ANY nodeId that is a real schema-tree catalog leaf in the owning
+          layoutId's layout_schema_json.records[], a raw tensor override's own componentKey for
+          that nodeId (when present) must match canonical exactly, or the WHOLE patch fails
+          closed with the SAME LAYOUT_PATCH_SCHEMA_COMPOSED_COMPONENT_KEY_IDENTITY_MISMATCH
+          diagnostic contract -- unconditionally, independent of componentKey presence, dispatch
+          field presence, or Event participation. A componentKey-consistent or
+          componentKey-absent override for a real schema-tree leaf remains legitimate exactly as
+          before (this is not a new restriction on authoring, only closing a spoof path).
+          Mechanism (round 43): ValidateLayoutPatchAsync's own gate is now
+          `mayBeSchemaComposed = ContainsNodeMissingComponentKey(json) ||
+          (ContainsNodeWithComponentKeyPresent(json) && await
+          LayoutHasSchemaComposedRecordsAsync(layoutId, ct))` -- the
+          ContainsAdminRuntimeNodeLevelDispatchField conjunct that round 42 added is removed
+          entirely from this gate (it remains used, unchanged, at its OTHER call site gating the
+          wiringKind="admin_runtime" authorization check, which is a genuinely different
+          question) and replaced with a new ContainsNodeWithComponentKeyPresent predicate --
+          NOT a business-dispatch signal like the removed conjunct, but the exact field the
+          identity-mismatch check itself compares against canonical, so gating on its presence is
+          proportional to the actual condition being verified rather than a proxy for "does this
+          node happen to also dispatch." A patch with no nodes at all, or whose only nodes already
+          fall under ContainsNodeMissingComponentKey, is spared the cheap check entirely (nothing
+          for it to add); every patch that DOES carry a componentKey-bearing node now pays the
+          SAME cheap LayoutHasSchemaComposedRecordsAsync scalar check round 42 already
+          introduced, regardless of whether that node (or any other node in the patch) authors a
+          dispatch field -- this is the accepted cost of closing the gap. The pre-existing, more
+          valuable guarantee -- an ordinary tensor-only layout (LayoutHasSchemaComposedRecordsAsync
+          resolves false) never reaches the expensive full-body LoadLayoutSchemaJsonAsync fetch
+          -- is unchanged and still holds for the overwhelming majority of ordinary saves. The
+          narrower round-42 guarantee "the cheap check itself never runs without a dispatch
+          field" is deliberately retired, because that guarantee is exactly what left the spoof
+          open; a test asserting it must be updated to assert the correct, narrower-but-genuine
+          guarantee (full fetch still gated) instead of deleted or left contradicting the new
+          gate.
+          Negative proof requirement: a literal single-node patch -- one node only, a real
+          schema-tree leaf nodeId, a forged (non-canonical) componentKey, and NEITHER
+          dispatchTargetRefByTrigger NOR dispatchPayloadFromByTrigger authored anywhere in the
+          patch -- must fail the whole patch closed with
+          LAYOUT_PATCH_SCHEMA_COMPOSED_COMPONENT_KEY_IDENTITY_MISMATCH. As with round 42's own
+          NG axis, a test proving this must not add a synthetic componentKey-missing or
+          dispatch-field-carrying sibling node merely to force the gate to fire -- that would
+          prove a narrower mechanism, not this round's actual closure. The matching positive
+          case (a single node, canonical-matching or absent componentKey, no dispatch field)
+          must still pass, proving this is not a new authoring restriction.
+          Preserved unchanged by this round: Field-family classification
+          (FieldFamilyComponentKeys / LayoutSchemaTensorComposer.FieldControlToComponentKey),
+          common-request-context auto-attach, base-spec-plus-payloadFrom-only preservation, the
+          general admin_runtime dispatch-participation contract from round 42
+          (owner_decision_2026_08_14_general_dispatch_participation_contract_round42),
+          runtimeDispatchCircuitKey's targetRef-priority behavior, tensor-only nodes' raw
+          componentKey authority (a nodeId genuinely absent from the schema tree is untouched by
+          this gate change -- LayoutHasSchemaComposedRecordsAsync answers "does THIS LAYOUT have
+          schema-composed records at all", the per-node schema-tree-membership lookup inside
+          ValidateLayoutPatchNodes still separately determines whether THIS specific nodeId is a
+          leaf), and malformed layout_schema_json.records[] fail-close
+          (LAYOUT_SCHEMA_RECORDS_INVALID). See .agent/tasks/todo.md admin-enum subBundle round
+          43 record for the concrete implementation/test inventory.
     admin_runtime_payload_binding_contract:
       payload_source_grammar_authority: >-
         Round 22 correction: this contract governs WHERE dispatchPayloadFromByTrigger is
