@@ -72,7 +72,14 @@ internal static class HubRelationUiProjectionResolutionChainProof
             // external_api_credential:* case in AdminRuntime.ExecuteDataAsync fails closed with
             // EXTERNAL_API_CREDENTIAL_NOT_AVAILABLE regardless of manifest/wiring resolution.
             externalApiCredentialAdminRepository: new NpgsqlExternalApiCredentialAdminRepository(
-                connectionString, new AesExternalCredentialCrypto()));
+                connectionString, new AesExternalCredentialCrypto()),
+            // external_instance_credential:search/get/create/update/delete (credential-management
+            // instance-port-backed category, round 5) needs this wired, or every
+            // external_instance_credential:* case in AdminRuntime.ExecuteDataAsync fails closed
+            // with EXTERNAL_INSTANCE_CREDENTIAL_NOT_AVAILABLE regardless of manifest/wiring
+            // resolution -- same rationale as externalApiCredentialAdminRepository above.
+            externalInstanceCredentialAdminRepository: new NpgsqlExternalInstanceCredentialAdminRepository(
+                connectionString));
         var adminAdapter = new AdminRuntimeDispatchAdapter(adminRuntime, new OperationVectorResolver());
 
         var targetOverride = new TargetDispatchOverride(NullLogger<TargetDispatchOverride>.Instance, adminRuntime);

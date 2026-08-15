@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using Topolactor.Repository;
 using Topolactor.Scheduler;
 using Topolactor.Schema;
+using Topolactor.Service;
 
 namespace Topolactor.Runtime;
 
@@ -38,6 +39,13 @@ public partial class AdminRuntime
     private readonly AggregateTriggerRepository? _aggregateTriggerRepository;
     private readonly IAbstractFunctionManifestRepository? _abstractFunctionManifestRepository;
     private readonly IExternalApiCredentialAdminRepository? _externalApiCredentialAdminRepository;
+    private readonly IExternalInstanceCredentialAdminRepository? _externalInstanceCredentialAdminRepository;
+    // credentials.users revoke_credential/revoke_sessions (admin-normal-surface-projection-seed-
+    // ssot.yaml surface_axes.admin.surfaces.credentials.categories.users.transaction_contract) --
+    // the SAME AuthService the existing POST /admin/auth/users/{userId}/credential|sessions/revoke
+    // REST routes already call (backend/Program.cs); this is an additional admin_runtime entry
+    // point onto that one canonical authority, never a second implementation of the revoke logic.
+    private readonly AuthService? _authService;
 
     private static readonly HashSet<string> KnownRuntimeDestinations = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -76,7 +84,9 @@ public partial class AdminRuntime
         IBackendErrorEvidenceAppender? errorAppender = null,
         AggregateTriggerRepository? aggregateTriggerRepository = null,
         IAbstractFunctionManifestRepository? abstractFunctionManifestRepository = null,
-        IExternalApiCredentialAdminRepository? externalApiCredentialAdminRepository = null)
+        IExternalApiCredentialAdminRepository? externalApiCredentialAdminRepository = null,
+        IExternalInstanceCredentialAdminRepository? externalInstanceCredentialAdminRepository = null,
+        AuthService? authService = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _contextRouteRepository = contextRouteRepository ?? throw new ArgumentNullException(nameof(contextRouteRepository));
@@ -102,6 +112,8 @@ public partial class AdminRuntime
         _aggregateTriggerRepository = aggregateTriggerRepository;
         _abstractFunctionManifestRepository = abstractFunctionManifestRepository;
         _externalApiCredentialAdminRepository = externalApiCredentialAdminRepository;
+        _externalInstanceCredentialAdminRepository = externalInstanceCredentialAdminRepository;
+        _authService = authService;
     }
 
     // ---------------------------------------------------------------------------
@@ -314,13 +326,19 @@ public partial class AdminRuntime
             "auth_users:create"                           => await DataAuthUsersCreateAsync(vector, ct),
             "auth_users:update"                           => await DataAuthUsersUpdateAsync(vector, ct),
             "auth_users:delete"                           => await DataAuthUsersDeleteAsync(vector, ct),
+            "auth_users:revoke_credential"                => await DataAuthUsersRevokeCredentialAsync(vector, ct),
+            "auth_users:revoke_sessions"                  => await DataAuthUsersRevokeSessionsAsync(vector, ct),
             "credential_management:configure_scheduler_job_credential_or_port_binding"
                 => await DataConfigureSchedulerJobCredentialOrPortBindingAsync(vector, ct),
-            "external_api_credential:search"              => await DataExternalApiCredentialSearchAsync(vector, ct),
+            "credential_management:search"                 => await DataCredentialManagementSearchAsync(vector, ct),
             "external_api_credential:get"                 => await DataExternalApiCredentialGetAsync(vector, ct),
             "external_api_credential:create"               => await DataExternalApiCredentialCreateAsync(vector, ct),
             "external_api_credential:update"               => await DataExternalApiCredentialUpdateAsync(vector, ct),
             "external_api_credential:delete"               => await DataExternalApiCredentialDeleteAsync(vector, ct),
+            "external_instance_credential:get"             => await DataExternalInstanceCredentialGetAsync(vector, ct),
+            "external_instance_credential:create"          => await DataExternalInstanceCredentialCreateAsync(vector, ct),
+            "external_instance_credential:update"          => await DataExternalInstanceCredentialUpdateAsync(vector, ct),
+            "external_instance_credential:delete"          => await DataExternalInstanceCredentialDeleteAsync(vector, ct),
             "promotion_manifest:list"                   => await DataPromotionManifestListAsync(vector, ct),
             "promotion_manifest:get"                    => await DataPromotionManifestGetAsync(vector, ct),
             "promotion_manifest:validate"               => await DataPromotionManifestValidateAsync(vector, ct),

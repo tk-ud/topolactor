@@ -14,13 +14,15 @@ namespace Topolactor.Integration.Tests;
 /// Proves, against real Postgres, through the REAL ManifestDispatcher -- i.e. production
 /// reachability, not merely a backend-callable method:
 ///   - create/update/delete are dispatchable via dispatch-only manifests cd008/cd009/cd010 ->
-///     admin_runtime (mirroring the cd006 pattern); search is dispatchable via manifest 092's OWN
-///     dispatcher_mapping entry (round 4 -- reusing the existing generic same-manifest response-
-///     adoption authority ProjectionShell.tsx already uses for admin-enum's enum_table, rather
-///     than a separate dispatch-only manifest whose cross-manifest response would never be
-///     adopted into the rendered screen). All four are reached via [role=admin, target=admin,
-///     layer=external_api_credential, action=...] axes, the same resolution path manifest 092's
-///     own UI triggers this file's seed wiring drives.
+///     admin_runtime (mirroring the cd006 pattern) via [role=admin, target=admin,
+///     layer=external_api_credential, action=...] axes; search is dispatchable via manifest 092's
+///     OWN dispatcher_mapping entry (round 4, widened round 5 into the unified, category-routed
+///     [layer=credential_management, action=search, payload.category=external_api_credential]
+///     action -- reusing the existing generic same-manifest response-adoption authority
+///     ProjectionShell.tsx already uses for admin-enum's enum_table, rather than a separate
+///     dispatch-only manifest whose cross-manifest response would never be adopted into the
+///     rendered screen). All four are reached through manifest 092's own UI triggers this file's
+///     seed wiring drives.
 ///   - mutation_confirmation_contract: dryRun preview never writes -> unconfirmed write fails
 ///     closed -> confirmed write persists, for both create and update.
 ///   - secret material (plaintextSecret/newPlaintextSecret/encryptionKeyReference) is NEVER
@@ -228,9 +230,12 @@ public class ExternalApiCredentialLiveDbTests
 
             // Unknown recordKind on search fails closed.
             var badKindSearch = await dispatcher.DispatchAsync(new EndpointRequestDto(
-                "ExternalApiCredentialScenario", "admin", "external_api_credential", "search",
+                "ExternalApiCredentialScenario", "admin", "credential_management", "search",
                 IdOrHubId: null,
-                Payload: System.Text.Json.JsonSerializer.SerializeToElement(new { recordKind = "not_a_real_kind" }),
+                Payload: System.Text.Json.JsonSerializer.SerializeToElement(new
+                {
+                    category = "external_api_credential", recordKind = "not_a_real_kind",
+                }),
                 Context: null, TriggerKind: "client", Role: "admin"));
             Assert.False(badKindSearch.Success);
             Assert.Contains(badKindSearch.Errors, e => e.Code == "EXTERNAL_API_CREDENTIAL_RECORD_KIND_INVALID");
@@ -239,9 +244,12 @@ public class ExternalApiCredentialLiveDbTests
             // row itself has no secret set (search response shape must exclude the forbidden
             // fields structurally, not merely because they happen to be empty here).
             var searchResponse = await dispatcher.DispatchAsync(new EndpointRequestDto(
-                "ExternalApiCredentialScenario", "admin", "external_api_credential", "search",
+                "ExternalApiCredentialScenario", "admin", "credential_management", "search",
                 IdOrHubId: null,
-                Payload: System.Text.Json.JsonSerializer.SerializeToElement(new { requiredByBundle = $"live-db-eac-update-{suffix}" }),
+                Payload: System.Text.Json.JsonSerializer.SerializeToElement(new
+                {
+                    category = "external_api_credential", requiredByBundle = $"live-db-eac-update-{suffix}",
+                }),
                 Context: null, TriggerKind: "client", Role: "admin"));
             Assert.True(searchResponse.Success, string.Join(";", searchResponse.Errors.Select(e => e.Code + ":" + e.Message)));
             var searchJson = searchResponse.Emission!.Data.ToString();
@@ -465,9 +473,12 @@ public class ExternalApiCredentialLiveDbTests
             var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
 
             var beforeResponse = await dispatcher.DispatchAsync(new EndpointRequestDto(
-                "ExternalApiCredentialScenario", "admin", "external_api_credential", "search",
+                "ExternalApiCredentialScenario", "admin", "credential_management", "search",
                 IdOrHubId: null,
-                Payload: System.Text.Json.JsonSerializer.SerializeToElement(new { requiredByBundle = bundle, expiresBefore = boundary }),
+                Payload: System.Text.Json.JsonSerializer.SerializeToElement(new
+                {
+                    category = "external_api_credential", requiredByBundle = bundle, expiresBefore = boundary,
+                }),
                 Context: null, TriggerKind: "client", Role: "admin"));
             Assert.True(beforeResponse.Success, string.Join(";", beforeResponse.Errors.Select(e => e.Code + ":" + e.Message)));
             var beforeJson = beforeResponse.Emission!.Data.ToString();
@@ -477,9 +488,12 @@ public class ExternalApiCredentialLiveDbTests
             Assert.DoesNotContain("no-expiry-record", beforeJson);
 
             var afterResponse = await dispatcher.DispatchAsync(new EndpointRequestDto(
-                "ExternalApiCredentialScenario", "admin", "external_api_credential", "search",
+                "ExternalApiCredentialScenario", "admin", "credential_management", "search",
                 IdOrHubId: null,
-                Payload: System.Text.Json.JsonSerializer.SerializeToElement(new { requiredByBundle = bundle, expiresAfter = boundary }),
+                Payload: System.Text.Json.JsonSerializer.SerializeToElement(new
+                {
+                    category = "external_api_credential", requiredByBundle = bundle, expiresAfter = boundary,
+                }),
                 Context: null, TriggerKind: "client", Role: "admin"));
             Assert.True(afterResponse.Success, string.Join(";", afterResponse.Errors.Select(e => e.Code + ":" + e.Message)));
             var afterJson = afterResponse.Emission!.Data.ToString();
@@ -571,9 +585,9 @@ public class ExternalApiCredentialLiveDbTests
         // credential_result_list's propBindings.rows.source="emission.data.records" pick up the
         // fresh search results, mirroring admin-enum's enum_table/list_groups pair exactly.
         var response = await dispatcher.DispatchAsync(new EndpointRequestDto(
-            "ExternalApiCredentialScenario", "admin", "external_api_credential", "search",
+            "ExternalApiCredentialScenario", "admin", "credential_management", "search",
             IdOrHubId: null,
-            Payload: System.Text.Json.JsonSerializer.SerializeToElement(new { }),
+            Payload: System.Text.Json.JsonSerializer.SerializeToElement(new { category = "external_api_credential" }),
             Context: null, TriggerKind: "client", Role: "admin"));
 
         Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
@@ -581,7 +595,7 @@ public class ExternalApiCredentialLiveDbTests
         Assert.Equal("00000000-0000-0000-0000-000000000092", response.Emission!.ManifestId);
         Assert.NotNull(response.Emission.LayoutNodes);
         Assert.NotEmpty(response.Emission.LayoutNodes!);
-        Assert.Contains(response.Emission.LayoutNodes!, n => n.NodeId == "external_api_credential_result_list");
+        Assert.Contains(response.Emission.LayoutNodes!, n => n.NodeId == "credential_result_list");
         Assert.True(response.Emission.Data.HasValue);
         Assert.True(response.Emission.Data!.Value.TryGetProperty("records", out _));
     }

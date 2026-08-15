@@ -41,102 +41,13 @@ public class AdminRuntimeExternalApiCredentialTests
     private static OperationVector Vector(string action, object payload) =>
         new("admin", "external_api_credential", action, null, "admin", JsonSerializer.SerializeToElement(payload), null);
 
-    private sealed class FakeExternalApiCredentialAdminRepository : IExternalApiCredentialAdminRepository
-    {
-        public List<ExternalApiCredentialRecord> Rows { get; } = new();
-        public List<ExternalApiCredentialCreateRequest> Created { get; } = new();
-        public List<ExternalApiCredentialUpdateRequest> Updated { get; } = new();
-        public List<(string RecordKind, Guid RecordId)> Deactivated { get; } = new();
-
-        public Task<IReadOnlyList<ExternalApiCredentialRecord>> SearchAsync(
-            string? query, string? recordKind, string? providerKind, string? requiredByBundle, bool? active,
-            DateTimeOffset? expiresBefore = null, DateTimeOffset? expiresAfter = null,
-            CancellationToken ct = default)
-        {
-            IEnumerable<ExternalApiCredentialRecord> rows = Rows;
-            if (recordKind is not null) rows = rows.Where(r => r.RecordKind == recordKind);
-            if (providerKind is not null) rows = rows.Where(r => r.ProviderKind == providerKind);
-            if (requiredByBundle is not null) rows = rows.Where(r => r.RequiredByBundle == requiredByBundle);
-            if (active is not null) rows = rows.Where(r => r.Active == active);
-            if (expiresBefore is not null) rows = rows.Where(r => r.ExpiresAt is not null && r.ExpiresAt < expiresBefore);
-            if (expiresAfter is not null) rows = rows.Where(r => r.ExpiresAt is not null && r.ExpiresAt > expiresAfter);
-            return Task.FromResult<IReadOnlyList<ExternalApiCredentialRecord>>(rows.ToList());
-        }
-
-        public Task<ExternalApiCredentialRecord?> GetAsync(string recordKind, Guid recordId, CancellationToken ct = default) =>
-            Task.FromResult(Rows.FirstOrDefault(r => r.RecordKind == recordKind && r.RecordId == recordId));
-
-        public ExternalApiCredentialWriteResult ValidateCreateRequest(ExternalApiCredentialCreateRequest request)
-        {
-            if (!ExternalApiCredentialRecordKinds.All.Contains(request.RecordKind))
-                return new ExternalApiCredentialWriteResult(ExternalApiCredentialOutcome.RecordKindInvalid, Detail: $"Unknown recordKind '{request.RecordKind}'.");
-            if (string.IsNullOrWhiteSpace(request.ProviderKind) || string.IsNullOrWhiteSpace(request.RequiredByBundle))
-                return new ExternalApiCredentialWriteResult(ExternalApiCredentialOutcome.RequiredFieldMissing, Detail: "providerKind and requiredByBundle are required.");
-            return new ExternalApiCredentialWriteResult(ExternalApiCredentialOutcome.Ok);
-        }
-
-        public Task<ExternalApiCredentialWriteResult> CreateAsync(ExternalApiCredentialCreateRequest request, CancellationToken ct = default)
-        {
-            var validation = ValidateCreateRequest(request);
-            if (validation.Outcome != ExternalApiCredentialOutcome.Ok) return Task.FromResult(validation);
-            Created.Add(request);
-            var record = new ExternalApiCredentialRecord(
-                request.RecordKind, Guid.NewGuid(), request.ProviderKind, request.RequiredByBundle, request.ReferenceKey,
-                true, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, request.TokenKind, null, request.RefreshBeforeSeconds,
-                1, request.UrlOrEnvReference, request.CredentialKind, request.HookPath, request.HeaderKey, request.RouteKey);
-            Rows.Add(record);
-            return Task.FromResult(new ExternalApiCredentialWriteResult(ExternalApiCredentialOutcome.Ok, record));
-        }
-
-        public Task<ExternalApiCredentialWriteResult> ValidateUpdateRequestAsync(ExternalApiCredentialUpdateRequest request, CancellationToken ct = default)
-        {
-            var existing = Rows.FirstOrDefault(r => r.RecordKind == request.RecordKind && r.RecordId == request.RecordId);
-            if (existing is null)
-                return Task.FromResult(new ExternalApiCredentialWriteResult(ExternalApiCredentialOutcome.NotFound, Detail: "not found"));
-            return Task.FromResult(new ExternalApiCredentialWriteResult(ExternalApiCredentialOutcome.Ok, existing));
-        }
-
-        public async Task<ExternalApiCredentialWriteResult> UpdateAsync(ExternalApiCredentialUpdateRequest request, CancellationToken ct = default)
-        {
-            var validation = await ValidateUpdateRequestAsync(request, ct);
-            if (validation.Outcome != ExternalApiCredentialOutcome.Ok) return validation;
-            Updated.Add(request);
-            var existing = validation.Record!;
-            var updated = existing with
-            {
-                ProviderKind = request.ProviderKind ?? existing.ProviderKind,
-                RequiredByBundle = request.RequiredByBundle ?? existing.RequiredByBundle,
-                ReferenceKey = request.ReferenceKey ?? existing.ReferenceKey,
-                Active = request.Active ?? existing.Active,
-            };
-            Rows.Remove(existing);
-            Rows.Add(updated);
-            return new ExternalApiCredentialWriteResult(ExternalApiCredentialOutcome.Ok, updated);
-        }
-
-        public Task<ExternalApiCredentialOutcome> DeactivateAsync(string recordKind, Guid recordId, CancellationToken ct = default)
-        {
-            var existing = Rows.FirstOrDefault(r => r.RecordKind == recordKind && r.RecordId == recordId);
-            if (existing is null) return Task.FromResult(ExternalApiCredentialOutcome.NotFound);
-            Deactivated.Add((recordKind, recordId));
-            Rows.Remove(existing);
-            Rows.Add(existing with { Active = false });
-            return Task.FromResult(ExternalApiCredentialOutcome.Ok);
-        }
-    }
-
     private static ExternalApiCredentialRecord SampleVaultRecord(string? referenceKey = "ref-1") =>
         new(ExternalApiCredentialRecordKinds.Vault, Guid.NewGuid(), "stripe", "billing_bundle", referenceKey,
             true, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, "bearer", null, 300, 1, null, null, null, null, null);
 
-    private static ExternalApiCredentialRecord SampleVaultRecordExpiringAt(DateTimeOffset expiresAt, string referenceKey) =>
-        new(ExternalApiCredentialRecordKinds.Vault, Guid.NewGuid(), "stripe", "billing_bundle", referenceKey,
-            true, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, "bearer", expiresAt, 300, 1, null, null, null, null, null);
-
     // --- unconfigured repository fails closed ---
 
     [Theory]
-    [InlineData("search")]
     [InlineData("get")]
     [InlineData("create")]
     [InlineData("update")]
@@ -151,95 +62,11 @@ public class AdminRuntimeExternalApiCredentialTests
         Assert.Equal("EXTERNAL_API_CREDENTIAL_NOT_AVAILABLE", error!.Code);
     }
 
-    // --- search ---
-
-    [Fact]
-    public async Task Search_ReturnsProjectionWithoutSecretFields()
-    {
-        var repo = new FakeExternalApiCredentialAdminRepository();
-        repo.Rows.Add(SampleVaultRecord());
-        var runtime = CreateRuntime(repo);
-
-        var (data, error) = await runtime.ExecuteDataAsync(
-            Vector("search", new { }), CancellationToken.None);
-
-        Assert.Null(error);
-        Assert.NotNull(data);
-        var json = data!.Value.GetRawText();
-        Assert.Contains("\"referenceKey\":\"ref-1\"", json);
-        foreach (var forbidden in new[] { "tokenHash", "encryptedPayload", "encryptionKeyReference", "plaintextSecret", "decryptedPayload", "tokenResponse" })
-            Assert.DoesNotContain(forbidden, json);
-    }
-
-    [Fact]
-    public async Task Search_UnknownRecordKind_FailsClosed()
-    {
-        var runtime = CreateRuntime(new FakeExternalApiCredentialAdminRepository());
-        var (data, error) = await runtime.ExecuteDataAsync(
-            Vector("search", new { recordKind = "not_a_real_kind" }), CancellationToken.None);
-
-        Assert.Null(data);
-        Assert.Equal("EXTERNAL_API_CREDENTIAL_RECORD_KIND_INVALID", error!.Code);
-    }
-
-    // --- search: expires_at filter boundary (admin-normal-surface-projection-seed-ssot.yaml
-    // surface_axes.admin.surfaces.credentials.capability_requirements.filter's expires_at
-    // dimension) ---
-
-    [Fact]
-    public async Task Search_ExpiresBefore_ExcludesRecordsAtOrAfterBoundary_IncludesStrictlyEarlier()
-    {
-        var repo = new FakeExternalApiCredentialAdminRepository();
-        var boundary = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
-        repo.Rows.Add(SampleVaultRecordExpiringAt(boundary.AddDays(-1), "expires-before-boundary"));
-        repo.Rows.Add(SampleVaultRecordExpiringAt(boundary, "expires-at-boundary"));
-        repo.Rows.Add(SampleVaultRecordExpiringAt(boundary.AddDays(1), "expires-after-boundary"));
-        var runtime = CreateRuntime(repo);
-
-        var (data, error) = await runtime.ExecuteDataAsync(
-            Vector("search", new { expiresBefore = boundary }), CancellationToken.None);
-
-        Assert.Null(error);
-        var json = data!.Value.GetRawText();
-        Assert.Contains("expires-before-boundary", json);
-        Assert.DoesNotContain("expires-at-boundary", json);
-        Assert.DoesNotContain("expires-after-boundary", json);
-    }
-
-    [Fact]
-    public async Task Search_ExpiresAfter_ExcludesRecordsAtOrBeforeBoundary_IncludesStrictlyLater()
-    {
-        var repo = new FakeExternalApiCredentialAdminRepository();
-        var boundary = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
-        repo.Rows.Add(SampleVaultRecordExpiringAt(boundary.AddDays(-1), "expires-before-boundary"));
-        repo.Rows.Add(SampleVaultRecordExpiringAt(boundary, "expires-at-boundary"));
-        repo.Rows.Add(SampleVaultRecordExpiringAt(boundary.AddDays(1), "expires-after-boundary"));
-        var runtime = CreateRuntime(repo);
-
-        var (data, error) = await runtime.ExecuteDataAsync(
-            Vector("search", new { expiresAfter = boundary }), CancellationToken.None);
-
-        Assert.Null(error);
-        var json = data!.Value.GetRawText();
-        Assert.DoesNotContain("expires-before-boundary", json);
-        Assert.DoesNotContain("expires-at-boundary", json);
-        Assert.Contains("expires-after-boundary", json);
-    }
-
-    [Fact]
-    public async Task Search_ExpiresFilter_ExcludesRecordsWithNoExpiresAt()
-    {
-        var repo = new FakeExternalApiCredentialAdminRepository();
-        repo.Rows.Add(SampleVaultRecord("no-expiry-record")); // ExpiresAt is null
-        var runtime = CreateRuntime(repo);
-
-        var (data, error) = await runtime.ExecuteDataAsync(
-            Vector("search", new { expiresBefore = DateTimeOffset.UtcNow.AddYears(10) }), CancellationToken.None);
-
-        Assert.Null(error);
-        var json = data!.Value.GetRawText();
-        Assert.DoesNotContain("no-expiry-record", json);
-    }
+    // search moved to AdminRuntimeCredentialManagementSearchTests.cs (round 5: unified
+    // credential_management:search dispatch, category-routed -- layer=external_api_credential no
+    // longer has its own "search" switch case, see AdminRuntime.cs ExecuteDataAsync). That file
+    // reuses FakeExternalApiCredentialAdminRepository's own SearchAsync (still implemented here,
+    // since it remains part of IExternalApiCredentialAdminRepository) via its own runtime wiring.
 
     // --- create ---
 

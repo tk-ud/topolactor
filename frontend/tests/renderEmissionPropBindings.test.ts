@@ -1182,26 +1182,27 @@ Deno.test("renderEmission: dispatchTargetRefByTrigger override intentionally OMI
   assertEquals(submitRd.wiringId, "11111111-1111-1111-1111-111111111111");
 });
 
-// ── credential-management: external_api_credential_result_list (round 4) ────────────────────
+// ── credential-management: credential_result_list (round 4, unified round 5) ────────────────
 //
 // The seeded credential_result_list node (db/seed_empty.sql cd002/cd004, manifest 092's own
-// external_api_credential_crud_section) declares propBindings.rows.source =
-// "emission.data.records" -- the SAME generic mechanism admin-enum's enum_table already proves
-// (propBindings: rows and columns bound separately for table, above). This test uses the REAL,
-// checked-in bare-entry fixture's own credential_result_list LayoutNode (not a hand-authored
-// stand-in) to prove: (1) with no search response yet (bare entry), it renders zero rows, never
-// an error (the RUNTIME_PRIMITIVE_RENDERER_INVALID_TABLE_PROPS regression this seed's propsJson
-// rows:[] default guards against); (2) given a synthetic search response's emission.data.records
-// shape (matching AdminRuntime.ExternalApiCredential.cs's ToProjection field set exactly, never
-// including a secret field), propBindings resolves those records into the table's rows prop.
+// credential_search_section, shared across all three categories since round 5) declares
+// propBindings.rows.source = "emission.data.records" -- the SAME generic mechanism admin-enum's
+// enum_table already proves (propBindings: rows and columns bound separately for table, above).
+// This test uses the REAL, checked-in bare-entry fixture's own credential_result_list LayoutNode
+// (not a hand-authored stand-in) to prove: (1) with no search response yet (bare entry), it
+// renders zero rows, never an error (the RUNTIME_PRIMITIVE_RENDERER_INVALID_TABLE_PROPS
+// regression this seed's propsJson rows:[] default guards against); (2) given a synthetic search
+// response's emission.data.records shape (matching AdminRuntime.ExternalApiCredential.cs's
+// ToProjection field set exactly, never including a secret field), propBindings resolves those
+// records into the table's rows prop.
 Deno.test("credential_result_list: real seeded node renders zero rows (never an error) on bare entry, and resolves emission.data.records when populated", async () => {
   ensureRuntimeComponentRegistryInitialized();
   const fixtureText = await Deno.readTextFile(
     new URL("./fixtures/manifest_0092_bare_entry_layout_nodes.json", import.meta.url),
   );
   const layoutNodes = JSON.parse(fixtureText) as LayoutNode[];
-  const resultListNode = layoutNodes.find((n) => n.nodeId === "external_api_credential_result_list");
-  assertExists(resultListNode, "expected the real fixture to contain external_api_credential_result_list");
+  const resultListNode = layoutNodes.find((n) => n.nodeId === "credential_result_list");
+  assertExists(resultListNode, "expected the real fixture to contain credential_result_list");
 
   const bareEmission: Emission = {
     layoutId: "00000000-0000-0000-0000-0000000cd002",

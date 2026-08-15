@@ -106,6 +106,38 @@ public partial class AdminRuntime
             return (null, new ValidationError("AUTH_USER_USERNAME_CONFLICT", "Username already exists."));
         }
 
+        // credentials.users mutation_confirmation_contract preview (admin-normal-surface-projection-
+        // seed-ssot.yaml surface_axes.admin.surfaces.credentials.seed_contract.
+        // mutation_confirmation_contract) -- additive and opt-in only: every check above already ran
+        // identically, so an invalid candidate never reports valid unchecked. No payload.confirmed
+        // gate is added here (unlike enum_dictionary/external_api_credential's own dedicated
+        // actions) because auth_users:create/update/delete are the SAME canonical action
+        // /admin/users (frontend/islands/AdminUsersRoster.tsx) already calls directly without ever
+        // sending dryRun/confirmed -- adding a hard confirmed-required gate would break that
+        // existing, unrelated caller. credential-management's own UI supplies dryRun=true for its
+        // preview step and simply omits it (never dryRun=true) for the real write, matching
+        // /admin/users' own existing call shape exactly.
+        if (IsTruthyPayloadFlag(vector.Payload, "dryRun"))
+        {
+            return (JsonSerializer.SerializeToElement(new
+            {
+                ok = true,
+                dryRun = true,
+                valid = true,
+                preview = new
+                {
+                    username = request.Username.Trim(),
+                    approve = request.Approve,
+                    status = request.Status,
+                    roleName = request.RoleName,
+                    realm = request.Realm,
+                    suspendedFrom = request.SuspendedFrom,
+                    suspendedUntil = request.SuspendedUntil,
+                    stateNote = request.StateNote,
+                },
+            }), null);
+        }
+
         var hash = BCrypt.Net.BCrypt.HashPassword(request.Password);
         var created = await _authMasterRepository.CreateUserAsync(
             request.Username.Trim(),
@@ -173,6 +205,30 @@ public partial class AdminRuntime
         if (request.RoleName is not (null or "admin" or "user"))
             return (null, new ValidationError("AUTH_USER_ROLE_INVALID", "roleName must be 'admin' or 'user'."));
 
+        // Preview (see DataAuthUsersCreateAsync's comment for why there is no confirmed-required
+        // gate here): every validation above already ran identically for dryRun and the real write.
+        if (IsTruthyPayloadFlag(vector.Payload, "dryRun"))
+        {
+            return (JsonSerializer.SerializeToElement(new
+            {
+                ok = true,
+                dryRun = true,
+                valid = true,
+                userId,
+                preview = new
+                {
+                    username = request.Username?.Trim() ?? before.Username,
+                    active = request.Active ?? before.Active,
+                    approve = request.Approve ?? before.Approve,
+                    status = request.Status ?? before.Status,
+                    suspendedFrom = request.ClearSuspendedFrom ? null : request.SuspendedFrom ?? before.SuspendedFrom,
+                    suspendedUntil = request.ClearSuspendedUntil ? null : request.SuspendedUntil ?? before.SuspendedUntil,
+                    stateNote = request.StateNote ?? before.StateNote,
+                    roleName = request.RoleName ?? before.Role,
+                },
+            }), null);
+        }
+
         var updated = await _authMasterRepository.UpdateUserAsync(
             userId,
             request.Username?.Trim(),
@@ -227,6 +283,21 @@ public partial class AdminRuntime
         var before = await _authMasterRepository.GetUserAsync(userId.Value, ct);
         if (before is null)
             return (null, new ValidationError("AUTH_USER_NOT_FOUND", $"User {userId} was not found."));
+
+        // Preview (see DataAuthUsersCreateAsync's comment for why there is no confirmed-required
+        // gate here).
+        if (IsTruthyPayloadFlag(vector.Payload, "dryRun"))
+        {
+            return (JsonSerializer.SerializeToElement(new
+            {
+                ok = true,
+                dryRun = true,
+                valid = true,
+                userId = userId.Value,
+                preview = new { username = before.Username },
+            }), null);
+        }
+
         var deleted = await _authMasterRepository.DeleteUserAsync(userId.Value, ct);
         if (!deleted)
             return (null, new ValidationError("AUTH_USER_NOT_FOUND", $"User {userId} was not found."));

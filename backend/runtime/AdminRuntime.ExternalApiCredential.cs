@@ -97,28 +97,10 @@ public partial class AdminRuntime
         _ => null,
     };
 
-    private async Task<(JsonElement? data, ValidationError? error)>
-        DataExternalApiCredentialSearchAsync(OperationVector vector, CancellationToken ct)
-    {
-        if (_externalApiCredentialAdminRepository is null)
-            return (null, ExternalApiCredentialNotAvailable());
-
-        var request = DeserializePayload<ExternalApiCredentialSearchRequestDto>(vector.Payload) ??
-            new ExternalApiCredentialSearchRequestDto();
-        if (request.RecordKind is not null && !ExternalApiCredentialRecordKinds.All.Contains(request.RecordKind))
-            return (null, new ValidationError(
-                "EXTERNAL_API_CREDENTIAL_RECORD_KIND_INVALID", $"Unknown recordKind '{request.RecordKind}'."));
-
-        var results = await _externalApiCredentialAdminRepository.SearchAsync(
-            request.Query, request.RecordKind, request.ProviderKind, request.RequiredByBundle, request.Active,
-            request.ExpiresBefore, request.ExpiresAfter, ct);
-
-        return (JsonSerializer.SerializeToElement(new
-        {
-            ok = true,
-            records = results.Select(ToProjection).ToList(),
-        }), null);
-    }
+    // search moved to AdminRuntime.CredentialManagementSearch.cs (round 4/5: unified
+    // credential_management:search dispatch, category-routed) -- SearchExternalApiCredentialAsync
+    // there calls _externalApiCredentialAdminRepository.SearchAsync directly and reuses this file's
+    // own ToProjection/ExternalApiCredentialNotAvailable helpers unchanged.
 
     private async Task<(JsonElement? data, ValidationError? error)>
         DataExternalApiCredentialGetAsync(OperationVector vector, CancellationToken ct)

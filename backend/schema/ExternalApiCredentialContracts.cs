@@ -8,15 +8,6 @@ namespace Topolactor.Schema;
 // secret-free response projection is built directly from
 // Topolactor.Repository.ExternalApiCredentialRecord in AdminRuntime.ExternalApiCredential.cs.
 
-public record ExternalApiCredentialSearchRequestDto(
-    [property: JsonPropertyName("query")] string? Query = null,
-    [property: JsonPropertyName("recordKind")] string? RecordKind = null,
-    [property: JsonPropertyName("providerKind")] string? ProviderKind = null,
-    [property: JsonPropertyName("requiredByBundle")] string? RequiredByBundle = null,
-    [property: JsonPropertyName("active")] bool? Active = null,
-    [property: JsonPropertyName("expiresBefore")] DateTimeOffset? ExpiresBefore = null,
-    [property: JsonPropertyName("expiresAfter")] DateTimeOffset? ExpiresAfter = null);
-
 public record ExternalApiCredentialGetRequestDto(
     [property: JsonPropertyName("recordKind")] string RecordKind,
     [property: JsonPropertyName("recordId")] string RecordId);

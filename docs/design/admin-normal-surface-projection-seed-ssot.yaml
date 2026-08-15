@@ -1181,19 +1181,17 @@ admin_normal_surface_projection_seed_ssot:
         credential-management:
           target_manifest: resolved_existing_substrate
           evidence_ref: manifest 00000000-0000-0000-0000-000000000092 (auth.external.credential_management.projection) already active with a real ui_projection
-          navigation_binding_authoring_and_verification: unresolved_before_seed
-          navigation_binding_gap_detail: >-
-            2026-07-22: the existing 2026-07-12b proof set does not yet meet
-            navigation_binding_resolution_criterion above -- it splits the authoring-dispatch path and
-            the resolution-chain assertion across two separate tests instead of combining them into one:
-            DispatchAsync_HubNavigationCreate_RealAuthoringPath_SourceManifestDispatchReflectsRelationInNavigationSequence_AndFailClosesOnZeroActiveTarget
-            proves the hub_navigation:create authoring path but against a fully synthetic, non-092
-            source manifest, while the resolution_chain proof against manifest 092 in
-            CredentialManagementHubRelationUiProjectionLiveDbTests.cs uses a directly-SQL-inserted
-            relation row rather than one produced by that same authoring dispatch. Closing this item
-            requires the AdminDashboardNavigationUiProjectionLiveDbTests.cs-style combined proof:
-            author a relation via hub_navigation:create pointed at manifest 092 as the target, then
-            assert the full resolution_chain from that same authored relation.
+          navigation_binding_authoring_and_verification: resolved
+          navigation_binding_evidence_ref: >-
+            backend/tests/Topolactor.Integration.Tests/CredentialManagementHubRelationUiProjectionLiveDbTests.cs
+            DispatchAsync_HubNavigationCreate_AuthorsRelationTargetingManifest092_ResolutionChainReachesScalarEmission
+            -- single live-DB test combining the hub_navigation:create real authoring dispatch path
+            (never a raw SQL insert) with the full resolution_chain against manifest 092's own real
+            hub/seed rows, meeting navigation_binding_resolution_criterion above (the same combined-proof
+            pattern AdminEnumHubRelationUiProjectionLiveDbTests.cs established for admin-enum). This
+            closes the per-id design_blocking gate for credential-management; it does not by itself mean
+            the credential-management subBundle is fully implemented -- see the separate
+            external_instance_projection_columns id below for that subBundle's remaining gap.
         admin-enum:
           target_manifest: resolved
           evidence_ref: manifest 00000000-0000-0000-0000-0000000ae200 (admin.enum.management.projection) built 2026-07-22, real ui_projection with component_tree per surface_axes.admin.surfaces.enum.seed_contract
@@ -1221,7 +1219,19 @@ admin_normal_surface_projection_seed_ssot:
         credential-management:
           physical_schema_and_candidate_source: resolved_existing_substrate
           evidence_ref: docs/design/instance-port-substrate-ssot.yaml existing_credential_management_projection_extension (topology.db_instance_port / topology.runtime_instance_port / topology.instance_connection_policy / topology.instance_operation_authority_binding, NpgsqlInstancePortPolicyRepository); seed-representation gap already represented_in_seed per docs/design/react-schema-topology-seed-translator-ssot.yaml declared_seed_surface_catalog[auth.external.credential_management.projection].known_gaps
-          projection_seed_binding_authoring_surface_operation_wiring_and_proof: unresolved_before_seed
+          projection_seed_binding_authoring_surface_operation_wiring_and_proof: resolved
+          projection_seed_binding_evidence_ref: >-
+            round 5: NpgsqlExternalInstanceCredentialAdminRepository (backend/repository) + AdminRuntime.
+            ExternalInstanceCredential.cs (create/read/update/delete) + AdminRuntime.CredentialManagementSearch.cs
+            (search, category=external_instance_credential, unified with the other two credentials
+            categories on manifest 092's own dispatcher_mapping entry) wired into manifest 092's seed
+            (external_instance_credential_crud_section under the instance_settings category, dispatch-only
+            manifests cd012/cd013/cd014/cd015) and proven via
+            backend/tests/Topolactor.Integration.Tests/ExternalInstanceCredentialLiveDbTests.cs (real
+            ManifestDispatcher reachability for create/update/delete/search, referenceKey-must-exist-in-vault
+            fail-close on both dryRun and confirmed write, canonical physical table name in diff_log,
+            secret-field non-exposure) and AdminRuntimeExternalInstanceCredentialTests.cs (unit-level
+            dryRun-must-validate / confirmed-required / fail-close coverage).
           out_of_bundle_note: instance_settings_admin_authoring_ui_pending (the admin authoring frontend route/island and backend action) is a separate roadmap item, not part of this Bundle.
         admin-enum: subBundle_not_applicable
         team-dashboard: subBundle_not_applicable
