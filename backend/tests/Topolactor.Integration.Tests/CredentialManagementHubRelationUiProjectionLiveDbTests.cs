@@ -500,10 +500,14 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
         // Structural authority (components_layout_design.layout_schema_json.records[]) is read —
         // Category/Section wrapper nodes exist, sourced from the schema tree, not only the four
         // flat tensor form nodes. Structural nodes never carry a componentId/componentKind.
-        var userAuthCategory = Assert.Single(nodes!, n => n.NodeId == "user_auth");
-        Assert.Equal("structural_node", userAuthCategory.NodeKind);
-        Assert.Equal("topology_ui_category", userAuthCategory.RecordType);
-        Assert.Null(userAuthCategory.ComponentId);
+        // Round 6: this category's own key/categoryKey was renamed from the legacy "user_auth" to
+        // the owning SSOT's canonical category identifier "users" (admin-normal-surface-projection-
+        // seed-ssot.yaml surface_axes.admin.surfaces.credentials.categories.users) -- its child
+        // section key "user_auth_section" is unchanged (never itself a category identity).
+        var usersCategory = Assert.Single(nodes!, n => n.NodeId == "users");
+        Assert.Equal("structural_node", usersCategory.NodeKind);
+        Assert.Equal("topology_ui_category", usersCategory.RecordType);
+        Assert.Null(usersCategory.ComponentId);
 
         var instanceSettingsSection = Assert.Single(nodes!, n => n.NodeId == "instance_settings_section");
         Assert.Equal("structural_node", instanceSettingsSection.NodeKind);
