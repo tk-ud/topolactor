@@ -1339,6 +1339,14 @@ admin_console_workflow_ssot:
                 # (admin-write-surface-selection-context-and-mode-composition-gap Bundle,
                 # .agent/tasks/todo.md).
                 form_input/search_input: [value]
+                # Selected-row-relative field prefill (admin-enum subBundle closure round,
+                # .agent/tasks/todo.md) -- SAME generic propBindings.value mechanism as
+                # form_input/search_input above, one more component kind, not a new one. Source
+                # may resolve against emission.data (existing path) or a node:<id>.value.<path>
+                # reference (new cascadeNodeValueReferences path, frontend/runtime/
+                # liveNodeValueTracker.ts) -- this capability list only gates which componentKinds
+                # may carry a `value` propBinding at all, not which source grammar resolves it.
+                form_input/input: [value]
                 table_op/faceted_filter_bar: [filters]
                 table_op/column_filter: [options]
                 table_op/column_visibility_editor: [columns]
@@ -1390,10 +1398,15 @@ admin_console_workflow_ssot:
     master_roster_routes:
       - route: /admin/enums
         label: enum_dictionary_roster
-        island: frontend/islands/AdminEnumsRoster.tsx
+        island: frontend/islands/ProjectionShell.tsx
         note: >
-          Pipeline-external master data. Enum group/item CRUD via admin_runtime enum_dictionary write
-          actions. Text search, show-all, modal create, row-click inline update, confirm delete.
+          Route retirement (admin-enum subBundle closure round): same-URL ProjectionShell thin
+          wrapper pinned to manifest ae200 (admin.enum.management.projection), replacing the
+          retired AdminEnumsRoster island (round 36: the island file itself is deleted, not just
+          route-unreachable). Pipeline-external master data. Enum
+          group/item CRUD via admin_runtime enum_dictionary write actions; enum_search filters
+          list_groups via a data-defined optional payload.search field; selecting a row prefills
+          the update field via node:enum_table.value.groupName.
       - route: /admin/users
         label: auth_users_roster
         island: frontend/islands/AdminUsersRoster.tsx

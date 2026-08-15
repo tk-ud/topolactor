@@ -33,6 +33,7 @@
 
 import type { HubNavigationSequenceItem, PropBinding } from "../api/dispatch.ts";
 import { resolveHubNavigationLinks } from "./projectionEntry.ts";
+import { parsePayloadFromSource } from "./payloadFromResolver.ts";
 
 /**
  * Component kinds that accept prop bindings, and which prop names they accept.
@@ -58,6 +59,10 @@ export const COMPONENT_ARRAY_PROP_CAPABILITIES: Record<string, string[]> = {
   // search_input.alias field's displayed value from an existing read/get action's
   // emission.data.
   "form_input/search_input": ["value"],
+  // Selected-row-relative field prefill (admin-enum subBundle closure round,
+  // .agent/tasks/todo.md) -- SAME generic propBindings.value mechanism as
+  // form_input/search_input above, one more component kind, not a new one.
+  "form_input/input": ["value"],
   "table_op/faceted_filter_bar": ["filters"],
   "table_op/column_filter": ["options"],
   "table_op/column_visibility_editor": ["columns"],
@@ -95,8 +100,22 @@ function isNavigationSequenceSource(source: string): boolean {
   return source === EMISSION_NAVIGATION_SEQUENCE_SOURCE;
 }
 
-function isRecognizedPropBindingSource(source: string): boolean {
-  return isEmissionDataSource(source) || isNavigationSequenceSource(source);
+/**
+ * `node:<nodeId>.value(.<path>)*` — selected-row-relative field prefill (admin-enum subBundle
+ * closure round). Reuses payloadFromResolver.ts's own node_value grammar (parsePayloadFromSource)
+ * rather than a third independently-maintained regex; the backend mirror is
+ * StructureMapResolver.cs's NodeValueSourceRegex. Only recognized for the "value" prop -- the
+ * same restriction the backend's isValidNodeValueReference check enforces -- because it is
+ * resolved reactively by liveNodeValueTracker.ts's cascadeNodeValueReferences against the live
+ * node-value tracker, not from static emission data here.
+ */
+function isNodeValueReferenceSource(source: string): boolean {
+  return parsePayloadFromSource(source).kind === "node_value";
+}
+
+function isRecognizedPropBindingSource(source: string, propName: string): boolean {
+  return isEmissionDataSource(source) || isNavigationSequenceSource(source) ||
+    (propName === "value" && isNodeValueReferenceSource(source));
 }
 
 function acceptsNonArrayResolvedValue(componentKind: string, propName: string): boolean {
@@ -298,16 +317,24 @@ export function resolvePropBindings(
   for (const [propName, binding] of Object.entries(propBindings)) {
     const { source, transform } = binding;
 
-    if (!isRecognizedPropBindingSource(source)) {
+    if (!isRecognizedPropBindingSource(source, propName)) {
       return {
         ok: false,
         error:
-          `LAYOUT_NODE_PROP_BINDING_INVALID_SOURCE: source "${source}" must be "emission.data", start with "emission.data.", or be "${EMISSION_NAVIGATION_SEQUENCE_SOURCE}"`,
+          `LAYOUT_NODE_PROP_BINDING_INVALID_SOURCE: source "${source}" must be "emission.data", start with "emission.data.", be "${EMISSION_NAVIGATION_SEQUENCE_SOURCE}", or (for prop "value") be "node:<nodeId>.value(.<path>)*"`,
       };
     }
 
     const capabilityError = validatePropBindingTarget(componentKind, propName);
     if (capabilityError) return { ok: false, error: capabilityError };
+
+    if (isNodeValueReferenceSource(source)) {
+      // Resolved reactively by cascadeNodeValueReferences (liveNodeValueTracker.ts) against the
+      // live node-value tracker, not from this call's static emissionData snapshot -- leave the
+      // prop absent here so the tracker's own applyLiveNodeValueOverride supplies the current
+      // (and future) value.
+      continue;
+    }
 
     const resolved = isNavigationSequenceSource(source)
       ? resolveRuntimeNavigationSequence(navigationSequence)
@@ -333,6 +360,22 @@ export function resolvePropBindings(
     }
 
     props[propName] = finalValue;
+    // round 37: some component factories (selectFactory/checkboxFactory/radioGroupFactory/
+    // checkboxGroupFactory -- see COMPONENT_ARRAY_PROP_CAPABILITIES' form_input/* entries) read
+    // their own data-carrying props from a nested props.data object when one is present
+    // (buildProductionCatalogComponentProps's own default props for these kinds already wrap
+    // value/options/etc under data:{...}), falling back to flat top-level props only when
+    // props.data is absent (the shape data_display/table's own factory uses instead). A
+    // top-level-only write above is silently shadowed by that nested-data default for every
+    // form_input/* kind -- this mirrors the resolved value into props.data[propName] too so
+    // BOTH factory-reading conventions see the SAME freshly-resolved value, never a stale
+    // default. Never mutates the pre-existing props.data reference (a new object each time).
+    if (
+      typeof props.data === "object" && props.data !== null &&
+      !Array.isArray(props.data)
+    ) {
+      props.data = { ...(props.data as Record<string, unknown>), [propName]: finalValue };
+    }
   }
 
   return { ok: true, props };
@@ -360,9 +403,9 @@ export function validatePropBindingsStructure(
     }
     const b = binding as Record<string, unknown>;
 
-    if (typeof b.source !== "string" || !isRecognizedPropBindingSource(b.source)) {
+    if (typeof b.source !== "string" || !isRecognizedPropBindingSource(b.source, propName)) {
       errors.push(
-        `LAYOUT_NODE_PROP_BINDING_INVALID_SOURCE: source for "${propName}" must be a string equal to "emission.data", starting with "emission.data.", or equal to "${EMISSION_NAVIGATION_SEQUENCE_SOURCE}"`,
+        `LAYOUT_NODE_PROP_BINDING_INVALID_SOURCE: source for "${propName}" must be a string equal to "emission.data", starting with "emission.data.", equal to "${EMISSION_NAVIGATION_SEQUENCE_SOURCE}", or (for "value") match "node:<nodeId>.value(.<path>)*"`,
       );
     }
 

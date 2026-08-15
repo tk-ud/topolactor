@@ -406,8 +406,329 @@ admin_uibuilder_ui_structure_wiring_ssot:
           AdminEnumHubRelationUiProjectionLiveDbTests.cs. See
           docs/design/react-schema-topology-seed-translator-ssot.yaml
           declared_seed_surface_catalog admin.enum.management.projection known_gaps
-          resolution_note for the full record, including the honestly-open remaining item
-          (hardcoded /admin/enums retirement still pending a genuine UX-parity replacement).
+          resolution_note for the full record. UPDATED (admin-enum subBundle closure round):
+          the hardcoded /admin/enums retirement previously tracked here as open is done --
+          see round_27_28_settled_child_dispatch_result_authority below for the current,
+          single-source record (this paragraph is not restated there as owning authority).
+        owner_decision_2026_08_13_explicit_dispatch_participation_required: >-
+          SUPERSEDES read_circuit_consumed_and_proven's "layout=one-canonical-operation
+          model" rationale above (dated 2026-07-23) FOR FIELD-FAMILY NODES ONLY (see scope
+          note below) -- that rationale is now WRONG for Fields and must not be relied on
+          by new Field-authoring work. Owner decision (admin-enum subBundle closure, round
+          41): a layout merely HAVING a default admin_runtime target/business operation
+          must NOT, by itself, cause a Field's click/change/select/submit/toggle trigger to
+          inherit a dispatch binding to that target. This does not touch, and must never be
+          conflated with, the separate common-request-context auto-attach contract (JWT
+          Authorization, role authority, client-origin, canonical scheduler selection),
+          which remains fully automatic at the frontendScheduler/API-client boundary
+          regardless of this change; only the layout-default-implies-per-Field-dispatch
+          inference is retired. Going forward, a Field's Event executes an admin_runtime
+          business operation ONLY when that Field's own authoring/topology data explicitly
+          participates in dispatch for that trigger -- i.e. carries its own
+          dispatchTargetRefByTrigger entry for that trigger (reusing the layout's own
+          default target literal is allowed and remains the common case for the 16
+          legitimately-dispatching ae200 nodes) OR its own dispatchPayloadFromByTrigger
+          entry for that trigger (a payload-shape customization that still falls back to
+          the node's own base spec as the dispatch target, since authoring a payload shape
+          for a specific trigger is itself an explicit, per-trigger authoring signal --
+          e.g. a button whose own node.targetRef already IS its intended target and only
+          needs its payload shaped; this pre-existing generic pattern, used outside
+          admin-enum, is preserved unchanged, not narrowed to "targetRefOverrideByTrigger
+          only"). It is the IMPLICIT inheritance with NEITHER authored for a given trigger
+          that is retired, not reuse of the same target value nor the
+          payload-only-customization pattern.
+          SCOPE (Field-family only, not every admin_runtime catalog_component): the fix is
+          applied ONLY when isFieldFamilyComponentKind(node.componentKind) is true -- the
+          SAME generic, componentKind-prefix ("form_input/") classification already used
+          for Field read-action/debounce policy elsewhere (adminRuntimeReadActions.ts),
+          reused here rather than invented fresh. A first draft retired the fallback for
+          EVERY admin_runtime catalog_component regardless of kind and was reverted after
+          it broke ~40 pre-existing, established, passing tests spanning rounds 3 through
+          40 of this subBundle's own history -- most centrally enum_table's own "select"
+          trigger (row click) re-dispatching list_groups as documented, asserted,
+          intentional "harmless idempotent read" behavior on selection, plus every
+          settlement-authority/canonical-reread/preview-confirm test's own preview-button
+          click relying on the SAME base-spec fallback for Action/button nodes. The
+          concretely user-reported symptom this round exists to close (typing into a
+          write Field firing spurious list_groups / interfering with a pending search
+          debounce) is specific to Field "change" events; broadening the fix to
+          non-Field nodes (tables, buttons, modals) would have reintroduced exactly the
+          "must not regress round 40's [and earlier rounds'] established contracts"
+          violation the OK axis forbids, for no concretely-reported benefit. Non-Field
+          admin_runtime nodes (tables, buttons, modals, structural containers) therefore
+          keep their pre-existing implicit base-spec-fallback dispatch behavior for every
+          trigger completely unchanged by this round -- a disclosed, deliberate boundary,
+          not a silent gap: those nodes were never the reported problem, and their
+          existing test coverage treats the current behavior as correct.
+          Mechanism: frontend/runtime/renderEmission.ts buildCatalogComponentEventBinding's
+          `targetRefOverrideByTrigger[trigger] ?? spec` fallback previously gave every
+          admin_runtime catalog_component node (Field or not) a binding for all 5 standard
+          triggers even absent any authored dispatchTargetRefByTrigger OR
+          dispatchPayloadFromByTrigger entry (confirmed via the real
+          admin_enum_ae200_layout_nodes.json fixture: every typed write-only Field --
+          form_input/* componentKind -- had neither of its own and was nonetheless
+          receiving an implicit binding to ae200's own list_groups target under the old
+          fallback). Fixed strictly when nodeWiringKind === "admin_runtime" AND
+          isFieldFamilyComponentKind(nodeComponentKind): for that combination only, a
+          trigger's dispatch target now resolves to (targetRefOverrideByTrigger[trigger]
+          ?? spec) ONLY when EITHER targetRefOverrideByTrigger[trigger] OR
+          payloadFromByTrigger[trigger] is authored for that trigger; a trigger with
+          NEITHER now gets an eventType-only binding entry (`{ eventType: trigger }`, no
+          runtimeDispatch key) rather than a real business-operation dispatch. Omitting
+          the entry entirely (for the no-participation case) was tried first and
+          reverted: runtimeComponentFactory.ts's requireBinding (inputFactory,
+          buttonFactory, etc.) fails a component's ENTIRE render closed when its own
+          required trigger key is missing from eventBinding at all -- which would have
+          made every real write-only Field (e.g. enum_create_group_name_input, which
+          authors neither dispatchTargetRefByTrigger nor dispatchPayloadFromByTrigger)
+          stop rendering as an `<input>` entirely, a functional regression worse than the
+          spurious-dispatch bug being fixed. A companion fail-close requiring
+          dispatchTargetRefByTrigger whenever dispatchPayloadFromByTrigger is authored on
+          the same trigger was ALSO tried first and reverted: it rejected the legitimate
+          base-spec-plus-payloadFrom-only pattern above (proven still in production use
+          by an existing, unmodified test in
+          projectionShellAdminRuntimeWritePayloadCapture.test.ts predating this round),
+          which is exactly the kind of established contract this round's own OK axis
+          requires preserving -- so no such fail-close exists. The eventType-only entry
+          keeps requireBinding satisfied and keeps emitBoundEvent's pre-dispatch lanes
+          (onNodeValueChange, calcTriggerCallback, the observation log) working
+          unchanged; parseEventBinding's own optional runtimeDispatch field is what
+          actually prevents any business dispatch from firing, not the binding entry's
+          presence or absence. Other wiringKinds (search/aggregate/create/update/delete),
+          and non-Field-family admin_runtime nodes, are untouched -- their own
+          one-canonical-operation-per-layout design (buildRuntimeDispatchSpec's base
+          fallback) is a separate, pre-existing contract this decision does not revisit.
+        owner_decision_2026_08_14_general_dispatch_participation_contract_round42: >-
+          SUPERSEDES owner_decision_2026_08_13_explicit_dispatch_participation_required's
+          "SCOPE (Field-family only, not every admin_runtime catalog_component)" paragraph
+          above in full -- that scope limitation is now WRONG and must not be relied on by
+          new work. Owner clarification (admin-enum subBundle closure, round 42): the
+          round-41 decision was never a Field-specific rule -- it is a general
+          business-operation-dispatch-participation contract for every admin_runtime
+          catalog_component node, Field or not (Table, Button, Modal, structural leaf
+          alike). Round 41 narrowed the contract to Field-family nodes ONLY because a
+          Field-family-unscoped draft broke ~40 pre-existing tests (most centrally
+          enum_table's own implicit "select"-triggered list_groups re-dispatch); the Owner
+          has now made explicit what round 41's own OK/NG axis should already have implied:
+          an existing test asserting the OLD implicit-inheritance behavior is not itself
+          design authority once that behavior is the exact thing a new Owner decision
+          retires -- such a test must be UPDATED to assert the new contract (or, where the
+          capability it protects is still needed, the capability must be re-authored as
+          EXPLICIT topology participation and the test updated to assert that), never used
+          as a reason to keep the SSOT narrower than the Owner's actual decision. Round 41's
+          own reverted-first-draft framing ("broke pre-existing tests" as the stated reason
+          for narrowing) is the precise anti-pattern this correction closes: test
+          compatibility is evidence to weigh when deciding HOW to reach a contract, never
+          evidence for deciding WHAT the contract is.
+          General contract (replaces the Field-family-only SCOPE paragraph): for every node
+          whose wiringKind is "admin_runtime" -- regardless of componentKind -- a trigger
+          only produces a real runtimeDispatch business-operation binding when that node's
+          own authoring/topology data explicitly participates for that SPECIFIC trigger:
+          dispatchTargetRefByTrigger[trigger] (a target override, reusing the layout's own
+          default target literal remains allowed and is the common case) OR
+          dispatchPayloadFromByTrigger[trigger] (payload-shape customization falling back to
+          the node's own base spec as target, per owner_decision_2026_08_13's own
+          base-spec-plus-payloadFrom-only preservation -- unchanged by this round). A
+          trigger with NEITHER authored gets no business dispatch, regardless of
+          componentKind. This does not touch, and must never be conflated with, the separate
+          common-request-context auto-attach contract (JWT Authorization, role authority,
+          client-origin, canonical scheduler selection), which remains fully automatic at
+          the frontendScheduler/API-client boundary -- business-dispatch-participation and
+          common-request-context auto-attach are different concepts operating at different
+          layers (per-node topology authoring vs. every-request transport boundary) and
+          collapsing them into one policy question is exactly the confusion the NG axis
+          prohibits.
+          Preserving legitimate non-Field capabilities under the general contract: a
+          capability round 41 preserved only because Field-family scoping left non-Field
+          nodes on the old implicit fallback (most concretely enum_table's own row-select
+          re-issuing list_groups as a scoped re-read) is preserved going forward by
+          AUTHORING explicit dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger on
+          that node for that trigger in the real ae200 fixture/seed, exactly the same
+          authoring shape the 16 already-explicit ae200 nodes already use -- not by
+          componentKind branching in the runtime mechanism itself. This is authoring-data
+          work (adding an explicit entry to a real production node), not a mechanism
+          exception; the mechanism (buildCatalogComponentEventBinding) has no
+          componentKind conditional left in it at all after this round.
+          Mechanism (round 42): frontend/runtime/renderEmission.ts
+          buildCatalogComponentEventBinding's requiresExplicitParticipation gate is
+          `nodeWiringKind === "admin_runtime"` unconditionally -- the
+          isFieldFamilyComponentKind(nodeComponentKind) conjunct round 41 added is removed.
+          The eventType-only inert-binding fallback (`{ eventType: trigger }`, no
+          runtimeDispatch key, keeping runtimeComponentFactory.ts's requireBinding satisfied
+          and emitBoundEvent's pre-dispatch lanes working) is unaffected by this
+          widening -- it already applied per-trigger, not per-componentKind, so no new
+          rendering regression is introduced by removing the Field-family conjunct.
+          runtimeDispatchCircuitKey correction (round 42): round 41's own test comments and
+          reasoning in projectionShellAdminRuntimeWritePayloadCapture.test.ts incorrectly
+          asserted that two different NODES are necessarily on two different dispatch
+          circuits ("being a DIFFERENT node, would resolve to a DIFFERENT
+          runtimeDispatchCircuitKey"). This contradicts
+          frontend/runtime/runtimeComponentFactory.ts's actual implementation:
+          `runtimeDispatchCircuitKey(spec, targetRef) { return targetRef ?? spec.nodeId ??
+          spec.componentId; }` -- targetRef is the TOP priority key, and nodeId/componentId
+          are only fallbacks used when targetRef itself is absent. Two DIFFERENT nodes that
+          happen to share the SAME targetRef (the ae200 layout's own default target,
+          exactly the literal every Field-family node without its own override was
+          implicitly bound to before round 41) are on the SAME circuit, not different ones,
+          by design (see the pre-existing round-38 doc comment on this same function: "a
+          component may fire more than one admin_runtime dispatch for the SAME circuit...
+          regardless of which NODE fired which call"). This means the pre-round-41 bug's
+          real severity was understated in round 41's own report: typing into a write-only
+          Field sharing the layout's default targetRef with a pending search Field's own
+          debounce was not merely a spurious EXTRA dispatch on an unrelated circuit -- it
+          was a dispatch on the SAME circuit as the pending debounced search, genuinely
+          capable of cancelling/racing that pending debounce per the same-circuit
+          cancellation semantics runtimeDispatchCircuitKey's own callers implement. Proof
+          reasoning and test comments must state this correctly; a corrected proof asserting
+          same-targetRef-different-node collapses to one circuit is required (see
+          runtimeComponentFactory.test.ts / projectionShellAdminRuntimeWritePayloadCapture.test.ts).
+          Schema-composed single-node spoof closure (round 42): owner_decision_2026_08_13's
+          own "Disclosed scope limit" paragraph below (schema-tree map only loaded when the
+          SAME patch contains another node missing componentKey) is NOT an acceptable
+          permanent boundary -- canonical schema/catalog identity must be authoritative
+          against ANY raw componentKey spoof for a schema-tree leaf nodeId, including a
+          single-node patch with no other node present. The DB-round-trip optimization
+          (ContainsNodeMissingComponentKey gating LoadLayoutSchemaJsonAsync) may be kept for
+          efficiency, but the optimization strategy itself must not leave an authority
+          bypass: any implementation that closes this gap without also keeping the
+          tensor-only fast path efficient is acceptable, but leaving the gap open to protect
+          the fast path is not. A test proving closure must not add a synthetic
+          componentKey-missing sibling node merely to force the existing gate to fire (that
+          would prove the OLD narrower mechanism, not a genuine single-node fix) -- the
+          negative proof must be a literal single-node patch.
+          Field-family classification, common-request-context auto-attach, and the
+          base-spec-plus-payloadFrom-only preservation from owner_decision_2026_08_13 are
+          all UNCHANGED by this round -- only the Field-family SCOPE limitation and the
+          schema-composed single-node spoof gap are corrected. See .agent/tasks/todo.md
+          admin-enum subBundle round 42 record for the concrete implementation/test
+          inventory.
+          Schema-composed node identity: canonical node/component identity resolved from
+          layout_schema_json.records[] (see react-schema-topology-seed-translator-ssot.yaml
+          round 40/41 addenda) is authoritative for any nodeId that is a real schema-tree
+          catalog leaf; a raw tensor override's own componentKey for that same nodeId must
+          match canonical exactly or the whole patch fails closed
+          (LAYOUT_PATCH_SCHEMA_COMPOSED_COMPONENT_KEY_IDENTITY_MISMATCH) -- this closes the
+          spoof path round 40's ResolveEffectiveComponentKey (raw-preferred-when-present)
+          would otherwise leave open for evading Field read-action/debounce policy.
+          Tensor-only nodes (no schema-tree catalog leaf for that nodeId) keep their
+          pre-round-40 raw-componentKey authority unchanged. Disclosed scope limit
+          (round 41, CLOSED in round 43 -- see
+          owner_decision_2026_08_15_schema_composed_identity_independent_of_dispatch_field_round43
+          above; text below is kept as historical record of the gap that existed between round
+          40 and round 43, not current authority. CORRECTION: this same paragraph previously
+          claimed "CLOSED in round 42" -- that was inaccurate; round 42 only closed this gap for
+          a single-node patch that ALSO authored an admin_runtime dispatch field, not for the
+          maximally-adversarial single-node-with-no-dispatch-field case described immediately
+          below, which round 43 actually closes): the
+          schema-tree map this check consults was, prior to round 43, only ever loaded when the
+          SAME patch also contained at least one other node genuinely missing componentKey (the
+          round-40 DB-round-trip gate, ContainsNodeMissingComponentKey) OR (round 42 only) the
+          patch additionally authored an admin_runtime dispatch field on a schema-composed
+          layout. This covered the realistic authored shape of a schema-composed override-delta
+          save (such a save's own nodes normally omit componentKey entirely -- see
+          storage_adoption_contract) and, after round 42, the dispatch-field-bearing spoof case,
+          but did not catch a maximally-adversarial single-node patch supplying only one forged
+          componentKey with NO dispatch field and no other node present -- round 43 closes this
+          last remaining case by dropping the dispatch-field conjunct entirely (see
+          owner_decision_2026_08_15_schema_composed_identity_independent_of_dispatch_field_round43
+          for the current mechanism). Field-family classification:
+          NpgsqlUiTopologyRepository.FieldFamilyComponentKeys is derived directly from
+          LayoutSchemaTensorComposer.FieldControlToComponentKey.Values (visibility widened
+          to internal) rather than maintained as an independent literal HashSet -- the two
+          Field-family sets can no longer drift apart. Proof obligations: production
+          ProjectionShell DOM tests against the real ae200 fixture proving (a) typing into
+          a real write-only typed Field during a pending search debounce fires no
+          list_groups dispatch and does not cancel the pending debounce, (b) explicitly-
+          participating search/read Events still dispatch correctly post-debounce with
+          correct payload, (c) Preview/Confirm for all 7 write operations still resolve
+          freshly-typed node values and dispatch the correct business operation with
+          mutation/settlement authority unregressed; backend negative-case tests proving
+          schema-composed componentKey spoof/mismatch/Field-policy-bypass attempts fail
+          closed. See .agent/tasks/todo.md admin-enum subBundle round 41 record for the
+          concrete implementation/test inventory.
+        owner_decision_2026_08_15_schema_composed_identity_independent_of_dispatch_field_round43: >-
+          CORRECTS owner_decision_2026_08_14_general_dispatch_participation_contract_round42's
+          own "Schema-composed single-node spoof closure (round 42)" paragraph above: that
+          paragraph declared "canonical schema/catalog identity must be authoritative against
+          ANY raw componentKey spoof for a schema-tree leaf nodeId, including a single-node
+          patch with no other node present" -- but round 42's own implementation
+          (NpgsqlUiTopologyRepository.ValidateLayoutPatchAsync) only actually closed this for a
+          single-node patch that ALSO authored an admin_runtime dispatch field
+          (dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger) -- gated by
+          ContainsAdminRuntimeNodeLevelDispatchField(...) as a prerequisite before even
+          consulting LayoutHasSchemaComposedRecordsAsync. A single-node patch supplying a
+          forged componentKey for a real schema-tree catalog leaf nodeId, authoring NEITHER
+          dispatch field at all, still bypassed the canonical identity check entirely --
+          ContainsNodeMissingComponentKey is false (a componentKey IS present, just wrong) and
+          ContainsAdminRuntimeNodeLevelDispatchField is also false, so mayBeSchemaComposed never
+          became true and the schema-tree map was never loaded. Round 42's own report and this
+          SSOT's own round-42 text both overstated the closure's actual scope; this is a
+          correction, not a new decision reached independently.
+          Owner clarification (admin-enum subBundle closure, round 43): canonical schema-tree
+          catalog leaf identity is a STRUCTURAL property of the node itself (which real DB row /
+          catalog component that nodeId composes to), never a property of what that node's
+          Events do. Whether a raw override authors a dispatch field, which trigger it
+          participates on, or whether it participates in dispatch AT ALL, is completely
+          irrelevant to whether its OWN componentKey must match canonical identity -- conflating
+          "does this node need identity resolved for dispatch purposes" with "is this node's
+          claimed identity even legitimate" was the precise category error
+          ContainsAdminRuntimeNodeLevelDispatchField introduced into the gate. The general
+          contract: for ANY nodeId that is a real schema-tree catalog leaf in the owning
+          layoutId's layout_schema_json.records[], a raw tensor override's own componentKey for
+          that nodeId (when present) must match canonical exactly, or the WHOLE patch fails
+          closed with the SAME LAYOUT_PATCH_SCHEMA_COMPOSED_COMPONENT_KEY_IDENTITY_MISMATCH
+          diagnostic contract -- unconditionally, independent of componentKey presence, dispatch
+          field presence, or Event participation. A componentKey-consistent or
+          componentKey-absent override for a real schema-tree leaf remains legitimate exactly as
+          before (this is not a new restriction on authoring, only closing a spoof path).
+          Mechanism (round 43): ValidateLayoutPatchAsync's own gate is now
+          `mayBeSchemaComposed = ContainsNodeMissingComponentKey(json) ||
+          (ContainsNodeWithComponentKeyPresent(json) && await
+          LayoutHasSchemaComposedRecordsAsync(layoutId, ct))` -- the
+          ContainsAdminRuntimeNodeLevelDispatchField conjunct that round 42 added is removed
+          entirely from this gate (it remains used, unchanged, at its OTHER call site gating the
+          wiringKind="admin_runtime" authorization check, which is a genuinely different
+          question) and replaced with a new ContainsNodeWithComponentKeyPresent predicate --
+          NOT a business-dispatch signal like the removed conjunct, but the exact field the
+          identity-mismatch check itself compares against canonical, so gating on its presence is
+          proportional to the actual condition being verified rather than a proxy for "does this
+          node happen to also dispatch." A patch with no nodes at all, or whose only nodes already
+          fall under ContainsNodeMissingComponentKey, is spared the cheap check entirely (nothing
+          for it to add); every patch that DOES carry a componentKey-bearing node now pays the
+          SAME cheap LayoutHasSchemaComposedRecordsAsync scalar check round 42 already
+          introduced, regardless of whether that node (or any other node in the patch) authors a
+          dispatch field -- this is the accepted cost of closing the gap. The pre-existing, more
+          valuable guarantee -- an ordinary tensor-only layout (LayoutHasSchemaComposedRecordsAsync
+          resolves false) never reaches the expensive full-body LoadLayoutSchemaJsonAsync fetch
+          -- is unchanged and still holds for the overwhelming majority of ordinary saves. The
+          narrower round-42 guarantee "the cheap check itself never runs without a dispatch
+          field" is deliberately retired, because that guarantee is exactly what left the spoof
+          open; a test asserting it must be updated to assert the correct, narrower-but-genuine
+          guarantee (full fetch still gated) instead of deleted or left contradicting the new
+          gate.
+          Negative proof requirement: a literal single-node patch -- one node only, a real
+          schema-tree leaf nodeId, a forged (non-canonical) componentKey, and NEITHER
+          dispatchTargetRefByTrigger NOR dispatchPayloadFromByTrigger authored anywhere in the
+          patch -- must fail the whole patch closed with
+          LAYOUT_PATCH_SCHEMA_COMPOSED_COMPONENT_KEY_IDENTITY_MISMATCH. As with round 42's own
+          NG axis, a test proving this must not add a synthetic componentKey-missing or
+          dispatch-field-carrying sibling node merely to force the gate to fire -- that would
+          prove a narrower mechanism, not this round's actual closure. The matching positive
+          case (a single node, canonical-matching or absent componentKey, no dispatch field)
+          must still pass, proving this is not a new authoring restriction.
+          Preserved unchanged by this round: Field-family classification
+          (FieldFamilyComponentKeys / LayoutSchemaTensorComposer.FieldControlToComponentKey),
+          common-request-context auto-attach, base-spec-plus-payloadFrom-only preservation, the
+          general admin_runtime dispatch-participation contract from round 42
+          (owner_decision_2026_08_14_general_dispatch_participation_contract_round42),
+          runtimeDispatchCircuitKey's targetRef-priority behavior, tensor-only nodes' raw
+          componentKey authority (a nodeId genuinely absent from the schema tree is untouched by
+          this gate change -- LayoutHasSchemaComposedRecordsAsync answers "does THIS LAYOUT have
+          schema-composed records at all", the per-node schema-tree-membership lookup inside
+          ValidateLayoutPatchNodes still separately determines whether THIS specific nodeId is a
+          leaf), and malformed layout_schema_json.records[] fail-close
+          (LAYOUT_SCHEMA_RECORDS_INVALID). See .agent/tasks/todo.md admin-enum subBundle round
+          43 record for the concrete implementation/test inventory.
     admin_runtime_payload_binding_contract:
       payload_source_grammar_authority: >-
         Round 22 correction: this contract governs WHERE dispatchPayloadFromByTrigger is
@@ -1054,11 +1375,15 @@ admin_uibuilder_ui_structure_wiring_ssot:
         case-insensitivity), AdminRuntimeManifestManagementTests.cs (save-time duplicate rejection),
         frontend/tests/layoutRightDockWiringKindSync.test.tsx (production LayoutRightDock mount --
         real PackageWiringEditor save flow, including its own ConfirmDialog, driving
-        NodeEventAuthoringPanel's gate live without remount). Not yet done: the admin-enum single
-        per-screen CRUD surface, canonical translator generation replacing hand-authored seed,
-        production DOM proof and live-DB proof of that specific wiring, the full negative-boundary
-        suite for it, and AdminEnumsRoster.tsx/hardcoded route retirement -- unchanged from round 18,
-        still this Bundle's largest remaining scope (see .agent/tasks/todo.md).
+        NodeEventAuthoringPanel's gate live without remount). UPDATED (admin-enum subBundle closure
+        round): the admin-enum single per-screen CRUD surface, canonical translator generation,
+        production DOM proof and live-DB proof of that wiring, and a negative-boundary suite
+        covering all 7 write actions (not one representative operation) are now done -- see
+        round_27_28_settled_child_dispatch_result_authority and
+        dryrun_preview_gated_confirm_modal below for the up to date record. UPDATED
+        (admin-enum subBundle closure round): AdminEnumsRoster.tsx/hardcoded route retirement,
+        selected-group-detail field-prefill, and enum_search's functional filter are all done --
+        see round_27_28_settled_child_dispatch_result_authority below for the current record.
       round_21_hardening: >-
         2026-07-29. Owner audit found a structural gap in round 19's
         IsBareManifestNavigationReadTargetRefAsync exemption: it resolved the axes-registered
@@ -1160,12 +1485,89 @@ admin_uibuilder_ui_structure_wiring_ssot:
         failed canonical redispatch surfaces the warning banner and retains the stale-but-real DOM
         without resending the write or reopening the modal, and a canonical redispatch forces a
         stale prop-bound tracked value back to the DB-authoritative one while a passive SSE refresh
-        of the same value leaves an in-progress edit untouched). Not yet done (admin-enum subBundle
-        scope, tracked in .agent/tasks/todo.md, not restated here as owning SSOT authority): dryRun
-        preview wired into the confirm-modal UI flow for any of the 7 write actions, items browse
-        UX via the existing get_group read composed into this surface's own parent read (no new
-        list_items action, no direct child-Emission adoption), the full negative-boundary matrix,
-        and AdminEnumsRoster.tsx/route retirement.
+        of the same value leaves an in-progress edit untouched). UPDATED (admin-enum subBundle
+        closure round, tracked in .agent/tasks/todo.md, not restated here as owning SSOT
+        authority): dryRun preview wired into the confirm-modal UI flow for all 7 write actions
+        (PR #601), items browse UX composed into list_groups' own backend query as an
+        itemsSummary displayColumn on the existing enum_table (no new action, no cross-manifest
+        dispatch, no direct child-Emission adoption), and the negative-boundary matrix now covers
+        all 7 operations (not one representative operation) are done. UPDATED (admin-enum
+        subBundle closure round): selected-group-detail field-prefill (enum_update_group_name_input's
+        propBindings.value.source="node:enum_table.value.groupName", resolved reactively by
+        cascadeNodeValueReferences/applyLiveNodeValueOverride -- frontend/runtime/
+        liveNodeValueTracker.ts, frontend/islands/ProjectionShell.tsx), enum_search's functional
+        list_groups search/filter (a data-defined optional payload.search field on the SAME
+        existing read action, sourced from enum_search's own tracked value via
+        dispatchPayloadFromByTrigger, backend/repository/NpgsqlEnumDictionaryRepository.cs ILIKE
+        filter), and /admin/enums route retirement (frontend/routes/admin/enums.tsx now a same-URL
+        ProjectionShell thin wrapper pinned to ae200 via a new optional manifestId prop) are all
+        done. UPDATED (round 36): AdminEnumsRoster.tsx itself is deleted -- it had carried no
+        production route/import reachability since the round above, and was kept catalog-
+        registered only as a ghost entry behind a hardcoded EXEMPT_KEYS test carve-out in
+        runtimeComponentCatalogFullConnection.test.ts; round 36 removed the island file, the
+        catalog.ts entry, the EXEMPT_KEYS carve-out, and roleBasedSurfaceSeparation.test.ts's
+        historical entry-existence assertion for it together, so no ghost/exempt residue remains.
+        Proof: frontend/tests/projectionShellAdminRuntimeWritePayloadCapture.test.ts's
+        canonical-ae200-fixture scenarios (the checked-in, backend-live-DB-captured
+        admin_enum_ae200_layout_nodes.json, never hand-built layoutNodes) prove prefill/edit-
+        retention/row-reselection-overwrite/fresh-preview-confirm and search-filter/empty-query-
+        restore end-to-end; backend/tests/Topolactor.Integration.Tests/
+        AdminEnumHubRelationUiProjectionLiveDbTests.cs's
+        DispatchAsync_AdminEnumManagementManifest_ListGroupsSearch_... proves the search filter
+        against real PostgreSQL (db/enum_seed.sql's demo_status/user_status rows) including fail-
+        close on a non-string search value.
+      dryrun_preview_gated_confirm_modal: >-
+        preview-gap round (2026-08-04). Generic runtime boundary contract, not admin-enum-specific
+        -- applies to ANY node whose open/action trigger carries an admin_runtime_dispatch_override_
+        wiring override paired with a secondaryDisclosureAction that opens a confirm surface: that
+        trigger's dispatch is authored with the SAME target_ref/field-source mapping the eventual
+        confirmed write inside the opened surface uses, differing only in payload.dryRun=literal:true
+        instead of payload.confirmed=literal:true (the SAME generic mutation_confirmation_contract
+        preview/confirm vocabulary admin-normal-surface-projection-seed-ssot.yaml already declares
+        for team_markdown's saved-view-update contract -- never a new preview mechanism). The
+        confirm surface's own open (secondaryDisclosureActionType=openModal) is deferred to that
+        dryRun dispatch's own success via the SAME deferLocalStateMutationToDispatchSuccess
+        generic hook a Confirm button's own secondaryDisclosureActionType=closeModal already used
+        (frontend/runtime/runtimeComponentFactory.ts emitBoundEvent) -- no new gating mechanism.
+        A settled dryRun preview result is classified purely by the dispatched request's OWN
+        resolved payload.dryRun flag (RuntimeDispatchResultContext.dryRun, forwarded from
+        dispatchRuntimeComponentCommandAndForwardResult -- never inferred from operation name,
+        nodeId, or manifest UUID): on preview success, ProjectionShell.tsx's
+        handleRuntimeDispatchResult takes no further action beyond what the deferred local-state
+        mutation (opening the confirm surface) already did -- it is NEVER classified the same as a
+        settled CONFIRMED write's success, and never triggers refreshCurrentManifestAsync's
+        canonical_reread (round_27_28's own child-write-success trigger remains reserved for an
+        actual confirmed write landing). On preview failure, the SAME generic settled-dispatch-
+        failure surfacing round_27_28 already described as intended but had not yet implemented
+        applies uniformly (result.errors[0].message via the existing non-destructive refreshWarning
+        banner) -- covering a preview's own validation failure and a confirmed write's own backend
+        rejection alike, never a preview-specific code path. Typed field values and the tracked
+        table-row selection are unaffected by either outcome, since neither branch touches the live
+        node value tracker or emission state at all -- retention falls out of doing nothing, not a
+        dedicated preservation mechanism. Confirm re-resolves the SAME payloadFrom mapping fresh
+        from current node values at its own click time (unchanged pre-existing generic behavior).
+        Proof: db/seed_empty.sql's ae204/ae206 (regenerated via
+        .agent/tests/fixtures/react-schema-topology-seed-translator/admin-enum-ae200.input.json,
+        never hand-edited) carries this shape for all 7 write actions;
+        backend/tests/Topolactor.Integration.Tests/AdminEnumHubRelationUiProjectionLiveDbTests.cs's
+        EachWriteActionEmbeddedBehindOwnConfirmModal_StructurallyResolves theory (extended with the
+        expected preview field source) plus the two dedicated create_group/delete_group node tests
+        prove this live-DB, structurally, for all 7 operations;
+        frontend/tests/projectionShellAdminRuntimeWritePayloadCapture.test.ts's preview-gap shared
+        scenario (production ProjectionShell mount, all 7 operations table-driven) proves failed-
+        preview-never-opens-with-error-surfaced, succeeded-preview-opens-without-adopting-state-or-
+        triggering-canonical-reread, Cancel-never-dispatches, and Confirm-re-resolves-fresh-and-
+        dispatches-confirmed. A generic Section-ownable-Action-lane addition
+        (admin_runtime_dispatch_override_wiring, alongside the pre-existing disclosure_state_wiring)
+        was required in react_schema_topology_seed_translator.py so this preview trigger button can
+        legally sit directly under a Section the same way its disclosure-only predecessor did — see
+        that file's SECTION_OWNABLE_ACTION_LANES comment for the narrow-scope rationale (paired-
+        with-a-Modal-opening-secondaryDisclosureAction only, never a bare ungated mutation).
+        UPDATED (admin-enum subBundle closure round): items browse UX (list_groups' own
+        itemsSummary column), a negative-boundary matrix covering all 7 operations (not
+        delete_group alone), selected-group-detail field-prefill, functional enum_search, and
+        /admin/enums route retirement are all done -- see
+        round_27_28_settled_child_dispatch_result_authority above for the up to date record.
     manifest_topology_boundary:
       rule: >-
         manifest.topology entries for this surface (ui_projection type per
@@ -1640,6 +2042,18 @@ admin_uibuilder_ui_structure_wiring_ssot:
         high-frequency and the binding's debounceMs is missing/invalid —
         authoring/apply policy guard alone does not stop an out-of-band
         persisted interaction from reaching the dispatch lane at runtime
+      - round 39 cross-reference (a distinct, narrower policy — not a duplicate of
+        this one): the admin_runtime dispatch lane's own Field-owned search_input
+        debounce requirement (docs/design/react-schema-topology-seed-translator-
+        ssot.yaml search_filter_input_contract.debounce_policy /
+        wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring.
+        field_participation rule 5) follows this SAME 3-layer shape (authoring
+        fail-close, backend persistence-boundary fail-close, and — added round 39
+        — a frontend runtime dispatch-time fail-close in emitBoundEvent, never a
+        silent fallback to immediate dispatch on a missing/invalid debounceMs) but
+        is scoped to componentType="form_input/search_input" specifically, not to
+        this section's trigger-name-based high-frequency classification —
+        intentionally NOT merged into high_frequency_policy's own rule set
     fail_close:
       - high_frequency_trigger_with_backend_or_external_dispatch_without_debounce_ms
       - runtime_dispatch_of_high_frequency_trigger_without_debounce_ms_at_event_time

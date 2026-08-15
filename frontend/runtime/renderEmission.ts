@@ -36,6 +36,10 @@ import {
   wiringSettingCategoryOf,
 } from "../lib/uiBuilderWiringProjection.ts";
 import { resolveUiStateUpdateMutation } from "./uiEventEffectRunner.ts";
+import {
+  ADMIN_RUNTIME_READ_ACTIONS,
+  isFieldFamilyComponentKind,
+} from "./adminRuntimeReadActions.ts";
 
 export type RenderEmissionOptions = {
   /**
@@ -595,6 +599,7 @@ export type AdminRuntimeTargetRefOverrideByTriggerResult =
 function buildAdminRuntimeTargetRefOverrideByTrigger(
   rawByTrigger: unknown,
   targetSurface: string | null | undefined,
+  componentKind: string | null | undefined,
 ): AdminRuntimeTargetRefOverrideByTriggerResult {
   if (rawByTrigger === undefined || rawByTrigger === null) {
     return { ok: true, byTrigger: {} };
@@ -653,6 +658,24 @@ function buildAdminRuntimeTargetRefOverrideByTrigger(
           `RUNTIME_INTERACTION_DISPATCH_TARGET_REF_BY_TRIGGER_TARGET_REF_INVALID: dispatchTargetRefByTrigger entry for trigger "${trigger}" is not a valid "manifest:<uuid>:<layer>:<action>" target_ref`,
       };
     }
+    // Round 37 defense-in-depth layer 3 of 3 (translator authoring-time / backend layout_patch
+    // save-time / THIS live runtime-dispatch-time render boundary) -- a Field-family node
+    // (componentKind starting with "form_input/") must resolve to a resource:action listed in
+    // ADMIN_RUNTIME_READ_ACTIONS. Even if BOTH earlier layers were bypassed (a directly-DB-edited
+    // layout_patch_json reaching this render/dispatch-wiring boundary without ever going through
+    // the translator or the NpgsqlUiTopologyRepository save-time validator), this is the last point
+    // before a click/keystroke handler is actually wired up to fire the request -- refusing here
+    // means no request is ever sent, not merely that one was rejected server-side after the fact.
+    if (
+      isFieldFamilyComponentKind(componentKind) &&
+      !ADMIN_RUNTIME_READ_ACTIONS.has(`${parsed.layer}:${parsed.action}`)
+    ) {
+      return {
+        ok: false,
+        error:
+          `RUNTIME_INTERACTION_FIELD_DISPATCH_TARGET_REF_NOT_READ_ACTION: dispatchTargetRefByTrigger entry for trigger "${trigger}" on Field-family componentKind "${componentKind}" resolves to "${parsed.layer}:${parsed.action}", which is not a member of ADMIN_RUNTIME_READ_ACTIONS`,
+      };
+    }
     if (!surface) {
       return {
         ok: false,
@@ -694,18 +717,82 @@ function buildAdminRuntimeTargetRefOverrideByTrigger(
  * REPLACES that trigger's spec entirely with a different admin_runtime layer:action
  * target — absent for triggers with no authored override, which keep using spec
  * (the layout's own uniform target) unchanged.
+ *
+ * Round 41/42 (Owner decision, admin-uibuilder-ui-structure-wiring-ssot.yaml
+ * owner_decision_2026_08_13_explicit_dispatch_participation_required, superseded/
+ * generalized by owner_decision_2026_08_14_general_dispatch_participation_contract_round42):
+ * for EVERY node whose wiringKind is "admin_runtime" — regardless of componentKind, Field
+ * or not — a layout merely HAVING a default spec must never by itself bind a trigger to a
+ * REAL business-operation dispatch. A trigger only gets a runtimeDispatch binding when the
+ * node's OWN authoring/topology data explicitly participates for that trigger: either
+ * targetRefOverrideByTrigger[trigger] (a target override) or payloadFromByTrigger[trigger]
+ * (a payload-shape customization, falling back to spec as the target since authoring a
+ * payload shape for a specific trigger is itself an explicit, per-trigger authoring
+ * signal — this pre-existing generic base-spec-plus-payloadFrom-only pattern, used
+ * outside admin-enum too, is preserved unchanged). A trigger with NEITHER authored gets no
+ * business dispatch at all, regardless of componentKind (confirmed via the real
+ * admin_enum_ae200_layout_nodes.json fixture: every write-only typed Field like
+ * enum_create_group_name_input has neither, yet its "change" trigger was previously
+ * bound anyway purely because the layout happens to be admin_runtime — spurious
+ * dispatch on every keystroke, confounding search-debounce non-interference).
+ *
+ * Round 41 first shipped this scoped to Field-family nodes only
+ * (isFieldFamilyComponentKind), reverting a broader draft after it broke ~40
+ * pre-existing tests that relied on non-Field nodes' implicit base-spec dispatch as
+ * untested-as-such behavior — most concretely enum_table's own "select" trigger (row
+ * click) re-dispatching list_groups. Round 42 (Owner clarification) corrects that: the
+ * contract was never Field-specific, and an existing test asserting the OLD implicit
+ * inheritance is not itself authority for keeping the contract narrower than the actual
+ * Owner decision — the capability those tests protected is preserved by AUTHORING
+ * explicit dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger on the affected real
+ * production nodes (the same authoring shape every already-explicit ae200 node already
+ * uses), not by a componentKind conditional in this function. There is no
+ * isFieldFamilyComponentKind check left in this function's gating as of round 42; every
+ * wiringKind === "admin_runtime" node is scoped identically regardless of componentKind.
+ * Every other wiringKind (search/aggregate/create/update/delete) keeps its pre-existing
+ * base-spec-fallback behavior for EVERY trigger unconditionally — a separate,
+ * pre-existing contract this decision does not revisit.
+ *
+ * Every admin_runtime trigger still gets an eventType-only binding entry even without
+ * dispatch participation (`{ eventType: trigger }`, no runtimeDispatch key) rather than
+ * being omitted entirely — omitting it was tried first and reverted:
+ * runtimeComponentFactory.ts's requireBinding (inputFactory/buttonFactory/etc.) fails a
+ * component's entire render closed when its own required trigger key is absent from
+ * eventBinding at all, which would have made every real write-only Field (e.g.
+ * enum_create_group_name_input) stop rendering as an `<input>` entirely — a functional
+ * regression far worse than the spurious-dispatch bug this round fixes. An
+ * eventType-only entry keeps requireBinding satisfied and keeps emitBoundEvent's
+ * pre-dispatch lanes (onNodeValueChange node-value tracking, calcTriggerCallback, the
+ * observation log) working exactly as before, while parseEventBinding's own optional
+ * runtimeDispatch means no business dispatch fires — this is what actually eliminates
+ * the spurious dispatch, not the entry's mere absence.
  */
 export function buildCatalogComponentEventBinding(
   spec: RuntimeDispatchSpec | null,
   payloadFromByTrigger: Record<string, Record<string, string>> = {},
   targetRefOverrideByTrigger: Record<string, RuntimeDispatchSpec> = {},
+  nodeWiringKind?: string,
 ): Record<string, unknown> {
   const triggers = COMPONENT_WIRING_EXECUTION_LANE_TRIGGERS;
   const binding: Record<string, unknown> = {};
+  const requiresExplicitParticipation = nodeWiringKind === "admin_runtime";
   for (const trigger of triggers) {
-    const triggerSpec = targetRefOverrideByTrigger[trigger] ?? spec;
-    if (!triggerSpec) continue;
+    const overrideSpec = targetRefOverrideByTrigger[trigger];
     const payloadFrom = payloadFromByTrigger[trigger];
+    if (requiresExplicitParticipation) {
+      const hasExplicitParticipation = overrideSpec !== undefined ||
+        payloadFrom !== undefined;
+      const triggerSpec = hasExplicitParticipation ? (overrideSpec ?? spec) : null;
+      binding[trigger] = triggerSpec
+        ? {
+          eventType: trigger,
+          runtimeDispatch: payloadFrom ? { ...triggerSpec, payloadFrom } : triggerSpec,
+        }
+        : { eventType: trigger };
+      continue;
+    }
+    const triggerSpec = overrideSpec ?? spec;
+    if (!triggerSpec) continue;
     binding[trigger] = {
       eventType: trigger,
       runtimeDispatch: payloadFrom ? { ...triggerSpec, payloadFrom } : triggerSpec,
@@ -1390,6 +1477,7 @@ export function renderEmission(
           : buildAdminRuntimeTargetRefOverrideByTrigger(
             node.dispatchTargetRefByTrigger,
             node.targetSurface,
+            node.componentKind,
           );
         if (!adminRuntimeTargetRefOverride.ok) {
           return {
@@ -1410,6 +1498,7 @@ export function renderEmission(
             buildRuntimeDispatchSpec(node),
             adminRuntimePayloadFrom.byTrigger,
             adminRuntimeTargetRefOverride.byTrigger,
+            nodeWiringKind,
           );
         const rawLocalInteractions = node.runtimeInteractions ??
           propsWithDesign.eventWirings;
@@ -1499,6 +1588,7 @@ export function renderEmission(
           }
           : undefined;
         const hub: ComponentDataHub = {
+          nodeId: node.nodeId,
           componentId: node.componentId,
           componentKind: node.componentKind,
           packageId: emission.packageId ?? null,
@@ -1518,6 +1608,7 @@ export function renderEmission(
             ? (result: DispatchResponse, context: RuntimeDispatchResultContext) =>
               options.onRuntimeDispatchResult!(node.nodeId!, result, context)
             : undefined,
+          debounceMs: typeof node.debounceMs === "number" ? node.debounceMs : undefined,
           design: hubDesign,
         };
         const adapted = adaptComponentDataHub(hub);

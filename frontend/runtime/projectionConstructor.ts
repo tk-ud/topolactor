@@ -37,6 +37,17 @@ export type ComponentDefinitionPayload = {
 };
 
 export type ComponentDataHub = {
+  /**
+   * round 38: the LAYOUT NODE's own stable structural identity (layout_patch_json.nodes[].nodeId /
+   * layout_schema_json.records[] composed node id) -- distinct from componentId (the CATALOG
+   * component definition this node instantiates, e.g. "search_input.alias"'s own registry UUID,
+   * which every node using that same catalog component shares, possibly across unrelated
+   * manifests/screens entirely). Any per-instance runtime state (debounce timers, dispatch
+   * sequence guards) MUST key on nodeId, never componentId -- keying on componentId lets two
+   * distinct layout nodes silently share timers/sequence state merely because they happen to use
+   * the same catalog component kind.
+   */
+  nodeId?: string;
   componentId?: string;
   componentKey?: string;
   packageId?: string | null;
@@ -83,6 +94,12 @@ export type ComponentDataHub = {
     result: DispatchResponse,
     context: RuntimeDispatchResultContext,
   ) => void;
+  /**
+   * round 37 (search_filter_input_contract debounce_policy): this node's own declared
+   * debounceMs (Field grammar, react-schema-topology-seed-translator-ssot.yaml) — see
+   * RuntimeComponentSpec.debounceMs for the runtime behavior this drives.
+   */
+  debounceMs?: number;
 };
 
 type RuntimeTopologyComponentProps = JsonObject & {

@@ -28,6 +28,126 @@ public class NpgsqlEnumDictionaryRepository : EnumDictionaryRepository
         return list;
     }
 
+    public override async Task<IReadOnlyList<EnumDictionaryGroupWithItemsSummaryDto>> ListGroupsWithItemsSummaryAsync(
+        string? search = null, string? groupNameFilter = null, int? groupIndexNumFilter = null,
+        int? itemPositionFilter = null, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        var trimmedGroupNameFilter = groupNameFilter?.Trim();
+        var hasSearch = !string.IsNullOrEmpty(search?.Trim());
+        var hasGroupNameFilter = !string.IsNullOrEmpty(trimmedGroupNameFilter);
+        var hasGroupIndexNumFilter = groupIndexNumFilter.HasValue;
+        var hasItemPositionFilter = itemPositionFilter.HasValue;
+
+        var whereClauses = new List<string>();
+        if (hasSearch)
+        {
+            // generic list_groups search (admin-enum subBundle closure round; extended round 36 to
+            // the owning SSOT's full declared search target field set -- docs/design/
+            // admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.enum.
+            // capability_requirements.search): case-insensitive substring match, parameterized --
+            // never string-concatenated -- across the group's OWN identity (group_name/index_num)
+            // OR any MEMBER ITEM's identity/position (items.name/items.index_num/
+            // group_items.position). An EXISTS subquery, not a join-level filter, so a group that
+            // matches via one item still returns its FULL itemsSummary (every member item), not
+            // only the matching one -- the outer LEFT JOIN below stays unfiltered for that reason.
+            whereClauses.Add(
+                """
+                (g.group_name ILIKE @search
+                 OR CAST(g.index_num AS TEXT) ILIKE @search
+                 OR EXISTS (
+                     SELECT 1 FROM enum.group_items gi2
+                     JOIN enum.items i2 ON i2.index_num = gi2.enum_index_num
+                     WHERE gi2.group_id = g.group_id
+                       AND (i2.name ILIKE @search
+                            OR CAST(i2.index_num AS TEXT) ILIKE @search
+                            OR CAST(gi2.position AS TEXT) ILIKE @search)
+                 ))
+                """);
+        }
+        // round 37: the owning SSOT's own three declared filter target fields (enum.groups.
+        // group_name, enum.groups.index_num, enum.group_items.position), each an independent
+        // exact-match clause, AND-combined -- replaces round 36's groupIdFilter (an exact match on
+        // enum.groups.group_id, a field the owning SSOT never actually declares as part of
+        // capability_requirements.filter). enum_group_filter drives groupNameFilter (its own
+        // option value is now the group's name, not an opaque id).
+        if (hasGroupNameFilter)
+        {
+            whereClauses.Add("g.group_name = @groupNameFilter");
+        }
+        if (hasGroupIndexNumFilter)
+        {
+            whereClauses.Add("g.index_num = @groupIndexNumFilter");
+        }
+        if (hasItemPositionFilter)
+        {
+            // group_items.position lives on the per-item membership row, not the group row itself
+            // -- an EXISTS subquery scopes to "this group has SOME member at exactly this
+            // position", the same "matches via a member, but the group's FULL itemsSummary is
+            // still returned" shape search's own EXISTS clause above already uses.
+            whereClauses.Add(
+                """
+                EXISTS (
+                    SELECT 1 FROM enum.group_items gi3
+                    WHERE gi3.group_id = g.group_id AND gi3.position = @itemPositionFilter
+                )
+                """);
+        }
+
+        cmd.CommandText =
+            """
+            SELECT g.group_id, g.index_num, g.group_name,
+                   COALESCE(
+                       string_agg(i.index_num || ':' || i.name, ', ' ORDER BY gi.position),
+                       ''
+                   ) AS items_summary,
+                   COALESCE(
+                       string_agg(CAST(i.index_num AS TEXT), ',' ORDER BY gi.position),
+                       ''
+                   ) AS items_index_nums
+            FROM enum.groups g
+            LEFT JOIN enum.group_items gi ON gi.group_id = g.group_id
+            LEFT JOIN enum.items i ON i.index_num = gi.enum_index_num
+            """
+            + (whereClauses.Count > 0 ? " WHERE " + string.Join(" AND ", whereClauses) : "") +
+            """
+
+            GROUP BY g.group_id, g.index_num, g.group_name
+            ORDER BY g.index_num
+            """;
+        if (hasSearch)
+        {
+            cmd.Parameters.AddWithValue("search", $"%{search!.Trim()}%");
+        }
+        if (hasGroupNameFilter)
+        {
+            cmd.Parameters.AddWithValue("groupNameFilter", trimmedGroupNameFilter!);
+        }
+        if (hasGroupIndexNumFilter)
+        {
+            cmd.Parameters.AddWithValue("groupIndexNumFilter", groupIndexNumFilter!.Value);
+        }
+        if (hasItemPositionFilter)
+        {
+            cmd.Parameters.AddWithValue("itemPositionFilter", itemPositionFilter!.Value);
+        }
+        var list = new List<EnumDictionaryGroupWithItemsSummaryDto>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            list.Add(new EnumDictionaryGroupWithItemsSummaryDto(
+                reader.GetGuid(0),
+                reader.GetInt32(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.GetString(4)));
+        }
+
+        return list;
+    }
+
     public override async Task<EnumDictionaryGroupDetailDto?> GetGroupDetailAsync(
         Guid groupId, CancellationToken ct = default)
     {

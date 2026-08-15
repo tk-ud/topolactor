@@ -32,6 +32,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL = REPO_ROOT / ".agent" / "tools" / "react-schema-topology-seed-translator"
 FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "credential-management-0092.input.json"
 TOPOLOGY_SEED_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "credential-management-0092.topology-seed.input.json"
+ADMIN_ENUM_AE200_TOPOLOGY_SEED_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "admin-enum-ae200.topology-seed.input.json"
 CRUD_SCHEMA_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "physical-search-crud-aggregate.react-schema.json"
 CRUD_TOPOLOGY_SEED_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "physical-search-crud-aggregate.topology-seed.input.json"
 AGENT_TMP_DIR = REPO_ROOT / ".agent" / "tmp"
@@ -1968,6 +1969,636 @@ def main():
         expect(
             "107. validate_disclosure_targets positive control: a supported actionType (openModal) with a targetNodeId resolving to an actual Modal node produces zero errors, proving 104-106 fail for the right reason and not because every input fails",
             valid_target_errors == [],
+        )
+
+        # 108-116: validate_admin_runtime_preview_action_pairing negative-boundary proof
+        # (preview-gap round). This proves the FULL safety shape of a Section-owned
+        # admin_runtime_dispatch_override_wiring Action is checked, not merely that the lane
+        # name is a member of SECTION_OWNABLE_ACTION_LANES -- each case below isolates exactly
+        # one violated invariant against an otherwise-valid preview/confirm pairing built from
+        # hand-crafted nodes (a well-formed CLI input cannot organically produce most of these
+        # defects), so a passing test proves the check actually distinguishes the specific
+        # violation, not that every input is rejected.
+        def build_preview_confirm_pair(
+            preview_payload_from=None,
+            confirm_payload_from=None,
+            secondary=("openModal", "confirm_modal"),
+            confirm_target_ref="manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group",
+            confirm_count=1,
+        ):
+            preview_target_ref = "manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group"
+            if preview_payload_from is None:
+                preview_payload_from = {"groupName": "node:name_input.value", "dryRun": "literal:true"}
+            if confirm_payload_from is None:
+                confirm_payload_from = {"groupName": "node:name_input.value", "confirmed": "literal:true"}
+            confirm_actions = [
+                {
+                    "kind": "Action",
+                    "key": f"confirm_btn_{i}",
+                    "eventBinding": {
+                        "wiringLane": "admin_runtime_dispatch_override_wiring",
+                        "targetRef": confirm_target_ref,
+                        "payloadFrom": confirm_payload_from,
+                    },
+                }
+                for i in range(confirm_count)
+            ]
+            modal_node = {"kind": "Modal", "key": "confirm_modal", "children": confirm_actions}
+            preview_action = {
+                "kind": "Action",
+                "key": "open_btn",
+                "_path": "$.test.open_btn",
+                "eventBinding": {
+                    "wiringLane": "admin_runtime_dispatch_override_wiring",
+                    "targetRef": preview_target_ref,
+                    "payloadFrom": preview_payload_from,
+                },
+            }
+            if secondary is not None:
+                action_type, target_node_id = secondary
+                preview_action["secondaryDisclosureAction"] = {
+                    "actionType": action_type, "targetNodeId": target_node_id,
+                }
+            nodes_by_key = {"confirm_modal": modal_node}
+            for c in confirm_actions:
+                nodes_by_key[c["key"]] = c
+            section_parent = {"kind": "Section", "key": "section1"}
+            return preview_action, nodes_by_key, section_parent
+
+        def run_pairing_check(preview_action, nodes_by_key, section_parent):
+            errs = []
+            translator_impl.validate_admin_runtime_preview_action_pairing(
+                preview_action, nodes_by_key, errs, parent=section_parent,
+            )
+            return [e["ruleId"] for e in errs]
+
+        missing_dryrun_action, missing_dryrun_nodes, missing_dryrun_parent = build_preview_confirm_pair(
+            preview_payload_from={"groupName": "node:name_input.value"},
+        )
+        expect(
+            "108. validate_admin_runtime_preview_action_pairing rejects a Section-owned preview Action whose payloadFrom omits dryRun via ADMIN_RUNTIME_PREVIEW_ACTION_DRYRUN_REQUIRED",
+            "ADMIN_RUNTIME_PREVIEW_ACTION_DRYRUN_REQUIRED"
+            in run_pairing_check(missing_dryrun_action, missing_dryrun_nodes, missing_dryrun_parent),
+        )
+
+        confirmed_present_action, confirmed_present_nodes, confirmed_present_parent = build_preview_confirm_pair(
+            preview_payload_from={
+                "groupName": "node:name_input.value", "dryRun": "literal:true", "confirmed": "literal:true",
+            },
+        )
+        expect(
+            "109. validate_admin_runtime_preview_action_pairing rejects a Section-owned preview Action whose payloadFrom ALSO declares confirmed via ADMIN_RUNTIME_PREVIEW_ACTION_CONFIRMED_NOT_ALLOWED",
+            "ADMIN_RUNTIME_PREVIEW_ACTION_CONFIRMED_NOT_ALLOWED"
+            in run_pairing_check(confirmed_present_action, confirmed_present_nodes, confirmed_present_parent),
+        )
+
+        missing_secondary_action, missing_secondary_nodes, missing_secondary_parent = build_preview_confirm_pair(
+            secondary=None,
+        )
+        expect(
+            "110. validate_admin_runtime_preview_action_pairing rejects a Section-owned admin_runtime Action with NO secondaryDisclosureAction at all via ADMIN_RUNTIME_PREVIEW_ACTION_SECONDARY_OPEN_MODAL_REQUIRED (never a silently-accepted bare mutation)",
+            "ADMIN_RUNTIME_PREVIEW_ACTION_SECONDARY_OPEN_MODAL_REQUIRED"
+            in run_pairing_check(missing_secondary_action, missing_secondary_nodes, missing_secondary_parent),
+        )
+
+        wrong_secondary_action, wrong_secondary_nodes, wrong_secondary_parent = build_preview_confirm_pair(
+            secondary=("closeModal", "confirm_modal"),
+        )
+        expect(
+            "111. validate_admin_runtime_preview_action_pairing rejects a Section-owned admin_runtime Action whose secondaryDisclosureActionType is closeModal (not openModal) via ADMIN_RUNTIME_PREVIEW_ACTION_SECONDARY_OPEN_MODAL_REQUIRED",
+            "ADMIN_RUNTIME_PREVIEW_ACTION_SECONDARY_OPEN_MODAL_REQUIRED"
+            in run_pairing_check(wrong_secondary_action, wrong_secondary_nodes, wrong_secondary_parent),
+        )
+
+        # secondaryDisclosureAction target existence/kind is validate_disclosure_targets' own
+        # authority (104-107 above), never duplicated in validate_admin_runtime_preview_action_pairing
+        # -- proven here specifically THROUGH the secondaryDisclosureAction path (104-107 only
+        # exercised the PRIMARY disclosureActionType path), since _disclosure_target_checks_for_node
+        # yields from both independently.
+        missing_target_secondary_errors = []
+        translator_impl.validate_disclosure_targets(
+            {
+                "_path": "$.test.open_btn_missing_target", "key": "open_btn_missing_target",
+                "secondaryDisclosureAction": {"actionType": "openModal", "targetNodeId": None},
+            },
+            {}, missing_target_secondary_errors,
+        )
+        expect(
+            "112. validate_disclosure_targets rejects a secondaryDisclosureAction (the preview button's own Modal-opening secondary) with a missing targetNodeId via DISCLOSURE_TARGET_NODE_REQUIRED, same authority as the primary disclosureActionType path",
+            "DISCLOSURE_TARGET_NODE_REQUIRED" in [e["ruleId"] for e in missing_target_secondary_errors],
+        )
+
+        wrong_kind_secondary_errors = []
+        translator_impl.validate_disclosure_targets(
+            {
+                "_path": "$.test.open_btn_wrong_kind_target", "key": "open_btn_wrong_kind_target",
+                "secondaryDisclosureAction": {"actionType": "openModal", "targetNodeId": "not_a_modal"},
+            },
+            {"not_a_modal": "Section"}, wrong_kind_secondary_errors,
+        )
+        expect(
+            "113. validate_disclosure_targets rejects a secondaryDisclosureAction targeting a real node of the wrong kind (Section, not Modal) via DISCLOSURE_TARGET_KIND_MISMATCH, same authority as the primary disclosureActionType path",
+            "DISCLOSURE_TARGET_KIND_MISMATCH" in [e["ruleId"] for e in wrong_kind_secondary_errors],
+        )
+
+        target_ref_mismatch_action, target_ref_mismatch_nodes, target_ref_mismatch_parent = build_preview_confirm_pair(
+            confirm_target_ref="manifest:00000000-0000-0000-0000-0000000ae999:enum_dictionary:some_other_action",
+        )
+        expect(
+            "114. validate_admin_runtime_preview_action_pairing rejects a preview Action whose target_ref differs from its Modal's own Confirm button's target_ref via ADMIN_RUNTIME_PREVIEW_ACTION_TARGET_REF_MISMATCH (preview and confirm resolving different manifests/actions is a real authoring defect, not cosmetic)",
+            "ADMIN_RUNTIME_PREVIEW_ACTION_TARGET_REF_MISMATCH"
+            in run_pairing_check(target_ref_mismatch_action, target_ref_mismatch_nodes, target_ref_mismatch_parent),
+        )
+
+        payload_mismatch_action, payload_mismatch_nodes, payload_mismatch_parent = build_preview_confirm_pair(
+            confirm_payload_from={"groupName": "node:a_DIFFERENT_input.value", "confirmed": "literal:true"},
+        )
+        expect(
+            "115. validate_admin_runtime_preview_action_pairing rejects a preview Action whose business-field payloadFrom differs from its Modal's own Confirm button's business-field payloadFrom via ADMIN_RUNTIME_PREVIEW_ACTION_PAYLOAD_FIELDS_MISMATCH",
+            "ADMIN_RUNTIME_PREVIEW_ACTION_PAYLOAD_FIELDS_MISMATCH"
+            in run_pairing_check(payload_mismatch_action, payload_mismatch_nodes, payload_mismatch_parent),
+        )
+
+        ambiguous_confirm_action, ambiguous_confirm_nodes, ambiguous_confirm_parent = build_preview_confirm_pair(
+            confirm_count=2,
+        )
+        expect(
+            "116. validate_admin_runtime_preview_action_pairing rejects a preview Action whose target Modal contains TWO admin_runtime_dispatch_override_wiring children via ADMIN_RUNTIME_PREVIEW_ACTION_CONFIRM_TARGET_AMBIGUOUS (never silently pairing against the first match)",
+            "ADMIN_RUNTIME_PREVIEW_ACTION_CONFIRM_TARGET_AMBIGUOUS"
+            in run_pairing_check(ambiguous_confirm_action, ambiguous_confirm_nodes, ambiguous_confirm_parent),
+        )
+
+        no_confirm_action, no_confirm_nodes, no_confirm_parent = build_preview_confirm_pair(confirm_count=0)
+        expect(
+            "117. validate_admin_runtime_preview_action_pairing rejects a preview Action whose target Modal contains ZERO admin_runtime_dispatch_override_wiring children via ADMIN_RUNTIME_PREVIEW_ACTION_CONFIRM_TARGET_AMBIGUOUS",
+            "ADMIN_RUNTIME_PREVIEW_ACTION_CONFIRM_TARGET_AMBIGUOUS"
+            in run_pairing_check(no_confirm_action, no_confirm_nodes, no_confirm_parent),
+        )
+
+        valid_pair_action, valid_pair_nodes, valid_pair_parent = build_preview_confirm_pair()
+        expect(
+            "118. validate_admin_runtime_preview_action_pairing positive control: a fully-matching dryRun preview + openModal secondary + single same-target_ref/same-fields Confirm produces zero errors, proving 108-117 fail for the right reason and not because every input fails",
+            run_pairing_check(valid_pair_action, valid_pair_nodes, valid_pair_parent) == [],
+        )
+
+        not_section_owned_action, not_section_owned_nodes, _ = build_preview_confirm_pair(
+            preview_payload_from={"groupName": "node:name_input.value"},
+        )
+        expect(
+            "119. validate_admin_runtime_preview_action_pairing does not apply this rule at all to a Modal-owned (not Section-owned) admin_runtime_dispatch_override_wiring Action -- the real Confirm button itself, which legitimately has no dryRun/openModal pairing of its own",
+            run_pairing_check(not_section_owned_action, not_section_owned_nodes, {"kind": "Modal", "key": "some_modal"}) == [],
+        )
+
+        # 119a-119b (round 3, preview-gap audit): the RESOLVED Confirm button's own payloadFrom
+        # authority, not merely lane membership plus Modal position, is now checked.
+        confirm_missing_confirmed_action, confirm_missing_confirmed_nodes, confirm_missing_confirmed_parent = (
+            build_preview_confirm_pair(
+                confirm_payload_from={"groupName": "node:name_input.value"},
+            )
+        )
+        expect(
+            "119a. validate_admin_runtime_preview_action_pairing rejects a resolved Confirm button whose own payloadFrom omits confirmed=literal:true via ADMIN_RUNTIME_CONFIRM_ACTION_CONFIRMED_LITERAL_TRUE_REQUIRED (lane membership plus Modal position alone is not write-confirmation authority proof)",
+            "ADMIN_RUNTIME_CONFIRM_ACTION_CONFIRMED_LITERAL_TRUE_REQUIRED"
+            in run_pairing_check(
+                confirm_missing_confirmed_action, confirm_missing_confirmed_nodes, confirm_missing_confirmed_parent,
+            ),
+        )
+
+        confirm_leftover_dryrun_action, confirm_leftover_dryrun_nodes, confirm_leftover_dryrun_parent = (
+            build_preview_confirm_pair(
+                confirm_payload_from={
+                    "groupName": "node:name_input.value", "confirmed": "literal:true", "dryRun": "literal:true",
+                },
+            )
+        )
+        expect(
+            "119b. validate_admin_runtime_preview_action_pairing rejects a resolved Confirm button whose own payloadFrom carries a leftover dryRun flag via ADMIN_RUNTIME_CONFIRM_ACTION_EXTRA_AUTHORITY_FLAG_NOT_ALLOWED (a Confirm button must never carry any authority flag besides confirmed)",
+            "ADMIN_RUNTIME_CONFIRM_ACTION_EXTRA_AUTHORITY_FLAG_NOT_ALLOWED"
+            in run_pairing_check(
+                confirm_leftover_dryrun_action, confirm_leftover_dryrun_nodes, confirm_leftover_dryrun_parent,
+            ),
+        )
+
+        # 119c-119f (round 3, preview-gap audit): validate_table_display_columns_and_rows_source --
+        # displayColumns/rowsSource are now an SSOT-defined, independently-validated data carrier
+        # rather than a translator-hardcoded literal (see the split_flat_records_into_adoption_
+        # candidates topology_ui_table branch, which now reads record["rowsSource"] instead of
+        # unconditionally emitting "emission.data").
+        def run_table_check(node):
+            errs = []
+            translator_impl.validate_table_display_columns_and_rows_source(node, errs)
+            return [e["ruleId"] for e in errs]
+
+        malformed_columns_table = {
+            "kind": "Table", "key": "malformed_table", "_path": "$.test.malformed_table",
+            "displayColumns": [{"key": "groupName", "header": "Group name"}],
+            "_rawDisplayColumns": "groupName:Group name,badsegment_no_colon",
+            "rowsSource": "emission.data",
+        }
+        expect(
+            "119c. validate_table_display_columns_and_rows_source rejects a displayColumns segment missing the ':' key:header separator via TABLE_DISPLAY_COLUMNS_MALFORMED (never silently dropped even though parse_columns' own lenient parsing omits it from the returned column list)",
+            "TABLE_DISPLAY_COLUMNS_MALFORMED" in run_table_check(malformed_columns_table),
+        )
+
+        missing_rows_source_table = {
+            "kind": "Table", "key": "missing_rows_source_table", "_path": "$.test.missing_rows_source_table",
+            "displayColumns": [{"key": "groupName", "header": "Group name"}],
+            "_rawDisplayColumns": "groupName:Group name",
+            "rowsSource": "",
+        }
+        expect(
+            "119d. validate_table_display_columns_and_rows_source rejects a Table with displayColumns authored but no rowsSource via TABLE_ROWS_SOURCE_REQUIRED_WITH_DISPLAY_COLUMNS (a data-bound table needs both a column list and a rows source)",
+            "TABLE_ROWS_SOURCE_REQUIRED_WITH_DISPLAY_COLUMNS" in run_table_check(missing_rows_source_table),
+        )
+
+        invalid_rows_source_table = {
+            "kind": "Table", "key": "invalid_rows_source_table", "_path": "$.test.invalid_rows_source_table",
+            "displayColumns": [{"key": "groupName", "header": "Group name"}],
+            "_rawDisplayColumns": "groupName:Group name",
+            "rowsSource": "enum.groups",
+        }
+        expect(
+            "119e. validate_table_display_columns_and_rows_source rejects a rowsSource equal to a domain/table identifier (e.g. the Table's own `source` attribute value) rather than an emission.data JSON traversal path via TABLE_ROWS_SOURCE_INVALID",
+            "TABLE_ROWS_SOURCE_INVALID" in run_table_check(invalid_rows_source_table),
+        )
+
+        valid_table = {
+            "kind": "Table", "key": "valid_table", "_path": "$.test.valid_table",
+            "displayColumns": [{"key": "groupName", "header": "Group name"}],
+            "_rawDisplayColumns": "groupName:Group name",
+            "rowsSource": "emission.data",
+        }
+        expect(
+            "119f. validate_table_display_columns_and_rows_source positive control: well-formed displayColumns paired with a valid emission.data rowsSource produces zero errors, proving 119c-119e fail for the right reason and not because every input fails",
+            run_table_check(valid_table) == [],
+        )
+
+        # 120-123: canonical-generation regression guard for the REAL admin-enum-ae200 fixture
+        # (preview-gap round) -- proves generate-topology-seed alone (no manual extraction/merge
+        # from a previously-hand-patched db/seed_empty.sql) reproduces enum_table's own
+        # propsJson/propBindings and every *_confirm_modal's own propsJson, and that the new
+        # Section-owned preview Action pairing check (108-119 above) passes cleanly against the
+        # real fixture, not just hand-built unit nodes.
+        proc_ae200, doc_ae200 = run_generate_topology_seed(ADMIN_ENUM_AE200_TOPOLOGY_SEED_FIXTURE)
+        expect(
+            "120. real admin-enum-ae200 fixture's generate-topology-seed run reports gateStatus == pass",
+            doc_ae200 is not None and doc_ae200.get("gateStatus") == "pass",
+        )
+        ae200_tensor_nodes = (
+            dig(doc_ae200, "adoptionCandidates", "tensorAdoptionCandidates")[0]["layoutPatchJson"]["nodes"]
+            if doc_ae200 and dig(doc_ae200, "adoptionCandidates", "tensorAdoptionCandidates")
+            else []
+        )
+        ae200_nodes_by_id = {n["nodeId"]: n for n in ae200_tensor_nodes}
+        expect(
+            "121. real admin-enum-ae200 fixture's generate-topology-seed run alone (no post-generation manual patch) produces enum_table's own propsJson (columns) and propBindings (rows: emission.data.groups) -- the content round 30 could only reproduce by hand-extracting it from the previous seed; round 37 moved rowsSource from emission.data to emission.data.groups (list_groups' response envelope became {groups, groupOptions} so enum_group_filter's own options no longer self-shrink to the same narrowed array enum_table's rows read from)",
+            "enum_table" in ae200_nodes_by_id
+            and ae200_nodes_by_id["enum_table"].get("propsJson") is not None
+            and "groupName" in ae200_nodes_by_id["enum_table"]["propsJson"]
+            and ae200_nodes_by_id["enum_table"].get("propBindings") == {"rows": {"source": "emission.data.groups"}},
+        )
+        ae200_modal_ids = [nid for nid in ae200_nodes_by_id if nid.endswith("_confirm_modal")]
+        expect(
+            "122. real admin-enum-ae200 fixture's generate-topology-seed run alone produces propsJson (open/title/body) for all 7 *_confirm_modal nodes -- the content round 30 could only reproduce by hand-extracting it from the previous seed",
+            len(ae200_modal_ids) == 7
+            and all(ae200_nodes_by_id[nid].get("propsJson") is not None for nid in ae200_modal_ids)
+            and all('"open": false' in ae200_nodes_by_id[nid]["propsJson"] for nid in ae200_modal_ids),
+        )
+        expect(
+            "123. real admin-enum-ae200 fixture's generate-topology-seed run reports zero validationErrors, proving the new Section-owned preview-pairing check (108-119) passes cleanly against production content, not only hand-built unit-test nodes",
+            doc_ae200 is not None and doc_ae200.get("validationErrors") == [],
+        )
+
+        # 123a (admin-enum subBundle closure round): the 7 write-flow typed fields must resolve
+        # control=form_input/input (a real <Input> with onChange, frontend/runtime/
+        # runtimeComponentFactory.ts inputFactory), never form_input/form_field
+        # (formFieldFactory renders FormField.tsx with a hardcoded empty span child -- no <input>
+        # element, no onChange, the live node value tracker never gets a value for that node, and
+        # every one of the 7 write actions' typed-value payloadFrom sourced from it would fail
+        # closed with PAYLOAD_FROM_NODE_NOT_FOUND in real production). This regression guard reads
+        # the REAL generated layoutAdoptionCandidates records (not a hand-built node), so it can
+        # only pass if the actual shipped fixture is correct.
+        ae200_layout_records = (
+            dig(doc_ae200, "adoptionCandidates", "layoutAdoptionCandidates")[0]["layoutSchemaJson"]["records"]
+            if doc_ae200 and dig(doc_ae200, "adoptionCandidates", "layoutAdoptionCandidates")
+            else []
+        )
+        ae200_field_control_by_key = {
+            r["record"]["key"]: r["record"].get("control")
+            for r in ae200_layout_records
+            if r["record"].get("recordType") == "topology_ui_field"
+        }
+        ae200_write_flow_typed_field_keys = [
+            "enum_create_group_name_input",
+            "enum_update_group_name_input",
+            "enum_create_item_name_input",
+            "enum_update_item_index_input",
+            "enum_update_item_name_input",
+            "enum_delete_item_index_input",
+            "enum_set_group_items_input",
+        ]
+        expect(
+            "123a. all 7 admin-enum write-flow typed fields resolve control=form_input/input (a real interactive <Input>), never form_input/form_field (a non-interactive label-only wrapper with no <input> element) -- proven against the REAL generated fixture output, not a hand-built substitute",
+            all(
+                ae200_field_control_by_key.get(k) == "form_input/input"
+                for k in ae200_write_flow_typed_field_keys
+            ),
+        )
+
+        # 124-125 (round 4, preview-gap audit round 4): split_flat_records_into_adoption_candidates
+        # no longer substitutes "emission.data" as a default when a topology_ui_table record's own
+        # rowsSource is missing (the round-3 fallback this round removed) -- these two tests prove
+        # BOTH directions of that removal against the REAL production react schema candidate (a
+        # mutated copy of the actual ae200 fixture, not a hand-built minimal node), so the proof
+        # reflects what actually ships: (124) omitting rowsSource fails the WHOLE run closed rather
+        # than silently defaulting, (125) an authored NON-default rowsSource is what actually
+        # reaches propBindings.rows.source -- proving true data-driven generation rather than a
+        # same-value coincidence with the (now-removed) hardcoded default.
+        ae200_envelope_raw = json.loads(ADMIN_ENUM_AE200_TOPOLOGY_SEED_FIXTURE.read_text(encoding="utf-8"))
+        ae200_candidate = json.loads(ae200_envelope_raw["inputText"])
+
+        def write_ae200_variant_fixture(mutated_candidate):
+            envelope = dict(ae200_envelope_raw)
+            envelope["inputText"] = json.dumps(mutated_candidate)
+            path = Path(tmpdir) / _next_tmp_name("ae200_variant_fixture")
+            path.write_text(json.dumps(envelope), encoding="utf-8")
+            return path
+
+        missing_rows_source_candidate = json.loads(json.dumps(ae200_candidate))
+        missing_rows_source_table_node = find_node(missing_rows_source_candidate["root"], "enum_table")
+        if missing_rows_source_table_node is None:
+            raise AssertionError("124/125 setup: enum_table node must exist in the real ae200 fixture")
+        missing_rows_source_table_node["rowsSource"] = ""
+        tmp124 = write_ae200_variant_fixture(missing_rows_source_candidate)
+        proc124, doc124 = run_generate_topology_seed(tmp124)
+        expect(
+            "124. split_flat_records_into_adoption_candidates fails the WHOLE generate-topology-seed run closed (non-zero exit, no JSON document) when a topology_ui_table record reaches tensor generation with displayColumns authored but rowsSource missing -- never silently substitutes a translator-hardcoded default",
+            proc124.returncode != 0 and doc124 is None,
+        )
+
+        NON_DEFAULT_ROWS_SOURCE = "emission.data.groups"
+        non_default_candidate = json.loads(json.dumps(ae200_candidate))
+        non_default_table_node = find_node(non_default_candidate["root"], "enum_table")
+        if non_default_table_node is None:
+            raise AssertionError("124/125 setup: enum_table node must exist in the real ae200 fixture")
+        non_default_table_node["rowsSource"] = NON_DEFAULT_ROWS_SOURCE
+        tmp125 = write_ae200_variant_fixture(non_default_candidate)
+        proc125, doc125 = run_generate_topology_seed(tmp125)
+        non_default_tensor_nodes = (
+            dig(doc125, "adoptionCandidates", "tensorAdoptionCandidates")[0]["layoutPatchJson"]["nodes"]
+            if doc125 and dig(doc125, "adoptionCandidates", "tensorAdoptionCandidates")
+            else []
+        )
+        non_default_nodes_by_id = {n["nodeId"]: n for n in non_default_tensor_nodes}
+        expect(
+            "125. an authored NON-default rowsSource (emission.data.groups, distinct from the removed hardcoded default emission.data) reaches the generated tensor's propBindings.rows.source EXACTLY -- proving data-driven generation, not a same-value coincidence with the old hardcode",
+            doc125 is not None
+            and doc125.get("validationErrors") == []
+            and non_default_nodes_by_id.get("enum_table", {}).get("propBindings")
+            == {"rows": {"source": NON_DEFAULT_ROWS_SOURCE}},
+        )
+
+        # 126-131 (round 36, admin-enum subBundle closure): validate_field_admin_runtime_dispatch_
+        # wiring -- a Field's own use of admin_runtime_dispatch_override_wiring is NEVER subject to
+        # validate_admin_runtime_preview_action_pairing (Action-only, tests 108-119 above) or
+        # validate_structural_node's ownership check (a Field is never Action-owned in the first
+        # place); this is the SEPARATE, generic fail-close restricting a Field's own participation
+        # in this lane to read/filter use only, closing the gap where a Field could otherwise carry
+        # mutation authority (confirmed/dryRun), drive Modal state, or target a mutation action
+        # entirely outside the Action-only Section-ownership/dryRun-preview-pairing rules.
+        def run_field_dispatch_check(node):
+            errs = []
+            translator_impl.validate_field_admin_runtime_dispatch_wiring(node, errs)
+            return [e["ruleId"] for e in errs]
+
+        _UNSET = object()
+
+        def build_field_dispatch_node(
+            payload_from=None,
+            secondary=None,
+            target_ref="manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:list_groups",
+            authority_marker="draft_or_projection_only",
+            event_binding_authority="draft_or_projection_only",
+            control=None,
+            debounce_ms=_UNSET,
+        ):
+            # round 37: defaults are the CORRECT authorityMarker/authority pair (rule 4's required
+            # value) so every negative test below isolates the ONE violation its own name/comment
+            # describes, rather than incidentally also tripping FIELD_ADMIN_RUNTIME_DISPATCH_
+            # AUTHORITY_MARKER_REQUIRED/MISMATCH alongside it. Tests that specifically target rule 4
+            # override authority_marker/event_binding_authority explicitly. control defaults to None
+            # (absent) -- rule 5 (debounceMs) only fires for control=="form_input/search_input", so
+            # every pre-existing test above (126-130) that never passes control is unaffected by
+            # rule 5's addition, same as before it existed.
+            node = {
+                "kind": "Field", "key": "test_dispatch_field", "_path": "$.test.test_dispatch_field",
+                "authorityMarker": authority_marker,
+                "eventBinding": {
+                    "trigger": "change",
+                    "wiringLane": "admin_runtime_dispatch_override_wiring",
+                    "targetRef": target_ref,
+                    "authority": event_binding_authority,
+                    "payloadFrom": payload_from or {},
+                },
+            }
+            if control is not None:
+                node["control"] = control
+            if debounce_ms is not _UNSET:
+                node["debounceMs"] = debounce_ms
+            if secondary is not None:
+                node["secondaryDisclosureAction"] = secondary
+            return node
+
+        field_confirmed_flag_node = build_field_dispatch_node(
+            payload_from={"search": "node:test_dispatch_field.value", "confirmed": "literal:true"},
+        )
+        expect(
+            "126. validate_field_admin_runtime_dispatch_wiring rejects a Field's payloadFrom declaring confirmed=literal:true via FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_FLAG_NOT_ALLOWED -- a Field can never carry write-confirmation authority",
+            "FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_FLAG_NOT_ALLOWED" in run_field_dispatch_check(field_confirmed_flag_node),
+        )
+
+        field_dryrun_flag_node = build_field_dispatch_node(
+            payload_from={"search": "node:test_dispatch_field.value", "dryRun": "literal:true"},
+        )
+        expect(
+            "127. validate_field_admin_runtime_dispatch_wiring rejects a Field's payloadFrom declaring dryRun=literal:true too via FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_FLAG_NOT_ALLOWED -- unlike an Action's Section-owned preview use, even dryRun is disallowed for a Field, since a Field can never pair into the Modal-Confirm shape dryRun's own safety meaning depends on",
+            "FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_FLAG_NOT_ALLOWED" in run_field_dispatch_check(field_dryrun_flag_node),
+        )
+
+        field_modal_mutation_node = build_field_dispatch_node(
+            payload_from={"search": "node:test_dispatch_field.value"},
+            secondary={"trigger": "change", "actionType": "openModal", "targetNodeId": "some_modal"},
+        )
+        expect(
+            "128. validate_field_admin_runtime_dispatch_wiring rejects a Field paired with a secondaryDisclosureAction via FIELD_ADMIN_RUNTIME_DISPATCH_MODAL_MUTATION_NOT_ALLOWED -- Modal open/close authority belongs to Action/Step's own disclosure_state_wiring lane, never a Field's own change event",
+            "FIELD_ADMIN_RUNTIME_DISPATCH_MODAL_MUTATION_NOT_ALLOWED" in run_field_dispatch_check(field_modal_mutation_node),
+        )
+
+        field_mutation_target_node = build_field_dispatch_node(
+            payload_from={"groupName": "node:test_dispatch_field.value"},
+            target_ref="manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:create_group",
+        )
+        expect(
+            "129. validate_field_admin_runtime_dispatch_wiring rejects a Field whose targetRef resolves to a mutation action (create_group) via FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED -- round 37 positive allowlist (ADMIN_RUNTIME_READ_ACTIONS), not the removed verb-prefix denylist",
+            "FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED" in run_field_dispatch_check(field_mutation_target_node),
+        )
+
+        for _mutation_suffix, _mutation_action in enumerate(("update_group", "delete_group", "set_group_items", "create_item", "update_item", "delete_item")):
+            _mutation_node = build_field_dispatch_node(
+                payload_from={"groupName": "node:test_dispatch_field.value"},
+                target_ref=f"manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:{_mutation_action}",
+            )
+            expect(
+                f"129{chr(97 + _mutation_suffix)}. validate_field_admin_runtime_dispatch_wiring also rejects a Field targeting '{_mutation_action}' via FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED -- proves the verb-prefix check covers every enum_dictionary write action, not just create_group",
+                "FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED" in run_field_dispatch_check(_mutation_node),
+            )
+
+        # auth_users domain uses the SAME create/update/delete verb convention (docs/design/
+        # admin-master-roster-management-ssot.yaml admin_runtime_actions) -- proves the check is a
+        # shared, generic naming convention across BOTH admin_runtime action namespaces, never a
+        # hardcoded enum_dictionary allowlist.
+        auth_users_mutation_node = build_field_dispatch_node(
+            payload_from={"status": "node:test_dispatch_field.value"},
+            target_ref="manifest:00000000-0000-0000-0000-000000000a01:auth_users:update",
+        )
+        expect(
+            "129g. validate_field_admin_runtime_dispatch_wiring also rejects a Field targeting the UNRELATED auth_users domain's 'update' action via FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED -- the verb-prefix convention is shared across admin_runtime action namespaces, not an enum_dictionary-only allowlist",
+            "FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED" in run_field_dispatch_check(auth_users_mutation_node),
+        )
+
+        # 129h-129l (round 37): negative proof that the POSITIVE allowlist (ADMIN_RUNTIME_READ_
+        # ACTIONS) rejects mutation actions whose leading verb was NEVER a member of the removed
+        # MUTATION_ACTION_VERB_PREFIXES denylist ({"create", "update", "delete", "set"}) -- exactly
+        # the class of action a verb-DENYLIST would have silently let through. A positive allowlist
+        # rejects these by construction (absent from admin_runtime_actions' "_read" groups), not by
+        # anyone having thought to add "apply"/"promote"/"import"/"deprecate" to a verb list.
+        for _non_denylist_suffix, (_ndm_manifest, _ndm_action) in enumerate((
+            ("00000000-0000-0000-0000-000000000m01", "manifest:promote"),
+            ("00000000-0000-0000-0000-000000000m01", "manifest:deprecate"),
+            ("00000000-0000-0000-0000-000000000m02", "layout_patch:apply"),
+            ("00000000-0000-0000-0000-000000000m03", "seed_runtime:import"),
+            ("00000000-0000-0000-0000-000000000m04", "package_generator:promote_package"),
+        )):
+            _ndm_node = build_field_dispatch_node(
+                payload_from={"x": "node:test_dispatch_field.value"},
+                target_ref=f"manifest:{_ndm_manifest}:{_ndm_action}",
+            )
+            expect(
+                f"129{chr(104 + _non_denylist_suffix)}. validate_field_admin_runtime_dispatch_wiring rejects a Field targeting '{_ndm_action}' via FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED even though its leading verb was never a MUTATION_ACTION_VERB_PREFIXES member -- proves the round-37 positive allowlist catches what the removed verb-denylist would have silently passed",
+                "FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED" in run_field_dispatch_check(_ndm_node),
+            )
+
+        # 129m-129n (round 37): FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_REQUIRED /
+        # _MISMATCH -- a Field participating in this lane must declare authorityMarker ==
+        # "draft_or_projection_only" (the exchange_mapping.authority_mapping frontend_intent value),
+        # independent of and in addition to rule 3's targetRef-resolved classification.
+        field_authority_marker_missing_node = build_field_dispatch_node(
+            payload_from={"search": "node:test_dispatch_field.value"},
+            authority_marker=None,
+            event_binding_authority=None,
+        )
+        expect(
+            "129m. validate_field_admin_runtime_dispatch_wiring rejects a Field with no authorityMarker at all via FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_REQUIRED, even though its targetRef legitimately resolves to a read action",
+            "FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_REQUIRED" in run_field_dispatch_check(field_authority_marker_missing_node),
+        )
+
+        field_authority_marker_wrong_value_node = build_field_dispatch_node(
+            payload_from={"search": "node:test_dispatch_field.value"},
+            authority_marker="validation_only",
+            event_binding_authority="validation_only",
+        )
+        expect(
+            "129n. validate_field_admin_runtime_dispatch_wiring rejects a Field whose authorityMarker is a DIFFERENT legal-for-the-lane value (validation_only) rather than the Field-specific required draft_or_projection_only, via FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_REQUIRED",
+            "FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_REQUIRED" in run_field_dispatch_check(field_authority_marker_wrong_value_node),
+        )
+
+        field_authority_marker_disagreement_node = build_field_dispatch_node(
+            payload_from={"search": "node:test_dispatch_field.value"},
+            authority_marker="draft_or_projection_only",
+            event_binding_authority="preview_only",
+        )
+        expect(
+            "129o. validate_field_admin_runtime_dispatch_wiring rejects a Field whose authorityMarker is correct (draft_or_projection_only) but whose OWN eventBinding.authority disagrees, via FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_MISMATCH",
+            "FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_MISMATCH" in run_field_dispatch_check(field_authority_marker_disagreement_node),
+        )
+
+        field_valid_read_node = build_field_dispatch_node(
+            payload_from={"search": "node:test_dispatch_field.value"},
+        )
+        expect(
+            "130. validate_field_admin_runtime_dispatch_wiring positive control: a Field dispatching to a read action (list_groups) with no authority flag, no secondaryDisclosureAction, and the correct authorityMarker produces zero errors, proving 126-129o fail for the right reason and not because every Field-owned use of this lane fails",
+            run_field_dispatch_check(field_valid_read_node) == [],
+        )
+
+        # 130a-130d (round 37): FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS -- a
+        # continuous-typing search Field (control="form_input/search_input") on this lane must
+        # declare a valid positive-integer debounceMs; a discrete-choice control (e.g. select) is
+        # never required to.
+        field_search_no_debounce_node = build_field_dispatch_node(
+            payload_from={"search": "node:test_dispatch_field.value"},
+            control="form_input/search_input",
+        )
+        expect(
+            "130a. validate_field_admin_runtime_dispatch_wiring rejects a search_input Field on this lane with NO debounceMs at all via FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS -- a continuous-typing search field must never dispatch uncontrolled on every keystroke",
+            "FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS" in run_field_dispatch_check(field_search_no_debounce_node),
+        )
+
+        field_search_zero_debounce_node = build_field_dispatch_node(
+            payload_from={"search": "node:test_dispatch_field.value"},
+            control="form_input/search_input",
+            debounce_ms=0,
+        )
+        expect(
+            "130b. validate_field_admin_runtime_dispatch_wiring rejects a search_input Field whose debounceMs is 0 (non-positive) via FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS -- zero is not a valid debounce window, never silently treated as 'no delay'",
+            "FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS" in run_field_dispatch_check(field_search_zero_debounce_node),
+        )
+
+        field_search_negative_debounce_node = build_field_dispatch_node(
+            payload_from={"search": "node:test_dispatch_field.value"},
+            control="form_input/search_input",
+            debounce_ms=-100,
+        )
+        expect(
+            "130c. validate_field_admin_runtime_dispatch_wiring rejects a search_input Field whose debounceMs is negative via FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS",
+            "FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS" in run_field_dispatch_check(field_search_negative_debounce_node),
+        )
+
+        field_search_valid_debounce_node = build_field_dispatch_node(
+            payload_from={"search": "node:test_dispatch_field.value"},
+            control="form_input/search_input",
+            debounce_ms=300,
+        )
+        expect(
+            "130d. validate_field_admin_runtime_dispatch_wiring positive control: a search_input Field with a valid positive-integer debounceMs (300) produces zero errors, proving 130a-130c fail for the right reason",
+            run_field_dispatch_check(field_search_valid_debounce_node) == [],
+        )
+
+        field_select_no_debounce_node = build_field_dispatch_node(
+            payload_from={"groupNameFilter": "node:test_dispatch_field.value"},
+            control="form_input/select",
+        )
+        expect(
+            "130e. validate_field_admin_runtime_dispatch_wiring does NOT require debounceMs for a discrete-choice control (form_input/select) on this lane -- rule 5 is scoped to search_input specifically, since a select fires once per selection, never once per keystroke",
+            run_field_dispatch_check(field_select_no_debounce_node) == [],
+        )
+
+        # 131: the REAL admin-enum-ae200 fixture's own enum_search Field (the actual production
+        # shape, not a hand-built substitute) passes this new check cleanly -- proves the fail-close
+        # does not regress the legitimate generic read/filter use case it exists to still permit.
+        enum_search_react_node = find_node(ae200_candidate["root"], "enum_search")
+        expect(
+            "131. the real admin-enum-ae200 fixture's own enum_search Field (control=form_input/search_input, targeting enum_dictionary:list_groups) exists, carries the admin_runtime_dispatch_override_wiring eventBinding, and produces zero FIELD_ADMIN_RUNTIME_DISPATCH_* errors -- proving the new fail-close was actually exercised against production content and passed for the right (permitted read/filter) reason",
+            enum_search_react_node is not None
+            and (enum_search_react_node.get("eventBinding") or {}).get("wiringLane") == "admin_runtime_dispatch_override_wiring"
+            and not any(
+                rid.startswith("FIELD_ADMIN_RUNTIME_DISPATCH_")
+                for rid in run_field_dispatch_check(enum_search_react_node)
+            )
+            and doc_ae200 is not None
+            and not any(
+                e.get("ruleId", "").startswith("FIELD_ADMIN_RUNTIME_DISPATCH_")
+                for e in (doc_ae200.get("validationErrors") or [])
+            ),
         )
 
     print()

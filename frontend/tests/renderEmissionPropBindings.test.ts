@@ -21,6 +21,7 @@ import {
 } from "../runtime/visualLayoutUtils.ts";
 import type { DispatchResponse, Emission } from "../api/dispatch.ts";
 import type { RuntimeDispatchSpec } from "../runtime/frontendScheduler.ts";
+import type { RuntimeDispatchResultContext } from "../runtime/runtimeComponentAdapter.ts";
 import { ensureRuntimeComponentRegistryInitialized } from "../runtime/runtimeComponentRegistry.ts";
 
 const ADMIN_ENUM_MANIFEST_ID = "00000000-0000-0000-0000-0000000ae200";
@@ -450,7 +451,7 @@ Deno.test("renderEmission: onNodeValueChange option registers per-node closures 
 
 Deno.test("renderEmission: onRuntimeDispatchResult option registers per-node closures carrying nodeId and forwards the dispatch identity context (round 29)", () => {
   ensureRuntimeComponentRegistryInitialized();
-  const captured: Array<[string, DispatchResponse, { targetRef?: string }]> = [];
+  const captured: Array<[string, DispatchResponse, RuntimeDispatchResultContext]> = [];
   const emission: Emission = {
     layoutId: "layout-rdr-001",
     layoutNodes: [
@@ -473,7 +474,10 @@ Deno.test("renderEmission: onRuntimeDispatchResult option registers per-node clo
     success: true,
     emission: { layoutId: "layout-rdr-001", data: { ok: true } },
   };
-  const fakeContext = { targetRef: "manifest:ae230-uuid:enum_dictionary:delete_group" };
+  const fakeContext: RuntimeDispatchResultContext = {
+    targetRef: "manifest:ae230-uuid:enum_dictionary:delete_group",
+    dryRun: false,
+  };
   specs[0].runtimeSpec!.onRuntimeDispatchResult?.(fakeResult, fakeContext);
   assertEquals(captured, [["node-rdr-1", fakeResult, fakeContext]]);
 });
@@ -739,7 +743,7 @@ Deno.test("renderEmission: dispatchPayloadFromByTrigger — an alias key (e.g. o
   assertEquals(clickRd.payloadFrom, { groupName: "node:name_input.value" });
 });
 
-Deno.test("renderEmission: dispatchPayloadFromByTrigger — trigger unspecified (absent field) keeps the pre-existing raw event-time payload passthrough for that trigger unchanged", () => {
+Deno.test("renderEmission: dispatchPayloadFromByTrigger — trigger unspecified (absent field) gets NO runtimeDispatch binding at all for that trigger (round 42 general admin_runtime dispatch-participation contract: only the SPECIFIC trigger's own authored participation binds a real dispatch, an eventType-only inert binding otherwise)", () => {
   ensureRuntimeComponentRegistryInitialized();
   const specs = renderEmission(
     adminRuntimeNodeEmission({ click: { groupName: "node:name_input.value" } }),
@@ -750,8 +754,8 @@ Deno.test("renderEmission: dispatchPayloadFromByTrigger — trigger unspecified 
     string,
     unknown
   >;
-  const submitRd = submitBinding.runtimeDispatch as Record<string, unknown>;
-  assertEquals(submitRd.payloadFrom, undefined);
+  assertEquals(submitBinding.eventType, "submit");
+  assertEquals(submitBinding.runtimeDispatch, undefined);
 });
 
 for (const trigger of ["input", "onInput", "focus", "blur"]) {
@@ -905,7 +909,7 @@ Deno.test("renderEmission: dispatchPayloadFromByTrigger with an empty per-trigge
   );
 });
 
-Deno.test("renderEmission: absent dispatchPayloadFromByTrigger renders normally (no payloadFrom attached)", () => {
+Deno.test("renderEmission: absent dispatchPayloadFromByTrigger (and no dispatchTargetRefByTrigger either) renders normally with an eventType-only inert binding, no runtimeDispatch (round 42: an admin_runtime node with NO trigger explicitly authored gets no business dispatch at all)", () => {
   ensureRuntimeComponentRegistryInitialized();
   const specs = renderEmission(adminRuntimeNodeEmission(undefined), {});
   assertExists(specs[0].runtimeSpec);
@@ -913,8 +917,8 @@ Deno.test("renderEmission: absent dispatchPayloadFromByTrigger renders normally 
     string,
     unknown
   >;
-  const clickRd = clickBinding.runtimeDispatch as Record<string, unknown>;
-  assertEquals(clickRd.payloadFrom, undefined);
+  assertEquals(clickBinding.eventType, "click");
+  assertEquals(clickBinding.runtimeDispatch, undefined);
 });
 
 Deno.test("renderEmission: dispatchPayloadFromByTrigger on a non-admin_runtime node fails closed (RUNTIME_INTERACTION_DISPATCH_PAYLOAD_FROM_BY_TRIGGER_REQUIRES_ADMIN_RUNTIME_WIRING)", () => {
@@ -1106,7 +1110,7 @@ Deno.test("renderEmission: dispatchTargetRefByTrigger with a bare \"<layer>:<act
   );
 });
 
-Deno.test("renderEmission: dispatchTargetRefByTrigger — the SAME node's OTHER triggers keep dispatching to the layout's own uniform target unchanged", () => {
+Deno.test("renderEmission: dispatchTargetRefByTrigger — the SAME node's OTHER, non-authored triggers get NO runtimeDispatch binding at all (round 42 general admin_runtime dispatch-participation contract: a node having ITS OWN default target/override for ONE trigger never implicitly extends to another trigger)", () => {
   ensureRuntimeComponentRegistryInitialized();
   const specs = renderEmission(
     adminRuntimeNodeEmissionWithTargetRefOverride({
@@ -1127,12 +1131,11 @@ Deno.test("renderEmission: dispatchTargetRefByTrigger — the SAME node's OTHER 
     string,
     unknown
   >;
-  const submitRd = submitBinding.runtimeDispatch as Record<string, unknown>;
-  assertEquals(submitRd.targetRef, ADMIN_ENUM_LIST_GROUPS_TARGET_REF);
-  assertEquals(submitRd.action, "list_groups");
+  assertEquals(submitBinding.eventType, "submit");
+  assertEquals(submitBinding.runtimeDispatch, undefined);
 });
 
-Deno.test("renderEmission: absent dispatchTargetRefByTrigger renders normally (every trigger keeps the layout's own uniform target)", () => {
+Deno.test("renderEmission: absent dispatchTargetRefByTrigger (and no dispatchPayloadFromByTrigger either) renders normally with an eventType-only inert binding on every trigger, no runtimeDispatch (round 42: the layout's own uniform default target is never auto-bound absent explicit per-trigger participation)", () => {
   ensureRuntimeComponentRegistryInitialized();
   const specs = renderEmission(
     adminRuntimeNodeEmissionWithTargetRefOverride(undefined),
@@ -1143,11 +1146,11 @@ Deno.test("renderEmission: absent dispatchTargetRefByTrigger renders normally (e
     string,
     unknown
   >;
-  const clickRd = clickBinding.runtimeDispatch as Record<string, unknown>;
-  assertEquals(clickRd.targetRef, ADMIN_ENUM_LIST_GROUPS_TARGET_REF);
+  assertEquals(clickBinding.eventType, "click");
+  assertEquals(clickBinding.runtimeDispatch, undefined);
 });
 
-Deno.test("renderEmission: dispatchTargetRefByTrigger override intentionally OMITS wiringKey/wiringId (they identify the layout's OWN wiring row, not this override's different target) — the non-overridden trigger keeps them unchanged", () => {
+Deno.test("renderEmission: dispatchTargetRefByTrigger override intentionally OMITS wiringKey/wiringId (they identify the layout's OWN wiring row, not this override's different target) — a DIFFERENT trigger explicitly participating via payloadFrom-only (no override) still inherits them from the base spec unchanged (round 42: base-spec-plus-payloadFrom-only preservation from owner_decision_2026_08_13, unaffected by the general contract widening)", () => {
   ensureRuntimeComponentRegistryInitialized();
   const emission = adminRuntimeNodeEmissionWithTargetRefOverride({
     click: ADMIN_ENUM_CREATE_GROUP_TARGET_REF,
@@ -1156,6 +1159,13 @@ Deno.test("renderEmission: dispatchTargetRefByTrigger override intentionally OMI
   (emission.layoutNodes![0] as any).wiringKey = "admin.enum.management.projection.read.wiring";
   // deno-lint-ignore no-explicit-any
   (emission.layoutNodes![0] as any).wiringId = "11111111-1111-1111-1111-111111111111";
+  // round 42: "submit" must ITSELF explicitly participate (via payloadFrom-only, no override) to get
+  // any runtimeDispatch binding at all -- a non-authored trigger on the SAME node no longer falls
+  // back to the layout's own uniform target merely because a DIFFERENT trigger has an override.
+  // deno-lint-ignore no-explicit-any
+  (emission.layoutNodes![0] as any).dispatchPayloadFromByTrigger = {
+    submit: { groupName: "node:name_input.value" },
+  };
   const specs = renderEmission(emission, {});
   assertExists(specs[0].runtimeSpec);
 

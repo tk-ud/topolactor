@@ -131,6 +131,13 @@ public record LayoutNode(
     /// </summary>
     JsonElement? DispatchTargetRefByTrigger = null,
     /// <summary>
+    /// round 37 (search_filter_input_contract debounce_policy): this node's own declared
+    /// debounceMs from layout_patch_json.nodes[].debounceMs — a Field grammar attribute
+    /// (react-schema-topology-seed-translator-ssot.yaml). Null when not authored — the node
+    /// then dispatches immediately on its own admin_runtime trigger, unchanged.
+    /// </summary>
+    int? DebounceMs = null,
+    /// <summary>
     /// Structural-node semantic type (topology_ui_category/topology_ui_section/topology_ui_form/
     /// topology_ui_workflow/topology_ui_validation) when NodeKind is "structural_node" — sourced
     /// from components_layout_design.layout_schema_json.records[], the structural authority tree.

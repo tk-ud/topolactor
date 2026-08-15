@@ -30,18 +30,105 @@ admin_master_roster_management_ssot:
     - frontend/api/adminApi.ts
     - frontend/routes/admin/enums.tsx
     - frontend/routes/admin/users.tsx
-    - frontend/islands/AdminEnumsRoster.tsx
     - frontend/islands/AdminUsersRoster.tsx
 
   canonical_routes:
     admin_enums:
       path: /admin/enums
-      island: frontend/islands/AdminEnumsRoster.tsx
+      island: frontend/islands/ProjectionShell.tsx
+      note: >-
+        Route retirement (admin-enum subBundle closure round): same-URL ProjectionShell thin
+        wrapper pinned to manifest ae200, replacing the retired AdminEnumsRoster island. UPDATED
+        (round 36): AdminEnumsRoster.tsx is deleted (was already unreachable from any route since
+        the initial retirement round; kept catalog-registered/on-disk as a ghost entry only
+        because of a hardcoded EXEMPT_KEYS test carve-out, which round 36 also removed --
+        frontend/components/catalog.ts no longer carries an admin_enum_roster.admin_operation
+        entry at all).
+      round_38_owner_decision_resolved_ux_contract_shrinkage: >-
+        Resolves the round_37 ux_contract_shrinkage_owner_decision_pending note below (kept
+        verbatim beneath this entry for the audit trail). Owner authorization (round 38 prompt):
+        DOM/panel/button/operation-order parity with AdminEnumsRoster.tsx is explicitly NOT
+        required -- a new design is acceptable as long as it maintains-or-improves business
+        capability (preview -> explicit confirm -> canonical reread, safe selection context,
+        generic topology substrate) and every design choice is compared against base/old-surface
+        capability with a recorded improvement axis, never adopted merely because it is easier
+        with the existing substrate. Decision, per line:
+        (1) show_all_button_clears_filter_and_lists_full_roster -- base had a dedicated "全件出力"
+        button distinct from the search input (handleShowAll: setSearch("") + reload). Round 38
+        found and fixed a REAL regression instead of building a new button: frontend/components/
+        Select.tsx's placeholder <option> was unconditionally `disabled`, which a real browser user
+        can never select via native <select> UI (only reachable by directly assigning `.value` from
+        script/test code) -- so enum_group_filter's "clear filter" value, though wired
+        (propBindings.options + dispatchPayloadFromByTrigger groupNameFilter), was not actually
+        user-reachable. Fixed by making the placeholder's `disabled` attribute conditional on the
+        Field's own `required` flag (enum_group_filter is authored required=false), which makes it
+        a genuine, native, keyboard/mouse-reachable clear-to-full-roster option with zero new
+        control, zero new wiring, and zero seed changes -- satisfying this round's own acceptance
+        criterion that a dedicated "Show All" button is explicitly NOT required as long as a real
+        user operation can reach the canonical full roster. Improvement axis over base: one fewer
+        bespoke button; the SAME select control both narrows and clears, and (unlike base's search-
+        box-only clear) also clears an explicit exact-match filter dimension base never had.
+        (2) row_click_opens_inline_update_panel -- base showed the update section only after a row
+        click (`{selectedId && detail && (<section>...)}`), i.e. a show/hide panel. Round 38 did
+        NOT build a new Table row-click-opens-disclosure grammar extension (still not uniquely
+        derivable without inventing new generic surface area, per round 37's own finding) --
+        instead it closed the SAME underlying gap (a selected row's current identity/name/
+        membership must be visible+editable as one context) through the EXISTING generic
+        node-value-prefill mechanism, extended to a SECOND field: enum_table's own displayColumns
+        already render groupName/indexNum/groupId/itemsSummary continuously for every row (not
+        gated behind a click, unlike base's panel), and both enum_update_group_name_input
+        (existing, round 27) and enum_set_group_items_input (round 38, new) now carry
+        propBindings.value.source = node:enum_table.value.<groupName|itemsIndexNums>, so selecting
+        a row prefills BOTH the editable name field AND the editable membership field with that
+        row's OWN current values (backend: EnumDictionaryGroupWithItemsSummaryDto.itemsIndexNums, a
+        comma-separated index list in the exact CSV shape TryParseSetGroupItemsPayload already
+        accepts -- backend/schema/EnumDictionaryContracts.cs, backend/repository/
+        NpgsqlEnumDictionaryRepository.cs). Improvement axis over base: the selection context is
+        ALWAYS visible (roster row) rather than conditionally mounted, requires no new
+        show/hide-panel state machine, and closes a gap base itself never had -- base's own
+        draftIndexNums prefill for group-items membership existed, but round 36/37 had regressed it
+        (enum_set_group_items_input carried no valueFrom at all, forcing a user to blindly retype
+        the full membership from scratch); round 38 restores that capability via the SAME generic
+        mechanism, not a bespoke one. Nothing from base is lost: identity (groupId, visible in the
+        table row and resolved fresh at every dispatch via node:enum_table.value.groupId), current
+        name (visible + prefilled + editable), and current membership (visible via itemsSummary +
+        prefilled + editable) are all present; only the PHYSICAL packaging (roster-row-plus-below-
+        fields instead of a click-gated panel) differs, which this round's Owner authorization
+        explicitly permits.
+      ux_contract_shrinkage_owner_decision_pending_round_37_original: >-
+        (superseded by round_38_owner_decision_resolved_ux_contract_shrinkage above -- kept for
+        audit trail, not current guidance) round 37 base-vs-head audit (git diff against this PR's
+        base commit, not against this already-edited branch) found the two ux_contract lines below
+        were genuinely reworded during this PR, not merely relabeled: base declared
+        show_all_button_clears_filter_and_lists_full_roster (AdminEnumsRoster.tsx had a real
+        "全件出力" button wired to handleShowAll, distinct from the search input) and
+        row_click_opens_inline_update_panel (the update section was conditionally rendered --
+        `{selectedId && detail && (<section>...)}`  -- only mounted after a row click, not
+        always-present). The generic ProjectionShell/manifest architecture this route now uses has
+        NO existing mechanism for either: (1) a button programmatically resetting a DIFFERENT
+        Field's own live/displayed value as a click side effect (checked
+        frontend/runtime/liveNodeValueTracker.ts / applyLiveNodeValueOverride -- flows DOM->tracker
+        for payload-building only, never tracker->DOM on demand; checked backend's setState
+        actionType -- statePath is restricted to "open"/"activeKey" only, never a Field's own
+        value); (2) a Table's row click opening a disclosure/Modal (Table has no
+        disclosureActionType/runtimeInteractions authoring attribute today, only Action/Step do).
+        Both are buildable (a new setState statePath="value" actionType across translator+backend+
+        frontend for (1); extending Table's grammar with row-click disclosure attributes for (2),
+        following the same "new actionType/container kind needs its full stack in one round"
+        precedent wiring_lane_contract.lanes.disclosure_state_wiring already documents for a future
+        Drawer/Dialog addition) but neither is uniquely derivable as "the" design without inventing
+        new generic surface area no other part of this codebase has needed yet -- per this round's
+        own instruction ("設計が一意でなければ実装せずOwnerへ質問する"), this is recorded here as an
+        open Owner design decision rather than guessed at. The two ux_contract lines below are left
+        at their round-36 (current-implementation-accurate) wording in the meantime -- NOT restored
+        to the base wording (which would misdescribe current behavior) and NOT silently accepted as
+        the final intended design either.
       ux_contract:
         - text_search_at_top
-        - show_all_button_clears_filter_and_lists_full_roster
+        - clearing_the_search_field_or_the_group_filter_via_real_user_interaction_restores_full_roster
         - new_record_via_modal_form
-        - row_click_opens_inline_update_panel
+        - row_click_prefills_the_update_name_field_and_the_set_group_items_membership_field
+        - selected_row_own_identity_current_name_and_current_membership_visible_via_the_always_present_roster_row_and_the_two_prefilled_editable_fields_below_it
         - delete_requires_confirm_dialog
     admin_users:
       path: /admin/users
@@ -158,6 +245,27 @@ admin_master_roster_management_ssot:
       timestamp: observed_at
 
   admin_runtime_actions:
+    # round 37 (admin-enum subBundle closure): this block is now the single explicit operation
+    # classification authority for Field-owned admin_runtime dispatch (replaces the prior
+    # MUTATION_ACTION_VERB_PREFIXES verb-heuristic denylist). Every admin_runtime resource:action
+    # pair reachable via this SSOT MUST be classified into a "_read" or "_write" group -- there is
+    # no third, ungrouped shape (auth_users below was ungrouped pre-round-37; that ambiguity is
+    # exactly what made this block non-machine-consumable and forced the translator to fall back
+    # to a verb-prefix guess instead of reading this authority directly). A Field may only ever
+    # dispatch to a resource:action listed under a "_read" group; every "_write" group member (and
+    # any resource:action absent from this block entirely, e.g. manifest:promote, layout_patch:
+    # apply, seed_runtime:import) is rejected by default -- this is a positive allowlist, not a
+    # denylist, so it fails closed on unknown future actions without needing a new verb added to
+    # anything. Mirrored verbatim (same resource:action strings) by:
+    #   - .agent/scripts/react_schema_topology_seed_translator.py ADMIN_RUNTIME_READ_ACTIONS
+    #     (translator/authoring-time Field dispatch guard)
+    #   - backend/repository/NpgsqlUiTopologyRepository.cs AdminRuntimeReadActions
+    #     (layout_patch save-time persistence guard, componentKind-discriminated)
+    #   - frontend/runtime/adminRuntimeReadActions.ts ADMIN_RUNTIME_READ_ACTIONS
+    #     (live runtime dispatch guard, componentKind-discriminated)
+    # A resource:action moved between groups, or a new resource added, must update all three
+    # mirrors in the SAME change -- see each mirror's own doc comment for the drift-detection test
+    # that enforces this.
     enum_dictionary_read:
       - enum_dictionary:list_groups
       - enum_dictionary:get_group
@@ -169,10 +277,11 @@ admin_master_roster_management_ssot:
       - enum_dictionary:update_item
       - enum_dictionary:delete_item
       - enum_dictionary:set_group_items
-    auth_users:
+    auth_users_read:
       - auth_users:list
       - auth_users:search
       - auth_users:get
+    auth_users_write:
       - auth_users:create
       - auth_users:update
       - auth_users:delete

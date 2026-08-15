@@ -70,7 +70,16 @@ export function Select({
         style="padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-family:monospace;font-size:0.9rem;background:#fff"
       >
         {placeholder && (
-          <option value="" disabled>
+          // round 38: the placeholder option is only disabled when this select is REQUIRED
+          // (forcing a real choice, unchanged prior behavior for every existing required
+          // select). For a non-required select -- e.g. an optional filter such as
+          // enum_group_filter -- disabling it left NO way for a real browser user to ever
+          // reach the empty/"no filter" value: a disabled <option> cannot be selected via
+          // native <select> UI at all, only by directly assigning .value from test/script
+          // code, which is not a real user interaction. Leaving it enabled for a
+          // non-required select makes it a genuine, native, keyboard/mouse-reachable
+          // clear/all option — no separate dedicated "Clear" control needed.
+          <option value="" disabled={required}>
             {placeholder}
           </option>
         )}

@@ -42,8 +42,8 @@ const PATCHED_GLOBALS = [
   "CustomEvent",
 ] as const;
 
-export function setupDom(): DomEnv {
-  const win = new Window({ url: "http://localhost/" }) as any;
+export function setupDom(url = "http://localhost/"): DomEnv {
+  const win = new Window({ url }) as any;
   const doc = win.document;
 
   const saved: Record<string, unknown> = {};

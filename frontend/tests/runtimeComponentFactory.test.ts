@@ -13,6 +13,10 @@ import { ensureRuntimeComponentRegistryInitialized } from "../runtime/runtimeCom
 import { __testOnly } from "../runtime/runtimeComponentFactory.ts";
 import { __testOnly as schedulerTestOnly } from "../runtime/frontendScheduler.ts";
 import type { RuntimeComponentSpec } from "../runtime/runtimeComponentAdapter.ts";
+import {
+  createRuntimeLocalStateStore,
+  createRuntimeStateDispatcher,
+} from "../runtime/uiEventEffectRunner.ts";
 
 const ADMIN_ENUM_MANIFEST_ID = "00000000-0000-0000-0000-0000000ae200";
 
@@ -342,7 +346,7 @@ Deno.test("emitBoundEvent: admin_runtime Lane 2 forwards the settled dispatch re
   }) as typeof fetch;
   try {
     let forwardedResult: unknown = null;
-    let forwardedContext: { targetRef?: string } | null = null;
+    let forwardedContext: { targetRef?: string; dryRun: boolean } | null = null;
     const spec: RuntimeComponentSpec = {
       componentId: "comp-load-button-001",
       packageId: null,
@@ -384,9 +388,14 @@ Deno.test("emitBoundEvent: admin_runtime Lane 2 forwards the settled dispatch re
     assertEquals(result.emission?.data, serverEmissionData);
     // Round 29: the authored targetRef actually dispatched must be forwarded verbatim as context,
     // so a caller can confirm a settled response really landed on the manifest it targeted.
+    // preview-gap round: this dispatch's payloadFrom carries no dryRun field, so context.dryRun
+    // must be false — the resolved payload actually sent, never assumed.
     assertEquals(
       forwardedContext,
-      { targetRef: `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:update_group` },
+      {
+        targetRef: `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:update_group`,
+        dryRun: false,
+      },
     );
   } finally {
     globalThis.fetch = originalFetch;
@@ -437,6 +446,107 @@ Deno.test("emitBoundEvent: admin_runtime Lane 2 never calls onRuntimeDispatchRes
     }
     assertEquals(fetchCalled, true, "the dispatch must still have fired");
   } finally {
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
+});
+
+Deno.test("emitBoundEvent: admin_runtime Lane 2's dispatchRuntimeComponentCommandAndForwardResult catch() branch — a GENUINE enqueueRuntimeComponentCommand promise rejection (not a mocked-fetch success:false conversion) forwards a synthetic failure to onRuntimeDispatchResult and never applies the deferred localStateMutation", async () => {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+  // Round 4 (preview-gap audit round 4): dispatchOperation (frontend/api/dispatch.ts) never
+  // rejects — every fetch/network failure it catches becomes a normal {success:false} response,
+  // so a mocked-fetch rejection can NEVER reach dispatchRuntimeComponentCommandAndForwardResult's
+  // own .catch() branch through the real call chain; it only ever re-proves the SAME
+  // success:false path a "backend_failure" scenario already covers. The module-level
+  // enqueueRuntimeComponentCommand override __testOnly exposes is the real seam: it makes
+  // enqueueRuntimeComponentCommand's OWN returned promise genuinely reject, exactly the shape
+  // this catch() branch exists to handle.
+  const originalFetch = globalThis.fetch;
+  let fetchCalled = false;
+  globalThis.fetch = ((_url: string) => {
+    fetchCalled = true;
+    return Promise.resolve(
+      new Response(JSON.stringify({ success: true, errors: [] }), { status: 200 }),
+    );
+  }) as typeof fetch;
+  __testOnly.setEnqueueRuntimeComponentCommandForTest(() =>
+    Promise.reject(new Error("simulated queue/network rejection"))
+  );
+  try {
+    const rawStore = createRuntimeLocalStateStore();
+    const dispatcher = createRuntimeStateDispatcher(rawStore);
+    dispatcher.declare("confirm_modal", "open", false);
+
+    let forwardedResult: unknown = null;
+    let forwardedContext: unknown = null;
+    const spec: RuntimeComponentSpec = {
+      componentId: "comp-queue-rejection-001",
+      packageId: null,
+      layoutId: "layout-queue-rejection-001",
+      wiringId: null,
+      componentType: "action/button",
+      props: { data: { label: "Confirm" } },
+      eventBinding: {
+        click: {
+          eventType: "click",
+          runtimeDispatch: {
+            operationType: "delete_group",
+            target: "manifest",
+            layer: "enum_dictionary",
+            action: "delete_group",
+            targetRef:
+              `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:delete_group`,
+            payloadFrom: { groupId: "node:group-id-input.value", confirmed: "literal:true" },
+          },
+          // Round 25 deferred-gate shape: a trigger carrying BOTH runtimeDispatch and
+          // localStateMutation only applies the mutation once the dispatch settles
+          // successfully — this is the SAME shape a real Confirm button's closeModal uses.
+          localStateMutation: {
+            targetNodeId: "confirm_modal",
+            statePath: "open",
+            action: "set",
+            value: false,
+          },
+        },
+      },
+      payloadFromNodeValues: { "group-id-input": "11111111-1111-1111-1111-111111111111" },
+      localStateStore: dispatcher,
+      onRuntimeDispatchResult: (result, context) => {
+        forwardedResult = result;
+        forwardedContext = context;
+      },
+    };
+    const clickResult = __testOnly.emitBoundEvent(spec, "click", {});
+    assertEquals(clickResult.ok, true);
+    for (let i = 0; i < 20 && forwardedResult === null; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assertEquals(fetchCalled, false, "a rejected enqueueRuntimeComponentCommand must never reach fetch at all");
+    assertExists(forwardedResult, "the catch() branch must forward a synthetic failure to onRuntimeDispatchResult");
+    const result = forwardedResult as { success: boolean; errors?: Array<{ message?: string }> };
+    assertEquals(result.success, false, "the synthetic forwarded result must be success:false");
+    assertExists(
+      result.errors?.[0]?.message?.includes("simulated queue/network rejection"),
+      "the synthetic failure message must carry the real rejection's own message",
+    );
+    assertEquals(
+      forwardedContext,
+      {
+        targetRef: `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:delete_group`,
+        dryRun: false,
+      },
+    );
+    // The deferred localStateMutation gate (onSettled, the SAME mechanism that opens/closes a
+    // Modal in production) must never have applied — the modal's own tracked state stays at its
+    // predeclared initial value (false), never flipped to the queued mutation's value.
+    assertEquals(
+      dispatcher.get("confirm_modal", "open"),
+      false,
+      "onSettled (Modal open/close) must never fire on a queue/network rejection",
+    );
+  } finally {
+    __testOnly.setEnqueueRuntimeComponentCommandForTest(null);
     globalThis.fetch = originalFetch;
     schedulerTestOnly.resetCommandQueue();
   }
@@ -769,6 +879,311 @@ Deno.test("emitBoundEvent: malformed payloadFrom at the dispatch-time parse boun
       );
     }
     assertEquals(schedulerTestOnly.getCommandQueueLength(), 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
+});
+
+Deno.test("emitBoundEvent: two DISTINCT layout nodes sharing the SAME catalog componentId (e.g. two Fields both instantiating form_input/search_input, whose componentId is the CATALOG component definition's own registry identity, not a per-instance one) maintain fully independent debounce timers and dispatch sequencing -- neither node's debounced dispatch cancels or overwrites the other's (round 38)", async () => {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  const capturedBodies: Record<string, unknown>[] = [];
+  globalThis.fetch = ((_url: string, init?: RequestInit) => {
+    capturedBodies.push(JSON.parse(String(init?.body ?? "{}")));
+    return Promise.resolve(
+      new Response(JSON.stringify({ success: true, errors: [] }), { status: 200 }),
+    );
+  }) as typeof fetch;
+  try {
+    const SHARED_CATALOG_COMPONENT_ID = "comp-shared-search-input-catalog-001";
+    const buildSpec = (
+      nodeId: string,
+      inputNodeId: string,
+      targetLayer: string,
+    ): RuntimeComponentSpec => ({
+      // SAME componentId on both specs -- the exact shape two independent Fields both
+      // instantiating the same catalog component (e.g. "search_input.alias") actually have
+      // in production, since componentId is the catalog registry's own identity.
+      componentId: SHARED_CATALOG_COMPONENT_ID,
+      nodeId,
+      packageId: null,
+      layoutId: "layout-shared-componentid-001",
+      wiringId: null,
+      componentType: "form_input/search_input",
+      props: { data: { value: "" } },
+      debounceMs: 30,
+      eventBinding: {
+        change: {
+          eventType: "change",
+          runtimeDispatch: {
+            operationType: "list_x",
+            target: "manifest",
+            layer: targetLayer,
+            action: "list_x",
+            targetRef: `manifest:${ADMIN_ENUM_MANIFEST_ID}:${targetLayer}:list_x`,
+            payloadFrom: { q: `node:${inputNodeId}.value` },
+          },
+        },
+      },
+      payloadFromNodeValues: { [inputNodeId]: nodeId === "node-A" ? "alpha" : "beta" },
+    });
+    const specA = buildSpec("node-A", "input-A", "layer_a");
+    const specB = buildSpec("node-B", "input-B", "layer_b");
+
+    // Fire A's own debounced dispatch, then IMMEDIATELY fire B's own debounced dispatch
+    // (before A's 30ms timer has elapsed). If componentId were still used as the identity
+    // (the round-37 bug this proves fixed), scheduling B would cancel A's still-pending
+    // timer since both specs share one componentId -- A's dispatch would then never fire
+    // at all.
+    const resultA = __testOnly.emitBoundEvent(specA, "change", { value: "alpha" });
+    assertEquals(resultA.ok, true);
+    const resultB = __testOnly.emitBoundEvent(specB, "change", { value: "beta" });
+    assertEquals(resultB.ok, true);
+
+    for (let i = 0; i < 40 && capturedBodies.length < 2; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assertEquals(
+      capturedBodies.length,
+      2,
+      "both A's and B's own debounced dispatch must independently fire -- neither node's own componentId-sharing with the other silently cancels its timer",
+    );
+    const layers = capturedBodies.map((b) => b.layer);
+    assertEquals(
+      new Set(layers),
+      new Set(["layer_a", "layer_b"]),
+      "each node's dispatch must reach ITS OWN targetRef/layer, not the other node's",
+    );
+    const bodyA = capturedBodies.find((b) => b.layer === "layer_a")!;
+    const bodyB = capturedBodies.find((b) => b.layer === "layer_b")!;
+    assertEquals((bodyA.payload as Record<string, unknown>).q, "alpha");
+    assertEquals((bodyB.payload as Record<string, unknown>).q, "beta");
+  } finally {
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
+});
+
+Deno.test("emitBoundEvent: two DISTINCT layout nodes (different nodeId AND different componentId) that author the SAME targetRef literal share ONE dispatch circuit -- scheduling the second node's debounced dispatch cancels the first node's still-pending timer, per runtimeDispatchCircuitKey's targetRef-priority resolution (round 42 correction: round 41's own test comments had incorrectly assumed different nodes always resolve to different circuits; this proves the opposite is true whenever they share a targetRef, exactly the shape enum_search/enum_group_filter/enum_create_group_name_input share in the real ae200 fixture via the layout's own list_groups target)", async () => {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  const capturedBodies: Record<string, unknown>[] = [];
+  globalThis.fetch = ((_url: string, init?: RequestInit) => {
+    capturedBodies.push(JSON.parse(String(init?.body ?? "{}")));
+    return Promise.resolve(
+      new Response(JSON.stringify({ success: true, errors: [] }), { status: 200 }),
+    );
+  }) as typeof fetch;
+  try {
+    const SHARED_TARGET_REF =
+      `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:list_groups`;
+    const buildSpec = (
+      nodeId: string,
+      componentId: string,
+      inputNodeId: string,
+      debounceMs: number,
+    ): RuntimeComponentSpec => ({
+      // DIFFERENT nodeId AND DIFFERENT componentId on both specs -- unlike the round-38 test
+      // above, node identity here is fully distinct on every axis EXCEPT targetRef, isolating
+      // targetRef itself as the one shared thing that should determine circuit identity.
+      componentId,
+      nodeId,
+      packageId: null,
+      layoutId: "layout-shared-targetref-001",
+      wiringId: null,
+      componentType: "form_input/search_input",
+      props: { data: { value: "" } },
+      debounceMs,
+      eventBinding: {
+        change: {
+          eventType: "change",
+          runtimeDispatch: {
+            operationType: "list_groups",
+            target: "manifest",
+            layer: "enum_dictionary",
+            action: "list_groups",
+            targetRef: SHARED_TARGET_REF,
+            payloadFrom: { q: `node:${inputNodeId}.value` },
+          },
+        },
+      },
+      payloadFromNodeValues: { [inputNodeId]: nodeId === "node-A" ? "alpha" : "beta" },
+    });
+    // node-A's own longer debounce starts first; node-B (a fully distinct node/component)
+    // shares node-A's targetRef and fires shortly after, well within node-A's own window.
+    const specA = buildSpec("node-A", "comp-A", "input-A", 300);
+    const specB = buildSpec("node-B", "comp-B", "input-B", 10);
+
+    const resultA = __testOnly.emitBoundEvent(specA, "change", { value: "alpha" });
+    assertEquals(resultA.ok, true);
+    const resultB = __testOnly.emitBoundEvent(specB, "change", { value: "beta" });
+    assertEquals(resultB.ok, true);
+
+    // Wait past B's own short debounce but well before A's own longer one.
+    for (let i = 0; i < 40 && capturedBodies.length < 1; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assertEquals(
+      capturedBodies.length,
+      1,
+      "only B's own shorter debounce must have fired so far",
+    );
+    assertEquals((capturedBodies[0].payload as Record<string, unknown>).q, "beta");
+
+    // Wait past A's own original window too -- if A and B were on independent circuits (the
+    // round-38 shape), A's own timer would still fire here. Because they share ONE targetRef
+    // (and therefore ONE runtimeDispatchCircuitKey), B's later scheduling must have cancelled
+    // A's still-pending timer instead.
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    assertEquals(
+      capturedBodies.length,
+      1,
+      "node-A's own debounced dispatch must NEVER fire -- node-B's dispatch on the SAME " +
+        "targetRef-derived circuit cancelled it, exactly the same-circuit cancellation " +
+        "semantics runtimeDispatchCircuitKey exists to implement, regardless of node/component " +
+        "identity differing on every other axis",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
+});
+
+// round 39: search_filter_input_contract debounce_policy runtime enforcement -- a
+// componentType="form_input/search_input" Field on the admin_runtime dispatch lane must fail
+// closed BEFORE any dispatch attempt when its own debounceMs is missing/invalid, never falling
+// through to an immediate dispatch (the silent "invalid debounceMs == no debounce" fallback the
+// governance NG axis prohibits). Mirrors the backend persistence-boundary matrix
+// (NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs) and the translator's own
+// FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS rule. ────────────────────────────────
+
+function buildSearchInputSpec(
+  debounceMs: unknown,
+  componentType = "form_input/search_input",
+): RuntimeComponentSpec {
+  return {
+    componentId: "comp-search-input-debounce-fail-close-001",
+    nodeId: "search-debounce-fail-close",
+    packageId: null,
+    layoutId: "layout-search-debounce-fail-close-001",
+    wiringId: null,
+    componentType,
+    props: { data: { value: "" } },
+    debounceMs: debounceMs as RuntimeComponentSpec["debounceMs"],
+    eventBinding: {
+      change: {
+        eventType: "change",
+        runtimeDispatch: {
+          operationType: "list_x",
+          target: "manifest",
+          layer: "layer_a",
+          action: "list_x",
+          targetRef: `manifest:${ADMIN_ENUM_MANIFEST_ID}:layer_a:list_x`,
+          payloadFrom: { q: "node:search-debounce-fail-close.value" },
+        },
+      },
+    },
+    payloadFromNodeValues: { "search-debounce-fail-close": "typed value" },
+  };
+}
+
+Deno.test("emitBoundEvent: a form_input/search_input Field on the admin_runtime dispatch lane fails closed (no dispatch, no timer scheduled) when its own debounceMs is missing, zero, negative, non-integer, boolean, or a string -- never silently falls through to an immediate dispatch", async () => {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  let fetchCallCount = 0;
+  globalThis.fetch = (() => {
+    fetchCallCount++;
+    return Promise.resolve(
+      new Response(JSON.stringify({ success: true, errors: [] }), { status: 200 }),
+    );
+  }) as typeof fetch;
+  try {
+    const invalidDebounceValues: unknown[] = [
+      undefined,
+      0,
+      -5,
+      1.5,
+      true,
+      "300",
+    ];
+    for (const invalid of invalidDebounceValues) {
+      fetchCallCount = 0;
+      const spec = buildSearchInputSpec(invalid);
+      const result = __testOnly.emitBoundEvent(spec, "change", { value: "x" });
+      assertEquals(
+        result.ok,
+        false,
+        `debounceMs=${JSON.stringify(invalid)} must fail close synchronously, never schedule or dispatch`,
+      );
+      if (!result.ok) {
+        assertEquals(
+          result.error.includes("FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS"),
+          true,
+          `error must carry the FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS code, got: ${result.error}`,
+        );
+      }
+      // Give any (incorrectly) scheduled timer a chance to fire before asserting it never did.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      assertEquals(
+        fetchCallCount,
+        0,
+        `debounceMs=${JSON.stringify(invalid)} must never reach the network, immediately or after a delay`,
+      );
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
+});
+
+Deno.test("emitBoundEvent: a form_input/search_input Field with a valid positive-integer debounceMs dispatches normally (fail-close does not regress the legitimate case)", async () => {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  let fetchCallCount = 0;
+  globalThis.fetch = (() => {
+    fetchCallCount++;
+    return Promise.resolve(
+      new Response(JSON.stringify({ success: true, errors: [] }), { status: 200 }),
+    );
+  }) as typeof fetch;
+  try {
+    const spec = buildSearchInputSpec(20);
+    const result = __testOnly.emitBoundEvent(spec, "change", { value: "x" });
+    assertEquals(result.ok, true);
+    for (let i = 0; i < 40 && fetchCallCount === 0; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assertEquals(fetchCallCount, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
+});
+
+Deno.test("emitBoundEvent: a NON-search_input Field (e.g. form_input/select, discrete-choice) on the admin_runtime dispatch lane is NEVER required to declare debounceMs -- dispatches immediately with no debounceMs authored, matching the discrete-choice exemption exactly", async () => {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  let fetchCallCount = 0;
+  globalThis.fetch = (() => {
+    fetchCallCount++;
+    return Promise.resolve(
+      new Response(JSON.stringify({ success: true, errors: [] }), { status: 200 }),
+    );
+  }) as typeof fetch;
+  try {
+    const spec = buildSearchInputSpec(undefined, "form_input/select");
+    const result = __testOnly.emitBoundEvent(spec, "change", { value: "x" });
+    assertEquals(result.ok, true);
+    for (let i = 0; i < 40 && fetchCallCount === 0; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assertEquals(fetchCallCount, 1);
   } finally {
     globalThis.fetch = originalFetch;
     schedulerTestOnly.resetCommandQueue();

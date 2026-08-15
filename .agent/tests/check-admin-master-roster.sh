@@ -28,7 +28,14 @@ grep -q 'enum_dictionary:create_group' "$REPO_ROOT/backend/runtime/AdminRuntime.
 
 [ -f "$REPO_ROOT/frontend/routes/admin/enums.tsx" ] || fail "frontend/routes/admin/enums.tsx missing"
 [ -f "$REPO_ROOT/frontend/routes/admin/users.tsx" ] || fail "frontend/routes/admin/users.tsx missing"
-[ -f "$REPO_ROOT/frontend/islands/AdminEnumsRoster.tsx" ] || fail "AdminEnumsRoster island missing"
+# admin-enum subBundle closure round 36: AdminEnumsRoster.tsx is retired and deleted --
+# /admin/enums is served by frontend/islands/ProjectionShell.tsx (pinned to manifest ae200), the
+# same generic production runtime every other projection surface uses. Checking for
+# ProjectionShell.tsx's own existence, not a re-added AdminEnumsRoster file.
+[ -f "$REPO_ROOT/frontend/islands/ProjectionShell.tsx" ] || fail "ProjectionShell island missing (serves /admin/enums since AdminEnumsRoster retirement)"
+if grep -qE '^import .*AdminEnumsRoster' "$REPO_ROOT/frontend/routes/admin/enums.tsx"; then
+  fail "frontend/routes/admin/enums.tsx must not import the retired AdminEnumsRoster island"
+fi
 [ -f "$REPO_ROOT/frontend/islands/AdminUsersRoster.tsx" ] || fail "AdminUsersRoster island missing"
 
 RUNTIME="$REPO_ROOT/docs/design/runtime-orchestration-ssot.yaml"

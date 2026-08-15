@@ -306,7 +306,7 @@ admin_normal_surface_projection_seed_ssot:
                 revoke_sessions: revokes one (by sessionId) or all active auth.sessions rows for the account in one transaction, with non-secret evidence appended in the same transaction.
                 update_role: grants or revokes the admin/system auth.grants row for the account (auth_users:update roleName field); never affects auth.credentials.
               admin_users_authority_relationship:
-                existing_authority_ref: docs/design/admin-master-roster-management-ssot.yaml admin_runtime_actions.auth_users
+                existing_authority_ref: docs/design/admin-master-roster-management-ssot.yaml admin_runtime_actions.auth_users_read/auth_users_write
                 relationship: continuation_refinement_not_duplicate_authority
                 rule: /admin/users remains the existing account CRUD authority surface for auth_users:* actions. credentials.users is the topology seed projection design for that same account lifecycle capability; it must bind to the same authority and must not introduce a parallel account CRUD authority.
             external_api_credential:
@@ -439,10 +439,92 @@ admin_normal_surface_projection_seed_ssot:
                 component_key: select.template
               - node_key: enum_table
                 component_key: table.primitive
-              - node_key: enum_form
-                component_key: form_field.template
-              - node_key: enum_confirm_button
+                note: displayColumns carries groupName/indexNum/groupId/itemsSummary -- itemsSummary folds the enum_dictionary:get_group item-join into this table's own list_groups read (items-browse UX), never a separate list_items action.
+              - node_key: enum_create_group_name_input
+                component_key: input.primitive
+              - node_key: enum_create_group_button
                 component_key: button.primitive
+              - node_key: enum_create_group_confirm_modal
+                component_key: modal.template
+              - node_key: enum_create_group_confirm_button
+                component_key: button.primitive
+              - node_key: enum_create_group_cancel_button
+                component_key: button.primitive
+              - node_key: enum_update_group_name_input
+                component_key: input.primitive
+              - node_key: enum_update_group_button
+                component_key: button.primitive
+              - node_key: enum_update_group_confirm_modal
+                component_key: modal.template
+              - node_key: enum_update_group_confirm_button
+                component_key: button.primitive
+              - node_key: enum_update_group_cancel_button
+                component_key: button.primitive
+              - node_key: enum_delete_group_button
+                component_key: button.primitive
+              - node_key: enum_delete_group_confirm_modal
+                component_key: modal.template
+              - node_key: enum_delete_group_confirm_button
+                component_key: button.primitive
+              - node_key: enum_delete_group_cancel_button
+                component_key: button.primitive
+              - node_key: enum_create_item_name_input
+                component_key: input.primitive
+              - node_key: enum_create_item_button
+                component_key: button.primitive
+              - node_key: enum_create_item_confirm_modal
+                component_key: modal.template
+              - node_key: enum_create_item_confirm_button
+                component_key: button.primitive
+              - node_key: enum_create_item_cancel_button
+                component_key: button.primitive
+              - node_key: enum_update_item_index_input
+                component_key: input.primitive
+              - node_key: enum_update_item_name_input
+                component_key: input.primitive
+              - node_key: enum_update_item_button
+                component_key: button.primitive
+              - node_key: enum_update_item_confirm_modal
+                component_key: modal.template
+              - node_key: enum_update_item_confirm_button
+                component_key: button.primitive
+              - node_key: enum_update_item_cancel_button
+                component_key: button.primitive
+              - node_key: enum_delete_item_index_input
+                component_key: input.primitive
+              - node_key: enum_delete_item_button
+                component_key: button.primitive
+              - node_key: enum_delete_item_confirm_modal
+                component_key: modal.template
+              - node_key: enum_delete_item_confirm_button
+                component_key: button.primitive
+              - node_key: enum_delete_item_cancel_button
+                component_key: button.primitive
+              - node_key: enum_set_group_items_input
+                component_key: input.primitive
+              - node_key: enum_set_group_items_button
+                component_key: button.primitive
+              - node_key: enum_set_group_items_confirm_modal
+                component_key: modal.template
+              - node_key: enum_set_group_items_confirm_button
+                component_key: button.primitive
+              - node_key: enum_set_group_items_cancel_button
+                component_key: button.primitive
+            component_tree_note: >-
+              Superseded the original enum_form (form_field.template) / enum_confirm_button
+              (button.primitive) structural-leaf-only stub (a non-interactive edit-and-confirm
+              placeholder authored before any per-operation write manifest or the
+              admin_runtime_dispatch_override_wiring lane existed). The 7 write operations
+              (create_group/update_group/delete_group/create_item/update_item/delete_item/
+              set_group_items) each own a typed input.primitive field (or fields), an open/preview
+              button wired via admin_runtime_dispatch_override_wiring to dispatch a non-mutating
+              dryRun to that operation's own dedicated write manifest, a disclosure/modal gated
+              behind that preview's success, and Confirm/Cancel buttons inside it -- Confirm
+              re-resolves the same payloadFrom mapping fresh and dispatches confirmed=literal:true,
+              Cancel dispatches nothing. See db/seed_empty.sql manifest
+              00000000-0000-0000-0000-0000000ae200 and
+              docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
+              dryrun_preview_gated_confirm_modal for the full runtime contract.
             mutation_confirmation_contract: [preview_dictionary_delta, validate_against_enum_authority, explicit_confirm, write, diff_log]
             loading_empty_error_projection: [loading_enum, empty_enum, enum_error_fail_close]
         dashboard:

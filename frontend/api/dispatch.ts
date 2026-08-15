@@ -190,6 +190,14 @@ export type LayoutNode = {
    * uniform target, unchanged. See renderEmission.ts's admin_runtime target-ref override contract.
    */
   dispatchTargetRefByTrigger?: Record<string, string> | null;
+  /**
+   * round 37 (search_filter_input_contract debounce_policy): this Field's own declared
+   * debounceMs (Field grammar, react-schema-topology-seed-translator-ssot.yaml). Debounces
+   * this node's own "input"-triggered admin_runtime Lane 2 dispatch (see
+   * runtimeComponentFactory.ts scheduleOrDispatchRuntimeCommand). Absent when not authored
+   * — the node then dispatches immediately on every "input" trigger, unchanged.
+   */
+  debounceMs?: number | null;
   widthMode?: "auto" | "preset" | "custom";
   heightMode?: "auto" | "preset" | "custom";
   /**

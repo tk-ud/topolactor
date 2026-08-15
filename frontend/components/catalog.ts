@@ -456,22 +456,6 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
       "runtime_reachability: existing_route_composition — mounted at /admin/users (unchanged route; unified single surface, not split into a standalone route/panel per admin-console-workflow-ssot.yaml). Owns auth_users:* account CRUD (role/approve/status/suspension via auth_users:update roleName field) plus session/credential revoke via the thin /admin/auth/users/{userId}/* HTTP boundary (bypasses /dispatch — see backend/Program.cs). Never exposes a UI to view or set another account's password value.",
   },
   {
-    componentKey: "admin_enum_roster.admin_operation",
-    componentKind: "admin_operation/enum_roster",
-    sourcePath: "frontend/islands/AdminEnumsRoster.tsx",
-    componentFamily: "composite",
-    semanticRole: "admin_operation",
-    visualRole: "panel",
-    lifecycleStatus: "registered",
-    capabilityTags: ["admin_only", "displays_backend_result", "field_binding", "emits_event"],
-    runtimeConnected: false,
-    runtimeReachability: "existing_route_composition",
-    routeCompositionFile: "frontend/routes/admin/enums.tsx",
-    registrationRequired: false,
-    notes:
-      "runtime_reachability: existing_route_composition — mounted at /admin/enums (unchanged route). enum_dictionary:* CRUD via admin dispatch, gated admin-only by the same manifest capability_requirement inference every admin_runtime action relies on.",
-  },
-  {
     componentKey: "scheduler_job_settings.admin_operation",
     componentKind: "admin_operation/scheduler_settings",
     sourcePath: "frontend/islands/SchedulerJobSettingsPanel.tsx",

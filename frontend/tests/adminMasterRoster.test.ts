@@ -12,12 +12,8 @@ Deno.test("USER_STATUS_ENUM_GROUP_ID matches SSOT seed group", () => {
   assertEquals(USER_STATUS_ENUM_GROUP_ID, "33333333-3333-3333-3333-333333333301");
 });
 
-Deno.test("AdminEnumsRoster and AdminUsersRoster islands exist", async () => {
-  const enums = await Deno.readTextFile(new URL("../islands/AdminEnumsRoster.tsx", import.meta.url));
+Deno.test("AdminUsersRoster island exists", async () => {
   const users = await Deno.readTextFile(new URL("../islands/AdminUsersRoster.tsx", import.meta.url));
-  assertEquals(enums.includes("Modal"), true);
-  assertEquals(enums.includes("全件出力"), true);
-  assertEquals(enums.includes("useConfirm"), true);
   assertEquals(users.includes("readonly"), true);
   assertEquals(users.includes("USER_STATUS_ENUM_GROUP_ID"), true);
 });

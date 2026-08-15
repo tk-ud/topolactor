@@ -123,16 +123,24 @@ LABEL_REQUIRED_UNITS = set(ALL_TAGGABLE_UNITS)
 # crud_cancel_button, whose parentNodeId is "crud_create_modal" (a Modal, no Form wrapper).
 VALID_ACTION_OWNER_NODE_KINDS = {"Form", "Workflow", "Modal"}
 
-# A Section may ALSO directly own an Action, but only when that Action's own wiringLane is
-# disclosure_state_wiring (round 24) -- a pure UI-local disclosure trigger with no backend dispatch
-# authority at all, verified against the SAME fixture: crud_add_button/crud_search_button (plain
-# trigger buttons, not mutations) have parentNodeId "crud_shell", a bare Section, no Form at all.
-# Deliberately NOT extended to every lane: check_react_schema_topology_seed_translator.py's own
-# check 40 proves a REAL dispatch Action (external_instance_wiring) injected directly under a
-# Section must still be rejected -- unconditionally allowing Section as an Action owner would
-# silently defeat that protection. Only the narrowest lane this round's own evidence supports is
-# added, not a blanket exception.
-SECTION_OWNABLE_ACTION_LANES = {"disclosure_state_wiring"}
+# A Section may ALSO directly own an Action, but only when that Action's own wiringLane is one of
+# these two (round 24 + preview-gap round): disclosure_state_wiring is a pure UI-local disclosure
+# trigger with no backend dispatch authority at all, verified against the SAME fixture:
+# crud_add_button/crud_search_button (plain trigger buttons, not mutations) have parentNodeId
+# "crud_shell", a bare Section, no Form at all. admin_runtime_dispatch_override_wiring was added
+# for the SAME structural role a disclosure_state_wiring open-trigger button already occupies
+# directly under a Section (a mutation_confirmation_contract preview_dictionary_delta trigger --
+# admin-normal-surface-projection-seed-ssot.yaml -- that dispatches a non-mutating
+# payload.dryRun=true probe to the SAME target manifest/fields the eventual confirmed write inside
+# the Modal uses, deferring its own secondaryDisclosureActionType=openModal to that dispatch's
+# success): it is never a bare, ungated mutation Action sitting under a Section on its own, always
+# paired with a secondaryDisclosureAction that only ever OPENS a Modal (never a raw create/update/
+# delete with no confirm step to follow). Deliberately NOT extended to every lane:
+# check_react_schema_topology_seed_translator.py's own check 40 proves a REAL dispatch Action
+# (external_instance_wiring) injected directly under a Section must still be rejected --
+# unconditionally allowing Section as an Action owner would silently defeat that protection. Only
+# the narrowest lanes this round's own evidence supports are added, not a blanket exception.
+SECTION_OWNABLE_ACTION_LANES = {"disclosure_state_wiring", "admin_runtime_dispatch_override_wiring"}
 
 UNIT_TO_NODE_KIND = {
     "projection": "Projection",
@@ -408,6 +416,203 @@ def parse_payload_from(raw):
     return result
 
 
+def parse_columns(raw):
+    """`key:Header,key2:Header 2` -> [{"key": key, "header": Header}, ...], order preserved.
+
+    preview-gap round: promotes a Table's display column list from a hand-patched
+    tensor-only propsJson addition (previously invisible to canonical generation) into an
+    authorable DSL attribute, so `generate-topology-seed` alone reproduces it -- see
+    split_flat_records_into_adoption_candidates' topology_ui_table branch, which projects this
+    into the tensor node's own propsJson.columns. Lenient by design (malformed/empty/duplicate
+    segments are silently omitted from the returned list rather than raising here) -- this stays a
+    pure parse step; find_display_columns_issues below re-parses the SAME raw string strictly and
+    is what actually makes malformed input a blocking validation error
+    (validate_table_display_columns_and_rows_source), so nothing is silently lost end-to-end."""
+    result = []
+    if not raw:
+        return result
+    for pair in raw.split(","):
+        pair = pair.strip()
+        if not pair:
+            continue
+        key, sep, header = pair.partition(":")
+        if not sep:
+            continue
+        result.append({"key": key.strip(), "header": header.strip()})
+    return result
+
+
+ROWS_SOURCE_SHAPE_RE = re.compile(r"^emission\.data(\..+)?$")
+
+# admin-enum subBundle closure round (.agent/tasks/todo.md): selected-row-relative field prefill.
+# IDENTICAL grammar to payloadFromResolver.ts's own NODE_VALUE_RE (docs/design/
+# ui-builder-preset-ecosystem-ssot.yaml payloadFrom_resolver_contract.recognized_source_patterns
+# .node_value_path) -- one owning grammar definition, never a second independently-maintained
+# regex, mirroring this file's own existing rule for ROWS_SOURCE_SHAPE_RE / round_21 node_value_path
+# promotion note.
+FIELD_VALUE_FROM_NODE_REF_RE = re.compile(r"^node:[A-Za-z0-9_-]+\.value(?:\.[A-Za-z0-9_]+)*$")
+
+
+def find_display_columns_issues(raw):
+    """Round 3 (preview-gap audit): strict re-parse of the SAME raw displayColumns string
+    parse_columns consumes leniently, returning human-readable issue strings for every segment
+    parse_columns would otherwise silently drop (empty segment, missing ':' separator, empty key,
+    empty header) plus duplicate keys across the whole list. Used only by
+    validate_table_display_columns_and_rows_source to raise a blocking validation error -- never
+    used to filter parse_columns' own returned column list, which stays lenient/best-effort for
+    whatever WAS parseable."""
+    issues = []
+    if not raw:
+        return issues
+    seen_keys = set()
+    for pair in raw.split(","):
+        pair_stripped = pair.strip()
+        if not pair_stripped:
+            issues.append(f"empty displayColumns segment in '{raw}'")
+            continue
+        key, sep, header = pair_stripped.partition(":")
+        if not sep:
+            issues.append(
+                f"displayColumns segment '{pair_stripped}' is missing the required "
+                f"':' key:header separator"
+            )
+            continue
+        key = key.strip()
+        header = header.strip()
+        if not key:
+            issues.append(f"displayColumns segment '{pair_stripped}' has an empty key")
+            continue
+        if not header:
+            issues.append(f"displayColumns segment '{pair_stripped}' has an empty header")
+            continue
+        if key in seen_keys:
+            issues.append(f"displayColumns key '{key}' is duplicated")
+            continue
+        seen_keys.add(key)
+    return issues
+
+
+def validate_table_display_columns_and_rows_source(node, errors, path="$.root"):
+    """SSOT: docs/design/react-schema-topology-seed-translator-ssot.yaml
+    input_text_markup_grammar_contract.per_unit_grammar.table's displayColumns/rowsSource
+    attributes and exchange_mapping's Table -> topology_ui_table -> tensor propsJson/propBindings
+    projection. Fail-close, generic (never Table-key-specific):
+      1. Malformed/empty/duplicate displayColumns segments are a blocking validation error --
+         parse_columns' own lenient parsing never silently drops information end-to-end once this
+         check runs alongside it.
+      2. displayColumns and rowsSource must be authored TOGETHER -- a Table binding real data
+         needs both a column list and a data source; declaring only one is a genuine authoring
+         defect, not a partial-but-valid shape.
+      3. rowsSource, when present, must resolve to a shape
+         frontend/runtime/propBindingResolver.ts's own resolveRuntimeDataPath actually accepts
+         ("emission.data" or "emission.data.<path>") -- never the Table's own `source` attribute
+         value verbatim, which is a domain/table lineage identifier (e.g. "enum.groups"), not a
+         JSON traversal path into the dispatched Emission.
+    """
+    if node.get("kind") == "Table":
+        node_path = node.get("_path", path)
+        key = node.get("key")
+        raw_display_columns = node.get("_rawDisplayColumns")
+        if raw_display_columns:
+            for issue in find_display_columns_issues(raw_display_columns):
+                errors.append(err(
+                    "TABLE_DISPLAY_COLUMNS_MALFORMED", node_path, "blocking",
+                    f"Table '{key}' displayColumns is malformed: {issue}",
+                ))
+        display_columns = node.get("displayColumns") or []
+        rows_source = node.get("rowsSource") or ""
+        if display_columns and not rows_source:
+            errors.append(err(
+                "TABLE_ROWS_SOURCE_REQUIRED_WITH_DISPLAY_COLUMNS", node_path, "blocking",
+                f"Table '{key}' declares displayColumns but no rowsSource -- a data-bound table "
+                f"needs both a column list and a rows data source authored together",
+            ))
+        if rows_source and not display_columns:
+            errors.append(err(
+                "TABLE_DISPLAY_COLUMNS_REQUIRED_WITH_ROWS_SOURCE", node_path, "blocking",
+                f"Table '{key}' declares rowsSource but no displayColumns -- a data-bound table "
+                f"needs both a column list and a rows data source authored together",
+            ))
+        if rows_source and not ROWS_SOURCE_SHAPE_RE.match(rows_source):
+            errors.append(err(
+                "TABLE_ROWS_SOURCE_INVALID", node_path, "blocking",
+                f"Table '{key}' rowsSource '{rows_source}' must be \"emission.data\" or start "
+                f"with \"emission.data.\" (frontend/runtime/propBindingResolver.ts's own "
+                f"recognized prop-binding source shape) -- never a domain/table identifier such "
+                f"as this Table's own `source` attribute",
+            ))
+    for c in node.get("children") or []:
+        validate_table_display_columns_and_rows_source(c, errors, path)
+
+
+def validate_field_value_from_source(node, errors, path="$.root"):
+    """SSOT: docs/design/react-schema-topology-seed-translator-ssot.yaml
+    input_text_markup_grammar_contract.per_unit_grammar.field's valueFrom attribute.
+    Fail-close, generic (never Field-key-specific, never admin-enum-specific): a Field's
+    valueFrom, when present, must be a node:<id>.value(.<path>)* reference -- the SAME grammar
+    payloadFrom already uses at dispatch time (frontend/runtime/payloadFromResolver.ts), reused
+    here for display-time selected-row-relative prefill (frontend/runtime/
+    liveNodeValueTracker.ts cascadeNodeValueReferences) rather than invented as a second
+    parallel source vocabulary. An emission.data-shaped source belongs to the OTHER, pre-existing
+    propBindings.value resolution path (seedTrackerFromPropBindingsValue against emissionData) and
+    is out of scope for valueFrom, which exists specifically for the node-reference case that path
+    cannot express.
+    """
+    if node.get("kind") == "Field":
+        node_path = node.get("_path", path)
+        key = node.get("key")
+        value_from = node.get("valueFrom") or ""
+        if value_from and not FIELD_VALUE_FROM_NODE_REF_RE.match(value_from):
+            errors.append(err(
+                "FIELD_VALUE_FROM_INVALID", node_path, "blocking",
+                f"Field '{key}' valueFrom '{value_from}' must be \"node:<id>.value\" or "
+                f"\"node:<id>.value.<path>\" (the SAME grammar payloadFrom already resolves at "
+                f"dispatch time) -- never an emission.data path, which belongs to the separate, "
+                f"pre-existing propBindings.value resolution against emissionData",
+            ))
+    for c in node.get("children") or []:
+        validate_field_value_from_source(c, errors, path)
+
+
+def validate_field_options_source(node, errors, path="$.root"):
+    """SSOT: docs/design/react-schema-topology-seed-translator-ssot.yaml
+    input_text_markup_grammar_contract.field_options_source_attributes. Fail-close, generic
+    (never Field-key-specific, never admin-enum-specific), mirroring
+    validate_table_display_columns_and_rows_source's own displayColumns/rowsSource pairing rule:
+      1. optionsSource, optionsLabelPath, optionsValuePath must be authored TOGETHER or NEITHER --
+         a data-bound select needs a data source AND both identity paths to build usable options.
+      2. optionsSource, when present, must resolve to a shape frontend/runtime/
+         propBindingResolver.ts's own resolveRuntimeDataPath actually accepts ("emission.data" or
+         "emission.data.<path>") -- the SAME ROWS_SOURCE_SHAPE_RE Table's own rowsSource already
+         uses, never a domain identifier or any other literal.
+    """
+    if node.get("kind") == "Field":
+        node_path = node.get("_path", path)
+        key = node.get("key")
+        options_source = node.get("optionsSource") or ""
+        options_label_path = node.get("optionsLabelPath") or ""
+        options_value_path = node.get("optionsValuePath") or ""
+        any_present = bool(options_source or options_label_path or options_value_path)
+        all_present = bool(options_source and options_label_path and options_value_path)
+        if any_present and not all_present:
+            errors.append(err(
+                "FIELD_OPTIONS_SOURCE_INCOMPLETE", node_path, "blocking",
+                f"Field '{key}' authors only some of optionsSource/optionsLabelPath/"
+                f"optionsValuePath ({options_source!r}, {options_label_path!r}, "
+                f"{options_value_path!r}) -- a data-bound select needs a data source and both "
+                f"identity paths authored together, never a partial set",
+            ))
+        if options_source and not ROWS_SOURCE_SHAPE_RE.match(options_source):
+            errors.append(err(
+                "FIELD_OPTIONS_SOURCE_INVALID", node_path, "blocking",
+                f"Field '{key}' optionsSource '{options_source}' must be \"emission.data\" or "
+                f"start with \"emission.data.\" (the SAME shape Table's own rowsSource uses) -- "
+                f"never a domain/table identifier or other literal",
+            ))
+    for c in node.get("children") or []:
+        validate_field_options_source(c, errors, path)
+
+
 def build_node(kind, attrs, source_refs, known_gaps):
     node_kind = UNIT_TO_NODE_KIND[kind]
     key = attrs.get("key")
@@ -439,9 +644,79 @@ def build_node(kind, attrs, source_refs, known_gaps):
     if kind == "field":
         node["control"] = attrs.get("control", "")
         node["required"] = str(attrs.get("required", "false")).lower() == "true"
+        # selected-row-relative field prefill (admin-enum subBundle closure round): the authored
+        # propBindings.value.source node-reference, see FIELD_VALUE_FROM_NODE_REF_RE /
+        # validate_field_value_from_source. Empty string (not authored) is the common case.
+        node["valueFrom"] = attrs.get("valueFrom", "")
+        # generic select options data-binding (round 36, admin-enum subBundle closure): a Field may
+        # ALSO author optionsSource/optionsLabelPath/optionsValuePath together, becoming this
+        # Field's own propBindings.options -- the SAME {"source","transform":"rowsToOptions",
+        # "labelPath","valuePath"} shape frontend/runtime/propBindingResolver.ts's
+        # COMPONENT_ARRAY_PROP_CAPABILITIES["form_input/select"]/backend
+        # StructureMapResolver.ComponentArrayPropCapabilities already validate and accept at the
+        # RUNTIME layer (see ValidateLayoutNodes_AcceptsValidRowsToOptionsWithPathFields) but which
+        # this translator's AUTHORING/GENERATION layer had no attribute to actually produce until
+        # now -- closes that generation gap, mirroring Table's own rowsSource/displayColumns
+        # pairing (see validate_field_options_source below). Empty strings (not authored) are the
+        # common case for every Field that is not a data-bound select.
+        node["optionsSource"] = attrs.get("optionsSource", "")
+        node["optionsLabelPath"] = attrs.get("optionsLabelPath", "")
+        node["optionsValuePath"] = attrs.get("optionsValuePath", "")
+        # round 37 (search_filter_input_contract debounce_policy, admin-normal-surface-projection-
+        # seed-ssot.yaml): a Field participating in admin_runtime_dispatch_override_wiring may
+        # declare its own debounceMs (positive integer ms) -- mirrors Step/Action's pre-existing
+        # debounceMs authoring_metadata_fields attribute (admin-uibuilder-ui-structure-wiring-ssot
+        # .yaml high_frequency_policy), extended to Field grammar here since a Field's own dispatch
+        # runs through a DIFFERENT lane (admin_runtime, not externalPortDispatch/
+        # instanceOperationDispatch) that high_frequency_policy's own trigger-name gate never
+        # covered. See validate_field_admin_runtime_dispatch_wiring rule 5 for when this becomes
+        # REQUIRED (a search/filter Field's own read-action dispatch), and
+        # frontend/runtime/runtimeComponentFactory.ts scheduleOrDispatchRuntimeCommand for the
+        # runtime behavior. Absent when not authored -- never invented.
+        if attrs.get("debounceMs") is not None:
+            try:
+                node["debounceMs"] = int(attrs.get("debounceMs"))
+            except (TypeError, ValueError):
+                node["debounceMs"] = attrs.get("debounceMs")
+        # generic list_groups search/filter (admin-enum subBundle closure round): a Field may ALSO
+        # carry an admin_runtime_dispatch_override_wiring eventBinding on its own trigger (default
+        # "change", matching a typed field's own keystroke event) -- the SAME override lane/shape
+        # Action/Step already author (build_admin_runtime_dispatch_override_candidate,
+        # validate_wiring_node), extended here so a typed search field's OWN current value can
+        # source an EXISTING read action's optional filter payload
+        # (dispatchPayloadFromByTrigger) -- no new wiringLane, no new actionType, no Field-vs-Action
+        # structural-ownership special-casing (validate_structural_node and
+        # validate_admin_runtime_preview_action_pairing both gate on kind=="Action" only, so a
+        # Field's own use of this lane is never subject to those Action-only Section-ownership /
+        # dryRun-preview-pairing rules -- correct, since a Field-sourced read/filter override is not
+        # the bare-ungated-mutation risk those Action-only rules exist to prevent). Absent when no
+        # wiringLane is authored (the common case for every other Field) -- never invented.
+        wiring_lane = attrs.get("wiringLane")
+        if wiring_lane:
+            event_binding = {
+                "trigger": attrs.get("trigger", "change"),
+                "wiringLane": wiring_lane,
+                "targetRef": attrs.get("actionRef", ""),
+                "authority": authority_marker,
+            }
+            payload_from_raw = attrs.get("payloadFrom")
+            if payload_from_raw:
+                event_binding["payloadFrom"] = parse_payload_from(payload_from_raw)
+            node["eventBinding"] = event_binding
     if kind == "table":
         node["source"] = attrs.get("source", "")
         node["display"] = attrs.get("display", "")
+        node["displayColumns"] = parse_columns(attrs.get("displayColumns"))
+        # Kept alongside the parsed list so validate_table_display_columns_and_rows_source can
+        # strictly re-check the ORIGINAL string for malformed/duplicate/empty segments that
+        # parse_columns' own lenient parsing silently omitted -- never read for seed generation
+        # itself (that always uses the already-parsed "displayColumns" list above).
+        node["_rawDisplayColumns"] = attrs.get("displayColumns")
+        # rowsSource is the authored propBindings.rows.source value (round 3, preview-gap audit)
+        # -- a JSON traversal path into the dispatched Emission ("emission.data" or
+        # "emission.data.<path>"), never the `source` attribute above (a domain/table lineage
+        # identifier such as "enum.groups", unrelated to response shape).
+        node["rowsSource"] = attrs.get("rowsSource", "")
     if kind == "workflow":
         node["steps"] = []
     if kind == "modal":
@@ -740,7 +1015,14 @@ def classify_source_pattern(value):
 
 
 def validate_wiring_node(node, lanes_def, errors, path):
-    if node.get("kind") not in ("Action", "Step"):
+    kind = node.get("kind")
+    if kind not in ("Action", "Step", "Field"):
+        return
+    # A Field's eventBinding is OPTIONAL (generic list_groups search/filter round) -- unlike
+    # Action/Step, which always carry one (build_node sets it unconditionally), most Fields never
+    # author a wiringLane at all. Only a Field that DID author one is subject to this lane
+    # validation; an absent eventBinding is silently fine, never UNRESOLVED_WIRING_LANE.
+    if kind == "Field" and not node.get("eventBinding"):
         return
     eb = node.get("eventBinding") or {}
     lane_key = eb.get("wiringLane")
@@ -1017,6 +1299,325 @@ def validate_disclosure_targets(node, kinds_by_key, errors, path="$.root"):
         validate_disclosure_targets(c, kinds_by_key, errors, path)
 
 
+def collect_nodes_by_key(node, out):
+    """Maps every node's key -> the FULL node dict (not just its kind -- contrast
+    collect_node_kinds_by_key), across the whole tree, same traversal. Used by
+    validate_admin_runtime_preview_action_pairing to cross-reference a Section-owned preview
+    Action against the Confirm Action inside the Modal it opens."""
+    key = node.get("key")
+    if key:
+        out[key] = node
+    for c in node.get("children") or []:
+        collect_nodes_by_key(c, out)
+
+
+#: mutation_confirmation_contract's closed authority-flag vocabulary
+#: (admin-normal-surface-projection-seed-ssot.yaml, docs/design/admin-uibuilder-ui-structure-
+#: wiring-ssot.yaml dryrun_preview_gated_confirm_modal): payload.dryRun marks a non-mutating
+#: preview, payload.confirmed marks the actual write-confirmation authority. No other payloadFrom
+#: key carries mutation-authority semantics -- validate_admin_runtime_preview_action_pairing uses
+#: this closed set (never a single-key check) so a THIRD authority-shaped flag introduced later
+#: fails closed here too, rather than silently passing because only "dryRun"/"confirmed" were
+#: individually checked.
+AUTHORITY_FLAG_KEYS = frozenset({"dryRun", "confirmed"})
+
+
+def validate_admin_runtime_preview_action_pairing(node, nodes_by_key, errors, path="$.root", parent=None):
+    """SECTION_OWNABLE_ACTION_LANES admits admin_runtime_dispatch_override_wiring directly under a
+    Section ONLY as a dryRun preview trigger paired with a Modal-opening secondaryDisclosureAction
+    -- never as a bare, ungated mutation (see that constant's own comment). Lane MEMBERSHIP alone
+    (checked by validate_structural_node) does not enforce this; this is the fail-close check that
+    the full safety shape actually holds for every Section-owned use of the lane:
+      1. secondaryDisclosureAction exists with actionType=="openModal" specifically (never
+         closeModal/toggleModal -- a preview trigger only ever OPENS a confirm surface).
+      2. eventBinding.payloadFrom declares dryRun="literal:true" and carries no OTHER
+         AUTHORITY_FLAG_KEYS member (never "confirmed", never a future third authority flag) --
+         a preview must never carry write-confirmation authority.
+      3. The targeted Modal contains EXACTLY ONE child Action whose own wiringLane is also
+         admin_runtime_dispatch_override_wiring (the Confirm button) to pair against -- zero or
+         more than one is a blocking authoring error, never silently picking one.
+      4. That Confirm button's target_ref and business-field payloadFrom (every payloadFrom key
+         except "confirmed") are IDENTICAL to the preview Action's own target_ref and
+         business-field payloadFrom (every payloadFrom key except "dryRun") -- a preview that
+         resolves a DIFFERENT manifest/layer/action or field set than what Confirm will actually
+         write is a genuine authoring defect, not a cosmetic mismatch.
+      5. (round 3, preview-gap audit) That Confirm button's OWN payloadFrom declares
+         confirmed="literal:true" exactly -- Lane MEMBERSHIP plus a same-lane child under the
+         opened Modal is not itself proof that button actually carries write-confirmation
+         authority -- and carries no OTHER AUTHORITY_FLAG_KEYS member (never "dryRun", never a
+         future third authority flag): a Modal-owned admin_runtime Action that forgot
+         confirmed=literal:true, or that still carries a leftover dryRun flag, is a genuine
+         authoring defect this rule now catches structurally rather than trusting lane membership
+         alone as write-confirmation proof.
+    Runs only for a Section-owned use of this lane (parent_kind == "Section"); the Confirm button
+    itself (Modal-owned, same lane) is unaffected by checks 1-4 above -- its own
+    secondaryDisclosureAction is closeModal, never openModal, so it never reaches this rule's
+    target-Modal cross-check as the OUTER action, and it is never itself Section-owned. It is
+    reached and checked (rule 5) only as the RESOLVED Confirm target of a Section-owned preview
+    Action. The target Modal's own existence/kind is already checked generically by
+    validate_disclosure_targets (DISCLOSURE_TARGET_NODE_REQUIRED / DISCLOSURE_TARGET_KIND_MISMATCH)
+    -- not duplicated here; this function only proceeds to the Confirm cross-check once a real
+    Modal node is resolved.
+    """
+    if node.get("kind") == "Action":
+        eb = node.get("eventBinding") or {}
+        parent_kind = parent.get("kind") if parent else None
+        if isinstance(eb, dict) and eb.get("wiringLane") == "admin_runtime_dispatch_override_wiring" and parent_kind == "Section":
+            node_path = node.get("_path", path)
+            key = node.get("key")
+            payload_from = eb.get("payloadFrom") or {}
+            secondary = node.get("secondaryDisclosureAction")
+            if not secondary or secondary.get("actionType") != "openModal":
+                errors.append(err(
+                    "ADMIN_RUNTIME_PREVIEW_ACTION_SECONDARY_OPEN_MODAL_REQUIRED", node_path, "blocking",
+                    f"Action '{key}' uses admin_runtime_dispatch_override_wiring directly under a "
+                    f"Section (SECTION_OWNABLE_ACTION_LANES) but does not pair it with a "
+                    f"secondaryDisclosureActionType=openModal -- a Section-owned admin_runtime Action "
+                    f"is only a legal preview trigger, never a bare mutation with no confirm gate",
+                ))
+            if payload_from.get("dryRun") != "literal:true":
+                errors.append(err(
+                    "ADMIN_RUNTIME_PREVIEW_ACTION_DRYRUN_REQUIRED", node_path, "blocking",
+                    f"Action '{key}' is Section-owned admin_runtime_dispatch_override_wiring (a preview "
+                    f"trigger) but its own payloadFrom does not declare dryRun=literal:true",
+                ))
+            preview_extra_authority_flags = (set(payload_from) & AUTHORITY_FLAG_KEYS) - {"dryRun"}
+            if preview_extra_authority_flags:
+                errors.append(err(
+                    "ADMIN_RUNTIME_PREVIEW_ACTION_CONFIRMED_NOT_ALLOWED", node_path, "blocking",
+                    f"Action '{key}' is Section-owned admin_runtime_dispatch_override_wiring (a preview "
+                    f"trigger) but its own payloadFrom declares {sorted(preview_extra_authority_flags)} "
+                    f"-- a preview must never carry any write-confirmation authority flag besides dryRun",
+                ))
+            if secondary and secondary.get("actionType") == "openModal":
+                modal_node = nodes_by_key.get(secondary.get("targetNodeId"))
+                if modal_node is not None and modal_node.get("kind") == "Modal":
+                    confirm_actions = [
+                        c for c in modal_node.get("children") or []
+                        if c.get("kind") == "Action"
+                        and (c.get("eventBinding") or {}).get("wiringLane") == "admin_runtime_dispatch_override_wiring"
+                    ]
+                    if len(confirm_actions) != 1:
+                        errors.append(err(
+                            "ADMIN_RUNTIME_PREVIEW_ACTION_CONFIRM_TARGET_AMBIGUOUS", node_path, "blocking",
+                            f"Action '{key}' opens Modal '{modal_node.get('key')}', which must contain "
+                            f"exactly one admin_runtime_dispatch_override_wiring child Action (the "
+                            f"Confirm button) to pair against, found {len(confirm_actions)}",
+                        ))
+                    else:
+                        confirm_action = confirm_actions[0]
+                        confirm_eb = confirm_action.get("eventBinding") or {}
+                        confirm_payload_from = confirm_eb.get("payloadFrom") or {}
+                        if eb.get("targetRef") != confirm_eb.get("targetRef"):
+                            errors.append(err(
+                                "ADMIN_RUNTIME_PREVIEW_ACTION_TARGET_REF_MISMATCH", node_path, "blocking",
+                                f"Action '{key}' previews target_ref '{eb.get('targetRef')}' but its "
+                                f"Modal's Confirm button '{confirm_action.get('key')}' writes to "
+                                f"target_ref '{confirm_eb.get('targetRef')}' -- preview and confirm must "
+                                f"resolve the SAME manifest/layer/action",
+                            ))
+                        preview_business_fields = {k: v for k, v in payload_from.items() if k != "dryRun"}
+                        confirm_business_fields = {
+                            k: v for k, v in confirm_payload_from.items() if k != "confirmed"
+                        }
+                        if preview_business_fields != confirm_business_fields:
+                            errors.append(err(
+                                "ADMIN_RUNTIME_PREVIEW_ACTION_PAYLOAD_FIELDS_MISMATCH", node_path, "blocking",
+                                f"Action '{key}' previews business fields "
+                                f"{sorted(preview_business_fields.items())} but its Modal's Confirm "
+                                f"button '{confirm_action.get('key')}' writes business fields "
+                                f"{sorted(confirm_business_fields.items())} -- preview and confirm must "
+                                f"resolve the SAME fields from the SAME sources",
+                            ))
+                        # round 3 (preview-gap audit): lane membership plus a resolved same-lane
+                        # Confirm child is not itself proof that button carries write-confirmation
+                        # authority -- its OWN payloadFrom must declare confirmed=literal:true
+                        # exactly, and never carry a leftover dryRun (or any other) authority flag.
+                        if confirm_payload_from.get("confirmed") != "literal:true":
+                            errors.append(err(
+                                "ADMIN_RUNTIME_CONFIRM_ACTION_CONFIRMED_LITERAL_TRUE_REQUIRED",
+                                node_path, "blocking",
+                                f"Action '{key}' opens Modal '{modal_node.get('key')}' whose Confirm "
+                                f"button '{confirm_action.get('key')}' does not declare "
+                                f"confirmed=literal:true in its own payloadFrom -- a Confirm button must "
+                                f"carry explicit write-confirmation authority, not merely lane membership "
+                                f"and Modal position",
+                            ))
+                        confirm_extra_authority_flags = (
+                            set(confirm_payload_from) & AUTHORITY_FLAG_KEYS
+                        ) - {"confirmed"}
+                        if confirm_extra_authority_flags:
+                            errors.append(err(
+                                "ADMIN_RUNTIME_CONFIRM_ACTION_EXTRA_AUTHORITY_FLAG_NOT_ALLOWED",
+                                node_path, "blocking",
+                                f"Action '{key}' opens Modal '{modal_node.get('key')}' whose Confirm "
+                                f"button '{confirm_action.get('key')}' declares "
+                                f"{sorted(confirm_extra_authority_flags)} in its own payloadFrom -- a "
+                                f"Confirm button must never carry any write-confirmation authority flag "
+                                f"besides confirmed (e.g. a leftover dryRun)",
+                            ))
+    for c in node.get("children") or []:
+        validate_admin_runtime_preview_action_pairing(c, nodes_by_key, errors, path, parent=node)
+
+
+#: Explicit, positive read/filter operation-classification authority for Field-owned
+#: admin_runtime_dispatch_override_wiring use (round 37 -- REPLACES the prior
+#: MUTATION_ACTION_VERB_PREFIXES verb-heuristic denylist {"create", "update", "delete", "set"}).
+#: A denylist only rejects verbs someone thought to enumerate; it silently PASSES a Field wired to
+#: manifest:promote, layout_patch:apply, seed_runtime:import, package_generator:promote_package,
+#: content_bundle:promote_draft, etc. -- none of those verbs start with create/update/delete/set,
+#: yet every one of them is a mutation. This allowlist instead mirrors, verbatim, the "_read" groups
+#: of docs/design/admin-master-roster-management-ssot.yaml admin_runtime_actions (the single
+#: explicit operation classification authority that YAML block now documents -- see its own leading
+#: comment) as "<resource>:<action>" strings. A Field may dispatch ONLY to a resource:action listed
+#: here; every "_write" group member AND every resource:action absent from admin_runtime_actions
+#: entirely is rejected by construction (fail-closed by default-deny, not by an ever-growing verb
+#: list). Mirrored by:
+#:   - backend/repository/NpgsqlUiTopologyRepository.cs AdminRuntimeReadActions (layout_patch
+#:     save-time persistence guard)
+#:   - frontend/runtime/adminRuntimeReadActions.ts ADMIN_RUNTIME_READ_ACTIONS (live runtime
+#:     dispatch guard)
+#: A resource:action moved between the SSOT's read/write groups, or a new resource/action added,
+#: must update THIS set and both mirrors above in the same change -- drift is caught by
+#: .agent/tests/... admin_runtime_read_actions_mirror tests (one per mirror) that assert set
+#: equality against a value parsed straight out of the SSOT YAML.
+ADMIN_RUNTIME_READ_ACTIONS = frozenset({
+    "enum_dictionary:list_groups",
+    "enum_dictionary:get_group",
+    "auth_users:list",
+    "auth_users:search",
+    "auth_users:get",
+})
+
+#: manifest:<manifestId>:<layer>:<action> -- the SAME shape lane_target_ref_patterns already
+#: enforces generically via wiring_lane_contract's targetRef_shape regex; this second, narrower
+#: regex exists only to EXTRACT the trailing <layer>:<action> resource:action pair for the
+#: allowlist check below, not to re-validate overall shape (a malformed targetRef simply fails to
+#: match here and is silently skipped by this check -- TARGET_REF_SHAPE_MISMATCH from
+#: validate_wiring_node already reports it).
+ADMIN_RUNTIME_TARGET_REF_ACTION_RE = re.compile(r"^manifest:[^:]+:([^:]+:[^:]+)$")
+
+#: The single authorityMarker value a Field may declare when using
+#: admin_runtime_dispatch_override_wiring (round 37) -- exchange_mapping.authority_mapping's own
+#: frontend_intent value, the weakest of the six authority tiers, chosen because it is the exact
+#: semantic match for "Field-driven frontend read/filter intent, no backend mutation authority".
+FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER = "draft_or_projection_only"
+
+
+def validate_field_admin_runtime_dispatch_wiring(node, errors, path="$.root"):
+    """SSOT: docs/design/react-schema-topology-seed-translator-ssot.yaml
+    wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring.field_participation.
+
+    A Field's OWN use of the admin_runtime_dispatch_override_wiring lane (see
+    input_text_markup_grammar_contract.field_admin_runtime_dispatch_override_attributes) is NEVER
+    subject to validate_admin_runtime_preview_action_pairing above (gates on kind=="Action" only)
+    or validate_structural_node's VALID_ACTION_OWNER_NODE_KINDS/SECTION_OWNABLE_ACTION_LANES check
+    (a Field is never Action-owned by a Form/Workflow/Modal/Section in the first place) -- neither
+    rule was ever meant to cover it, and stretching either to do so would be wrong (a Field can
+    never structurally participate in the Section-owned dryRun-preview/Modal-Confirm pairing those
+    rules protect). This is the SEPARATE, generic, fail-close restriction that instead applies:
+    a Field-owned use of this lane must be read/filter-only, never a reachable mutation-authority
+    surface outside an Action-owned preview/confirm pair. Never keyed by nodeId, manifest UUID, or
+    operation name.
+      1. FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_FLAG_NOT_ALLOWED -- payloadFrom must not declare
+         ANY AUTHORITY_FLAG_KEYS member (neither "dryRun" nor "confirmed"). Even dryRun is
+         disallowed here (unlike an Action's Section-owned preview use) because a Field can never
+         pair into the Modal-Confirm shape that dryRun's own safety meaning depends on.
+      2. FIELD_ADMIN_RUNTIME_DISPATCH_MODAL_MUTATION_NOT_ALLOWED -- the Field must not carry a
+         secondaryDisclosureAction; Modal open/close authority belongs to Action/Step's own
+         disclosure_state_wiring lane, never to a Field's keystroke/change event.
+      3. FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED -- the targetRef's
+         <layer>:<action> resource:action pair must be a member of ADMIN_RUNTIME_READ_ACTIONS
+         (round 37 positive allowlist; see its own doc comment for why this replaced the prior
+         verb-prefix denylist).
+      4. FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_REQUIRED /
+         FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_MISMATCH (round 37) -- the Field must
+         declare authorityMarker == FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER
+         ("draft_or_projection_only"), and its own eventBinding.authority (set from that SAME
+         authorityMarker at build_node time) must agree -- an independent author-asserted-intent
+         signal checked alongside, not instead of, rule 3's allowlist-derived classification.
+      5. FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS (round 37,
+         search_filter_input_contract debounce_policy) -- a continuous-typing search Field
+         (control="form_input/search_input") must declare a valid positive-integer debounceMs.
+         Scoped to search_input only: a discrete-choice control (e.g. form_input/select) fires
+         once per selection, never per keystroke, and is never required to declare one.
+    """
+    if node.get("kind") == "Field":
+        eb = node.get("eventBinding")
+        if isinstance(eb, dict) and eb.get("wiringLane") == "admin_runtime_dispatch_override_wiring":
+            node_path = node.get("_path", path)
+            key = node.get("key")
+            payload_from = eb.get("payloadFrom") or {}
+            authority_flags = set(payload_from) & AUTHORITY_FLAG_KEYS
+            if authority_flags:
+                errors.append(err(
+                    "FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_FLAG_NOT_ALLOWED", node_path, "blocking",
+                    f"Field '{key}' uses admin_runtime_dispatch_override_wiring but its own "
+                    f"payloadFrom declares {sorted(authority_flags)} -- a Field can never carry "
+                    f"write-confirmation authority (neither dryRun nor confirmed); only an "
+                    f"Action-owned preview/confirm pair may",
+                ))
+            if node.get("secondaryDisclosureAction"):
+                errors.append(err(
+                    "FIELD_ADMIN_RUNTIME_DISPATCH_MODAL_MUTATION_NOT_ALLOWED", node_path, "blocking",
+                    f"Field '{key}' uses admin_runtime_dispatch_override_wiring paired with a "
+                    f"secondaryDisclosureAction -- a Field must never drive Modal open/close state "
+                    f"as a side effect of its own dispatch",
+                ))
+            target_ref = eb.get("targetRef") or ""
+            m = ADMIN_RUNTIME_TARGET_REF_ACTION_RE.match(target_ref)
+            if m:
+                resource_action = m.group(1)
+                if resource_action not in ADMIN_RUNTIME_READ_ACTIONS:
+                    errors.append(err(
+                        "FIELD_ADMIN_RUNTIME_DISPATCH_MUTATION_TARGET_NOT_ALLOWED", node_path, "blocking",
+                        f"Field '{key}' targetRef '{target_ref}' resolves to '{resource_action}', which "
+                        f"is not a member of the explicit read-action allowlist "
+                        f"({sorted(ADMIN_RUNTIME_READ_ACTIONS)}) -- a Field may only dispatch to a "
+                        f"resource:action listed under a \"_read\" group of docs/design/"
+                        f"admin-master-roster-management-ssot.yaml admin_runtime_actions, never a "
+                        f"mutation or an unlisted action",
+                    ))
+            authority_marker = node.get("authorityMarker")
+            if authority_marker != FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER:
+                errors.append(err(
+                    "FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_REQUIRED", node_path, "blocking",
+                    f"Field '{key}' uses admin_runtime_dispatch_override_wiring but its "
+                    f"authorityMarker is {authority_marker!r} -- a Field participating in this lane "
+                    f"must declare authorityMarker=\"{FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER}\" "
+                    f"explicitly, asserting frontend read/filter-only intent",
+                ))
+            elif eb.get("authority") != FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER:
+                errors.append(err(
+                    "FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER_MISMATCH", node_path, "blocking",
+                    f"Field '{key}' authorityMarker is "
+                    f"\"{FIELD_ADMIN_RUNTIME_DISPATCH_AUTHORITY_MARKER}\" but its own "
+                    f"eventBinding.authority is {eb.get('authority')!r} -- the two must agree",
+                ))
+            # 5 (round 37, search_filter_input_contract debounce_policy): a continuous-typing
+            # search Field (control="form_input/search_input") dispatching through this lane must
+            # declare a valid positive-integer debounceMs -- without it, every keystroke would
+            # reach the backend uncontrolled (NG-axis: "letting a search/filter dispatch fire
+            # uncontrolled on every keystroke"). Scoped to search_input specifically, not every
+            # Field on this lane: a discrete-choice control (e.g. form_input/select) fires once per
+            # selection, not once per keystroke, so it carries none of the risk this rule exists to
+            # close and is never required to declare one.
+            if node.get("control") == "form_input/search_input":
+                debounce_ms = node.get("debounceMs")
+                if not isinstance(debounce_ms, int) or isinstance(debounce_ms, bool) or debounce_ms <= 0:
+                    errors.append(err(
+                        "FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS", node_path, "blocking",
+                        f"Field '{key}' is a form_input/search_input dispatching through "
+                        f"admin_runtime_dispatch_override_wiring but declares no valid positive-integer "
+                        f"debounceMs -- a continuous-typing search field's own dispatch must declare an "
+                        f"explicit debounce policy (admin-normal-surface-projection-seed-ssot.yaml "
+                        f"search_filter_input_contract.required_shape debounce_policy), never fire "
+                        f"uncontrolled on every keystroke",
+                    ))
+    for c in node.get("children") or []:
+        validate_field_admin_runtime_dispatch_wiring(c, errors, path)
+
+
 # ---------------------------------------------------------------------------
 # react_schema -> topology_ui_seed conversion (generate_topology_ui_seed mode)
 # ---------------------------------------------------------------------------
@@ -1037,8 +1638,8 @@ KIND_SPECIFIC_CONSUMED_KEYS = {
     "Category": set(),
     "Section": {"sectionKind"},
     "Form": {"target", "mode", "fields", "actions"},
-    "Field": {"control", "required"},
-    "Table": {"source", "display"},
+    "Field": {"control", "required", "valueFrom", "eventBinding", "optionsSource", "optionsLabelPath", "optionsValuePath", "debounceMs"},
+    "Table": {"source", "display", "displayColumns", "rowsSource", "_rawDisplayColumns"},
     "Workflow": {"steps"},
     "Modal": {"componentKind", "title", "body"},
     "Step": {"eventBinding", "actionRef", "runtimeInteractions", "idempotencyPolicy", "lifecycleDispatchConfirmed", "debounceMs", "secondaryDisclosureAction"},
@@ -1107,11 +1708,33 @@ def convert_node_to_seed_record(node, schema_to_seed_map, target_surface, loss_e
         record["control"] = node.get("control", "")
         record["required"] = bool(node.get("required", False))
         record["validationRefs"] = [c["key"] for c in converted_children if c["recordType"] == "topology_ui_validation"]
+        record["valueFrom"] = node.get("valueFrom") or ""
+        record["optionsSource"] = node.get("optionsSource") or ""
+        record["optionsLabelPath"] = node.get("optionsLabelPath") or ""
+        record["optionsValuePath"] = node.get("optionsValuePath") or ""
+        if node.get("eventBinding") is not None:
+            record["eventBinding"] = node["eventBinding"]
+        if "debounceMs" in node:
+            record["debounceMs"] = node["debounceMs"]
+        admin_runtime_override = build_admin_runtime_dispatch_override_candidate(node)
+        if admin_runtime_override is not None:
+            record["adminRuntimeDispatchOverride"] = admin_runtime_override
     elif react_kind == "Table":
         record["tableKey"] = record["key"]
         record["source"] = node.get("source", "")
         record["display"] = node.get("display", "")
         record["columns"] = converted_children
+        # preview-gap round: distinct from "columns" above (structural PropBinding/Field child
+        # records, always empty today -- Table is a LEAF_UNIT, never a CONTAINER_UNIT, so the
+        # markup grammar cannot populate it). displayColumns is the authored
+        # key:Header,key2:Header2 attribute list -- see parse_columns and
+        # split_flat_records_into_adoption_candidates' topology_ui_table branch.
+        record["displayColumns"] = node.get("displayColumns") or []
+        # round 3 (preview-gap audit): the authored propBindings.rows.source JSON traversal path
+        # (paired with displayColumns by validate_table_display_columns_and_rows_source) -- never
+        # derived from "source" above, which is a domain/table lineage identifier, not a response
+        # shape path.
+        record["rowsSource"] = node.get("rowsSource") or ""
     elif react_kind == "Workflow":
         record["workflowKey"] = record["key"]
         record["steps"] = [c for c in converted_children if c["recordType"] == "topology_ui_workflow_step"]
@@ -1540,6 +2163,131 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                     "nodeKind": "catalog_component",
                     "runtimeInteractions": list(modal_interactions),
                 })
+            # preview-gap round: the Modal's own display props (open/title/body) -- unlike
+            # runtimeInteractions above (owned by the PARENT per Compose's
+            # "{parentNodeId}::{sourceActionKey}" lookup), propsJson is matched by
+            # NodeLocalData against the LEAF's own resolved nodeId directly (same convention
+            # dispatchTargetRefByTrigger already established, round 19's own fix comment), so
+            # this is a SEPARATE tensor node entry keyed at the Modal's own this_resolved_key,
+            # not owning_form_key. Previously this content existed only as a hand-patched
+            # addition to db/seed_empty.sql itself (round 20), invisible to
+            # generate-topology-seed -- every regeneration silently dropped it until a caller
+            # noticed and re-patched it by hand. title/body are optional per
+            # react_schema_contract (a Modal with neither still gets open:false).
+            modal_props_data = {"open": False}
+            if record.get("title"):
+                modal_props_data["title"] = record["title"]
+            if record.get("body"):
+                modal_props_data["body"] = record["body"]
+            tensor_nodes.append({
+                "nodeId": this_resolved_key,
+                "nodeKind": "catalog_component",
+                "runtimeInteractions": [],
+                "propsJson": json.dumps({"data": modal_props_data}),
+            })
+
+        if record_type == "topology_ui_table" and record.get("displayColumns"):
+            # preview-gap round: promotes the Table's static display shape (columns list, the
+            # rows propBinding every admin_runtime read-circuit table this translator emits
+            # shares -- round 23's own LayoutSchemaTensorComposer BuildNodeLocalDataByNodeId merge
+            # is what actually consumes this at Compose time) from a hand-patched
+            # db/seed_empty.sql-only addition (round 14) into canonical generation. Same
+            # NodeLocalData-by-own-nodeId convention as the Modal propsJson above -- a Table is
+            # never itself a Form/Section owner, so this is always keyed at its own
+            # this_resolved_key, never an owning_form_key lookup.
+            # round 4 (preview-gap audit round 4): propBindings.rows.source is the AUTHORED
+            # rowsSource attribute ONLY -- never a translator-hardcoded literal, including as a
+            # fallback for the missing/skipped-validation case. validate_table_display_columns_
+            # and_rows_source (run earlier in the SAME generate-react-schema/generate-topology-seed
+            # call) already raises a blocking TABLE_ROWS_SOURCE_REQUIRED_WITH_DISPLAY_COLUMNS
+            # validationError when displayColumns is authored with no rowsSource, but that pass
+            # only ACCUMULATES errors -- it does not itself stop this generation step from running.
+            # A caller that supplies a hand-built react schema candidate directly to
+            # generate-topology-seed (bypassing generate-react-schema's own markup-attribute
+            # parsing entirely) could otherwise still reach this branch with displayColumns set and
+            # rowsSource missing; silently defaulting to "emission.data" in that case is exactly
+            # the round-3 violation this branch was built to close (a translator-hardcoded literal
+            # standing in for an actually-authored value) -- round 3 only moved the hardcode from
+            # "always" to "only when validation was bypassed", which is still a hardcode. This
+            # branch now fails the WHOLE run closed (raise SystemExit, matching this file's own
+            # render_seed_sql_fragment fail-loud-rather-than-emit-wrong-output precedent) instead of
+            # silently substituting a default when it is about to emit a tensor node it cannot
+            # correctly source.
+            rows_source = record.get("rowsSource")
+            if not rows_source:
+                raise SystemExit(
+                    f"topology_ui_table record '{record.get('key')}' declares displayColumns but "
+                    f"no rowsSource -- refusing to emit propBindings.rows.source with a "
+                    f"translator-hardcoded default; author rowsSource on the Table (or drop "
+                    f"displayColumns) instead"
+                )
+            tensor_nodes.append({
+                "nodeId": this_resolved_key,
+                "nodeKind": "catalog_component",
+                "runtimeInteractions": [],
+                "propsJson": json.dumps({"table": None, "columns": record["displayColumns"]}),
+                "propBindings": {"rows": {"source": rows_source}},
+            })
+
+        if record_type == "topology_ui_field" and record.get("valueFrom"):
+            # selected-row-relative field prefill (admin-enum subBundle closure round): the
+            # authored valueFrom (already grammar-validated by validate_field_value_from_source
+            # earlier in this same generate-topology-seed call) becomes this Field's own
+            # propBindings.value.source -- consumed at RUNTIME not by seedTrackerFromPropBindingsValue
+            # (that function's own componentKind gate and resolveRuntimeDataPath-against-emissionData
+            # resolution are for the OTHER, pre-existing emission.data-sourced case) but by
+            # ProjectionShell.tsx's handleNodeValueChange -> cascadeNodeValueReferences
+            # (frontend/runtime/liveNodeValueTracker.ts), fired when the REFERENCED node's own
+            # tracked value changes (e.g. a table row select) -- never at every render, never on an
+            # unrelated rerender. Same NodeLocalData-by-own-nodeId convention as the Table/Modal
+            # branches above: a Field is never itself a Form/Section owner.
+            tensor_nodes.append({
+                "nodeId": this_resolved_key,
+                "nodeKind": "catalog_component",
+                "runtimeInteractions": [],
+                "propBindings": {"value": {"source": record["valueFrom"]}},
+            })
+
+        if record_type == "topology_ui_field" and record.get("optionsSource"):
+            # generic select options data-binding (round 36, admin-enum subBundle closure): the
+            # authored optionsSource/optionsLabelPath/optionsValuePath (already grammar-validated
+            # together by validate_field_options_source earlier in this same generate-topology-seed
+            # call) become this Field's own propBindings.options -- the SAME rowsToOptions-transform
+            # shape frontend/runtime/propBindingResolver.ts's COMPONENT_ARRAY_PROP_CAPABILITIES
+            # already validates and resolves at RUNTIME for form_input/select, generated here for
+            # the first time rather than requiring a hand-authored db/seed_empty.sql propBindings
+            # entry. Mutually exclusive with the valueFrom branch above in every field authored so
+            # far (a Field is either a value-prefilled input or a data-bound select, never both) --
+            # same single-purpose-per-node convention the merge step below already assumes.
+            tensor_nodes.append({
+                "nodeId": this_resolved_key,
+                "nodeKind": "catalog_component",
+                "runtimeInteractions": [],
+                "propBindings": {
+                    "options": {
+                        "source": record["optionsSource"],
+                        "transform": "rowsToOptions",
+                        "labelPath": record["optionsLabelPath"],
+                        "valuePath": record["optionsValuePath"],
+                    },
+                },
+            })
+
+        if record_type == "topology_ui_field" and record.get("adminRuntimeDispatchOverride"):
+            # generic list_groups search/filter (admin-enum subBundle closure round): reuses the
+            # SAME adminRuntimeDispatchOverride merge shape the Action/Step branch below builds
+            # (merged[nid]["dispatchTargetRefByTrigger"/"dispatchPayloadFromByTrigger"] keyed by
+            # trigger) -- deliberately NOT the wiring_action_entries dedicated-wiring-row path
+            # below, which is Action/Step's own per-node wiring registration and not needed here:
+            # a Field carrying this override still dispatches through the layout's OWN uniform
+            # admin_runtime wiring (wiringId=ae205), this override only supplies a per-trigger
+            # payload addition, same as Action/Step's override does for THEIR own uniform target.
+            tensor_nodes.append({
+                "nodeId": this_resolved_key,
+                "nodeKind": "catalog_component",
+                "runtimeInteractions": [],
+                "adminRuntimeDispatchOverride": record["adminRuntimeDispatchOverride"],
+            })
 
         if record_type in ("topology_ui_action", "topology_ui_workflow_step"):
             event_binding = record.get("eventBinding") or {}
@@ -1655,6 +2403,8 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                     "runtimeInteractions": [],
                     "dispatchTargetRefByTrigger": {},
                     "dispatchPayloadFromByTrigger": {},
+                    "propsJson": None,
+                    "propBindings": None,
                 }
                 order.append(nid)
                 override_source_action_keys_by_node[nid] = []
@@ -1667,6 +2417,15 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                     if override.get("payloadFrom"):
                         merged[nid]["dispatchPayloadFromByTrigger"][trigger] = override["payloadFrom"]
                     override_source_action_keys_by_node[nid].append(override.get("sourceActionKey"))
+            # propsJson/propBindings (Modal display state, Table columns/rows binding) are
+            # per-nodeId, single-owner content -- never contributed by more than one tensor_nodes
+            # entry for the same nodeId today (a Modal's own entry and a Table's own entry are
+            # always distinct nodeIds), so first-write-wins with no merge policy needed beyond
+            # "don't overwrite an already-set value with a later None".
+            if node.get("propsJson") is not None and merged[nid]["propsJson"] is None:
+                merged[nid]["propsJson"] = node["propsJson"]
+            if node.get("propBindings") is not None and merged[nid]["propBindings"] is None:
+                merged[nid]["propBindings"] = node["propBindings"]
 
         def _clean_tensor_node(n):
             out = {"nodeId": n["nodeId"], "nodeKind": n["nodeKind"], "runtimeInteractions": n["runtimeInteractions"]}
@@ -1674,6 +2433,10 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                 out["dispatchTargetRefByTrigger"] = n["dispatchTargetRefByTrigger"]
             if n["dispatchPayloadFromByTrigger"]:
                 out["dispatchPayloadFromByTrigger"] = n["dispatchPayloadFromByTrigger"]
+            if n["propsJson"] is not None:
+                out["propsJson"] = n["propsJson"]
+            if n["propBindings"] is not None:
+                out["propBindings"] = n["propBindings"]
             return out
 
         tensor_candidates.append({
@@ -1886,7 +2649,7 @@ def validate_adoption_candidates(candidates, flat_records):
         record_type = record.get("recordType")
         key = record.get("key")
         path = record.get("sourceReactPath", "$.root")
-        if record_type not in ("topology_ui_action", "topology_ui_workflow_step"):
+        if record_type not in ("topology_ui_action", "topology_ui_workflow_step", "topology_ui_field"):
             continue
 
         event_binding = record.get("eventBinding") or {}
@@ -1903,7 +2666,7 @@ def validate_adoption_candidates(candidates, flat_records):
                 "ADMIN_RUNTIME_DISPATCH_OVERRIDE_NOT_PERSISTED_LAYOUT_PATH",
                 path,
                 "blocking",
-                f"Action/Step '{key}' has an admin_runtime_dispatch_override_wiring eventBinding but no "
+                f"'{key}' has an admin_runtime_dispatch_override_wiring eventBinding but no "
                 "corresponding tensorAdoptionCandidates dispatchTargetRefByTrigger entry",
             ))
 
@@ -2164,6 +2927,13 @@ def cmd_generate_react_schema(args):
         kinds_by_key = {}
         collect_node_kinds_by_key(root_node, kinds_by_key)
         validate_disclosure_targets(root_node, kinds_by_key, tree_errors)
+        nodes_by_key = {}
+        collect_nodes_by_key(root_node, nodes_by_key)
+        validate_admin_runtime_preview_action_pairing(root_node, nodes_by_key, tree_errors)
+        validate_table_display_columns_and_rows_source(root_node, tree_errors)
+        validate_field_value_from_source(root_node, tree_errors)
+        validate_field_admin_runtime_dispatch_wiring(root_node, tree_errors)
+        validate_field_options_source(root_node, tree_errors)
         output["validationErrors"].extend(tree_errors)
 
     source_refs = envelope.get("sourceYamlRefs") or []
@@ -2306,6 +3076,13 @@ def cmd_generate_topology_seed(args):
     kinds_by_key = {}
     collect_node_kinds_by_key(root_node, kinds_by_key)
     validate_disclosure_targets(root_node, kinds_by_key, tree_errors)
+    nodes_by_key = {}
+    collect_nodes_by_key(root_node, nodes_by_key)
+    validate_admin_runtime_preview_action_pairing(root_node, nodes_by_key, tree_errors)
+    validate_table_display_columns_and_rows_source(root_node, tree_errors)
+    validate_field_value_from_source(root_node, tree_errors)
+    validate_field_admin_runtime_dispatch_wiring(root_node, tree_errors)
+    validate_field_options_source(root_node, tree_errors)
     output["validationErrors"].extend(tree_errors)
 
     schema_to_seed_map = dig(ssot_root, "exchange_mapping", "schema_to_seed_record_mapping") or {}

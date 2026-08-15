@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { JSX } from "preact";
+import type { FunctionComponent } from "preact";
 import { probeSessionToken, refreshProjectionSession } from "../api/authApi.ts";
 import {
   clearSessionToken,
@@ -34,35 +34,29 @@ import {
   type UiEventEffectRunner,
 } from "../runtime/uiEventEffectRunner.ts";
 import {
+  cascadeNodeValueReferences,
   createLiveNodeValueTracker,
   type LiveNodeValueTracker,
   seedTrackerFromPropBindingsValue,
+  seedTrackerWithEmptyDefaultsForFieldDispatchParticipants,
 } from "../runtime/liveNodeValueTracker.ts";
 import { resolveRuntimeDataPath } from "../runtime/propBindingResolver.ts";
+import { resolveNodeValueReferenceSource } from "../runtime/payloadFromResolver.ts";
 import type { WiringNode } from "../lib/uiBuilderWiringProjection.ts";
 import {
   adoptResolvedManifestIdentity,
   confirmProjectionEntryEmission,
+  isDefaultProjectionEntry,
   parseProjectionEntrySelection,
   resolveHubNavigationLinks,
   resolveProjectionEntryAxes,
 } from "../runtime/projectionEntry.ts";
 import type { DispatchResponse, Emission, LayoutNode } from "../api/dispatch.ts";
 import type { RuntimeDispatchResultContext } from "../runtime/runtimeComponentAdapter.ts";
+import { resolveRuntimeDispatchSettlement } from "../runtime/runtimeDispatchSettlement.ts";
+import { clearAllPendingRuntimeDispatchDebounceTimers } from "../runtime/runtimeComponentFactory.ts";
 import { RecommendNavigationIsland } from "../components/RecommendNavigationIsland.tsx";
 import { LayoutProjectionTree } from "../components/LayoutProjectionTree.tsx";
-
-/**
- * Round 29: extracts the manifest id an authored target_ref actually pointed at
- * ("manifest:<uuid>:<wiringKey>" — see projectionEntry.ts's own target_ref construction and
- * RuntimeDispatchSpec.targetRef's doc comment for the shape). Generic string parsing, never a
- * lookup table keyed by operation/nodeId/UUID.
- */
-function extractManifestIdFromTargetRef(targetRef: string | undefined): string | undefined {
-  if (!targetRef) return undefined;
-  const match = /^manifest:([^:]+):/.exec(targetRef);
-  return match ? match[1] : undefined;
-}
 
 /** Narrow an emission's layoutNodes into the WiringNode shape the runtime state/effect runner consumes. */
 function toRunnerWiringNodes(
@@ -97,7 +91,21 @@ function toRunnerWiringNodes(
  * to the onProjectionUpdate handler, which re-dispatches via queueClientCommand
  * with identity-preserving axes. No field is silently discarded.
  */
-export default function ProjectionShell(): JSX.Element {
+export type ProjectionShellProps = {
+  /**
+   * Route retirement (admin-enum subBundle closure round): lets a same-URL thin route wrapper
+   * (e.g. frontend/routes/admin/enums.tsx) pin a manifest without a `?manifest=` query string.
+   * Applied ONLY when the URL itself carries no explicit route/package/manifest selection
+   * (isDefaultProjectionEntry) -- an explicit URL selection always wins, so this is purely a
+   * default, never an override of a real user navigation.
+   */
+  manifestId?: string;
+};
+
+const ProjectionShell: FunctionComponent<ProjectionShellProps> = (
+  props,
+) => {
+  const { manifestId } = props;
   const [loading, setLoading] = useState(true);
   const [emission, setEmission] = useState<Emission | null>(null);
   const [specs, setSpecs] = useState<ComponentSpec[]>([]);
@@ -247,7 +255,11 @@ export default function ProjectionShell(): JSX.Element {
         setLoading(false);
         return;
       }
-      const entrySelection = entryParse.selection;
+      // A `manifestId` prop only ever fills in a DEFAULT entry (no explicit route/package/
+      // manifest in the URL) -- a real user navigation (?manifest=/?route=/?package=) always wins.
+      const entrySelection = manifestId && isDefaultProjectionEntry(entryParse.selection)
+        ? { ...entryParse.selection, manifestId }
+        : entryParse.selection;
 
       const initialAxes: UserOperation = resolveProjectionEntryAxes(
         entrySelection,
@@ -307,6 +319,10 @@ export default function ProjectionShell(): JSX.Element {
         nextEmission.layoutNodes ?? [],
         nextEmission.data ?? {},
         resolveRuntimeDataPath,
+      );
+      seedTrackerWithEmptyDefaultsForFieldDispatchParticipants(
+        nodeValueTrackerRef.current,
+        nextEmission.layoutNodes ?? [],
       );
       if (!stateDispatcherRef.current) {
         stateDispatcherRef.current = createProjectionStateDispatcher(
@@ -384,32 +400,66 @@ export default function ProjectionShell(): JSX.Element {
         context: RuntimeDispatchResultContext,
       ) => {
         if (!mounted) return;
-        if (!result.success || !result.emission) return;
-        const dispatched = result.emission;
-        const expectedManifestId = extractManifestIdFromTargetRef(context.targetRef);
+        // preview-gap round: (b) error display — a settled dispatch failure (a dryRun preview's
+        // own validation error, or a confirmed write's backend rejection alike) was previously a
+        // silent no-op here; the caller's own success-gated local-state mutation (e.g. deferred
+        // Modal-open/close) already stays un-applied on failure independently of this handler, so
+        // this only adds the missing explicit, non-destructive surface for WHY it didn't apply.
+        // Generic — classified by result.success alone, never by context.dryRun or any
+        // operation/nodeId — so a confirmed write's failure gets the same explicit surfacing a
+        // preview's failure does, matching round_27_28_settled_child_dispatch_result_authority's
+        // own "(a) success/failure determination, (b) error display" description.
+        //
+        // Round 3 (preview-gap audit): backend success:false, a missing Emission, and an
+        // authored-target_ref identity mismatch are now determined by the SAME shared settlement
+        // authority (resolveRuntimeDispatchSettlement) runtimeComponentFactory.ts's deferred
+        // localStateMutation gate also uses — a missing Emission on an otherwise-"successful"
+        // response previously fell through this handler as a silent no-op (no warning, though the
+        // Modal-mutation gate at least still correctly stayed closed on the OLD result.success
+        // check since a genuinely absent Emission never accompanies backend success in practice;
+        // the real gap this closes is that the two consumers now agree on ALL four rejection
+        // shapes — failure, missing Emission, identity mismatch, and queue rejection — instead of
+        // only sharing the trivial result.success=false case).
+        const settlement = resolveRuntimeDispatchSettlement(result, context);
+        if (!settlement.accepted) {
+          console.error(
+            `[ProjectionShell] RUNTIME_DISPATCH_RESULT_${settlement.kind.toUpperCase()}:`,
+            settlement.reason,
+          );
+          setRefreshWarning(settlement.reason);
+          return;
+        }
+        const dispatched = settlement.emission;
+        const expectedManifestId = settlement.expectedManifestId;
         if (expectedManifestId) {
-          if (dispatched.manifestId !== expectedManifestId) {
-            console.error(
-              "[ProjectionShell] RUNTIME_DISPATCH_RESULT_IDENTITY_MISMATCH:",
-              `authored target_ref resolved manifest "${expectedManifestId}" but the settled ` +
-                `response carries manifest "${dispatched.manifestId ?? "(absent)"}".`,
-            );
-            setRefreshWarning(
-              `書き込み結果の投影先が想定と一致しませんでした（想定: ${expectedManifestId}、` +
-                `実際: ${dispatched.manifestId ?? "(absent)"}）。`,
-            );
-            return;
-          }
           if (expectedManifestId !== adoptedManifestIdRef.current) {
             // Confirmed expected cross-manifest child response — never adopted into ae200's own
-            // state; re-read ae200's own canonical identity now that the write landed.
+            // state. preview-gap round: a settled DRY-RUN preview's SUCCESS is a validation-only
+            // signal — its own success-gated local-state mutation (the caller's deferred Modal
+            // open) already consumed it; it must never ALSO be classified the same as a settled
+            // CONFIRMED write's success, which is the only case that re-reads ae200's own
+            // canonical identity (round_27_28_settled_child_dispatch_result_authority). Generic:
+            // context.dryRun reflects what this dispatch's own resolved payload actually carried,
+            // never an operation name/nodeId/manifest UUID.
+            if (context.dryRun) {
+              // Clears a stale failure banner from a previous failed preview attempt on this
+              // same trigger — this success supersedes it. No state adoption, no canonical reread.
+              setRefreshWarning(null);
+              return;
+            }
+            // Re-read ae200's own canonical identity now that the confirmed write landed.
             void refreshCurrentManifestAsync("canonical_reread");
             return;
           }
           // expectedManifestId === adopted identity: a same-manifest authored override (e.g. the
           // "Load current values" dryRun pattern) — falls through to the same direct-adoption
-          // logic as the no-target_ref path below.
+          // logic as the no-target_ref path below. This is the ONE dryRun shape that DOES adopt:
+          // it is a same-manifest read/prefill, not a cross-manifest write preview.
         } else if (dispatched.manifestId !== adoptedManifestIdRef.current) {
+          if (context.dryRun) {
+            setRefreshWarning(null);
+            return;
+          }
           void refreshCurrentManifestAsync("canonical_reread");
           return;
         }
@@ -446,10 +496,48 @@ export default function ProjectionShell(): JSX.Element {
           resolveRuntimeDataPath,
           { forceOverwrite: true },
         );
+        seedTrackerWithEmptyDefaultsForFieldDispatchParticipants(
+          nodeValueTrackerRef.current,
+          dispatched.layoutNodes ?? [],
+        );
         setSpecs(renderEmission(dispatched, defaultComponentRegistry, {
           localStateStore: stateDispatcherRef.current ?? undefined,
           payloadFromNodeValues: nodeValueTrackerRef.current.snapshot(),
-          onNodeValueChange: nodeValueTrackerRef.current.set,
+          onNodeValueChange: handleNodeValueChange,
+          onRuntimeDispatchResult: handleRuntimeDispatchResult,
+        }));
+      };
+
+      // Selected-row-relative field prefill (admin-enum subBundle closure round): the single
+      // onNodeValueChange callback passed to every renderEmission() call site below. Wraps the
+      // tracker's own set() with cascadeNodeValueReferences (liveNodeValueTracker.ts) — when the
+      // changed node is one OTHER nodes reference via propBindings.value.source="node:<id>.value...",
+      // those dependent nodes' OWN tracker slots are overwritten with the freshly-resolved value too.
+      // Always re-renders (not only when cascaded.length > 0): the CHANGED node's own controlled
+      // <input>/<select> (Input.tsx etc.) must also pick up its own fresh tracker value via
+      // applyLiveNodeValueOverride on this same pass -- a node with no wiringKind-driven UI状態更新
+      // side effect on its own change trigger (e.g. enum_update_group_name_input, which only carries
+      // Lane 3 tracking + its own Lane 2 read-circuit redispatch, no runtimeInteractions setState) has
+      // NO other path that would re-render specs; without this, the very next UNRELATED re-render
+      // (an unrelated node's dispatch settling, an SSE refresh) would reapply the stale pre-keystroke
+      // specs and visibly revert the just-typed value on screen.
+      // Fires ONLY on an actual value change of the source node itself (a row click, a keystroke)
+      // — never on an unrelated rerender (SSE passive refresh, an unrelated local-state mutation),
+      // so an in-progress edit in a field with no dependency on the changed node is never touched.
+      const handleNodeValueChange = (nodeId: string, value: unknown) => {
+        nodeValueTrackerRef.current.set(nodeId, value);
+        cascadeNodeValueReferences(
+          nodeId,
+          emissionRef.current?.layoutNodes,
+          nodeValueTrackerRef.current,
+          resolveNodeValueReferenceSource,
+        );
+        const current = emissionRef.current;
+        if (!current) return;
+        setSpecs(renderEmission(current, defaultComponentRegistry, {
+          localStateStore: stateDispatcherRef.current ?? undefined,
+          payloadFromNodeValues: nodeValueTrackerRef.current.snapshot(),
+          onNodeValueChange: handleNodeValueChange,
           onRuntimeDispatchResult: handleRuntimeDispatchResult,
         }));
       };
@@ -459,7 +547,7 @@ export default function ProjectionShell(): JSX.Element {
       setSpecs(renderEmission(nextEmission, defaultComponentRegistry, {
         localStateStore: stateDispatcher,
         payloadFromNodeValues: nodeValueTrackerRef.current.snapshot(),
-        onNodeValueChange: nodeValueTrackerRef.current.set,
+        onNodeValueChange: handleNodeValueChange,
         onRuntimeDispatchResult: handleRuntimeDispatchResult,
       }));
       setLoading(false);
@@ -480,7 +568,7 @@ export default function ProjectionShell(): JSX.Element {
             setSpecs(renderEmission(current, defaultComponentRegistry, {
               localStateStore: stateDispatcherRef.current ?? stateDispatcher,
               payloadFromNodeValues: nodeValueTrackerRef.current.snapshot(),
-              onNodeValueChange: nodeValueTrackerRef.current.set,
+              onNodeValueChange: handleNodeValueChange,
               onRuntimeDispatchResult: handleRuntimeDispatchResult,
             }));
           },
@@ -631,6 +719,10 @@ export default function ProjectionShell(): JSX.Element {
             resolveRuntimeDataPath,
             { forceOverwrite: intent === "canonical_reread" },
           );
+          seedTrackerWithEmptyDefaultsForFieldDispatchParticipants(
+            nodeValueTrackerRef.current,
+            updated.layoutNodes ?? [],
+          );
           if (effectRunnerRef.current) {
             effectRunnerRef.current.updateNodes(refreshedNodes);
             for (
@@ -657,7 +749,7 @@ export default function ProjectionShell(): JSX.Element {
           setSpecs(renderEmission(updated, defaultComponentRegistry, {
             localStateStore: stateDispatcherRef.current ?? undefined,
             payloadFromNodeValues: nodeValueTrackerRef.current.snapshot(),
-            onNodeValueChange: nodeValueTrackerRef.current.set,
+            onNodeValueChange: handleNodeValueChange,
             onRuntimeDispatchResult: handleRuntimeDispatchResult,
           }));
         } catch (err) {
@@ -735,6 +827,9 @@ export default function ProjectionShell(): JSX.Element {
       storeUnsubscribeRef.current = null;
       sseReceiverRef.current?.disconnect();
       sseReceiverRef.current = null;
+      // round 37: a debounced Field dispatch's pending timer must never fire after this mount
+      // is gone — it would otherwise dispatch/setState against a component that no longer exists.
+      clearAllPendingRuntimeDispatchDebounceTimers();
     };
   }, []);
 
@@ -842,4 +937,6 @@ export default function ProjectionShell(): JSX.Element {
       )}
     </div>
   );
-}
+};
+
+export default ProjectionShell;

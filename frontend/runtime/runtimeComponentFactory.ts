@@ -126,6 +126,7 @@ import type {
   RuntimeDispatchResultContext,
 } from "./runtimeComponentAdapter.ts";
 import type { DispatchResponse } from "../api/dispatch.ts";
+import { resolveRuntimeDispatchSettlement } from "./runtimeDispatchSettlement.ts";
 import { resolvePayloadFrom } from "./payloadFromResolver.ts";
 import { applyGuardedLocalStateMutation } from "./uiEventEffectRunner.ts";
 import {
@@ -429,24 +430,218 @@ function isPreviewMode(spec: RuntimeComponentSpec): boolean {
  * normal {success:false} response) never fires onSettled — the mutation stays un-applied,
  * matching the existing "no synchronous caller left to propagate to" console.error-only handling.
  */
+/**
+ * preview-gap round: mirrors backend AdminRuntimeMasterRoster.cs's own IsTruthyPayloadFlag —
+ * a data-defined literal:true payloadFrom source always resolves to the JSON STRING "true" at
+ * the wire (payloadFromResolver.ts's literal: source), never a JS boolean, so both shapes must
+ * be accepted identically to the backend's own acceptance. Generic mutation_confirmation_contract
+ * vocabulary (admin-normal-surface-projection-seed-ssot.yaml), not admin-enum-specific.
+ */
+function isTruthyDryRunPayloadFlag(payload: Record<string, unknown> | undefined): boolean {
+  const value = payload?.dryRun;
+  return value === true || value === "true";
+}
+
+// Round 4 (preview-gap audit round 4): dispatchOperation (frontend/api/dispatch.ts) deliberately
+// converts EVERY fetch/network-level failure into a normal {success:false} DispatchResponse and
+// never throws/rejects -- by design, so callers can "treat all outcomes uniformly" (its own doc
+// comment). This means enqueueRuntimeComponentCommand's own returned promise has NO reachable
+// production trigger for a genuine rejection through the real fetch-mocking test seam every other
+// test in this codebase uses: a mocked fetch that rejects, or even synchronously throws, is still
+// caught inside dispatchOperation's own try/catch and surfaces as {success:false}, not a rejected
+// promise. round 3's "queue_rejection" DOM test scenario mocked fetch itself to reject, which
+// therefore only ever exercised dispatchOperation's success:false conversion (the SAME path
+// "backend_failure" already covers) -- never this function's OWN .catch() branch below.
+// This module-level swappable reference is the real seam: every call site in this file (both
+// emitBoundEvent branches) reads it indirectly through dispatchRuntimeComponentCommandAndForward
+// Result, so a test can install a rejecting override BEFORE a specific click and restore the real
+// implementation after, exercising this exact catch() branch through a genuine ProjectionShell DOM
+// mount -- not a synthetic unit call that bypasses the real dispatch/rendering wiring.
+let enqueueRuntimeComponentCommandImpl: typeof enqueueRuntimeComponentCommand =
+  enqueueRuntimeComponentCommand;
+
+/**
+ * round 38: identity for admin_runtime dispatch coordination (debounce cancellation +
+ * stale-result sequencing) — the SHARED QUERY CIRCUIT a dispatch belongs to, never the
+ * catalog componentId (round 37's key, found to be UNSOUND: componentId is the CATALOG
+ * component definition's own registry identity, e.g. "search_input.alias"'s UUID —
+ * every layout node instantiating that same catalog component shares ONE componentId,
+ * possibly across unrelated manifests/screens entirely; keying per-instance state on it
+ * let two distinct layout nodes silently share timers/sequence state). Prefers the
+ * dispatch's own resolved targetRef (e.g. "manifest:<ae200>:enum_dictionary:list_groups")
+ * when present — this is what makes search and filter Fields, which dispatch to the
+ * SAME targetRef, coordinate as ONE query circuit (a filter selection cancels a
+ * still-pending search debounce timer and vice versa, and a stale response from either
+ * one is discarded once the OTHER has fired a newer dispatch to that same targetRef) —
+ * falling back to the node's own stable structural identity (nodeId), then finally
+ * componentId only when neither is available (defensive; every production node has at
+ * least a componentId).
+ */
+function runtimeDispatchCircuitKey(
+  spec: RuntimeComponentSpec,
+  targetRef: string | undefined,
+): string {
+  return targetRef ?? spec.nodeId ?? spec.componentId;
+}
+
+/**
+ * round 37 stale-result boundary (round 38: rekeyed from componentId to the shared query
+ * circuit — see runtimeDispatchCircuitKey): a component may fire more than one
+ * admin_runtime dispatch for the SAME circuit before an earlier one's response lands
+ * (debounced search still allows two dispatches across two separate debounce windows,
+ * a filter selection racing a search's own debounced dispatch, or any other rapid
+ * re-trigger). A monotonic per-circuit sequence number captured at the moment the
+ * network call actually fires; a settled response is only forwarded if it is still the
+ * LATEST fired call for that circuit, so an older, slower response can never overwrite
+ * what a newer, faster-resolving one already applied — regardless of which NODE fired
+ * which call, or which order the two responses actually settle in. Generic (not scoped
+ * to search/filter Fields) since it is a correctness property of the dispatch lane
+ * itself, not a search-specific behavior.
+ */
+const runtimeDispatchSeqByCircuitId = new Map<string, number>();
+
+/**
+ * round 37 (search_filter_input_contract debounce_policy; round 38: rekeyed to the
+ * shared query circuit): pending debounce timers for a debounced admin_runtime Lane 2
+ * dispatch. A NEW firing for the SAME CIRCUIT — whether from the SAME node (another
+ * keystroke) or a DIFFERENT node sharing the same dispatch targetRef (e.g. a filter
+ * selection while a search field's own debounce is still pending) — cancels and
+ * replaces any still-pending timer, so only the LAST value within a debounce window
+ * ever actually dispatches, and a filter/search change during another field's debounce
+ * window is never silently overwritten by that field's own stale captured payload once
+ * its timer eventually fires. Opt-in per node via debounceMs — never gated by a
+ * specific trigger name: inputFactory's onChange handler always calls emitBoundEvent
+ * with the literal trigger key "change" regardless of whether the underlying native DOM
+ * event was "input" or "change" (see Input.tsx), so gating on a trigger string here
+ * would be wrong; gating on the node's OWN declared debounceMs is trigger-shape-
+ * independent and correct for both a typed search field and any other
+ * admin_runtime-dispatching Field that opts in.
+ */
+const pendingDebounceTimerByCircuitId = new Map<string, number>();
+
+function isValidFieldDebounceMs(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+/**
+ * Immediate dispatch unless the node declares a valid positive-integer debounceMs
+ * (round 37) — in which case the actual network enqueue is delayed by that many ms.
+ * round 38: `buildFreshDispatchSpec` is called to build the ACTUAL payload sent — at
+ * FIRE time for a debounced dispatch (re-reading whatever is currently live in the
+ * node value tracker, so a value that changed DURING the debounce window is what
+ * actually ships, never the stale snapshot captured back when the timer was scheduled)
+ * and immediately for a non-debounced dispatch (fire time == schedule time, so this is
+ * simply the caller's already-resolved payload). Any still-pending timer for the SAME
+ * circuit (see runtimeDispatchCircuitKey) is canceled first, whether this call itself
+ * ends up debounced or immediate — an immediate trigger (e.g. selecting a filter) is by
+ * definition a newer user intent than whatever an earlier same-circuit debounce window
+ * captured, so that older timer must never be allowed to still fire later with a
+ * combined payload that has since gone stale. A node with no declared debounceMs
+ * (every pre-round-37 authored node) is completely unaffected by the debounce branch —
+ * additive/opt-in, not a default behavior change.
+ */
+function scheduleOrDispatchRuntimeCommand(
+  spec: RuntimeComponentSpec,
+  circuitKey: string,
+  buildFreshDispatchSpec: () =>
+    | { ok: true; value: Parameters<typeof enqueueRuntimeComponentCommand>[0] }
+    | { ok: false; error: string },
+  onSettled?: (result: DispatchResponse, context: RuntimeDispatchResultContext) => void,
+): void {
+  const existing = pendingDebounceTimerByCircuitId.get(circuitKey);
+  if (existing !== undefined) {
+    clearTimeout(existing);
+    pendingDebounceTimerByCircuitId.delete(circuitKey);
+  }
+  if (isValidFieldDebounceMs(spec.debounceMs)) {
+    const timerId = setTimeout(() => {
+      pendingDebounceTimerByCircuitId.delete(circuitKey);
+      const built = buildFreshDispatchSpec();
+      if (!built.ok) {
+        // A live value the debounced dispatch depended on became unresolvable by fire
+        // time (e.g. its source node was reconciled away by an intervening refresh) --
+        // fail closed with an explicit warning through the SAME channel a queue
+        // rejection uses, never a silent drop and never a fallback to a stale payload.
+        console.error(
+          "[runtimeComponentFactory] debounced admin_runtime dispatch payload could not be resolved at fire time:",
+          built.error,
+        );
+        spec.onRuntimeDispatchResult?.(
+          { success: false, errors: [{ message: built.error }] },
+          { targetRef: undefined, dryRun: false },
+        );
+        return;
+      }
+      dispatchRuntimeComponentCommandAndForwardResult(spec, built.value, onSettled);
+    }, spec.debounceMs) as unknown as number;
+    pendingDebounceTimerByCircuitId.set(circuitKey, timerId);
+    return;
+  }
+  const built = buildFreshDispatchSpec();
+  if (!built.ok) return; // caller already surfaced this synchronously before scheduling.
+  dispatchRuntimeComponentCommandAndForwardResult(spec, built.value, onSettled);
+}
+
+/**
+ * round 37: clears every still-pending debounce timer (e.g. on ProjectionShell unmount) so a
+ * debounced dispatch never fires after the component that owns it is gone, and so no timer is
+ * ever left running past the lifetime of the mount that scheduled it (leak-sanitizer-visible in
+ * tests, a real dangling-callback risk in production).
+ */
+export function clearAllPendingRuntimeDispatchDebounceTimers(): void {
+  for (const timerId of pendingDebounceTimerByCircuitId.values()) {
+    clearTimeout(timerId);
+  }
+  pendingDebounceTimerByCircuitId.clear();
+}
+
 function dispatchRuntimeComponentCommandAndForwardResult(
   spec: RuntimeComponentSpec,
   dispatchSpec: Parameters<typeof enqueueRuntimeComponentCommand>[0],
-  onSettled?: (result: DispatchResponse) => void,
+  onSettled?: (result: DispatchResponse, context: RuntimeDispatchResultContext) => void,
 ): void {
   // Round 29: the authored targetRef actually dispatched (never inferred/guessed downstream) —
   // forwarded verbatim so a caller can confirm a settled response landed on the manifest that
   // was actually targeted, instead of merely noticing it differs from some other identity.
-  const context: RuntimeDispatchResultContext = { targetRef: dispatchSpec.targetRef };
-  enqueueRuntimeComponentCommand(dispatchSpec)
+  // preview-gap round: dryRun mirrors the SAME dispatchSpec.payload the request itself carries —
+  // the settled result is classified by what was actually sent, never by operation/nodeId/UUID.
+  const context: RuntimeDispatchResultContext = {
+    targetRef: dispatchSpec.targetRef,
+    dryRun: isTruthyDryRunPayloadFlag(dispatchSpec.payload),
+  };
+  const circuitKey = runtimeDispatchCircuitKey(spec, dispatchSpec.targetRef);
+  const seq = (runtimeDispatchSeqByCircuitId.get(circuitKey) ?? 0) + 1;
+  runtimeDispatchSeqByCircuitId.set(circuitKey, seq);
+  enqueueRuntimeComponentCommandImpl(dispatchSpec)
     .then((result) => {
+      // Stale/superseded: a newer dispatch for this same circuit has fired since this
+      // one was sent — silently discard (never overwrites the newer in-flight/settled
+      // state), regardless of which node fired which call or response arrival order.
+      if (runtimeDispatchSeqByCircuitId.get(circuitKey) !== seq) return;
       spec.onRuntimeDispatchResult?.(result, context);
-      onSettled?.(result);
+      onSettled?.(result, context);
     })
     .catch((err) => {
+      if (runtimeDispatchSeqByCircuitId.get(circuitKey) !== seq) return;
+      // preview-gap round 3: a queue/network-level rejection (never a normal {success:false}
+      // response) previously reached NEITHER onRuntimeDispatchResult NOR onSettled — Modal state
+      // correctly never mutated (onSettled never fired), but no warning ever reached the DOM
+      // either. Forwarding a synthetic failure result through the SAME onRuntimeDispatchResult
+      // channel a real {success:false} response uses lets ProjectionShell's shared settlement
+      // authority (resolveRuntimeDispatchSettlement) surface the SAME non-destructive warning
+      // uniformly, without a second ad-hoc error-display path. onSettled (the localStateMutation
+      // gate) is deliberately NOT called here — a queue rejection never opens/closes a Modal.
       console.error(
         "[runtimeComponentFactory] admin_runtime dispatch queue rejected:",
         err,
+      );
+      const message = err instanceof Error ? err.message : String(err);
+      spec.onRuntimeDispatchResult?.(
+        {
+          success: false,
+          errors: [{ message: `送信キューへの登録に失敗しました: ${message}` }],
+        },
+        context,
       );
     });
 }
@@ -518,8 +713,19 @@ function emitBoundEvent(
   const deferLocalStateMutationToDispatchSuccess = Boolean(
     binding.runtimeDispatch && binding.localStateMutation,
   );
-  const applyDeferredLocalStateMutationOnSuccess = (result: DispatchResponse) => {
-    if (!result.success) return;
+  // preview-gap round 3: gates on the SAME shared settlement authority
+  // (resolveRuntimeDispatchSettlement) ProjectionShell's handleRuntimeDispatchResult uses for its
+  // own error display / canonical-reread decision — never on result.success alone. Before this,
+  // a success response carrying a manifestId that did not match the authored target_ref, or
+  // carrying no Emission at all, still opened/closed a preview/confirm Modal here, even though
+  // ProjectionShell's own handler would separately have logged it as an anomaly: the two
+  // consumers of the SAME settled result disagreed about whether it was acceptable. A single
+  // settlement authority shared by both closes that gap.
+  const applyDeferredLocalStateMutationOnSuccess = (
+    result: DispatchResponse,
+    context: RuntimeDispatchResultContext,
+  ) => {
+    if (!resolveRuntimeDispatchSettlement(result, context).accepted) return;
     if (!binding.localStateMutation || !spec.localStateStore) return;
     const mutationResult = applyGuardedLocalStateMutation(
       spec.localStateStore,
@@ -542,7 +748,32 @@ function emitBoundEvent(
   // aggregate/create/update/delete wiringKinds ignore it (their payload comes
   // from wiring/screen_data_shape configuration instead).
   if (binding.runtimeDispatch) {
-    const payloadFrom = binding.runtimeDispatch.payloadFrom;
+    const runtimeDispatch = binding.runtimeDispatch;
+    const payloadFrom = runtimeDispatch.payloadFrom;
+    const circuitKey = runtimeDispatchCircuitKey(spec, runtimeDispatch.targetRef);
+    // round 39 (search_filter_input_contract debounce_policy, backend persistence-boundary
+    // mirror: NpgsqlUiTopologyRepository.ValidateFieldOwnedAdminRuntimeSearchDebounce):
+    // a search_input Field on this lane fails closed HERE, before scheduling anything, when its
+    // own debounceMs is missing/invalid -- mirrors the externalPortDispatch high_frequency_policy
+    // guard above (isHighFrequencyTrigger + isValidDebounceMs). Without this, an authored node
+    // that somehow reached the frontend with an invalid debounceMs (0/negative/non-integer/
+    // string/boolean, or simply absent on a search_input control) would silently fall through
+    // scheduleOrDispatchRuntimeCommand's own isValidFieldDebounceMs branch to an IMMEDIATE
+    // dispatch -- exactly the "invalid debounceMs interpreted as no-debounce" silent fallback
+    // this round's own governance NG axis prohibits. A non-search_input Field (e.g. select,
+    // discrete-choice) is unaffected: this check is scoped to componentType exactly
+    // "form_input/search_input", never generalized to every Field or every admin_runtime
+    // dispatch.
+    if (
+      spec.componentType === "form_input/search_input" &&
+      !isValidFieldDebounceMs(spec.debounceMs)
+    ) {
+      return {
+        ok: false,
+        error:
+          `FIELD_ADMIN_RUNTIME_SEARCH_DISPATCH_REQUIRES_DEBOUNCE_MS — search_input のフィールドが admin_runtime dispatch を使う場合、正の整数の debounceMs が必要です（node: ${spec.nodeId ?? spec.componentId}）`,
+      };
+    }
     // Priority/conflict rule (SSOT remaining_write_payload_capture_gap): when a
     // payloadFrom map is authored, it is the SOLE payload authority for this
     // dispatch — same fail-close contract as dispatchExternalPort/
@@ -551,28 +782,51 @@ function emitBoundEvent(
     // authored, the pre-existing raw event-time payload passthrough (static
     // config payload + Lane 1's merged payload) is unchanged.
     if (payloadFrom && Object.keys(payloadFrom).length > 0) {
-      const resolved = resolvePayloadFrom(
+      // Synchronous check-now resolution: preserves the existing fail-close contract
+      // (a payloadFrom that cannot resolve RIGHT NOW throws synchronously here, exactly
+      // as before) — this is a validity probe, not what necessarily gets sent later.
+      const resolvedNow = resolvePayloadFrom(
         payloadFrom,
         spec.payloadFromNodeValues ?? {},
         payload,
       );
-      if (!resolved.ok) {
-        return { ok: false, error: resolved.errors.join("; ") };
+      if (!resolvedNow.ok) {
+        return { ok: false, error: resolvedNow.errors.join("; ") };
       }
-      dispatchRuntimeComponentCommandAndForwardResult(
+      scheduleOrDispatchRuntimeCommand(
         spec,
-        { ...binding.runtimeDispatch, payload: resolved.payload },
+        circuitKey,
+        () => {
+          // round 38: re-resolve from the LIVE tracker at ACTUAL fire time (immediately
+          // for a non-debounced dispatch, or after the debounce delay) — payloadFromNodeValues
+          // is a stable-reference object the tracker mutates in place (see
+          // liveNodeValueTracker.ts snapshot()'s own doc comment), so reading it again
+          // here picks up whatever the CURRENT values are, including a value changed by
+          // a DIFFERENT field (e.g. a filter selection) during this field's own debounce
+          // window — never resending the stale snapshot captured back at schedule time.
+          const fresh = resolvePayloadFrom(
+            payloadFrom,
+            spec.payloadFromNodeValues ?? {},
+            payload,
+          );
+          if (!fresh.ok) return { ok: false, error: fresh.errors.join("; ") };
+          return { ok: true, value: { ...runtimeDispatch, payload: fresh.payload } };
+        },
         deferLocalStateMutationToDispatchSuccess
           ? applyDeferredLocalStateMutationOnSuccess
           : undefined,
       );
     } else {
-      dispatchRuntimeComponentCommandAndForwardResult(
+      // No payloadFrom: the raw event-time payload passthrough has no live source to
+      // re-read later, so the same value is correct whether sent now or after a delay.
+      const dispatchSpecValue = {
+        ...runtimeDispatch,
+        payload: { ...runtimeDispatch.payload, ...binding.payload, ...payload },
+      };
+      scheduleOrDispatchRuntimeCommand(
         spec,
-        {
-          ...binding.runtimeDispatch,
-          payload: { ...binding.runtimeDispatch.payload, ...binding.payload, ...payload },
-        },
+        circuitKey,
+        () => ({ ok: true, value: dispatchSpecValue }),
         deferLocalStateMutationToDispatchSuccess
           ? applyDeferredLocalStateMutationOnSuccess
           : undefined,
@@ -3716,4 +3970,18 @@ export type { LayoutPreviewRenderResult } from "./layoutComponentPreview.ts";
 export const __testOnly = {
   parseEventBinding,
   emitBoundEvent,
+  /**
+   * Round 4 (preview-gap audit round 4): installs a replacement for the module-level
+   * enqueueRuntimeComponentCommand reference every emitBoundEvent admin_runtime dispatch call
+   * site reads indirectly (dispatchRuntimeComponentCommandAndForwardResult) -- the real seam for
+   * making a settled dispatch's own promise genuinely REJECT through a real ProjectionShell DOM
+   * mount, since dispatchOperation itself never rejects (see the doc comment on
+   * enqueueRuntimeComponentCommandImpl). Pass `null` to restore the real
+   * enqueueRuntimeComponentCommand implementation.
+   */
+  setEnqueueRuntimeComponentCommandForTest(
+    fn: typeof enqueueRuntimeComponentCommand | null,
+  ): void {
+    enqueueRuntimeComponentCommandImpl = fn ?? enqueueRuntimeComponentCommand;
+  },
 };

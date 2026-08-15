@@ -24,14 +24,37 @@ type NormalizedDesign = {
  * the manifest that was targeted, rather than inferring "this must be an ordinary cross-manifest
  * child response" merely because its manifestId differs from whatever the caller currently has
  * adopted. See ProjectionShell.tsx's handleRuntimeDispatchResult.
+ *
+ * dryRun (preview-gap round): whether the dispatched request's OWN resolved payload carried a
+ * truthy `dryRun` field — mirrors backend AdminRuntimeMasterRoster.cs's own IsTruthyPayloadFlag
+ * acceptance of both the JSON boolean `true` and the JSON string `"true"` (a data-defined
+ * literal:true payloadFrom source always resolves to a string, never a JS boolean, at the wire —
+ * see AdminRuntimeMasterRoster.cs's own comment on this exact point). This is the SAME generic
+ * payload.dryRun / payload.confirmed mutation_confirmation_contract vocabulary
+ * admin-normal-surface-projection-seed-ssot.yaml already declares for ANY surface's write preview
+ * (team_markdown's saved-view-update contract uses the identical flag), never an operation name,
+ * nodeId, manifest UUID, or admin-enum-specific field. A caller uses this to tell a genuine
+ * mutating write's settled result apart from a non-mutating preview probe's settled result,
+ * without inspecting response content or hardcoding either side's identity.
  */
 export type RuntimeDispatchResultContext = {
   /** The dispatchSpec.targetRef that was actually sent, if any (e.g. "manifest:<uuid>:<wiringKey>"). */
   targetRef?: string;
+  /** Whether the dispatched request's own resolved payload.dryRun was truthy. */
+  dryRun: boolean;
 };
 
 export type RuntimeComponentSpec = {
   componentId: string;
+  /**
+   * round 38: the layout node's own stable structural identity, when known -- see
+   * ComponentDataHub.nodeId's own doc comment for why this must be the identity any per-instance
+   * runtime state (debounce timers, dispatch sequence guards) keys on instead of componentId.
+   * Absent for specs built outside the normal ComponentDataHub->adaptComponentDataHub path (e.g.
+   * some unit-test-constructed specs) -- callers needing instance identity must fall back to
+   * componentId only when nodeId is genuinely unavailable, never prefer componentId when both exist.
+   */
+  nodeId?: string;
   packageId?: string | null;
   layoutId?: string | null;
   wiringId?: string | null;
@@ -65,6 +88,18 @@ export type RuntimeComponentSpec = {
   localStateStore?: RuntimeGuardedStateStore;
   /** Snapshot used by dispatchExternalPort payloadFrom node:<nodeId>.value resolution. */
   payloadFromNodeValues?: Record<string, unknown>;
+  /**
+   * round 37 (search_filter_input_contract debounce_policy): a Field's own declared
+   * debounceMs (translator-authored, react-schema-topology-seed-translator-ssot.yaml
+   * Field grammar) — when present and a valid positive integer, emitBoundEvent's
+   * admin_runtime Lane 2 dispatch (binding.runtimeDispatch) on an "input" trigger delays
+   * the actual network enqueue by this many ms, collapsing rapid keystrokes to the LAST
+   * value only (a new keystroke cancels the previous pending timer). Absent/invalid on
+   * every pre-existing node (no authored source sets it yet) — behavior for those nodes
+   * is byte-for-byte unchanged (immediate dispatch), so this is additive/opt-in, not a
+   * generic behavior change to every input.
+   */
+  debounceMs?: number;
   /** Fires with this node's own latest scalar value on a value-bearing trigger (change/input/select). */
   onNodeValueChange?: (value: unknown) => void;
   /** Fires with the settled result of this node's own admin_runtime dispatch. See ComponentDataHub. */
@@ -238,6 +273,7 @@ export function adaptComponentDataHub(hub: ComponentDataHub): AdaptResult {
     ok: true,
     value: {
       componentId: hub.componentId,
+      nodeId: hub.nodeId,
       packageId: hub.packageId,
       layoutId: hub.layoutId,
       wiringId: hub.wiringId,
@@ -248,6 +284,7 @@ export function adaptComponentDataHub(hub: ComponentDataHub): AdaptResult {
       payloadFromNodeValues: hub.payloadFromNodeValues,
       onNodeValueChange: hub.onNodeValueChange,
       onRuntimeDispatchResult: hub.onRuntimeDispatchResult,
+      debounceMs: hub.debounceMs,
       className,
       design,
     },

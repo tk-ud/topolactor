@@ -66,7 +66,10 @@ public static class LayoutSchemaTensorComposer
 
     // Canonical control -> ui_component_registry.component_key convention for Field leaves.
     // Reuses the existing preset catalog rows; does not invent new registry entries.
-    private static readonly IReadOnlyDictionary<string, string> FieldControlToComponentKey =
+    // Round 41: widened from private to internal so NpgsqlUiTopologyRepository.
+    // FieldFamilyComponentKeys can derive directly from this map's Values instead of
+    // maintaining an independently hand-kept mirror of the same Field-family set.
+    internal static readonly IReadOnlyDictionary<string, string> FieldControlToComponentKey =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["form_input/select"] = "select.template",
@@ -393,7 +396,13 @@ public static class LayoutSchemaTensorComposer
         string? StateJson,
         string? PropBindingsJson,
         string? DispatchPayloadFromByTriggerJson = null,
-        string? DispatchTargetRefByTriggerJson = null);
+        string? DispatchTargetRefByTriggerJson = null,
+        /// <summary>
+        /// round 37 (search_filter_input_contract debounce_policy): this node's own declared
+        /// debounceMs from the tensor's layout_patch_json.nodes[].debounceMs. Null when not
+        /// authored.
+        /// </summary>
+        int? DebounceMs = null);
 
     /// <summary>
     /// Builds a NodeId -> NodeLocalData map from the tensor's own layout_patch_json.nodes[]
@@ -411,11 +420,12 @@ public static class LayoutSchemaTensorComposer
         foreach (var node in tensorNodes)
         {
             if (node.PropsJson is null && node.StateJson is null && node.PropBindingsJson is null &&
-                node.DispatchPayloadFromByTriggerJson is null && node.DispatchTargetRefByTriggerJson is null)
+                node.DispatchPayloadFromByTriggerJson is null && node.DispatchTargetRefByTriggerJson is null &&
+                node.DebounceMs is null)
                 continue;
             result[node.NodeId] = new NodeLocalData(
                 node.PropsJson, node.StateJson, node.PropBindingsJson, node.DispatchPayloadFromByTriggerJson,
-                node.DispatchTargetRefByTriggerJson);
+                node.DispatchTargetRefByTriggerJson, node.DebounceMs);
         }
         return result;
     }
@@ -450,12 +460,36 @@ public static class LayoutSchemaTensorComposer
     /// document — the implicit/virtual tree root the translator emits ($.root) is never itself a
     /// record.
     /// </summary>
-    public static IReadOnlyList<LayoutNodeRecord> Compose(
-        IReadOnlyList<SchemaRecordRow> schemaRecords,
-        IReadOnlyDictionary<string, string> interactionsBySourceActionKey,
-        IReadOnlyDictionary<string, string> componentKeyToId,
-        IReadOnlyDictionary<string, string> componentIdToKind,
-        IReadOnlyDictionary<string, NodeLocalData>? nodeLocalDataByNodeId = null)
+    /// <summary>
+    /// One schema record's resolved identity: its NodeId (duplicate-key-namespaced exactly as
+    /// Compose composes it), its resolved ParentNodeId, its structural/unresolved/catalog-leaf
+    /// classification, and — for a catalog leaf other than Modal — its canonical control/display
+    /// convention componentKey (ResolveComponentKey), all computed by the single walk in
+    /// ResolveNodeIdentities. Row is carried through so callers needing the full record (Compose)
+    /// don't need a second lookup back into schemaRecords.
+    /// </summary>
+    private readonly record struct ResolvedNodeIdentity(
+        SchemaRecordRow Row,
+        string ResolvedNodeId,
+        string? ParentNodeId,
+        bool IsStructural,
+        bool IsUnresolved,
+        bool IsCatalogLeaf,
+        string? ComponentKey);
+
+    /// <summary>
+    /// Single authority for schema-tree NodeId/ParentNodeId resolution (including the
+    /// duplicate-key "{resolvedParentNodeId}::{key}" namespacing) and each catalog leaf's own
+    /// canonical control/display -&gt; ui_component_registry.component_key convention lookup
+    /// (ResolveComponentKey) — shared by Compose (render-time full composition, which
+    /// additionally resolves componentId/componentKind via registry lookups and merges
+    /// runtimeInteractions/local tensor data) and ResolveCatalogComponentKeysByNodeId
+    /// (persistence-time identity resolution for a schema-composed layout's tensor override
+    /// deltas — see NpgsqlUiTopologyRepository.ValidateLayoutPatchAsync). Walking this identically
+    /// in both places — one implementation, not two mirrors kept in sync by hand — is what
+    /// guarantees the two callers' NodeId/componentKey semantics can never drift apart.
+    /// </summary>
+    private static List<ResolvedNodeIdentity> ResolveNodeIdentities(IReadOnlyList<SchemaRecordRow> schemaRecords)
     {
         var duplicateKeys = new HashSet<string>(
             schemaRecords.GroupBy(r => r.Key, StringComparer.Ordinal)
@@ -472,8 +506,7 @@ public static class LayoutSchemaTensorComposer
         string ResolveNodeId(SchemaRecordRow row, string? resolvedParentNodeId) =>
             duplicateKeys.Contains(row.Key) ? $"{resolvedParentNodeId}::{row.Key}" : row.Key;
 
-        var result = new List<LayoutNodeRecord>(schemaRecords.Count);
-        var orderIndex = 0;
+        var result = new List<ResolvedNodeIdentity>(schemaRecords.Count);
 
         // Running map: authored key -> the resolved NodeId of the most recently composed record
         // with that key, in document order (parent-before-child). See ParentNodeId resolution
@@ -485,6 +518,78 @@ public static class LayoutSchemaTensorComposer
             var isStructural = StructuralRecordTypes.Contains(row.RecordType);
             var isUnresolved = row.RecordType == UnresolvedRecordType;
             var isCatalogLeaf = !isStructural && !isUnresolved;
+
+            var parentNodeId = row.ParentKey is not null && lastResolvedNodeIdByKey.TryGetValue(row.ParentKey, out var resolvedParentId)
+                ? resolvedParentId
+                : null;
+
+            var resolvedNodeId = ResolveNodeId(row, parentNodeId);
+            lastResolvedNodeIdByKey[row.Key] = resolvedNodeId;
+
+            // Modal never resolves via the control/display convention table (it carries its own
+            // literal componentKind, see Compose) — matches Compose's own branching, which never
+            // calls ResolveComponentKey for a Modal row either.
+            string? componentKey = isCatalogLeaf && row.RecordType != ModalRecordType
+                ? ResolveComponentKey(row)
+                : null;
+
+            result.Add(new ResolvedNodeIdentity(row, resolvedNodeId, parentNodeId, isStructural, isUnresolved, isCatalogLeaf, componentKey));
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Persistence-boundary identity resolution (round 40): maps each schema-composed catalog
+    /// leaf's resolved NodeId -&gt; its canonical control/display convention componentKey, via the
+    /// SAME ResolveNodeIdentities NodeId/duplicate-key/parent-tracking walk Compose itself uses —
+    /// there is no second definition of either the NodeId or componentKey resolution rule to
+    /// drift out of sync with Compose's own render-time resolution.
+    ///
+    /// Used by NpgsqlUiTopologyRepository.ValidateLayoutPatchAsync to resolve a schema-composed
+    /// layout's ui_topology_tensor.layout_patch_json.nodes[] override-delta entries — which, per
+    /// this file's own header doc, carry neither componentKind nor componentKey themselves,
+    /// identity for them living only in components_layout_design.layout_schema_json.records[] —
+    /// back to the SAME Field-family componentKey vocabulary (FieldFamilyComponentKeys /
+    /// SearchInputFieldComponentKey) already checked for tensor-only-authored nodes, so the SAME
+    /// two save-time validators (read-action allowlist, search debounceMs) apply with identical
+    /// meaning to both authoring modes.
+    ///
+    /// Modal rows are never included (no control/display convention applies to them — see
+    /// ResolveNodeIdentities). A catalog leaf whose control/display has no recognized convention
+    /// mapping is simply absent from the result — Compose already fails that shape closed with
+    /// CATALOG_COMPONENT_KIND_REQUIRED at render time; this method does not re-diagnose it.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> ResolveCatalogComponentKeysByNodeId(
+        IReadOnlyList<SchemaRecordRow> schemaRecords)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var identity in ResolveNodeIdentities(schemaRecords))
+        {
+            if (identity.IsCatalogLeaf && identity.ComponentKey is not null)
+                result[identity.ResolvedNodeId] = identity.ComponentKey;
+        }
+        return result;
+    }
+
+    public static IReadOnlyList<LayoutNodeRecord> Compose(
+        IReadOnlyList<SchemaRecordRow> schemaRecords,
+        IReadOnlyDictionary<string, string> interactionsBySourceActionKey,
+        IReadOnlyDictionary<string, string> componentKeyToId,
+        IReadOnlyDictionary<string, string> componentIdToKind,
+        IReadOnlyDictionary<string, NodeLocalData>? nodeLocalDataByNodeId = null)
+    {
+        var identities = ResolveNodeIdentities(schemaRecords);
+        var result = new List<LayoutNodeRecord>(schemaRecords.Count);
+        var orderIndex = 0;
+
+        foreach (var identity in identities)
+        {
+            var row = identity.Row;
+            var isStructural = identity.IsStructural;
+            var isUnresolved = identity.IsUnresolved;
+            var isCatalogLeaf = identity.IsCatalogLeaf;
+            var parentNodeId = identity.ParentNodeId;
+            var resolvedNodeId = identity.ResolvedNodeId;
             string? componentId = null;
             string? componentKind = null;
 
@@ -505,17 +610,13 @@ public static class LayoutSchemaTensorComposer
             }
             else if (isCatalogLeaf)
             {
-                var componentKey = ResolveComponentKey(row);
+                var componentKey = identity.ComponentKey;
                 if (componentKey is not null && componentKeyToId.TryGetValue(componentKey, out var resolvedId))
                 {
                     componentId = resolvedId;
                     componentIdToKind.TryGetValue(resolvedId, out componentKind);
                 }
             }
-
-            var parentNodeId = row.ParentKey is not null && lastResolvedNodeIdByKey.TryGetValue(row.ParentKey, out var resolvedParentId)
-                ? resolvedParentId
-                : null;
 
             // Merge target is a catalog_component leaf only, keyed by "{resolvedParentNodeId}::{key}"
             // — scoped to the leaf's owning FORM's RESOLVED identity (see
@@ -531,8 +632,6 @@ public static class LayoutSchemaTensorComposer
                 interactionsBySourceActionKey.TryGetValue($"{parentNodeId}::{row.Key}", out runtimeInteractionsJson);
 
             var nodeKind = isUnresolved ? "unresolved_gap" : isStructural ? "structural_node" : "catalog_component";
-            var resolvedNodeId = ResolveNodeId(row, parentNodeId);
-            lastResolvedNodeIdByKey[row.Key] = resolvedNodeId;
             if (row.RecordType == ModalRecordType)
                 componentId = resolvedNodeId;
 
@@ -562,6 +661,7 @@ public static class LayoutSchemaTensorComposer
                 PropBindingsJson: localData?.PropBindingsJson,
                 DispatchPayloadFromByTriggerJson: localData?.DispatchPayloadFromByTriggerJson,
                 DispatchTargetRefByTriggerJson: localData?.DispatchTargetRefByTriggerJson,
+                DebounceMs: localData?.DebounceMs,
                 RecordType: (isStructural || isUnresolved) ? row.RecordType : null,
                 // Every schema record carries an authored label (record_common_required_fields)
                 // — a catalog_component leaf's own label must survive composition the same way a

@@ -58,6 +58,54 @@ public sealed class InMemoryEnumDictionaryRepository : EnumDictionaryRepository
                 .OrderBy(g => g.IndexNum)
                 .ToList());
 
+    public override Task<IReadOnlyList<EnumDictionaryGroupWithItemsSummaryDto>> ListGroupsWithItemsSummaryAsync(
+        string? search = null, string? groupNameFilter = null, int? groupIndexNumFilter = null,
+        int? itemPositionFilter = null, CancellationToken ct = default)
+    {
+        var trimmedSearch = search?.Trim();
+        var trimmedGroupNameFilter = groupNameFilter?.Trim();
+        IEnumerable<EnumDictionaryGroupDetailDto> groups = _groups.Values;
+        if (!string.IsNullOrEmpty(trimmedSearch))
+        {
+            // Mirrors NpgsqlEnumDictionaryRepository's SQL exactly: matches the group's own
+            // identity (group_name/index_num) OR any member item's identity/position
+            // (items.name/items.index_num/group_items.position, position == 0-based index within
+            // g.Items, the same order SetGroupItemsAsync assigns).
+            groups = groups.Where(g =>
+                g.GroupName.Contains(trimmedSearch, StringComparison.OrdinalIgnoreCase)
+                || g.IndexNum.ToString().Contains(trimmedSearch, StringComparison.OrdinalIgnoreCase)
+                || g.Items.Select((item, position) => (item, position)).Any(t =>
+                    t.item.Name.Contains(trimmedSearch, StringComparison.OrdinalIgnoreCase)
+                    || t.item.IndexNum.ToString().Contains(trimmedSearch, StringComparison.OrdinalIgnoreCase)
+                    || t.position.ToString().Contains(trimmedSearch, StringComparison.OrdinalIgnoreCase)));
+        }
+        // round 37: the owning SSOT's three declared filter target fields, mirroring
+        // NpgsqlEnumDictionaryRepository's exact-match SQL clauses.
+        if (!string.IsNullOrEmpty(trimmedGroupNameFilter))
+        {
+            groups = groups.Where(g => g.GroupName == trimmedGroupNameFilter);
+        }
+        if (groupIndexNumFilter.HasValue)
+        {
+            groups = groups.Where(g => g.IndexNum == groupIndexNumFilter.Value);
+        }
+        if (itemPositionFilter.HasValue)
+        {
+            groups = groups.Where(g =>
+                g.Items.Select((item, position) => position).Any(position => position == itemPositionFilter.Value));
+        }
+        return Task.FromResult<IReadOnlyList<EnumDictionaryGroupWithItemsSummaryDto>>(
+            groups
+                .OrderBy(g => g.IndexNum)
+                .Select(g => new EnumDictionaryGroupWithItemsSummaryDto(
+                    g.GroupId,
+                    g.IndexNum,
+                    g.GroupName,
+                    string.Join(", ", g.Items.Select(i => $"{i.IndexNum}:{i.Name}")),
+                    string.Join(",", g.Items.Select(i => i.IndexNum))))
+                .ToList());
+    }
+
     public override Task<EnumDictionaryGroupDetailDto?> GetGroupDetailAsync(
         Guid groupId, CancellationToken ct = default) =>
         Task.FromResult(_groups.TryGetValue(groupId, out var detail) ? detail : null);

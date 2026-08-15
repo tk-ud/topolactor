@@ -83,22 +83,13 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         Assert.Equal("data_display/table", table.ComponentKind);
         Assert.NotNull(table.ComponentId);
 
-        var formField = Assert.Single(nodes, n => n.NodeId == "enum_form");
-        Assert.Equal("catalog_component", formField.NodeKind);
-        Assert.Equal("form_input/form_field", formField.ComponentKind);
-        Assert.NotNull(formField.ComponentId);
-
-        var confirmButton = Assert.Single(nodes, n => n.NodeId == "enum_confirm_button");
-        Assert.Equal("catalog_component", confirmButton.NodeKind);
-        Assert.Equal("action/button", confirmButton.ComponentKind);
-        Assert.NotNull(confirmButton.ComponentId);
-        // The one real, functioning interaction: opens local confirm state
-        // (internal_instance_wiring localStateMutation) -- explicit_confirm stage of
-        // mutation_confirmation_contract. The write stage has no runtimeInteractions here (see
-        // db/seed_empty.sql admin-enum header comment / enum_write_dispatch_gap validation
-        // record -- known gap, not fabricated).
-        Assert.NotNull(confirmButton.RuntimeInteractions);
-        Assert.Contains("localStateMutation", confirmButton.RuntimeInteractions!.Value.GetRawText());
+        // enum_confirm_form/enum_form/enum_confirm_button (the original structural-leaf-only
+        // edit-and-confirm stub, predating the per-operation write manifests ae210-ae270 and
+        // their real dryRun-preview/confirm-modal wiring) were removed as orphans: zero frontend
+        // consumers, and enum_confirm_button's own dispatch was a ui-local no-op with no backend
+        // target and no consumer of the local "confirm" state it opened. Fully superseded by the
+        // 7 real per-operation confirm modals below (see .agent/tasks/todo.md admin-enum
+        // subBundle closure record).
 
         // render completion: every catalog_component leaf resolved either a registry componentId
         // (Field/Table/Action/WorkflowStep) or, for a Modal, its own literal componentKind
@@ -122,6 +113,59 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         Assert.Equal("enum_delete_group_confirm_modal", confirmModal.ComponentId);
 
         Assert.Empty(emission.Errors);
+    }
+
+    /// <summary>
+    /// admin-enum subBundle closure round (.agent/tasks/todo.md): mirrors CredentialManagement
+    /// HubRelationUiProjectionLiveDbTests's own manifest_0092_bare_entry_layout_nodes.json pattern.
+    /// frontend/tests/fixtures/admin_enum_ae200_layout_nodes.json is a checked-in snapshot of
+    /// THIS EXACT dispatch's Emission.LayoutNodes (camelCase-serialized, the same shape the
+    /// frontend receives over HTTP -- backend/Program.cs JsonNamingPolicy.CamelCase), consumed by
+    /// frontend/tests/projectionShellAdminEnumCanonicalSeedShape.test.ts as its mocked initial
+    /// dispatch response -- a production DOM proof driven by the REAL canonical translator-
+    /// generated ae200 layout, never a hand-built layoutNodes object standing in for it. If
+    /// ae200's seed ever changes, this test fails HERE (a live-DB dispatch against real
+    /// PostgreSQL), not by the frontend fixture silently going stale against real data.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_AdminEnumManagementManifest_LayoutNodesMatchCheckedInFrontendFixture()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+
+        var payload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = $"manifest:{AdminEnumManagementManifestId}:projection_entry",
+        });
+        var request = new EndpointRequestDto(
+            "Search", "default", "screen_list", "Search",
+            IdOrHubId: null, Payload: payload, Context: null, TriggerKind: "client", Role: "admin");
+
+        var response = await dispatcher.DispatchAsync(request);
+        Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
+        Assert.NotNull(response.Emission);
+        Assert.NotNull(response.Emission!.LayoutNodes);
+
+        var fixturePath = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "../../../../../../frontend/tests/fixtures/admin_enum_ae200_layout_nodes.json"));
+        var expectedJson = await File.ReadAllTextAsync(fixturePath);
+        // Options must mirror backend/Program.cs's actual wire serialization exactly (including
+        // DefaultIgnoreCondition) -- the fixture is a snapshot of what the frontend really
+        // receives over HTTP, not an arbitrary debug dump. A field-shape drift (e.g. a new
+        // LayoutNode field, or a null-handling change) must fail HERE, not silently pass while
+        // the checked-in fixture and the real DTO diverge.
+        var actualJson = System.Text.Json.JsonSerializer.Serialize(
+            response.Emission.LayoutNodes,
+            new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+                WriteIndented = true,
+            });
+        Assert.Equal(expectedJson.Trim(), actualJson.Trim());
     }
 
     /// <summary>
@@ -178,12 +222,22 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         Assert.Contains("node:enum_create_group_name_input.value", payloadFromByTriggerText);
         Assert.Contains("literal:true", payloadFromByTriggerText);
 
-        // The visible Create trigger itself carries no write authority -- clicking it can only
-        // open the modal (same gating class as delete_group's Delete trigger).
+        // preview-gap round: the visible Create trigger now ALSO carries a non-mutating dryRun
+        // preview dispatch to the SAME ae210 target -- the modal only opens once that preview
+        // dispatch settles successfully (deferred secondaryDisclosureActionType=openModal), never
+        // unconditionally on click.
         var createGroupButtonNode = Assert.Single(
             entryResponse.Emission!.LayoutNodes!, n => n.NodeId == "enum_create_group_button");
-        Assert.Null(createGroupButtonNode.DispatchTargetRefByTrigger);
-        Assert.Null(createGroupButtonNode.DispatchPayloadFromByTrigger);
+        Assert.NotNull(createGroupButtonNode.DispatchTargetRefByTrigger);
+        Assert.Contains(
+            "manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group",
+            createGroupButtonNode.DispatchTargetRefByTrigger!.Value.GetRawText());
+        Assert.NotNull(createGroupButtonNode.DispatchPayloadFromByTrigger);
+        var previewPayloadFromText = createGroupButtonNode.DispatchPayloadFromByTrigger!.Value.GetRawText();
+        Assert.Contains("node:enum_create_group_name_input.value", previewPayloadFromText);
+        Assert.Contains("\"dryRun\"", previewPayloadFromText);
+        Assert.Contains("literal:true", previewPayloadFromText);
+        Assert.DoesNotContain("confirmed", previewPayloadFromText);
         Assert.NotNull(createGroupButtonNode.RuntimeInteractions);
         Assert.Contains("openModal", createGroupButtonNode.RuntimeInteractions!.Value.GetRawText());
 
@@ -312,13 +366,22 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         Assert.Contains("node:enum_table.value.groupId", payloadFromByTriggerText);
         Assert.Contains("literal:true", payloadFromByTriggerText);
 
-        // The visible Delete trigger itself carries no write authority at all -- clicking it can
-        // only open the modal (proven at the frontend runtime layer; here we prove the seed gives
-        // it nothing to dispatch even if that gating were ever bypassed).
+        // preview-gap round: the visible Delete trigger now ALSO carries a non-mutating dryRun
+        // preview dispatch to the SAME ae230 target (groupId re-resolved fresh from enum_table's
+        // own tracked selected-row value, same source the Confirm button itself uses) -- the modal
+        // only opens once that preview dispatch settles successfully.
         var deleteGroupButtonNode = Assert.Single(
             entryResponse.Emission!.LayoutNodes!, n => n.NodeId == "enum_delete_group_button");
-        Assert.Null(deleteGroupButtonNode.DispatchTargetRefByTrigger);
-        Assert.Null(deleteGroupButtonNode.DispatchPayloadFromByTrigger);
+        Assert.NotNull(deleteGroupButtonNode.DispatchTargetRefByTrigger);
+        Assert.Contains(
+            "manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group",
+            deleteGroupButtonNode.DispatchTargetRefByTrigger!.Value.GetRawText());
+        Assert.NotNull(deleteGroupButtonNode.DispatchPayloadFromByTrigger);
+        var deletePreviewPayloadFromText = deleteGroupButtonNode.DispatchPayloadFromByTrigger!.Value.GetRawText();
+        Assert.Contains("node:enum_table.value.groupId", deletePreviewPayloadFromText);
+        Assert.Contains("\"dryRun\"", deletePreviewPayloadFromText);
+        Assert.Contains("literal:true", deletePreviewPayloadFromText);
+        Assert.DoesNotContain("confirmed", deletePreviewPayloadFromText);
         // Round 26: this is the leaf whose RuntimeInteractions (openModal) previously resolved to
         // NULL against a real Compose pipeline -- see round 26 todo.md entry for the full story.
         // Its owning tensor entry must now be scoped to its RESOLVED PARENT ("enum_dictionary_roster"),
@@ -442,26 +505,48 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
     /// <summary>
     /// Round 26 -- shared structural proof, generalized across all 7 write actions, that each is
     /// now embedded in ae200's OWN single surface behind the SAME disclosure/modal explicit-confirm
-    /// pattern create_group/delete_group already proved (round 24/25): open button carries NO
-    /// dispatch (openModal only), the modal resolves componentKind=disclosure/modal AND its own
-    /// required toggle self-close (modalFactory's requireBinding(spec,"toggle") -- round 26 found
-    /// and fixed a translator bug where this was silently dropped from every Modal, including
-    /// delete_group's already-shipped one, never caught because the existing DOM tests use
-    /// hand-built mock layoutNodes that bypass the real Compose pipeline entirely), the confirm
-    /// button inside the modal carries the exact node-local dispatch override, and the cancel
+    /// pattern create_group/delete_group already proved (round 24/25). Preview-gap round: the open
+    /// button now ALSO carries a non-mutating dryRun preview dispatch to the SAME target manifest
+    /// the Confirm button writes to (same field-source mapping, "dryRun" instead of "confirmed"),
+    /// deferring its own openModal to that dispatch's own success -- proven here structurally for
+    /// all 7 operations via the SAME dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger seed
+    /// mechanism the Confirm button already used (no new wiring lane, actionType, or per-operation
+    /// branch). The modal resolves componentKind=disclosure/modal AND its own required toggle
+    /// self-close (modalFactory's requireBinding(spec,"toggle") -- round 26 found and fixed a
+    /// translator bug where this was silently dropped from every Modal, including delete_group's
+    /// already-shipped one, never caught because the existing DOM tests use hand-built mock
+    /// layoutNodes that bypass the real Compose pipeline entirely), the confirm button inside the
+    /// modal carries the exact node-local dispatch override (confirmed:true), and the cancel
     /// button carries NO dispatch, only closeModal. One shared theory, not 7 duplicated test
-    /// bodies, per this round's instruction to reuse a shared scenario contract.
+    /// bodies, per round 26's instruction to reuse a shared scenario contract.
     /// </summary>
     [Theory]
-    [InlineData("enum_create_group", "manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group")]
-    [InlineData("enum_update_group", "manifest:00000000-0000-0000-0000-0000000ae220:enum_dictionary:update_group")]
-    [InlineData("enum_delete_group", "manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group")]
-    [InlineData("enum_create_item", "manifest:00000000-0000-0000-0000-0000000ae240:enum_dictionary:create_item")]
-    [InlineData("enum_update_item", "manifest:00000000-0000-0000-0000-0000000ae250:enum_dictionary:update_item")]
-    [InlineData("enum_delete_item", "manifest:00000000-0000-0000-0000-0000000ae260:enum_dictionary:delete_item")]
-    [InlineData("enum_set_group_items", "manifest:00000000-0000-0000-0000-0000000ae270:enum_dictionary:set_group_items")]
+    [InlineData(
+        "enum_create_group", "manifest:00000000-0000-0000-0000-0000000ae210:enum_dictionary:create_group",
+        new[] { "groupName" }, new[] { "node:enum_create_group_name_input.value" })]
+    [InlineData(
+        "enum_update_group", "manifest:00000000-0000-0000-0000-0000000ae220:enum_dictionary:update_group",
+        new[] { "groupId", "groupName" },
+        new[] { "node:enum_table.value.groupId", "node:enum_update_group_name_input.value" })]
+    [InlineData(
+        "enum_delete_group", "manifest:00000000-0000-0000-0000-0000000ae230:enum_dictionary:delete_group",
+        new[] { "groupId" }, new[] { "node:enum_table.value.groupId" })]
+    [InlineData(
+        "enum_create_item", "manifest:00000000-0000-0000-0000-0000000ae240:enum_dictionary:create_item",
+        new[] { "name" }, new[] { "node:enum_create_item_name_input.value" })]
+    [InlineData(
+        "enum_update_item", "manifest:00000000-0000-0000-0000-0000000ae250:enum_dictionary:update_item",
+        new[] { "indexNum", "name" },
+        new[] { "node:enum_update_item_index_input.value", "node:enum_update_item_name_input.value" })]
+    [InlineData(
+        "enum_delete_item", "manifest:00000000-0000-0000-0000-0000000ae260:enum_dictionary:delete_item",
+        new[] { "indexNum" }, new[] { "node:enum_delete_item_index_input.value" })]
+    [InlineData(
+        "enum_set_group_items", "manifest:00000000-0000-0000-0000-0000000ae270:enum_dictionary:set_group_items",
+        new[] { "groupId", "enumIndexNums" },
+        new[] { "node:enum_table.value.groupId", "node:enum_set_group_items_input.value" })]
     public async Task DispatchAsync_AdminEnumManagementManifest_EachWriteActionEmbeddedBehindOwnConfirmModal_StructurallyResolves(
-        string prefix, string expectedTargetRef)
+        string prefix, string expectedTargetRef, string[] expectedFieldKeys, string[] expectedFieldSources)
     {
         var cs = GetConnectionString();
         if (cs is null) return;
@@ -478,9 +563,15 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         Assert.True(entryResponse.Success, string.Join(";", entryResponse.Errors.Select(e => e.Code + ":" + e.Message)));
         var nodes = entryResponse.Emission!.LayoutNodes!;
 
+        Assert.Equal(expectedFieldKeys.Length, expectedFieldSources.Length);
+
         var openButton = Assert.Single(nodes, n => n.NodeId == $"{prefix}_button");
-        Assert.Null(openButton.DispatchTargetRefByTrigger);
-        Assert.Null(openButton.DispatchPayloadFromByTrigger);
+        Assert.NotNull(openButton.DispatchTargetRefByTrigger);
+        Assert.Contains(expectedTargetRef, openButton.DispatchTargetRefByTrigger!.Value.GetRawText());
+        Assert.NotNull(openButton.DispatchPayloadFromByTrigger);
+        var openClick = openButton.DispatchPayloadFromByTrigger!.Value.GetProperty("click");
+        Assert.Equal("literal:true", openClick.GetProperty("dryRun").GetString());
+        Assert.False(openClick.TryGetProperty("confirmed", out _));
         Assert.NotNull(openButton.RuntimeInteractions);
         Assert.Contains("openModal", openButton.RuntimeInteractions!.Value.GetRawText());
 
@@ -493,9 +584,29 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         Assert.NotNull(confirmButton.DispatchTargetRefByTrigger);
         Assert.Contains(expectedTargetRef, confirmButton.DispatchTargetRefByTrigger!.Value.GetRawText());
         Assert.NotNull(confirmButton.DispatchPayloadFromByTrigger);
-        Assert.Contains("literal:true", confirmButton.DispatchPayloadFromByTrigger!.Value.GetRawText());
+        var confirmClick = confirmButton.DispatchPayloadFromByTrigger!.Value.GetProperty("click");
+        Assert.Equal("literal:true", confirmClick.GetProperty("confirmed").GetString());
+        Assert.False(confirmClick.TryGetProperty("dryRun", out _));
         Assert.NotNull(confirmButton.RuntimeInteractions);
         Assert.Contains("closeModal", confirmButton.RuntimeInteractions!.Value.GetRawText());
+
+        // Full business-field key/source-set parity between the preview and confirm payloadFrom --
+        // the SAME key set + node source on both buttons (only dryRun/confirmed differ), and NO
+        // other keys beyond dryRun/confirmed/these -- mirroring
+        // DispatchAsync_EnumDictionaryWriteManifest_ResolvesSinglePurposeLayout_WithDistinctPreviewAndConfirmPayloads's
+        // rigor, now against THIS surface's own ae200-embedded preview/confirm button pair rather
+        // than the dedicated per-action write manifest's own preview_button/confirm_button.
+        for (var i = 0; i < expectedFieldKeys.Length; i++)
+        {
+            Assert.Equal(expectedFieldSources[i], openClick.GetProperty(expectedFieldKeys[i]).GetString());
+            Assert.Equal(expectedFieldSources[i], confirmClick.GetProperty(expectedFieldKeys[i]).GetString());
+        }
+        var expectedOpenKeys = expectedFieldKeys.Append("dryRun").OrderBy(k => k, StringComparer.Ordinal).ToArray();
+        var actualOpenKeys = openClick.EnumerateObject().Select(p => p.Name).OrderBy(k => k, StringComparer.Ordinal).ToArray();
+        Assert.Equal(expectedOpenKeys, actualOpenKeys);
+        var expectedConfirmKeys = expectedFieldKeys.Append("confirmed").OrderBy(k => k, StringComparer.Ordinal).ToArray();
+        var actualConfirmKeys = confirmClick.EnumerateObject().Select(p => p.Name).OrderBy(k => k, StringComparer.Ordinal).ToArray();
+        Assert.Equal(expectedConfirmKeys, actualConfirmKeys);
 
         var cancelButton = Assert.Single(nodes, n => n.NodeId == $"{prefix}_cancel_button");
         Assert.Null(cancelButton.DispatchTargetRefByTrigger);
@@ -663,6 +774,9 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
 
         Assert.NotNull(table.PropsJson);
         Assert.Contains("groupName", table.PropsJson);
+        // items-browse UX (admin-enum subBundle closure round): folded into enum_table's own
+        // displayColumns, no new list_items action, no cross-manifest dispatch.
+        Assert.Contains("itemsSummary", table.PropsJson);
         Assert.NotNull(table.PropBindings);
         var propBindingsText = table.PropBindings!.Value.GetRawText();
         Assert.Contains("\"rows\"", propBindingsText);
@@ -675,12 +789,6 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         Assert.Equal("admin_runtime", searchField.WiringKind);
         var groupFilterField = Assert.Single(structureNodes, n => n.NodeId == "enum_group_filter");
         Assert.Equal("admin_runtime", groupFilterField.WiringKind);
-
-        // enum_confirm_button keeps its own explicit_confirm-only interaction, unaffected by the
-        // layout's admin_runtime read binding (Lane 3 overrides Lane 2 on its own click trigger).
-        var confirmButton = Assert.Single(structureNodes, n => n.NodeId == "enum_confirm_button");
-        Assert.NotNull(confirmButton.RuntimeInteractions);
-        Assert.Contains("localStateMutation", confirmButton.RuntimeInteractions!.Value.GetRawText());
 
         // STEP 2: the REAL data dispatch -- Target/Layer/Action set directly (exactly what
         // frontend/runtime/frontendScheduler.ts enqueueRuntimeComponentCommand sends as the
@@ -711,6 +819,283 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         var dataText = dataEmission.Data!.Value.GetRawText();
         Assert.Contains("demo_status", dataText);
         Assert.Contains("groupName", dataText);
+        // items-browse UX: list_groups' own response now carries each group's items as a
+        // flattened "index:name" summary (db/enum_seed.sql: demo_status's real member
+        // demo_active, index_num=1) -- folded into the SAME action, never a separate
+        // list_items dispatch.
+        Assert.Contains("itemsSummary", dataText);
+        Assert.Contains("1:demo_active", dataText);
+    }
+
+    /// <summary>
+    /// generic list_groups search/filter (admin-enum subBundle closure round): a data-defined
+    /// OPTIONAL payload field on this SAME existing list_groups read action -- no new action, no
+    /// enum-specific runtime lane. Proves against REAL PostgreSQL (db/enum_seed.sql's own
+    /// demo_status/user_status rows, not hand-built data): enum_search's own generated wiring
+    /// carries the search payloadFrom override, a real dispatch with payload.search filters
+    /// group_name case-insensitively, an empty/absent search returns the canonical full list, and
+    /// a non-string search fails close rather than being silently ignored.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_AdminEnumManagementManifest_ListGroupsSearch_FiltersRealRowsEmptyReturnsFullListNonStringFailsClose()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+
+        // STEP 1: structural proof -- enum_search's own generated wiring (db/seed_empty.sql
+        // ae206, produced by the translator from admin-enum-ae200.input.json/
+        // admin-enum-ae200.topology-seed.input.json, adopted verbatim) carries the search
+        // payloadFrom override on its own change trigger.
+        var structurePayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = $"manifest:{AdminEnumManagementManifestId}:projection_entry",
+        });
+        var structureRequest = new EndpointRequestDto(
+            "Search", "default", "screen_list", "Search",
+            IdOrHubId: null, Payload: structurePayload, Context: null, TriggerKind: "client", Role: "admin");
+        var structureResponse = await dispatcher.DispatchAsync(structureRequest);
+        Assert.True(structureResponse.Success, string.Join(";", structureResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+        var structureNodes = structureResponse.Emission!.LayoutNodes!;
+        var searchField = Assert.Single(structureNodes, n => n.NodeId == "enum_search");
+        Assert.NotNull(searchField.DispatchPayloadFromByTrigger);
+        var payloadFromText = searchField.DispatchPayloadFromByTrigger!.Value.GetRawText();
+        Assert.Contains("\"change\"", payloadFromText);
+        Assert.Contains("\"search\"", payloadFromText);
+        Assert.Contains("\"node:enum_search.value\"", payloadFromText);
+
+        // STEP 2: a real dispatch with payload.search="demo" must return ONLY demo_status, not
+        // user_status -- both real db/enum_seed.sql rows, proving a genuine SQL-level filter, not
+        // a coincidence of there being only one row.
+        var searchDataPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups",
+            search = "demo",
+        });
+        var searchDataRequest = new EndpointRequestDto(
+            "list_groups", "manifest", "enum_dictionary", "list_groups",
+            IdOrHubId: null, Payload: searchDataPayload, Context: null, TriggerKind: "client", Role: "admin");
+        var searchDataResponse = await dispatcher.DispatchAsync(searchDataRequest);
+        Assert.True(searchDataResponse.Success, string.Join(";", searchDataResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+        // round 37: list_groups' response envelope is {groups, groupOptions} -- groups is the
+        // search-narrowed roster, groupOptions is ALWAYS the full unfiltered list (closes the
+        // options-self-shrinking gap where enum_group_filter's own select choices previously came
+        // from this SAME narrowed array).
+        using var searchDataDoc = System.Text.Json.JsonDocument.Parse(searchDataResponse.Emission!.Data!.Value.GetRawText());
+        var searchGroupsText = searchDataDoc.RootElement.GetProperty("groups").GetRawText();
+        Assert.Contains("demo_status", searchGroupsText);
+        Assert.DoesNotContain("user_status", searchGroupsText);
+        var searchGroupOptionsText = searchDataDoc.RootElement.GetProperty("groupOptions").GetRawText();
+        Assert.Contains("demo_status", searchGroupOptionsText);
+        Assert.Contains("user_status", searchGroupOptionsText);
+
+        // STEP 3: an empty search returns the SAME canonical full list an absent payload does.
+        var emptySearchDataPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups",
+            search = "",
+        });
+        var emptySearchDataRequest = new EndpointRequestDto(
+            "list_groups", "manifest", "enum_dictionary", "list_groups",
+            IdOrHubId: null, Payload: emptySearchDataPayload, Context: null, TriggerKind: "client", Role: "admin");
+        var emptySearchDataResponse = await dispatcher.DispatchAsync(emptySearchDataRequest);
+        Assert.True(emptySearchDataResponse.Success, string.Join(";", emptySearchDataResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+        var emptySearchDataText = emptySearchDataResponse.Emission!.Data!.Value.GetRawText();
+        Assert.Contains("demo_status", emptySearchDataText);
+        Assert.Contains("user_status", emptySearchDataText);
+
+        // STEP 4: fail-close -- a non-string search must never be silently ignored/treated as "no
+        // search"; the real dispatch chain surfaces an explicit validation error.
+        var malformedDataPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups",
+            search = 12345,
+        });
+        var malformedDataRequest = new EndpointRequestDto(
+            "list_groups", "manifest", "enum_dictionary", "list_groups",
+            IdOrHubId: null, Payload: malformedDataPayload, Context: null, TriggerKind: "client", Role: "admin");
+        var malformedDataResponse = await dispatcher.DispatchAsync(malformedDataRequest);
+        Assert.False(malformedDataResponse.Success);
+        Assert.Contains(malformedDataResponse.Errors, e => e.Code == "ENUM_LIST_GROUPS_PAYLOAD_MALFORMED");
+
+        // STEP 5 (round 37): fail-close -- a payload whose OWN shape is not a JSON object (here a
+        // bare array) must never be silently treated as "no search"/"no filter" either, through
+        // the real dispatch chain.
+        var nonObjectPayload = System.Text.Json.JsonSerializer.SerializeToElement(new[] { "not", "an", "object" });
+        var nonObjectRequest = new EndpointRequestDto(
+            "list_groups", "manifest", "enum_dictionary", "list_groups",
+            IdOrHubId: null, Payload: nonObjectPayload, Context: null, TriggerKind: "client", Role: "admin");
+        var nonObjectResponse = await dispatcher.DispatchAsync(nonObjectRequest);
+        Assert.False(nonObjectResponse.Success);
+        Assert.Contains(nonObjectResponse.Errors, e => e.Code == "ENUM_LIST_GROUPS_PAYLOAD_NOT_OBJECT");
+    }
+
+    /// <summary>
+    /// round 36 (admin-enum subBundle closure): the owning SSOT (docs/design/
+    /// admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.enum.
+    /// capability_requirements.search) declares FIVE search target fields (not group_name alone),
+    /// and capability_requirements.filter declares its OWN three fields (enum.groups.group_name,
+    /// enum.groups.index_num, enum.group_items.position -- round 37 replaced round 36's
+    /// groupIdFilter, an exact match on enum.groups.group_id, a field the owning SSOT never
+    /// actually declares as part of capability_requirements.filter). Proves against REAL
+    /// PostgreSQL: (1) search matches via group_items.position specifically (an item whose own
+    /// name/index_num do NOT contain the search term, only its position within a freshly created
+    /// group does), (2) groupNameFilter/groupIndexNumFilter/itemPositionFilter each independently
+    /// scope the roster to exactly this one group, excluding db/enum_seed.sql's own demo_status/
+    /// user_status rows, while groupOptions stays the full unfiltered list throughout (proves the
+    /// options-self-shrinking gap is closed against real Postgres, not only the in-memory
+    /// fixture), and (3) a malformed (non-integer) groupIndexNumFilter fails close through the
+    /// real dispatch chain.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_AdminEnumManagementManifest_ListGroupsSearchAndFilterFields_MatchPositionAndScopeToExactGroupRealRows()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+
+        // "2" is the search token this test proves matches ONLY via group_items.position -- every
+        // other numeric identity below (group's own indexNum, every item's own indexNum, the
+        // group name's random suffix) is deliberately generated to avoid the digit '2' entirely,
+        // so a match can only be explained by the target item's computed position (index 2, the
+        // 3rd item passed to set_group_items).
+        const string positionSearchTerm = "2";
+        static int NextIndexNumAvoidingDigit(char digit)
+        {
+            int candidate;
+            do { candidate = 970_000 + Random.Shared.Next(0, 9_000); }
+            while (candidate.ToString().Contains(digit));
+            return candidate;
+        }
+        var groupNameSuffix = Guid.NewGuid().ToString("N").Replace('2', 'x');
+        var groupName = $"position-search-proof-{groupNameSuffix}"[..40];
+        var groupIndexNum = NextIndexNumAvoidingDigit('2');
+        var itemAIndex = NextIndexNumAvoidingDigit('2');
+        var itemBIndex = NextIndexNumAvoidingDigit('2');
+        var itemCIndex = NextIndexNumAvoidingDigit('2'); // lands at position 2 (3rd in enumIndexNums order)
+        var itemDIndex = NextIndexNumAvoidingDigit('2');
+        // round 37: db/enum_seed.sql's own demo_status carries positions 0-2 and user_status
+        // carries positions 0-3 -- itemEIndex lands at position 4 (5th in enumIndexNums order), the
+        // lowest position value NEITHER real seed group has, so itemPositionFilter=4 below can only
+        // match this freshly created group.
+        var itemEIndex = NextIndexNumAvoidingDigit('2');
+        string? groupId = null;
+        var createdItemIndexes = new List<int>();
+
+        try
+        {
+            var createdGroup = await DispatchViaOwnWriteManifestAsync(dispatcher, "create_group",
+                new { groupName, indexNum = groupIndexNum, confirmed = true });
+            Assert.True(createdGroup.Success, string.Join(";", createdGroup.Errors.Select(e => e.Code + ":" + e.Message)));
+            using (var doc = System.Text.Json.JsonDocument.Parse(createdGroup.Emission!.Data!.Value.GetRawText()))
+                groupId = doc.RootElement.GetProperty("groupId").GetString();
+
+            foreach (var idx in new[] { itemAIndex, itemBIndex, itemCIndex, itemDIndex, itemEIndex })
+            {
+                var createdItem = await DispatchViaOwnWriteManifestAsync(dispatcher, "create_item",
+                    new { name = $"position-proof-item-{idx}", indexNum = idx, confirmed = true });
+                Assert.True(createdItem.Success, string.Join(";", createdItem.Errors.Select(e => e.Code + ":" + e.Message)));
+                createdItemIndexes.Add(idx);
+            }
+
+            var setItems = await DispatchViaOwnWriteManifestAsync(dispatcher, "set_group_items",
+                new { groupId, enumIndexNums = $"{itemAIndex},{itemBIndex},{itemCIndex},{itemDIndex},{itemEIndex}", confirmed = true });
+            Assert.True(setItems.Success, string.Join(";", setItems.Errors.Select(e => e.Code + ":" + e.Message)));
+
+            // Sanity: none of this group's own identity fields (name/indexNum) or any of its
+            // items' own indexNums contain the search token -- a match below can only be the
+            // position dimension.
+            Assert.DoesNotContain(positionSearchTerm, groupName);
+            Assert.DoesNotContain(positionSearchTerm, groupIndexNum.ToString());
+            Assert.DoesNotContain(positionSearchTerm, itemAIndex.ToString());
+            Assert.DoesNotContain(positionSearchTerm, itemBIndex.ToString());
+            Assert.DoesNotContain(positionSearchTerm, itemCIndex.ToString());
+
+            var positionSearchPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups",
+                search = positionSearchTerm,
+            });
+            var positionSearchResponse = await dispatcher.DispatchAsync(new EndpointRequestDto(
+                "list_groups", "manifest", "enum_dictionary", "list_groups",
+                IdOrHubId: null, Payload: positionSearchPayload, Context: null, TriggerKind: "client", Role: "admin"));
+            Assert.True(positionSearchResponse.Success, string.Join(";", positionSearchResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+            using (var positionSearchDoc = System.Text.Json.JsonDocument.Parse(positionSearchResponse.Emission!.Data!.Value.GetRawText()))
+            {
+                Assert.Contains(groupName, positionSearchDoc.RootElement.GetProperty("groups").GetRawText());
+            }
+
+            // round 37: the owning SSOT's own three declared filter target fields, each
+            // independently exact-match scoping to this one group, excluding the real
+            // db/enum_seed.sql demo_status/user_status rows -- while groupOptions stays the FULL
+            // unfiltered list every time (proves the options-self-shrinking gap is closed against
+            // real Postgres, not only the in-memory fixture).
+            async Task AssertFilterScopesToThisGroupAndOptionsStayFullAsync(System.Text.Json.JsonElement payload)
+            {
+                var response = await dispatcher.DispatchAsync(new EndpointRequestDto(
+                    "list_groups", "manifest", "enum_dictionary", "list_groups",
+                    IdOrHubId: null, Payload: payload, Context: null, TriggerKind: "client", Role: "admin"));
+                Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
+                using var doc = System.Text.Json.JsonDocument.Parse(response.Emission!.Data!.Value.GetRawText());
+                var groupsText = doc.RootElement.GetProperty("groups").GetRawText();
+                Assert.Contains(groupName, groupsText);
+                Assert.DoesNotContain("demo_status", groupsText);
+                Assert.DoesNotContain("user_status", groupsText);
+                var groupOptionsText = doc.RootElement.GetProperty("groupOptions").GetRawText();
+                Assert.Contains(groupName, groupOptionsText);
+                Assert.Contains("demo_status", groupOptionsText);
+                Assert.Contains("user_status", groupOptionsText);
+            }
+
+            await AssertFilterScopesToThisGroupAndOptionsStayFullAsync(System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups",
+                groupNameFilter = groupName,
+            }));
+            await AssertFilterScopesToThisGroupAndOptionsStayFullAsync(System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups",
+                groupIndexNumFilter = groupIndexNum,
+            }));
+            await AssertFilterScopesToThisGroupAndOptionsStayFullAsync(System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups",
+                itemPositionFilter = 4,
+            }));
+
+            // fail-close: a non-integer groupIndexNumFilter through the real dispatch chain.
+            var malformedFilterPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups",
+                groupIndexNumFilter = "not-a-number",
+            });
+            var malformedFilterResponse = await dispatcher.DispatchAsync(new EndpointRequestDto(
+                "list_groups", "manifest", "enum_dictionary", "list_groups",
+                IdOrHubId: null, Payload: malformedFilterPayload, Context: null, TriggerKind: "client", Role: "admin"));
+            Assert.False(malformedFilterResponse.Success);
+            Assert.Contains(malformedFilterResponse.Errors, e => e.Code == "ENUM_LIST_GROUPS_PAYLOAD_MALFORMED");
+        }
+        finally
+        {
+            await using var conn = new NpgsqlConnection(cs);
+            await conn.OpenAsync();
+            if (groupId is not null)
+            {
+                await using var delGroupCmd = conn.CreateCommand();
+                delGroupCmd.CommandText = "DELETE FROM enum.groups WHERE group_id = @id";
+                delGroupCmd.Parameters.AddWithValue("id", Guid.Parse(groupId));
+                await delGroupCmd.ExecuteNonQueryAsync();
+            }
+            foreach (var idx in createdItemIndexes)
+            {
+                await using var delItemCmd = conn.CreateCommand();
+                delItemCmd.CommandText = "DELETE FROM enum.items WHERE index_num = @idx";
+                delItemCmd.Parameters.AddWithValue("idx", idx);
+                await delItemCmd.ExecuteNonQueryAsync();
+            }
+        }
     }
 
     /// <summary>
@@ -997,6 +1382,135 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = "SELECT name FROM enum.items WHERE index_num = 1";
             Assert.Equal("demo_active", (string?)await cmd.ExecuteScalarAsync());
+        }
+    }
+
+    /// <summary>
+    /// admin-enum subBundle closure round negative-boundary matrix gap-fill: the constraint-backed
+    /// negative test above proves missing/duplicate-index/referenced-delete for create_group/
+    /// create_item/delete_item/set_group_items, but update_group/update_item's OWN missing-ID and
+    /// duplicate-index checks (AdminRuntimeMasterRoster.cs DataEnumDictionaryUpdateGroupAsync/
+    /// DataEnumDictionaryUpdateItemAsync -- separate method bodies, not shared code with create_*)
+    /// had never been independently live-DB-proven. Uses fresh, UNREFERENCED rows (never demo_status/
+    /// demo_active) so this is a genuine "two ordinary rows, no group-membership entanglement"
+    /// duplicate-index case, distinct from the referenced-row ENUM_ITEM_IN_USE case already proven
+    /// above.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_EnumDictionaryUpdateGroupAndUpdateItem_OwnMissingIdAndDuplicateIndexNegativeCases_FailCloseAgainstRealPostgres()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+        async Task<EndpointResponseDto> DispatchAsync(string action, object payload) =>
+            await DispatchViaOwnWriteManifestAsync(dispatcher, action, payload);
+
+        await using var cleanupConn = new NpgsqlConnection(cs);
+        await cleanupConn.OpenAsync();
+        async Task ExecAsync(string sql, params (string Name, object Value)[] parms)
+        {
+            await using var cmd = cleanupConn.CreateCommand();
+            cmd.CommandText = sql;
+            foreach (var (name, value) in parms) cmd.Parameters.AddWithValue(name, value);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        Guid? groupAId = null, groupBId = null;
+        int? itemAIndex = null, itemBIndex = null;
+        try
+        {
+            var createGroupA = await DispatchAsync("create_group",
+                new { groupName = $"neg-matrix-group-a-{suffix}", confirmed = true });
+            Assert.True(createGroupA.Success, string.Join(";", createGroupA.Errors.Select(e => e.Code)));
+            groupAId = createGroupA.Emission!.Data!.Value.GetProperty("groupId").GetGuid();
+            var groupAIndex = createGroupA.Emission!.Data!.Value.GetProperty("indexNum").GetInt32();
+
+            var createGroupB = await DispatchAsync("create_group",
+                new { groupName = $"neg-matrix-group-b-{suffix}", confirmed = true });
+            Assert.True(createGroupB.Success, string.Join(";", createGroupB.Errors.Select(e => e.Code)));
+            groupBId = createGroupB.Emission!.Data!.Value.GetProperty("groupId").GetGuid();
+            var groupBIndex = createGroupB.Emission!.Data!.Value.GetProperty("indexNum").GetInt32();
+
+            var createItemA = await DispatchAsync("create_item",
+                new { name = $"neg-matrix-item-a-{suffix}", confirmed = true });
+            Assert.True(createItemA.Success, string.Join(";", createItemA.Errors.Select(e => e.Code)));
+            itemAIndex = createItemA.Emission!.Data!.Value.GetProperty("indexNum").GetInt32();
+
+            var createItemB = await DispatchAsync("create_item",
+                new { name = $"neg-matrix-item-b-{suffix}", confirmed = true });
+            Assert.True(createItemB.Success, string.Join(";", createItemB.Errors.Select(e => e.Code)));
+            itemBIndex = createItemB.Emission!.Data!.Value.GetProperty("indexNum").GetInt32();
+
+            // update_group: missing groupId (never created / already deleted) fails close, dryRun
+            // and confirmed alike.
+            var missingGroupDryRun = await DispatchAsync("update_group",
+                new { groupId = Guid.NewGuid().ToString(), groupName = "x", dryRun = true });
+            Assert.False(missingGroupDryRun.Success);
+            Assert.Contains(missingGroupDryRun.Errors, e => e.Code == "ENUM_GROUP_NOT_FOUND");
+            var missingGroupWrite = await DispatchAsync("update_group",
+                new { groupId = Guid.NewGuid().ToString(), groupName = "x", confirmed = true });
+            Assert.False(missingGroupWrite.Success);
+            Assert.Contains(missingGroupWrite.Errors, e => e.Code == "ENUM_GROUP_NOT_FOUND");
+
+            // update_group: changing group A's own indexNum to group B's (unreferenced, ordinary
+            // rows -- no FK entanglement) fails close, dryRun and confirmed alike, group A untouched.
+            var dupGroupIndexDryRun = await DispatchAsync("update_group",
+                new { groupId = groupAId.Value.ToString(), indexNum = groupBIndex, dryRun = true });
+            Assert.False(dupGroupIndexDryRun.Success);
+            Assert.Contains(dupGroupIndexDryRun.Errors, e => e.Code == "ENUM_GROUP_INDEX_CONFLICT");
+            var dupGroupIndexWrite = await DispatchAsync("update_group",
+                new { groupId = groupAId.Value.ToString(), indexNum = groupBIndex, confirmed = true });
+            Assert.False(dupGroupIndexWrite.Success);
+            Assert.Contains(dupGroupIndexWrite.Errors, e => e.Code == "ENUM_GROUP_INDEX_CONFLICT");
+
+            // update_item: missing indexNum (never created) fails close, dryRun and confirmed alike.
+            var missingItemDryRun = await DispatchAsync("update_item",
+                new { indexNum = 987_654_321, name = "x", dryRun = true });
+            Assert.False(missingItemDryRun.Success);
+            Assert.Contains(missingItemDryRun.Errors, e => e.Code == "ENUM_ITEM_NOT_FOUND");
+            var missingItemWrite = await DispatchAsync("update_item",
+                new { indexNum = 987_654_321, name = "x", confirmed = true });
+            Assert.False(missingItemWrite.Success);
+            Assert.Contains(missingItemWrite.Errors, e => e.Code == "ENUM_ITEM_NOT_FOUND");
+
+            // update_item: changing item A's own indexNum to item B's (unreferenced, ordinary rows)
+            // fails close, dryRun and confirmed alike, item A untouched.
+            var dupItemIndexDryRun = await DispatchAsync("update_item",
+                new { indexNum = itemAIndex.Value, newIndexNum = itemBIndex.Value, dryRun = true });
+            Assert.False(dupItemIndexDryRun.Success);
+            Assert.Contains(dupItemIndexDryRun.Errors, e => e.Code == "ENUM_ITEM_INDEX_CONFLICT");
+            var dupItemIndexWrite = await DispatchAsync("update_item",
+                new { indexNum = itemAIndex.Value, newIndexNum = itemBIndex.Value, confirmed = true });
+            Assert.False(dupItemIndexWrite.Success);
+            Assert.Contains(dupItemIndexWrite.Errors, e => e.Code == "ENUM_ITEM_INDEX_CONFLICT");
+
+            // None of the above negative attempts altered group A's or item A's real rows.
+            await using (var conn = new NpgsqlConnection(cs))
+            {
+                await conn.OpenAsync();
+                await using var groupCmd = conn.CreateCommand();
+                groupCmd.CommandText = "SELECT index_num FROM enum.groups WHERE group_id = @id";
+                groupCmd.Parameters.AddWithValue("id", groupAId.Value);
+                Assert.Equal(groupAIndex, (int)(await groupCmd.ExecuteScalarAsync())!);
+
+                await using var itemCmd = conn.CreateCommand();
+                itemCmd.CommandText = "SELECT index_num FROM enum.items WHERE index_num = @idx";
+                itemCmd.Parameters.AddWithValue("idx", itemAIndex.Value);
+                Assert.Equal(itemAIndex.Value, (int)(await itemCmd.ExecuteScalarAsync())!);
+            }
+        }
+        finally
+        {
+            if (groupAId is not null)
+                await ExecAsync("DELETE FROM enum.groups WHERE group_id = @id", ("id", groupAId.Value));
+            if (groupBId is not null)
+                await ExecAsync("DELETE FROM enum.groups WHERE group_id = @id", ("id", groupBId.Value));
+            if (itemAIndex is not null)
+                await ExecAsync("DELETE FROM enum.items WHERE index_num = @idx", ("idx", itemAIndex.Value));
+            if (itemBIndex is not null)
+                await ExecAsync("DELETE FROM enum.items WHERE index_num = @idx", ("idx", itemBIndex.Value));
         }
     }
 

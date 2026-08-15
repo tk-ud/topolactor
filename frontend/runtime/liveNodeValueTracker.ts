@@ -59,6 +59,8 @@
  * either layer means changing what it guarantees for its existing callers.
  */
 
+import { parsePayloadFromSource } from "./payloadFromResolver.ts";
+
 export type LiveNodeValueTracker = {
   /** Registers or updates nodeId's current value. No-op for an empty nodeId. */
   set(nodeId: string, value: unknown): void;
@@ -106,6 +108,73 @@ export function createLiveNodeValueTracker(): LiveNodeValueTracker {
       }
     },
   };
+}
+
+/**
+ * Selected-row-relative field prefill (admin-enum subBundle closure round,
+ * .agent/tasks/todo.md admin-surface-topology-seed-conversion). Generic, surface-independent:
+ * composes two pre-existing mechanisms rather than adding a new one. A node's
+ * propBindings.value.source may be a `node:<id>.value.<path>` reference (the SAME grammar
+ * payloadFrom already resolves at dispatch time — docs/design/ui-builder-preset-ecosystem-ssot.yaml
+ * payloadFrom_resolver_contract.recognized_source_patterns.node_value_path,
+ * frontend/runtime/payloadFromResolver.ts) instead of an `emission.data...` path. When the
+ * REFERENCED node's own tracked value changes (e.g. a table row select), every node whose
+ * propBindings.value.source points at it gets its OWN tracker slot overwritten with the
+ * freshly-resolved value — reusing the tracker's existing per-nodeId storage, so
+ * renderEmission.ts's pre-existing applyLiveNodeValueOverride (which already re-displays a
+ * node's OWN tracked value every render) picks it up with no new rendering-layer code.
+ *
+ * Called ONLY in direct response to the source node's own value actually changing (see
+ * ProjectionShell.tsx's handleNodeValueChange) — never on an unrelated rerender (SSE passive
+ * refresh, an unrelated local-state mutation) — so an in-progress edit in a dependent field is
+ * never clobbered by anything other than a genuine new selection of the node it depends on.
+ * This mirrors seedTrackerFromPropBindingsValue's own forceOverwrite semantics: selecting a
+ * DIFFERENT row is an explicit "load this record's values" action, so it intentionally
+ * overwrites whatever the user had typed for the previously-selected row — the same
+ * "explicit reselection overwrites, passive background events never do" boundary
+ * seedTrackerFromPropBindingsValue's own forceOverwrite option already established.
+ *
+ * Returns the set of dependent nodeIds actually updated (empty when nothing depends on
+ * changedNodeId) so the caller knows whether a re-render is warranted.
+ */
+export function cascadeNodeValueReferences(
+  changedNodeId: string,
+  layoutNodes: readonly LayoutNodeForValueSeeding[] | undefined,
+  tracker: LiveNodeValueTracker,
+  resolveNodeValueSource: (
+    source: string,
+    nodeValues: Record<string, unknown>,
+  ) => { ok: true; value: unknown } | { ok: false },
+): string[] {
+  if (!changedNodeId || !layoutNodes || layoutNodes.length === 0) return [];
+  const updated: string[] = [];
+  // Snapshot BEFORE any writes in this pass — every dependent node resolves against the SAME
+  // consistent view of the tracker (the just-changed source value plus whatever else was
+  // already tracked), not a partially-updated one from an earlier node in this same loop.
+  const trackerSnapshot = tracker.snapshot();
+  for (const node of layoutNodes) {
+    if (!node.nodeId) continue;
+    const source = node.propBindings?.value?.source;
+    if (typeof source !== "string" || !source) continue;
+    // Only a node whose OWN source actually references changedNodeId is a dependent of it --
+    // parsed via the SAME node_value grammar payloadFromResolver.ts already owns, not a
+    // startsWith/substring check (which could false-positive on a nodeId that is a prefix of a
+    // different one, e.g. "enum_table" vs "enum_table_2"). Without this check, EVERY
+    // propBindings.value-bound node would be blindly re-resolved on EVERY node's value change --
+    // including a node whose source references some OTHER node being re-resolved in reaction to
+    // ITS OWN change (e.g. typing into enum_update_group_name_input itself would immediately
+    // re-derive its value from enum_table again, discarding the keystroke that just landed).
+    const parsedSource = parsePayloadFromSource(source);
+    if (parsedSource.kind !== "node_value" || parsedSource.nodeId !== changedNodeId) {
+      continue;
+    }
+    const resolved = resolveNodeValueSource(source, trackerSnapshot);
+    if (!resolved.ok) continue;
+    // Own-property identity: matches this module's existing hasOwnProperty contract.
+    tracker.set(node.nodeId, resolved.value);
+    updated.push(node.nodeId);
+  }
+  return updated;
 }
 
 /**
@@ -165,9 +234,44 @@ export function seedTrackerFromPropBindingsValue(
   }
 }
 
+/**
+ * round 37: seeds an empty-string default for every Field-family node (componentKind starting
+ * with "form_input/") that owns a dispatchPayloadFromByTrigger and is not yet tracked -- closes
+ * an ordering-dependency gap this round's own combined search+filter payloadFrom introduced
+ * (see docs/design/admin-master-roster-management-ssot.yaml canonical_routes.admin_enums.
+ * ux_contract_shrinkage_owner_decision_pending's sibling note and
+ * frontend/tests/projectionShellAdminRuntimeWritePayloadCapture.test.ts's "selecting
+ * enum_group_filter" DOM test): when a Field's own payloadFrom references ANOTHER Field's value
+ * (e.g. enum_search's payloadFrom now also reads node:enum_group_filter.value, and vice versa, so
+ * either field's own change dispatch carries both current values combined), the referenced field
+ * previously had NO tracked value at all until a user had ALREADY typed/selected into it at least
+ * once, so touching field B before ever touching field A failed closed
+ * (PAYLOAD_FROM_NODE_NOT_FOUND) even though "field A was simply never touched" is a legitimate,
+ * common state whose natural payload value is an empty string -- not a missing-record error like
+ * an unselected table row (node:<table>.value.<field>, deliberately NOT seeded here or anywhere
+ * else, and still correctly fails closed).
+ * Scoped strictly to Field-family componentKinds with their OWN dispatchPayloadFromByTrigger --
+ * never touches a Table/Action node's tracked value, and never overwrites an already-tracked
+ * value (a user's real keystroke always wins over this one-time empty default).
+ */
+export function seedTrackerWithEmptyDefaultsForFieldDispatchParticipants(
+  tracker: LiveNodeValueTracker,
+  layoutNodes: readonly LayoutNodeForValueSeeding[],
+): void {
+  const tracked = tracker.snapshot();
+  for (const node of layoutNodes) {
+    if (!node.nodeId) continue;
+    if (!node.componentKind?.startsWith("form_input/")) continue;
+    if (!node.dispatchPayloadFromByTrigger) continue;
+    if (Object.prototype.hasOwnProperty.call(tracked, node.nodeId)) continue;
+    tracker.set(node.nodeId, "");
+  }
+}
+
 /** Minimal shape seedTrackerFromPropBindingsValue needs from a LayoutNode (api/dispatch.ts). */
 export type LayoutNodeForValueSeeding = {
   nodeId?: string;
   componentKind?: string;
   propBindings?: Record<string, { source?: string }> | null;
+  dispatchPayloadFromByTrigger?: unknown;
 };
