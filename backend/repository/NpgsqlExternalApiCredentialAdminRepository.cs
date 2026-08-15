@@ -25,8 +25,16 @@ namespace Topolactor.Repository;
 /// </summary>
 public interface IExternalApiCredentialAdminRepository
 {
+    /// <summary>
+    /// expiresBefore/expiresAfter: admin-normal-surface-projection-seed-ssot.yaml
+    /// surface_axes.admin.surfaces.credentials.capability_requirements.filter's expires_at
+    /// dimension, implemented as a boundary range (only vault records carry expires_at; the other
+    /// three record kinds always have it NULL and are excluded by either bound, matching an
+    /// "expiring/expired credential" admin lookup use case rather than an exact-timestamp match).
+    /// </summary>
     Task<IReadOnlyList<ExternalApiCredentialRecord>> SearchAsync(
         string? query, string? recordKind, string? providerKind, string? requiredByBundle, bool? active,
+        DateTimeOffset? expiresBefore = null, DateTimeOffset? expiresAfter = null,
         CancellationToken ct = default);
 
     Task<ExternalApiCredentialRecord?> GetAsync(string recordKind, Guid recordId, CancellationToken ct = default);
@@ -62,6 +70,22 @@ public static class ExternalApiCredentialRecordKinds
     public const string ResponsePort = "response_port";
     public const string HookPort = "hook_port";
     public static readonly IReadOnlyList<string> All = new[] { Vault, AccessPort, ResponsePort, HookPort };
+
+    /// <summary>
+    /// Single source of canonical physical table identity for recordKind -> table name, shared by
+    /// <see cref="NpgsqlExternalApiCredentialAdminRepository"/>'s own query/write targets AND
+    /// AdminRuntime.ExternalApiCredential.cs's diff_log physical_table_name -- never independently
+    /// derived (e.g. by string-concatenating recordKind), so the two can never drift apart. Matches
+    /// db/topology_tables.sql / docs/design/db-schema.yaml table identity exactly.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, string> CanonicalPhysicalTableNames =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [Vault] = "topology.external_credential_vault",
+            [AccessPort] = "topology.external_access_ports",
+            [ResponsePort] = "topology.external_response_ports",
+            [HookPort] = "topology.external_hook_ports",
+        };
 }
 
 public enum ExternalApiCredentialOutcome
@@ -152,13 +176,21 @@ public sealed class NpgsqlExternalApiCredentialAdminRepository : IExternalApiCre
 
     private sealed record TableIdentity(string Table, string PkColumn);
 
+    // Table names come from ExternalApiCredentialRecordKinds.CanonicalPhysicalTableNames (the single
+    // source shared with AdminRuntime.ExternalApiCredential.cs's diff_log physical_table_name) --
+    // only the PK column name (a physical detail this repository alone needs for SQL identifiers)
+    // is added here.
     private static readonly IReadOnlyDictionary<string, TableIdentity> RecordKindTables =
         new Dictionary<string, TableIdentity>(StringComparer.Ordinal)
         {
-            [ExternalApiCredentialRecordKinds.Vault] = new("topology.external_credential_vault", "credential_vault_id"),
-            [ExternalApiCredentialRecordKinds.AccessPort] = new("topology.external_access_ports", "access_port_id"),
-            [ExternalApiCredentialRecordKinds.ResponsePort] = new("topology.external_response_ports", "response_port_id"),
-            [ExternalApiCredentialRecordKinds.HookPort] = new("topology.external_hook_ports", "hook_port_id"),
+            [ExternalApiCredentialRecordKinds.Vault] = new(
+                ExternalApiCredentialRecordKinds.CanonicalPhysicalTableNames[ExternalApiCredentialRecordKinds.Vault], "credential_vault_id"),
+            [ExternalApiCredentialRecordKinds.AccessPort] = new(
+                ExternalApiCredentialRecordKinds.CanonicalPhysicalTableNames[ExternalApiCredentialRecordKinds.AccessPort], "access_port_id"),
+            [ExternalApiCredentialRecordKinds.ResponsePort] = new(
+                ExternalApiCredentialRecordKinds.CanonicalPhysicalTableNames[ExternalApiCredentialRecordKinds.ResponsePort], "response_port_id"),
+            [ExternalApiCredentialRecordKinds.HookPort] = new(
+                ExternalApiCredentialRecordKinds.CanonicalPhysicalTableNames[ExternalApiCredentialRecordKinds.HookPort], "hook_port_id"),
         };
 
     public NpgsqlExternalApiCredentialAdminRepository(string connectionString, IExternalCredentialCrypto crypto)
@@ -216,12 +248,15 @@ public sealed class NpgsqlExternalApiCredentialAdminRepository : IExternalApiCre
                 OR required_by_bundle ILIKE '%' || @query || '%'
                 OR COALESCE(reference_key, '') ILIKE '%' || @query || '%'
               )
+          AND (@expiresBefore::timestamptz IS NULL OR expires_at < @expiresBefore)
+          AND (@expiresAfter::timestamptz IS NULL OR expires_at > @expiresAfter)
         ORDER BY updated_at DESC
         LIMIT 200
         """;
 
     public async Task<IReadOnlyList<ExternalApiCredentialRecord>> SearchAsync(
         string? query, string? recordKind, string? providerKind, string? requiredByBundle, bool? active,
+        DateTimeOffset? expiresBefore = null, DateTimeOffset? expiresAfter = null,
         CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
@@ -234,6 +269,8 @@ public sealed class NpgsqlExternalApiCredentialAdminRepository : IExternalApiCre
         cmd.Parameters.AddWithValue("requiredByBundle", (object?)requiredByBundle ?? DBNull.Value);
         cmd.Parameters.AddWithValue("active", (object?)active ?? DBNull.Value);
         cmd.Parameters.AddWithValue("query", (object?)query ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("expiresBefore", (object?)expiresBefore ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("expiresAfter", (object?)expiresAfter ?? DBNull.Value);
 
         var results = new List<ExternalApiCredentialRecord>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -256,6 +293,8 @@ public sealed class NpgsqlExternalApiCredentialAdminRepository : IExternalApiCre
         cmd.Parameters.AddWithValue("requiredByBundle", DBNull.Value);
         cmd.Parameters.AddWithValue("active", DBNull.Value);
         cmd.Parameters.AddWithValue("query", DBNull.Value);
+        cmd.Parameters.AddWithValue("expiresBefore", DBNull.Value);
+        cmd.Parameters.AddWithValue("expiresAfter", DBNull.Value);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         return await reader.ReadAsync(ct) ? MapRecord(reader) : null;

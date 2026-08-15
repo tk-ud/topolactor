@@ -13,7 +13,9 @@ public record ExternalApiCredentialSearchRequestDto(
     [property: JsonPropertyName("recordKind")] string? RecordKind = null,
     [property: JsonPropertyName("providerKind")] string? ProviderKind = null,
     [property: JsonPropertyName("requiredByBundle")] string? RequiredByBundle = null,
-    [property: JsonPropertyName("active")] bool? Active = null);
+    [property: JsonPropertyName("active")] bool? Active = null,
+    [property: JsonPropertyName("expiresBefore")] DateTimeOffset? ExpiresBefore = null,
+    [property: JsonPropertyName("expiresAfter")] DateTimeOffset? ExpiresAfter = null);
 
 public record ExternalApiCredentialGetRequestDto(
     [property: JsonPropertyName("recordKind")] string RecordKind,

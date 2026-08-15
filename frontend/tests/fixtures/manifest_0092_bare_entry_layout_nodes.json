@@ -842,12 +842,14 @@
         "query": "node:external_api_credential_search_query_input.value",
         "active": "node:external_api_credential_search_active_input.value",
         "recordKind": "node:external_api_credential_search_record_kind_input.value",
+        "expiresAfter": "node:external_api_credential_search_expires_after_input.value",
         "providerKind": "node:external_api_credential_search_provider_kind_input.value",
+        "expiresBefore": "node:external_api_credential_search_expires_before_input.value",
         "requiredByBundle": "node:external_api_credential_search_required_by_bundle_input.value"
       }
     },
     "dispatchTargetRefByTrigger": {
-      "click": "manifest:00000000-0000-0000-0000-0000000cd007:external_api_credential:search"
+      "click": "manifest:00000000-0000-0000-0000-000000000092:external_api_credential:search"
     },
     "label": "Search"
   },
@@ -1447,5 +1449,59 @@
       }
     ],
     "label": "Cancel"
+  },
+  {
+    "nodeId": "external_api_credential_result_list",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000020",
+    "parentNodeId": "external_api_credential_crud_section",
+    "orderIndex": 78,
+    "x": 0,
+    "y": 0,
+    "componentKind": "data_display/table",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022table\u0022:null,\u0022columns\u0022:[{\u0022key\u0022:\u0022recordKind\u0022,\u0022header\u0022:\u0022Record kind\u0022},{\u0022key\u0022:\u0022providerKind\u0022,\u0022header\u0022:\u0022Provider kind\u0022},{\u0022key\u0022:\u0022requiredByBundle\u0022,\u0022header\u0022:\u0022Required by bundle\u0022},{\u0022key\u0022:\u0022referenceKey\u0022,\u0022header\u0022:\u0022Reference key\u0022},{\u0022key\u0022:\u0022active\u0022,\u0022header\u0022:\u0022Active\u0022},{\u0022key\u0022:\u0022expiresAt\u0022,\u0022header\u0022:\u0022Expires at\u0022},{\u0022key\u0022:\u0022updatedAt\u0022,\u0022header\u0022:\u0022Updated at\u0022}],\u0022rows\u0022:[]}",
+    "propBindings": {
+      "rows": {
+        "source": "emission.data.records"
+      }
+    },
+    "label": "External API credential search results"
+  },
+  {
+    "nodeId": "external_api_credential_search_expires_before_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "external_api_credential_crud_section",
+    "orderIndex": 79,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "Expires before"
+  },
+  {
+    "nodeId": "external_api_credential_search_expires_after_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "external_api_credential_crud_section",
+    "orderIndex": 80,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "Expires after"
   }
 ]

@@ -110,7 +110,8 @@ public partial class AdminRuntime
                 "EXTERNAL_API_CREDENTIAL_RECORD_KIND_INVALID", $"Unknown recordKind '{request.RecordKind}'."));
 
         var results = await _externalApiCredentialAdminRepository.SearchAsync(
-            request.Query, request.RecordKind, request.ProviderKind, request.RequiredByBundle, request.Active, ct);
+            request.Query, request.RecordKind, request.ProviderKind, request.RequiredByBundle, request.Active,
+            request.ExpiresBefore, request.ExpiresAfter, ct);
 
         return (JsonSerializer.SerializeToElement(new
         {
@@ -185,7 +186,7 @@ public partial class AdminRuntime
         if (writeError is not null) return (null, writeError);
 
         await AdminMasterRosterAudit.AppendAsync(_sqlAttentionLogsRepository, ResolveAuditActor(vector),
-            $"topology.external_{request.RecordKind}", result.Record!.RecordId.ToString(), "create",
+            ExternalApiCredentialRecordKinds.CanonicalPhysicalTableNames[request.RecordKind], result.Record!.RecordId.ToString(), "create",
             null, auditMetadata,
             [new AuditChangedField("record", null, auditMetadata)], ct);
 
@@ -245,7 +246,7 @@ public partial class AdminRuntime
             before.HookPath, before.HeaderKey, before.RouteKey);
 
         await AdminMasterRosterAudit.AppendAsync(_sqlAttentionLogsRepository, ResolveAuditActor(vector),
-            $"topology.external_{request.RecordKind}", recordId.ToString(), "update",
+            ExternalApiCredentialRecordKinds.CanonicalPhysicalTableNames[request.RecordKind], recordId.ToString(), "update",
             beforeMetadata, auditMetadata,
             [new AuditChangedField("record", beforeMetadata, auditMetadata)], ct);
 
@@ -298,7 +299,7 @@ public partial class AdminRuntime
             existing.HookPath, existing.HeaderKey, existing.RouteKey);
 
         await AdminMasterRosterAudit.AppendAsync(_sqlAttentionLogsRepository, ResolveAuditActor(vector),
-            $"topology.external_{request.RecordKind}", recordId.ToString(), "delete",
+            ExternalApiCredentialRecordKinds.CanonicalPhysicalTableNames[request.RecordKind], recordId.ToString(), "delete",
             beforeMetadata, afterMetadata,
             [new AuditChangedField("active", true, false)], ct);
 

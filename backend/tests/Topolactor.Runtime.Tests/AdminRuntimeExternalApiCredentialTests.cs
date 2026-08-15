@@ -50,8 +50,18 @@ public class AdminRuntimeExternalApiCredentialTests
 
         public Task<IReadOnlyList<ExternalApiCredentialRecord>> SearchAsync(
             string? query, string? recordKind, string? providerKind, string? requiredByBundle, bool? active,
-            CancellationToken ct = default) =>
-            Task.FromResult<IReadOnlyList<ExternalApiCredentialRecord>>(Rows);
+            DateTimeOffset? expiresBefore = null, DateTimeOffset? expiresAfter = null,
+            CancellationToken ct = default)
+        {
+            IEnumerable<ExternalApiCredentialRecord> rows = Rows;
+            if (recordKind is not null) rows = rows.Where(r => r.RecordKind == recordKind);
+            if (providerKind is not null) rows = rows.Where(r => r.ProviderKind == providerKind);
+            if (requiredByBundle is not null) rows = rows.Where(r => r.RequiredByBundle == requiredByBundle);
+            if (active is not null) rows = rows.Where(r => r.Active == active);
+            if (expiresBefore is not null) rows = rows.Where(r => r.ExpiresAt is not null && r.ExpiresAt < expiresBefore);
+            if (expiresAfter is not null) rows = rows.Where(r => r.ExpiresAt is not null && r.ExpiresAt > expiresAfter);
+            return Task.FromResult<IReadOnlyList<ExternalApiCredentialRecord>>(rows.ToList());
+        }
 
         public Task<ExternalApiCredentialRecord?> GetAsync(string recordKind, Guid recordId, CancellationToken ct = default) =>
             Task.FromResult(Rows.FirstOrDefault(r => r.RecordKind == recordKind && r.RecordId == recordId));
@@ -119,6 +129,10 @@ public class AdminRuntimeExternalApiCredentialTests
         new(ExternalApiCredentialRecordKinds.Vault, Guid.NewGuid(), "stripe", "billing_bundle", referenceKey,
             true, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, "bearer", null, 300, 1, null, null, null, null, null);
 
+    private static ExternalApiCredentialRecord SampleVaultRecordExpiringAt(DateTimeOffset expiresAt, string referenceKey) =>
+        new(ExternalApiCredentialRecordKinds.Vault, Guid.NewGuid(), "stripe", "billing_bundle", referenceKey,
+            true, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, "bearer", expiresAt, 300, 1, null, null, null, null, null);
+
     // --- unconfigured repository fails closed ---
 
     [Theory]
@@ -166,6 +180,65 @@ public class AdminRuntimeExternalApiCredentialTests
 
         Assert.Null(data);
         Assert.Equal("EXTERNAL_API_CREDENTIAL_RECORD_KIND_INVALID", error!.Code);
+    }
+
+    // --- search: expires_at filter boundary (admin-normal-surface-projection-seed-ssot.yaml
+    // surface_axes.admin.surfaces.credentials.capability_requirements.filter's expires_at
+    // dimension) ---
+
+    [Fact]
+    public async Task Search_ExpiresBefore_ExcludesRecordsAtOrAfterBoundary_IncludesStrictlyEarlier()
+    {
+        var repo = new FakeExternalApiCredentialAdminRepository();
+        var boundary = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        repo.Rows.Add(SampleVaultRecordExpiringAt(boundary.AddDays(-1), "expires-before-boundary"));
+        repo.Rows.Add(SampleVaultRecordExpiringAt(boundary, "expires-at-boundary"));
+        repo.Rows.Add(SampleVaultRecordExpiringAt(boundary.AddDays(1), "expires-after-boundary"));
+        var runtime = CreateRuntime(repo);
+
+        var (data, error) = await runtime.ExecuteDataAsync(
+            Vector("search", new { expiresBefore = boundary }), CancellationToken.None);
+
+        Assert.Null(error);
+        var json = data!.Value.GetRawText();
+        Assert.Contains("expires-before-boundary", json);
+        Assert.DoesNotContain("expires-at-boundary", json);
+        Assert.DoesNotContain("expires-after-boundary", json);
+    }
+
+    [Fact]
+    public async Task Search_ExpiresAfter_ExcludesRecordsAtOrBeforeBoundary_IncludesStrictlyLater()
+    {
+        var repo = new FakeExternalApiCredentialAdminRepository();
+        var boundary = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        repo.Rows.Add(SampleVaultRecordExpiringAt(boundary.AddDays(-1), "expires-before-boundary"));
+        repo.Rows.Add(SampleVaultRecordExpiringAt(boundary, "expires-at-boundary"));
+        repo.Rows.Add(SampleVaultRecordExpiringAt(boundary.AddDays(1), "expires-after-boundary"));
+        var runtime = CreateRuntime(repo);
+
+        var (data, error) = await runtime.ExecuteDataAsync(
+            Vector("search", new { expiresAfter = boundary }), CancellationToken.None);
+
+        Assert.Null(error);
+        var json = data!.Value.GetRawText();
+        Assert.DoesNotContain("expires-before-boundary", json);
+        Assert.DoesNotContain("expires-at-boundary", json);
+        Assert.Contains("expires-after-boundary", json);
+    }
+
+    [Fact]
+    public async Task Search_ExpiresFilter_ExcludesRecordsWithNoExpiresAt()
+    {
+        var repo = new FakeExternalApiCredentialAdminRepository();
+        repo.Rows.Add(SampleVaultRecord("no-expiry-record")); // ExpiresAt is null
+        var runtime = CreateRuntime(repo);
+
+        var (data, error) = await runtime.ExecuteDataAsync(
+            Vector("search", new { expiresBefore = DateTimeOffset.UtcNow.AddYears(10) }), CancellationToken.None);
+
+        Assert.Null(error);
+        var json = data!.Value.GetRawText();
+        Assert.DoesNotContain("no-expiry-record", json);
     }
 
     // --- create ---
