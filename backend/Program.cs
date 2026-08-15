@@ -141,6 +141,8 @@ builder.Services.AddSingleton<IAbstractFunctionManifestRepository>(_ =>
     new NpgsqlAbstractFunctionManifestRepository(connectionString));
 builder.Services.AddSingleton<ISchedulerJobManifestRepository>(_ =>
     new NpgsqlSchedulerJobManifestRepository(connectionString));
+builder.Services.AddSingleton<IExternalApiCredentialAdminRepository>(sp =>
+    new NpgsqlExternalApiCredentialAdminRepository(connectionString, sp.GetRequiredService<IExternalCredentialCrypto>()));
 builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(_ =>
     new CallPostgresFunctionPrimitiveAdapter(connectionString));
 builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter, CallInstancePostgresFunctionPrimitiveAdapter>();
@@ -280,7 +282,8 @@ builder.Services.AddSingleton<AdminRuntime>(sp =>
         sp.GetRequiredService<ISchedulerJobManifestRepository>(),
         sp.GetRequiredService<IBackendErrorEvidenceAppender>(),
         sp.GetRequiredService<AggregateTriggerRepository>(),
-        sp.GetRequiredService<IAbstractFunctionManifestRepository>()));
+        sp.GetRequiredService<IAbstractFunctionManifestRepository>(),
+        sp.GetRequiredService<IExternalApiCredentialAdminRepository>()));
 builder.Services.AddSingleton<TopologyFunctionBinder>();
 builder.Services.AddSingleton<HubNavigationResolver>(sp =>
     new HubNavigationResolver(sp.GetRequiredService<ContentBundleRepository>(), sp.GetRequiredService<ManifestRepository>()));

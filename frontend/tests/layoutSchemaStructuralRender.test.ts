@@ -231,13 +231,15 @@ Deno.test("DOM-connected proof: manifest 0092's REAL bare-entry-resolved LayoutN
   const errorSpecCount = specs.filter((s) => s.componentType === "error").length;
   assertEquals(errorSpecCount, 0, "expected zero errors at the renderEmission() spec layer");
 
-  // The real DOM ALSO shows zero error boxes — the four plain select fields (approval_status x2,
-  // port_kind, callable) have no authored "change" binding at all, so selectFactory renders them
-  // within the existing runtime adapter contract without requiring one (the SAME no-binding-
-  // required posture formFieldFactory already has for form_input/form_field), closing the gap
-  // renderEmission()'s error-spec count alone could not see. Never a substitute proof: this test
-  // exists specifically to catch the case where renderEmission() says zero but the real DOM
-  // still shows an error box, and it now proves that case does not occur for this scenario.
+  // The real DOM ALSO shows zero error boxes — the eight plain select fields (approval_status x2,
+  // port_kind, callable, plus the external_api_credential search/form recordKind and active
+  // selects added for the base CRUD surface) have no authored "change" binding at all, so
+  // selectFactory renders them within the existing runtime adapter contract without requiring one
+  // (the SAME no-binding-required posture formFieldFactory already has for form_input/form_field),
+  // closing the gap renderEmission()'s error-spec count alone could not see. Never a substitute
+  // proof: this test exists specifically to catch the case where renderEmission() says zero but
+  // the real DOM still shows an error box, and it now proves that case does not occur for this
+  // scenario.
   const errorBoxMatches = html.match(/rounded border border-red-200/g) ?? [];
   assertEquals(
     errorBoxMatches.length,
@@ -245,13 +247,13 @@ Deno.test("DOM-connected proof: manifest 0092's REAL bare-entry-resolved LayoutN
     "expected zero visible error boxes in the real DOM for the manifest 092 bare-entry representative scenario",
   );
 
-  // The four unwired selects render as real <select> elements (not error boxes) — no Field-level
+  // The eight unwired selects render as real <select> elements (not error boxes) — no Field-level
   // read-only/editable authority is introduced; they render the same way an unwired
   // form_input/form_field already does.
   const selectMatches = html.match(/<select\b[^>]*>/g) ?? [];
   assertEquals(
     selectMatches.length,
-    4,
-    "expected the 4 unwired select fields (approval_status x2, port_kind, callable) to render as <select> elements in the real DOM",
+    8,
+    "expected the 8 unwired select fields (approval_status x2, port_kind, callable, external_api_credential_search_record_kind_input, external_api_credential_search_active_input, external_api_credential_form_record_kind_input, external_api_credential_form_active_input) to render as <select> elements in the real DOM",
   );
 });

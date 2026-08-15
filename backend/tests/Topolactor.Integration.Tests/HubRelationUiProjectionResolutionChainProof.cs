@@ -65,7 +65,14 @@ internal static class HubRelationUiProjectionResolutionChainProof
             // management consumer_reference_binding) needs this wired, or that admin_runtime case
             // fails closed with SCHEDULER_JOB_MANIFEST_NOT_CONFIGURED regardless of manifest/wiring
             // resolution -- same rationale as sqlAttentionLogsRepository above.
-            schedulerJobManifestRepository: new NpgsqlSchedulerJobManifestRepository(connectionString));
+            schedulerJobManifestRepository: new NpgsqlSchedulerJobManifestRepository(connectionString),
+            // external_api_credential:search/get/create/update/delete (credential-management base
+            // CRUD over topology.external_credential_vault/external_access_ports/
+            // external_response_ports/external_hook_ports) needs this wired, or every
+            // external_api_credential:* case in AdminRuntime.ExecuteDataAsync fails closed with
+            // EXTERNAL_API_CREDENTIAL_NOT_AVAILABLE regardless of manifest/wiring resolution.
+            externalApiCredentialAdminRepository: new NpgsqlExternalApiCredentialAdminRepository(
+                connectionString, new AesExternalCredentialCrypto()));
         var adminAdapter = new AdminRuntimeDispatchAdapter(adminRuntime, new OperationVectorResolver());
 
         var targetOverride = new TargetDispatchOverride(NullLogger<TargetDispatchOverride>.Instance, adminRuntime);

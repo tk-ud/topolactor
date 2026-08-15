@@ -37,6 +37,7 @@ public partial class AdminRuntime
     private readonly IBackendErrorEvidenceAppender? _errorAppender;
     private readonly AggregateTriggerRepository? _aggregateTriggerRepository;
     private readonly IAbstractFunctionManifestRepository? _abstractFunctionManifestRepository;
+    private readonly IExternalApiCredentialAdminRepository? _externalApiCredentialAdminRepository;
 
     private static readonly HashSet<string> KnownRuntimeDestinations = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -74,7 +75,8 @@ public partial class AdminRuntime
         ISchedulerJobManifestRepository? schedulerJobManifestRepository = null,
         IBackendErrorEvidenceAppender? errorAppender = null,
         AggregateTriggerRepository? aggregateTriggerRepository = null,
-        IAbstractFunctionManifestRepository? abstractFunctionManifestRepository = null)
+        IAbstractFunctionManifestRepository? abstractFunctionManifestRepository = null,
+        IExternalApiCredentialAdminRepository? externalApiCredentialAdminRepository = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _contextRouteRepository = contextRouteRepository ?? throw new ArgumentNullException(nameof(contextRouteRepository));
@@ -99,6 +101,7 @@ public partial class AdminRuntime
         _errorAppender = errorAppender;
         _aggregateTriggerRepository = aggregateTriggerRepository;
         _abstractFunctionManifestRepository = abstractFunctionManifestRepository;
+        _externalApiCredentialAdminRepository = externalApiCredentialAdminRepository;
     }
 
     // ---------------------------------------------------------------------------
@@ -313,6 +316,11 @@ public partial class AdminRuntime
             "auth_users:delete"                           => await DataAuthUsersDeleteAsync(vector, ct),
             "credential_management:configure_scheduler_job_credential_or_port_binding"
                 => await DataConfigureSchedulerJobCredentialOrPortBindingAsync(vector, ct),
+            "external_api_credential:search"              => await DataExternalApiCredentialSearchAsync(vector, ct),
+            "external_api_credential:get"                 => await DataExternalApiCredentialGetAsync(vector, ct),
+            "external_api_credential:create"               => await DataExternalApiCredentialCreateAsync(vector, ct),
+            "external_api_credential:update"               => await DataExternalApiCredentialUpdateAsync(vector, ct),
+            "external_api_credential:delete"               => await DataExternalApiCredentialDeleteAsync(vector, ct),
             "promotion_manifest:list"                   => await DataPromotionManifestListAsync(vector, ct),
             "promotion_manifest:get"                    => await DataPromotionManifestGetAsync(vector, ct),
             "promotion_manifest:validate"               => await DataPromotionManifestValidateAsync(vector, ct),
