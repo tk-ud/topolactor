@@ -311,6 +311,8 @@ public partial class AdminRuntime
             "auth_users:create"                           => await DataAuthUsersCreateAsync(vector, ct),
             "auth_users:update"                           => await DataAuthUsersUpdateAsync(vector, ct),
             "auth_users:delete"                           => await DataAuthUsersDeleteAsync(vector, ct),
+            "credential_management:configure_scheduler_job_credential_or_port_binding"
+                => await DataConfigureSchedulerJobCredentialOrPortBindingAsync(vector, ct),
             "promotion_manifest:list"                   => await DataPromotionManifestListAsync(vector, ct),
             "promotion_manifest:get"                    => await DataPromotionManifestGetAsync(vector, ct),
             "promotion_manifest:validate"               => await DataPromotionManifestValidateAsync(vector, ct),

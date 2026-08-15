@@ -315,6 +315,166 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
         }
     }
 
+    /// <summary>
+    /// Closes admin-normal-surface-projection-seed-ssot.yaml
+    /// design_blocking.target_surface_manifest_readiness.navigation_binding_authoring_and_verification
+    /// (subbundle_status.credential-management), whose 2026-07-22 gap detail is: the prior proof set
+    /// split the hub_navigation:create authoring-dispatch path (proven only against a fully synthetic,
+    /// non-092 TARGET manifest above) and the resolution-chain-to-092 assertion (proven only via a
+    /// directly-SQL-inserted hub_relations row, see
+    /// DispatchAsync_CredentialManagementManifest_E2E_RelationVectorToScalarEmission) across two
+    /// separate tests instead of combining them. This single test: (1) authors a hub_relations row via
+    /// the REAL hub_navigation:create dispatch action with manifest 092's OWN existing hub
+    /// ('...a1', external_port_substrate -- the hub HubRelations_Manifest092_HasCanonicalSequencePosition1Relation_SeedOnly
+    /// confirms carries exactly manifest 092 as its sole active topology_manifest) as the
+    /// relatedHubId/target, then (2) walks that SAME authored relation's resolved TargetManifestId
+    /// onward through manifest 092's real package/layout/wiring/tensor rows to a scalar Emission --
+    /// never a synthetic target, never a direct SQL relation insert standing in for authoring.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_HubNavigationCreate_AuthorsRelationTargetingManifest092_ResolutionChainReachesScalarEmission()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var sourceHubId = Guid.NewGuid();
+        var sourceManifestId = Guid.NewGuid();
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var credentialManagementHubId = new Guid("00000000-0000-0000-0000-0000000000a1");
+
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+
+        async Task ExecAsync(string sql, params (string Name, object Value)[] parms)
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            foreach (var (name, value) in parms) cmd.Parameters.AddWithValue(name, value);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        Guid? createdHubRelationId = null;
+        try
+        {
+            // SOURCE manifest: an ordinary, already-existing topology_manifest an admin could select
+            // via /admin/manifests -- same setup pattern as
+            // DispatchAsync_HubNavigationCreate_RealAuthoringPath_... above. Manifest 092 itself is
+            // the TARGET here, reached through its own existing hub/seed rows -- nothing about 092 is
+            // created or modified by this test.
+            await ExecAsync("INSERT INTO hubs.hub (hub_id, relation) VALUES (@id, '{}'::jsonb)", ("id", sourceHubId));
+            await ExecAsync(
+                "INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status) VALUES (@mid, @hid, @key, 'active')",
+                ("mid", sourceManifestId), ("hid", sourceHubId), ("key", $"live-db-hub-nav-create-source-to-092-{suffix}"));
+            await ExecAsync(
+                "INSERT INTO manifest (manifest_id, relation_registry_id, topology, status) VALUES " +
+                "(@mid, NULL, ARRAY['{\"type\":\"runtime_mapping\",\"runtime_destination\":\"admin_runtime\"}'::jsonb], 'active')",
+                ("mid", sourceManifestId));
+
+            var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+
+            // STEP 1: author the relation via the REAL hub_navigation:create dispatch action
+            // (frontend/api/adminApi.ts createHubRelation() -> HubNavigationAdmin.tsx -> real
+            // ManifestDispatcher -> AdminRuntime.HubNavigationCreateAsync ->
+            // NpgsqlContentBundleRepository.CreateHubRelationAsync), targeting manifest 092's OWN
+            // existing hub as relatedHubId -- never a raw SQL insert standing in for authoring.
+            var createPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                topologyManifestId = sourceManifestId.ToString(),
+                relatedHubId = credentialManagementHubId.ToString(),
+                sequencePosition = 1,
+            });
+            var createRequest = new EndpointRequestDto(
+                OperationType: "HubNavigationAdminScenario",
+                Target: "admin",
+                Layer: "hub_navigation",
+                Action: "create",
+                IdOrHubId: null, Payload: createPayload, Context: null, TriggerKind: "client", Role: "admin");
+            var createResponse = await dispatcher.DispatchAsync(createRequest);
+
+            Assert.True(
+                createResponse.Success,
+                string.Join(";", createResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+
+            // STEP 2: readback through the repository read path -- the created row is really
+            // persisted, not merely echoed in the create response.
+            var contentBundleRepo = new NpgsqlContentBundleRepository(NullLogger<NpgsqlContentBundleRepository>.Instance, cs);
+            var relations = await contentBundleRepo.ListHubRelationsByManifestAsync(sourceManifestId);
+            var created = Assert.Single(relations, r => r.RelatedHubId == credentialManagementHubId.ToString());
+            createdHubRelationId = Guid.Parse(created.HubRelationId);
+            Assert.Equal(1, created.SequencePosition);
+            Assert.Equal("active", created.Status);
+
+            // STEP 3: dispatch the SOURCE manifest and confirm THIS SAME authored relation resolves
+            // Emission.NavigationSequence[].TargetManifestId to manifest 092 itself, via the
+            // exactly-one-active-manifest rule against hub '...a1' (never an implicit fallback).
+            var sourcePayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{sourceManifestId}:hub_relations_read",
+                topologyManifestId = sourceManifestId.ToString(),
+            });
+            var sourceRequest = new EndpointRequestDto(
+                OperationType: "HubNavigationAdminScenario",
+                Target: "admin",
+                Layer: "hub_navigation",
+                Action: "get_hub_relations",
+                IdOrHubId: null, Payload: sourcePayload, Context: null, TriggerKind: "client", Role: "admin");
+            var sourceResponse = await dispatcher.DispatchAsync(sourceRequest);
+
+            Assert.True(
+                sourceResponse.Success,
+                string.Join(";", sourceResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+            Assert.NotNull(sourceResponse.Emission);
+            HubRelationUiProjectionResolutionChainProof.AssertNavigationSequenceResolvesHubVector(
+                sourceResponse.Emission!,
+                sourceManifestId,
+                [new HubRelationUiProjectionResolutionChainProof.ExpectedHubVectorEntry(
+                    credentialManagementHubId, 1, CredentialManagementManifestId)]);
+
+            // STEP 4: walk onward from that SAME relation's resolved target -- dispatch manifest 092
+            // itself (the exact TargetManifestId STEP 3 just resolved, asserted above) and confirm the
+            // full package/layout/wiring/tensor resolution chain reaches a real scalar Emission:
+            // LayoutId/PackageId populated, LayoutNodes containing the instance_settings_import_form
+            // leaf and the instance_settings_action_bundle wiring, zero unresolved catalog leaves, zero
+            // errors. This is the same target_ref shape frontend/runtime/projectionEntry.ts produces
+            // once resolveHubNavigationLinks turns this NavigationSequence entry into a
+            // ?manifest=<TargetManifestId> selection.
+            var targetPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{CredentialManagementManifestId}:projection_entry",
+            });
+            var targetRequest = new EndpointRequestDto(
+                "Search", "default", "screen_list", "Search",
+                IdOrHubId: null, Payload: targetPayload, Context: null, TriggerKind: "client", Role: "admin");
+            var targetResponse = await dispatcher.DispatchAsync(targetRequest);
+
+            Assert.True(
+                targetResponse.Success,
+                string.Join(";", targetResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+            Assert.NotNull(targetResponse.Emission);
+            var targetEmission = targetResponse.Emission!;
+            Assert.Equal(CredentialManagementManifestId.ToString(), targetEmission.ManifestId);
+            Assert.NotNull(targetEmission.LayoutId);
+            Assert.NotNull(targetEmission.PackageId);
+            Assert.NotNull(targetEmission.LayoutNodes);
+            Assert.Contains(targetEmission.LayoutNodes!, n => n.NodeId == "instance_settings_import_form");
+            Assert.Contains(targetEmission.LayoutNodes!, n => n.WiringKind == "instance_settings_action_bundle");
+
+            var unresolvedLeaves = targetEmission.LayoutNodes!
+                .Where(n => n.NodeKind == "catalog_component" && n.ComponentId is null)
+                .ToList();
+            Assert.Empty(unresolvedLeaves);
+            Assert.Empty(targetEmission.Errors);
+        }
+        finally
+        {
+            if (createdHubRelationId is not null)
+                await ExecAsync("DELETE FROM hubs.hub_relations WHERE hub_relation_id = @rid", ("rid", createdHubRelationId.Value));
+            await ExecAsync("DELETE FROM manifest WHERE manifest_id = @mid", ("mid", sourceManifestId));
+            await ExecAsync("DELETE FROM hubs.topology_manifests WHERE topology_manifest_id = @mid", ("mid", sourceManifestId));
+            await ExecAsync("DELETE FROM hubs.hub WHERE hub_id = @hid", ("hid", sourceHubId));
+        }
+    }
+
     [Fact]
     public async Task DispatchAsync_CredentialManagementManifest_LayoutNodes_IncludeStructuralCategorySectionWrappers_NotOnlyFlatFormNodes()
     {

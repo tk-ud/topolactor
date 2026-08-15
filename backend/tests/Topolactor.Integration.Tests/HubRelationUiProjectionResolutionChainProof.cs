@@ -60,7 +60,12 @@ internal static class HubRelationUiProjectionResolutionChainProof
             // not change behavior for the other two consumers (grep-confirmed neither references
             // sqlAttentionLogsRepository or a *_NOT_AVAILABLE code gated by its absence).
             sqlAttentionLogsRepository: new NpgsqlSqlAttentionLogsRepository(
-                NullLogger<NpgsqlSqlAttentionLogsRepository>.Instance, connectionString));
+                NullLogger<NpgsqlSqlAttentionLogsRepository>.Instance, connectionString),
+            // credential_management:configure_scheduler_job_credential_or_port_binding (credential-
+            // management consumer_reference_binding) needs this wired, or that admin_runtime case
+            // fails closed with SCHEDULER_JOB_MANIFEST_NOT_CONFIGURED regardless of manifest/wiring
+            // resolution -- same rationale as sqlAttentionLogsRepository above.
+            schedulerJobManifestRepository: new NpgsqlSchedulerJobManifestRepository(connectionString));
         var adminAdapter = new AdminRuntimeDispatchAdapter(adminRuntime, new OperationVectorResolver());
 
         var targetOverride = new TargetDispatchOverride(NullLogger<TargetDispatchOverride>.Instance, adminRuntime);

@@ -2226,6 +2226,29 @@ VALUES (
 )
 ON CONFLICT (topology_manifest_id, sequence_position) DO NOTHING;
 
+-- Manifest entry: admin dispatch for
+-- credential_management:configure_scheduler_job_credential_or_port_binding → admin_runtime.
+-- docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.
+-- credentials.categories.external_api_credential.consumer_reference_binding: writes only
+-- topology.scheduler_jobs.credential_requirement_ref / .external_port_ref, identified by
+-- scheduler_job_id plus a credential/port row's reference_key — never scheduler job body/
+-- step-chain fields (those stay on the scheduler_jobs:create/edit dispatch above,
+-- manifest 00000000-0000-0000-0000-0000000000f1/f2) and never the vault/port tables
+-- themselves (those stay this category's own create/read/update/delete/search operations).
+-- Dispatch-only entry (no ui_projection): this action is reached from the SAME credential
+-- management screen/projection as manifest 092, never a dedicated route.
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000cd006',
+    NULL,
+    ARRAY[
+        '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"credential_management","action":"configure_scheduler_job_credential_or_port_binding"}'::jsonb,
+        '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO NOTHING;
+
 -- ---------------------------------------------------------------------------
 -- file_storage_bundle physical table catalog.
 -- Registers the domain metadata tables for export_job / file_artifact /
