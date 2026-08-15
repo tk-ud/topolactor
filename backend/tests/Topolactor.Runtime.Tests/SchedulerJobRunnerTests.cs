@@ -159,6 +159,10 @@ public class SchedulerJobRunnerTests
         public Task<SchedulerJobCredentialBindingResult> UpdateCredentialBindingAsync(
             Guid schedulerJobId, string? credentialRequirementRef, string? externalPortRef, CancellationToken ct = default) =>
             Task.FromResult(new SchedulerJobCredentialBindingResult(SchedulerJobCredentialBindingOutcome.Updated));
+
+        public Task<SchedulerJobCredentialBindingResult> ValidateCredentialBindingAsync(
+            Guid schedulerJobId, string? credentialRequirementRef, string? externalPortRef, CancellationToken ct = default) =>
+            Task.FromResult(new SchedulerJobCredentialBindingResult(SchedulerJobCredentialBindingOutcome.Updated));
     }
 
     // ─── Tests ───────────────────────────────────────────────────────────────

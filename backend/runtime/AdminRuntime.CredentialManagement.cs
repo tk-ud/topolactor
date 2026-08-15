@@ -47,6 +47,18 @@ public partial class AdminRuntime
                 "CREDENTIAL_MANAGEMENT_SCHEDULER_JOB_ID_MALFORMED",
                 "payload.schedulerJobId must be a valid UUID."));
 
+        // validate_policy_and_transaction_boundary (mutation_confirmation_contract): runs for BOTH
+        // dryRun and confirmed, identically -- an invalid candidate (unknown scheduler_job_id,
+        // unknown credentialRequirementRef/externalPortRef) is never reported "valid=true" without
+        // ever having been checked. The confirmed write path below re-runs the SAME checks itself
+        // (UpdateCredentialBindingAsync's own transaction) rather than trusting this result as prior
+        // proof, mirroring the enum-dictionary write actions' "dryRun is never trusted as prior
+        // proof" contract.
+        var validation = await _schedulerJobManifestRepository.ValidateCredentialBindingAsync(
+            schedulerJobId, request.CredentialRequirementRef, request.ExternalPortRef, ct);
+        var validationError = ToValidationError(validation.Outcome, schedulerJobId, request);
+        if (validationError is not null) return (null, validationError);
+
         if (IsTruthyPayloadFlag(vector.Payload, "dryRun"))
         {
             return (JsonSerializer.SerializeToElement(new
@@ -70,21 +82,8 @@ public partial class AdminRuntime
         var result = await _schedulerJobManifestRepository.UpdateCredentialBindingAsync(
             schedulerJobId, request.CredentialRequirementRef, request.ExternalPortRef, ct);
 
-        var error = result.Outcome switch
-        {
-            SchedulerJobCredentialBindingOutcome.SchedulerJobNotFound => new ValidationError(
-                "SCHEDULER_JOB_NOT_FOUND", $"Scheduler job {schedulerJobId} was not found."),
-            SchedulerJobCredentialBindingOutcome.CredentialRequirementRefNotFound => new ValidationError(
-                "CREDENTIAL_REQUIREMENT_REF_NOT_FOUND",
-                $"credentialRequirementRef '{request.CredentialRequirementRef}' does not match any existing " +
-                "external_credential_vault reference_key."),
-            SchedulerJobCredentialBindingOutcome.ExternalPortRefNotFound => new ValidationError(
-                "EXTERNAL_PORT_REF_NOT_FOUND",
-                $"externalPortRef '{request.ExternalPortRef}' does not match any existing " +
-                "access_port/response_port/hook_port reference_key."),
-            _ => null,
-        };
-        if (error is not null) return (null, error);
+        var writeError = ToValidationError(result.Outcome, schedulerJobId, request);
+        if (writeError is not null) return (null, writeError);
 
         await AdminMasterRosterAudit.AppendAsync(_sqlAttentionLogsRepository, ResolveAuditActor(vector),
             "topology.scheduler_jobs", schedulerJobId.ToString(), "configure_credential_binding",
@@ -105,4 +104,22 @@ public partial class AdminRuntime
             externalPortRef = request.ExternalPortRef,
         }), null);
     }
+
+    private static ValidationError? ToValidationError(
+        SchedulerJobCredentialBindingOutcome outcome,
+        Guid schedulerJobId,
+        CredentialManagementSchedulerBindingRequestDto request) => outcome switch
+    {
+        SchedulerJobCredentialBindingOutcome.SchedulerJobNotFound => new ValidationError(
+            "SCHEDULER_JOB_NOT_FOUND", $"Scheduler job {schedulerJobId} was not found."),
+        SchedulerJobCredentialBindingOutcome.CredentialRequirementRefNotFound => new ValidationError(
+            "CREDENTIAL_REQUIREMENT_REF_NOT_FOUND",
+            $"credentialRequirementRef '{request.CredentialRequirementRef}' does not match any existing " +
+            "external_credential_vault reference_key."),
+        SchedulerJobCredentialBindingOutcome.ExternalPortRefNotFound => new ValidationError(
+            "EXTERNAL_PORT_REF_NOT_FOUND",
+            $"externalPortRef '{request.ExternalPortRef}' does not match any existing " +
+            "access_port/response_port/hook_port reference_key."),
+        _ => null,
+    };
 }

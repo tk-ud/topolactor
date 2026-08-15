@@ -71,7 +71,22 @@ public class CredentialManagementSchedulerBindingLiveDbTests
             var t0 = DateTimeOffset.UtcNow.AddSeconds(-1);
             var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
 
-            // STEP 1: dryRun preview -- non-mutating.
+            // STEP 0: dryRun preview against an UNKNOWN reference_key -- fails closed with the real
+            // validation error, never a bare "valid=true" echo of an unchecked candidate.
+            var invalidDryRunPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                schedulerJobId = schedulerJobId.ToString(),
+                credentialRequirementRef = $"does-not-exist-{suffix}",
+                dryRun = true,
+            });
+            var invalidDryRunResponse = await dispatcher.DispatchAsync(new EndpointRequestDto(
+                "CredentialManagementScenario", "admin", "credential_management",
+                "configure_scheduler_job_credential_or_port_binding",
+                IdOrHubId: null, Payload: invalidDryRunPayload, Context: null, TriggerKind: "client", Role: "admin"));
+            Assert.False(invalidDryRunResponse.Success);
+            Assert.Contains(invalidDryRunResponse.Errors, e => e.Code == "CREDENTIAL_REQUIREMENT_REF_NOT_FOUND");
+
+            // STEP 1: dryRun preview against a VALID candidate -- non-mutating.
             var dryRunPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
             {
                 schedulerJobId = schedulerJobId.ToString(),

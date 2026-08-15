@@ -29,7 +29,7 @@
     "componentKind": "form_input/select",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "label": "Approval status"
@@ -64,7 +64,7 @@
     "componentKind": "form_input/form_field",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "label": "Credential reference key"
@@ -109,7 +109,7 @@
     "componentKind": "form_input/form_field",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "label": "Template file"
@@ -125,7 +125,7 @@
     "componentKind": "action/button",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "runtimeInteractions": [
@@ -152,7 +152,7 @@
     "componentKind": "action/button",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "runtimeInteractions": [
@@ -189,7 +189,7 @@
     "componentKind": "form_input/form_field",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "label": "Instance authority key"
@@ -205,7 +205,7 @@
     "componentKind": "form_input/form_field",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "label": "Instance display name"
@@ -221,7 +221,7 @@
     "componentKind": "form_input/select",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "label": "Port kind"
@@ -237,7 +237,7 @@
     "componentKind": "form_input/form_field",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "label": "Provider kind"
@@ -253,7 +253,7 @@
     "componentKind": "form_input/form_field",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "label": "Required by bundle"
@@ -269,7 +269,7 @@
     "componentKind": "form_input/form_field",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "label": "Address reference"
@@ -285,7 +285,7 @@
     "componentKind": "form_input/form_field",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "label": "Connection policy key"
@@ -301,7 +301,7 @@
     "componentKind": "action/button",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "runtimeInteractions": [
@@ -339,7 +339,7 @@
     "componentKind": "form_input/form_field",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "label": "Operation binding key"
@@ -355,7 +355,7 @@
     "componentKind": "form_input/form_field",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "label": "Display label"
@@ -371,7 +371,7 @@
     "componentKind": "form_input/form_field",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "label": "Operation protocol"
@@ -387,7 +387,7 @@
     "componentKind": "form_input/form_field",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "label": "Input schema key"
@@ -403,7 +403,7 @@
     "componentKind": "form_input/form_field",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "label": "Output shape key"
@@ -419,7 +419,7 @@
     "componentKind": "form_input/form_field",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "label": "Sanitize policy key"
@@ -435,7 +435,7 @@
     "componentKind": "form_input/select",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "label": "Callable"
@@ -451,7 +451,7 @@
     "componentKind": "action/button",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "runtimeInteractions": [
@@ -489,7 +489,7 @@
     "componentKind": "form_input/select",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "label": "Approval status"
@@ -505,7 +505,7 @@
     "componentKind": "action/button",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "runtimeInteractions": [
@@ -533,7 +533,7 @@
     "componentKind": "action/button",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "instance_settings_action_bundle",
+    "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "runtimeInteractions": [
@@ -569,5 +569,168 @@
     "y": 0,
     "recordType": "topology_ui_validation",
     "label": "Approve confirmation"
+  },
+  {
+    "nodeId": "scheduler_credential_binding_section",
+    "nodeKind": "structural_node",
+    "parentNodeId": "external",
+    "orderIndex": 36,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_section",
+    "label": "Scheduler job credential/port binding"
+  },
+  {
+    "nodeId": "scheduler_job_id_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "scheduler_credential_binding_section",
+    "orderIndex": 37,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "Scheduler job ID"
+  },
+  {
+    "nodeId": "scheduler_credential_requirement_ref_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "scheduler_credential_binding_section",
+    "orderIndex": 38,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "Credential requirement reference"
+  },
+  {
+    "nodeId": "scheduler_external_port_ref_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "scheduler_credential_binding_section",
+    "orderIndex": 39,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "External port reference"
+  },
+  {
+    "nodeId": "configure_scheduler_job_credential_or_port_binding_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "scheduler_credential_binding_section",
+    "orderIndex": 40,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "dryRun": "literal:true",
+        "schedulerJobId": "node:scheduler_job_id_input.value",
+        "externalPortRef": "node:scheduler_external_port_ref_input.value",
+        "credentialRequirementRef": "node:scheduler_credential_requirement_ref_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000cd006:credential_management:configure_scheduler_job_credential_or_port_binding"
+    },
+    "label": "Configure scheduler job credential/port binding"
+  },
+  {
+    "nodeId": "configure_scheduler_job_credential_or_port_binding_confirm_modal",
+    "nodeKind": "catalog_component",
+    "componentId": "configure_scheduler_job_credential_or_port_binding_confirm_modal",
+    "parentNodeId": "scheduler_credential_binding_section",
+    "orderIndex": 41,
+    "x": 0,
+    "y": 0,
+    "componentKind": "disclosure/modal",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022Configure scheduler job credential/port binding\u0022, \u0022body\u0022: \u0022Bind the entered credential/port reference to the scheduler job. Writes only credential_requirement_ref/external_port_ref; never the job body/step-chain fields it owns.\u0022}}",
+    "label": "Configure credential/port binding confirmation dialog"
+  },
+  {
+    "nodeId": "configure_scheduler_job_credential_or_port_binding_confirm_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "configure_scheduler_job_credential_or_port_binding_confirm_modal",
+    "orderIndex": 42,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "configure_scheduler_job_credential_or_port_binding_confirm_modal",
+        "sourceActionKey": "configure_scheduler_job_credential_or_port_binding_confirm_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "confirmed": "literal:true",
+        "schedulerJobId": "node:scheduler_job_id_input.value",
+        "externalPortRef": "node:scheduler_external_port_ref_input.value",
+        "credentialRequirementRef": "node:scheduler_credential_requirement_ref_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000cd006:credential_management:configure_scheduler_job_credential_or_port_binding"
+    },
+    "label": "Configure"
+  },
+  {
+    "nodeId": "configure_scheduler_job_credential_or_port_binding_cancel_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "configure_scheduler_job_credential_or_port_binding_confirm_modal",
+    "orderIndex": 43,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "configure_scheduler_job_credential_or_port_binding_confirm_modal",
+        "sourceActionKey": "configure_scheduler_job_credential_or_port_binding_cancel_button"
+      }
+    ],
+    "label": "Cancel"
   }
 ]

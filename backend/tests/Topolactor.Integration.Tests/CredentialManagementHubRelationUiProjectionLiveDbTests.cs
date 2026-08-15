@@ -135,7 +135,7 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
             Assert.NotNull(emission.LayoutId);
             Assert.NotNull(emission.LayoutNodes);
             Assert.Contains(emission.LayoutNodes!, n => n.NodeId == "instance_settings_import_form");
-            Assert.Contains(emission.LayoutNodes!, n => n.WiringKind == "instance_settings_action_bundle");
+            Assert.Contains(emission.LayoutNodes!, n => n.WiringKind == "admin_runtime");
 
             // "current topology phase" identity, and hub_ids[] (manifest-scoped relation vector,
             // hubs.hub_relations.sequence_position) resolving through to Emission.NavigationSequence
@@ -457,7 +457,7 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
             Assert.NotNull(targetEmission.PackageId);
             Assert.NotNull(targetEmission.LayoutNodes);
             Assert.Contains(targetEmission.LayoutNodes!, n => n.NodeId == "instance_settings_import_form");
-            Assert.Contains(targetEmission.LayoutNodes!, n => n.WiringKind == "instance_settings_action_bundle");
+            Assert.Contains(targetEmission.LayoutNodes!, n => n.WiringKind == "admin_runtime");
 
             var unresolvedLeaves = targetEmission.LayoutNodes!
                 .Where(n => n.NodeKind == "catalog_component" && n.ComponentId is null)
@@ -535,6 +535,103 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
         // surface as an explicit CATALOG_COMPONENT_KIND_REQUIRED error component on the frontend).
         var unresolvedLeaves = nodes!.Where(n => n.NodeKind == "catalog_component" && n.ComponentId is null).ToList();
         Assert.Empty(unresolvedLeaves);
+    }
+
+    /// <summary>
+    /// Closes the "backend-callable-only" gap in
+    /// external_api_credential.consumer_reference_binding: proves the FULL production path
+    /// 092 projection -> user-intent leaf -> dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger
+    /// candidate -> real dispatcher -> admin_runtime write, not merely that
+    /// credential_management:configure_scheduler_job_credential_or_port_binding is reachable via a
+    /// hand-authored EndpointRequestDto. Step 1 dispatches manifest 092 itself and asserts the
+    /// resolved LayoutNode for "configure_scheduler_job_credential_or_port_binding_button" carries
+    /// EXACTLY the dispatch candidate the seed authored (manifest cd006 target_ref + the
+    /// schedulerJobId/credentialRequirementRef/externalPortRef/dryRun payloadFrom map) -- this is
+    /// what a real click on this leaf would actually send, not what the seed merely intends. Step 2
+    /// takes that SAME resolved target_ref (never a re-typed constant) and dispatches it for real,
+    /// proving the candidate the projection exposes is itself live-dispatchable end to end.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_CredentialManagementManifest_SchedulerBindingButton_ResolvedDispatchCandidateIsLiveDispatchable()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+        var payload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = $"manifest:{CredentialManagementManifestId}:projection_entry",
+        });
+        var request = new EndpointRequestDto(
+            "Search", "default", "screen_list", "Search",
+            IdOrHubId: null, Payload: payload, Context: null, TriggerKind: "client", Role: "admin");
+
+        var response = await dispatcher.DispatchAsync(request);
+        Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
+        var nodes = response.Emission!.LayoutNodes;
+        Assert.NotNull(nodes);
+
+        // STEP 1: the button leaf's resolved dispatch candidate is exactly what the seed authored --
+        // real componentId (catalog resolution succeeded), admin_runtime wiring, and a
+        // dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger the frontend's own
+        // buildAdminRuntimeTargetRefOverrideByTrigger / buildAdminRuntimePayloadFromByTrigger would
+        // consume verbatim (docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
+        // lane_storage_boundary.admin_runtime_payload_binding_contract).
+        var button = Assert.Single(nodes!, n => n.NodeId == "configure_scheduler_job_credential_or_port_binding_button");
+        Assert.Equal("catalog_component", button.NodeKind);
+        Assert.NotNull(button.ComponentId);
+        Assert.Equal("action/button", button.ComponentKind);
+        Assert.Equal("admin_runtime", button.WiringKind);
+        Assert.NotNull(button.DispatchTargetRefByTrigger);
+        Assert.NotNull(button.DispatchPayloadFromByTrigger);
+
+        var resolvedTargetRef = button.DispatchTargetRefByTrigger!.Value.GetProperty("click").GetString();
+        Assert.Equal(
+            "manifest:00000000-0000-0000-0000-0000000cd006:credential_management:configure_scheduler_job_credential_or_port_binding",
+            resolvedTargetRef);
+
+        var payloadFromClick = button.DispatchPayloadFromByTrigger!.Value.GetProperty("click");
+        Assert.Equal("node:scheduler_job_id_input.value", payloadFromClick.GetProperty("schedulerJobId").GetString());
+        Assert.Equal(
+            "node:scheduler_credential_requirement_ref_input.value",
+            payloadFromClick.GetProperty("credentialRequirementRef").GetString());
+        Assert.Equal(
+            "node:scheduler_external_port_ref_input.value",
+            payloadFromClick.GetProperty("externalPortRef").GetString());
+        Assert.Equal("literal:true", payloadFromClick.GetProperty("dryRun").GetString());
+
+        // The confirm button (inside the confirm modal) resolves the identical target_ref with
+        // confirmed:true instead of dryRun:true -- the preview/confirm pairing the
+        // mutation_confirmation_contract requires is structurally present, not just the preview half.
+        var confirmButton = Assert.Single(
+            nodes!, n => n.NodeId == "configure_scheduler_job_credential_or_port_binding_confirm_button");
+        Assert.Equal(
+            resolvedTargetRef,
+            confirmButton.DispatchTargetRefByTrigger!.Value.GetProperty("click").GetString());
+        Assert.Equal(
+            "literal:true",
+            confirmButton.DispatchPayloadFromByTrigger!.Value.GetProperty("click").GetProperty("confirmed").GetString());
+
+        // STEP 2: the EXACT resolved target_ref from Step 1 (not a re-typed constant) is itself
+        // live-dispatchable through the SAME real dispatcher -- the candidate the projection exposes
+        // is not a dead reference.
+        var schedulerJobId = Guid.NewGuid();
+        var dispatchResponse = await dispatcher.DispatchAsync(new EndpointRequestDto(
+            "CredentialManagementScenario", "admin", "credential_management",
+            "configure_scheduler_job_credential_or_port_binding",
+            IdOrHubId: null,
+            Payload: System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                schedulerJobId = schedulerJobId.ToString(),
+                dryRun = true,
+            }),
+            Context: null, TriggerKind: "client", Role: "admin"));
+
+        // A non-existent scheduler_job_id fails closed with a real validation error (not
+        // MANIFEST_NOT_FOUND/ADMIN_OPERATION_NOT_FOUND) -- proof the target_ref actually reaches
+        // AdminRuntime.ExecuteDataAsync's credential_management case, not a resolution dead end.
+        Assert.False(dispatchResponse.Success);
+        Assert.Contains(dispatchResponse.Errors, e => e.Code == "SCHEDULER_JOB_NOT_FOUND");
     }
 
     [Fact]

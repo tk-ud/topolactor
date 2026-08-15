@@ -59,13 +59,22 @@ public class AdminRuntimeSchedulerAuthoringTests
         public Task UpsertAuthorizedOutputAsync(SchedulerJobRecord job, SchedulerStepResultBinding b, IReadOnlyDictionary<string, object?> v, CancellationToken ct = default) => Task.CompletedTask;
 
         public List<(Guid SchedulerJobId, string? CredentialRequirementRef, string? ExternalPortRef)> CredentialBindingUpdates { get; } = new();
+        public List<(Guid SchedulerJobId, string? CredentialRequirementRef, string? ExternalPortRef)> CredentialBindingValidations { get; } = new();
         public SchedulerJobCredentialBindingResult CredentialBindingResult { get; set; } =
             new(SchedulerJobCredentialBindingOutcome.Updated);
+        /// <summary>Defaults to CredentialBindingResult's outcome when null (the common case: validate and write agree).</summary>
+        public SchedulerJobCredentialBindingResult? CredentialBindingValidationResult { get; set; }
         public Task<SchedulerJobCredentialBindingResult> UpdateCredentialBindingAsync(
             Guid schedulerJobId, string? credentialRequirementRef, string? externalPortRef, CancellationToken ct = default)
         {
             CredentialBindingUpdates.Add((schedulerJobId, credentialRequirementRef, externalPortRef));
             return Task.FromResult(CredentialBindingResult);
+        }
+        public Task<SchedulerJobCredentialBindingResult> ValidateCredentialBindingAsync(
+            Guid schedulerJobId, string? credentialRequirementRef, string? externalPortRef, CancellationToken ct = default)
+        {
+            CredentialBindingValidations.Add((schedulerJobId, credentialRequirementRef, externalPortRef));
+            return Task.FromResult(CredentialBindingValidationResult ?? CredentialBindingResult);
         }
     }
 
@@ -365,7 +374,7 @@ public class AdminRuntimeSchedulerAuthoringTests
         new("admin", "credential_management", action, null, "admin", JsonSerializer.SerializeToElement(payload), null);
 
     [Fact]
-    public async Task ConfigureSchedulerJobCredentialOrPortBinding_DryRun_DoesNotReachRepository()
+    public async Task ConfigureSchedulerJobCredentialOrPortBinding_DryRun_ValidatesButDoesNotWrite()
     {
         var repo = new StubSchedulerRepo();
         var runtime = CreateRuntime(repo);
@@ -382,6 +391,32 @@ public class AdminRuntimeSchedulerAuthoringTests
         Assert.Equal(
             "weather_credential_requirement",
             data.Value.GetProperty("preview").GetProperty("credentialRequirementRef").GetString());
+        // real validation ran (ValidateCredentialBindingAsync) but no write (UpdateCredentialBindingAsync).
+        var validated = Assert.Single(repo.CredentialBindingValidations);
+        Assert.Equal(id, validated.SchedulerJobId);
+        Assert.Equal("weather_credential_requirement", validated.CredentialRequirementRef);
+        Assert.Empty(repo.CredentialBindingUpdates);
+    }
+
+    [Fact]
+    public async Task ConfigureSchedulerJobCredentialOrPortBinding_DryRun_InvalidCandidate_FailsClosed_NeverReportsValidTrue()
+    {
+        var repo = new StubSchedulerRepo
+        {
+            CredentialBindingValidationResult = new SchedulerJobCredentialBindingResult(
+                SchedulerJobCredentialBindingOutcome.CredentialRequirementRefNotFound),
+        };
+        var runtime = CreateRuntime(repo);
+        var id = Guid.NewGuid();
+
+        var (data, error) = await runtime.ExecuteDataAsync(CredentialManagementVector(
+            "configure_scheduler_job_credential_or_port_binding",
+            new { schedulerJobId = id.ToString(), credentialRequirementRef = "does_not_exist", dryRun = true }),
+            default);
+
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("CREDENTIAL_REQUIREMENT_REF_NOT_FOUND", error!.Code);
         Assert.Empty(repo.CredentialBindingUpdates);
     }
 
