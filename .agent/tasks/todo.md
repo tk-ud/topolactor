@@ -2066,6 +2066,48 @@ PR #600（round14〜24、コミット履歴は上記の各round実装記録を�
 - `topology.team_markdown_saved_view`への永続化・team-dashboard機能との統合は本Bundleのscope外——将来必要になった場合は別Bundleとして起票し、`content_bundle:*`と`team_markdown:*`という非互換operation語彙をどう橋渡しするかを設計判断すること（本Bundleは意図的にこの統合を行っていない）。
 - `frontend/lib/markdownRenderer.ts`は意図的に制限された構文のみ対応（画像は非対応、テーブルは非対応）——将来これらが必要になった場合はallow-list方式を維持したまま拡張すること（denylistへの転換や`dangerouslySetInnerHTML`の導入はGate0違反になる）。
 
+### 実装記録（round 2、2026-08-16、blocking closure、implementation_change）
+
+自己監査により発見された2件のblockingを同一PR内で解消し、`partial`のまま留めず`implemented`へ確定させた回。
+
+**Blocking #1（値がdispatch payloadへ届かない）を閉じた汎用経路:**
+`details_markdown_body`のTextarea編集値は、専用React state/global storeを一切経由せず、既存の汎用node-value carrier機構だけで`content_bundle:update_entity_draft`のdispatch payloadへ到達する。
+- SSOT: `docs/design/admin-console-workflow-ssot.yaml` `layout_node_props_contract.component_array_prop_capabilities`（値受入先の正本）
+- 初期値bind: `details_markdown_body`のcompile_snapshot nodeへ`propBindings.value.source: "emission.data.markdownBody"`を追加（`db/physical_details_inline_editor_md_generator_preset_seed.sql`）。
+- 新規発見の実装ギャップ: `frontend/runtime/propBindingResolver.ts`の`COMPONENT_ARRAY_PROP_CAPABILITIES`（および`acceptsNonArrayResolvedValue`）が`form_input/textarea_template`を未登録だったため、このpropBindingは`LAYOUT_NODE_PROP_BINDING_UNSUPPORTED_COMPONENT`で構造的に失敗していた——`form_input/search_input`/`form_input/input`が既に持つ「`value`propは配列ではなくscalarとして受理する」の同一パターンを`form_input/textarea_template`へ拡張した（Markdown専用ではなく、textarea系componentすべてに開かれた汎用capability追加）。frontend（`propBindingResolver.ts`）・backend（`backend/runtime/StructureMapResolver.cs`）・両者を同期させる`PropBindingContractSyncTests.cs`/`propBindingContractSync.test.ts`・SSOT（`admin-console-workflow-ssot.yaml`）の4箇所を同時更新。
+- change event capture: 既存Lane 3汎用機構（`runtimeComponentFactory.ts`の`emitBoundEvent`→`onNodeValueChange`→`liveNodeValueTracker.ts`の`createLiveNodeValueTracker().set`）をそのまま再利用——Markdown専用の値追跡コードは一切追加していない。
+- payloadFrom: `details_save_button`のwiring candidate（`mock_preset_wiring_candidate`および`compile_snapshot.wiring_candidate_json`双方）の`binding.payloadFrom`へ`"markdownBody":"node:details_markdown_body.value"`を追加（既存`"entityId":"event.record.id"`は無変更）——`payloadFromResolver.ts`の既存source文法（`node:<nodeId>.value`）をそのまま再利用、新しいsource kindは追加していない。
+- dispatch shape: 既存`content_bundle:update_entity_draft`をそのまま使用——Markdown専用API/action/runtime laneは新設していない。
+- test: `frontend/tests/presetSeedLineContract.test.ts`の`"[preset-line] physical_details_inline_editor_md_generator: Textarea initial bind -> change -> save click carries the raw Markdown string into the dispatch payload (not HTML-converted)"`——renderEmissionで実際にTextareaのruntimeSpecを構築→初期値bind確認→`emitBoundEvent(..., "change", ...)`でtracker更新確認→save buttonの`emitBoundEvent(..., "click", ...)`→fetchをmockして実際に送信されたrequest bodyの`payload.markdownBody`が編集後の生Markdown文字列と一致することまで一続きで検証。同ファイルに補助test2件（`"...value carrier (initial bind + save payloadFrom) is complete"`、`"...markdown_body_field_binding_generic_placeholder is a compile-snapshot unresolved authoring-carrier entry..."`）も追加。
+
+**Blocking #2（gapがsource_snapshot止まりでcompile snapshotへ伝播していない）を閉じた汎用経路:**
+`AdminRuntime.MockPreset.cs`の`CompilePresetFromMappings`（アップロード型mockの実行時compiler）は`source_snapshot_json.knownGaps`を一切参照しないことを確認済み——SQL seedで直接手書きされた`unresolved_json`が、UIBuilder/authorが実際に目にするpending-authoring carrierの正本である（`db/aggregate_dashboard_preset_seed.sql`の`dashboard_run_button`エントリが既存precedent）。
+- `compile_snapshot.unresolved_json`へ`markdown_body_field_binding_generic_placeholder`エントリを追加（`nodeId: "details_markdown_preview"`、`reason`は`cross_preset_authoring_boundary.gap_classification_rule`を明示引用、`authoringSurface: "Design Inspector propBindings tab"`、`saveAction: "layout_patch:apply"`、`persistedField: "topology.ui_topology_tensor.layout_patch_json.nodes[].propBindings"`、`status: "pending_author_selection_via_design_inspector"`）。
+- `source_snapshot_json.knownGaps[0].reason`をcompile_snapshot側エントリを参照する形に更新——source snapshotとcompile snapshot、両方に同じgapが可視化された（片方だけに記録された状態を解消）。
+- `cross_preset_authoring_boundary.gap_classification_rule`適用根拠: このgapはbackend/catalogのgapではなく、Design Inspector propBindingsタブ＋`layout_patch:apply`で著者が実テーブル判明後にauthor-selectできる値であるため、「pending authoring work」として可視化することが正しい分類（SSOTに既存の`author_resolution_map.propBindings`カテゴリそのもの）。
+- test: `presetSeedLineContract.test.ts`の`"...markdown_body_field_binding_generic_placeholder is a compile-snapshot unresolved authoring-carrier entry, not source-text-only"`——`unresolvedJson`エントリの`nodeId`/`reason`（非空）/`authoringSurface`/`saveAction`/`persistedField`を検証。
+
+**raw-source-save vs Viewer-security/renderingの分離確認:**
+save側（`details_save_button`→`content_bundle:update_entity_draft`）は生Markdown文字列をそのまま（HTML変換・エスケープなし）payloadへ運ぶだけ——上記end-to-endテストが`payload.markdownBody`に`<script>`タグを含む生文字列がそのまま（escapeされずに）到達することを明示的にassertしている。一方、表示側の安全性（`markdownRenderer.ts`のallow-list VNode化、`dangerouslySetInnerHTML`不使用）はround 1で実装済みのまま無変更——save authorityとViewer security/rendering authorityは物理的に別コードパス（`payloadFromResolver.ts`/`emitBoundEvent`系 vs `markdownRenderer.ts`/`MdViewer.tsx`系）のまま、一切交差していない。
+
+**検証（round 2）:**
+- `deno test -A frontend/tests/`（2106 passed / 0 failed、repo rootから実行）
+- `bash .agent/tests/check-frontend-types.sh`（PASS）
+- `bash .agent/tests/check-structure.sh`（PASS）
+- `dotnet build backend/Topolactor.Host.csproj`（0 errors）
+- `dotnet test`（backend `Topolactor.Runtime.Tests`、1678 passed / 0 failed——`PropBindingContractSyncTests`含む）
+
+**対象ファイル名（round 2追加分）:**
+- `db/physical_details_inline_editor_md_generator_preset_seed.sql`
+- `frontend/tests/presetSeedLineContract.test.ts`
+- `frontend/runtime/propBindingResolver.ts`（`form_input/textarea_template`のvalue capability追加——新規発見の汎用ギャップ修正）
+- `backend/runtime/StructureMapResolver.cs`（同上、backend mirror）
+- `backend/tests/Topolactor.Runtime.Tests/PropBindingContractSyncTests.cs`
+- `frontend/tests/propBindingContractSync.test.ts`
+- `docs/design/admin-console-workflow-ssot.yaml`（`component_array_prop_capabilities`エントリ追加）
+
+**Status更新:** `implemented`（round 1で暫定`implemented`としていたが、自己監査で発見した2 blockingを本roundで解消——`unresolved_json`のgapは意図的に残置したまま、carrier配線のみを完成させた）。
+
 ---
 
 ## Bundle `admin-runtime-operation-dispatch-lane-determination`

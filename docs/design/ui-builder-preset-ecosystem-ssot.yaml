@@ -600,14 +600,24 @@ ui_builder_preset_ecosystem_ssot:
     known_gaps:
       - id: markdown_body_field_binding_generic_placeholder
         detail: >
-          emission.data.markdownBody (details_markdown_preview's propBindings source) is a
-          generic field-name placeholder, the same idiom as details_field_label_1's "Field 1"
-          label — this preset is table-agnostic, so it cannot know a real physical table's
-          actual markdown-shaped column/jsonb path in advance. The author renames this binding
-          to the real field path after loading the preset into a route package's tmp canvas
-          draft, before apply. This does not block preset completion (declared reusable-carrier
-          status, not a per-table-bound production screen) and matches the pre-existing
-          unaddressed pattern for every other content_bundle-bound field in this preset.
+          emission.data.markdownBody (details_markdown_preview's propBindings source and
+          details_markdown_body's own propBindings.value source) is a generic field-name
+          placeholder, the same idiom as details_field_label_1's "Field 1" label — this preset
+          is table-agnostic, so it cannot know a real physical table's actual markdown-shaped
+          column/jsonb path in advance. The author renames this binding to the real field path
+          after loading the preset into a route package's tmp canvas draft, before apply
+          (Design Inspector propBindings tab, layout_patch:apply). This does not block preset
+          completion (declared reusable-carrier status, not a per-table-bound production
+          screen) and matches the pre-existing unaddressed pattern for every other
+          content_bundle-bound field in this preset. Per cross_preset_authoring_boundary.
+          gap_classification_rule this gap is also propagated into the compiled seed's own
+          mock_preset_compile_snapshot.unresolved_json (db/physical_details_inline_editor_md_
+          generator_preset_seed.sql), not left source-snapshot-only, so UIBuilder/authors see
+          it as pending authoring work at the same surface they author it from. Separately,
+          the value CARRIER itself (Textarea initial bind + change capture + save payloadFrom
+          into content_bundle:update_entity_draft) is fully wired and generic — only the field
+          NAME is a pending author choice; see frontend/tests/presetSeedLineContract.test.ts
+          "Textarea initial bind -> change -> save click carries the raw Markdown string...".
     implemented_evidence:
       logs_diff_record_history_binding:
         repository_method: backend/repository/SqlAttentionLogsRepository.cs LoadPhysicalRecordHistoryAsync(tableId, recordId, ct)
