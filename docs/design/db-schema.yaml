@@ -407,6 +407,39 @@ db_schema:
         - name: status
           type: enum
           role: active_or_deprecated
+      minimum_cardinality_completion_invariant:
+        rule: >-
+          Every hubs.topology_manifests row must own at least one hubs.hub_relations row with
+          status='active' whose related_hub_id resolves to exactly one active
+          hubs.topology_manifests row for that hub (the same exactly-one-active-manifest rule
+          navigation_target_resolution below already defines). A topology_manifest with zero
+          hub_relations rows, with only status='deprecated' rows, or whose only active row's
+          target does not resolve, is not a valid completion state ("navigation orphan"). This is
+          the reverse-direction cardinality this table's own fk_topology_manifests column does not
+          by itself guarantee: the FK guarantees every hub_relations row points at a real
+          topology_manifest, not that every topology_manifest has an outbound hub_relations row.
+        applies_to: every hubs.topology_manifests row, not a subset classified by manifest kind
+        does_not_authorize: >-
+          fabricating hub_relations, hubs, or topology_manifests rows that would not otherwise
+          exist merely to satisfy this cardinality (PR #584 review comment ban on an empty/fake
+          manifest created only to host a hub_relations row remains in force).
+        enforcement_boundary: >-
+          The only existing mutation able to reduce a topology_manifest's active hub_relations
+          count is hub_navigation:deprecate (hub_navigation:update replaces related_hub_id in
+          place; hub_navigation:reorder never changes status) — NpgsqlContentBundleRepository.
+          DeprecateHubRelationAsync fails closed (HUB_RELATION_LAST_ACTIVE_FOR_MANIFEST) when
+          deprecating the given row would leave its topology_manifest_id with zero active rows.
+          This invariant is not enforced at hub_relations authoring (hub_navigation:create) or at
+          topology_manifest promotion/authoring (ManifestCanonicalProjection.ProjectOnPromoteAsync /
+          ProjectOnAuthoringDraftAsync in db/manifest_tables.sql's manifest table) — see
+          docs/design/runtime-orchestration-ssot.yaml
+          ui_projection_render_reachability_contract.production_projection_connectivity_invariant
+          for why those two authorities are decoupled by design.
+        mirror: >-
+          docs/design/runtime-orchestration-ssot.yaml
+          ui_projection_render_reachability_contract.production_projection_connectivity_invariant,
+          docs/framework-core.yaml runtime_route_attention_boundary
+          production_projection_connectivity_invariant.
 
     content_entity_drafts:
       category: topology_definition

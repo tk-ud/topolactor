@@ -55,6 +55,30 @@
 
 **検証:** `bash .agent/tests/check-unified-test-gate.sh`（9 lanes pass）、`dotnet test`（Topolactor.Runtime.Tests 1674/1674 pass — 新規`SqlAttentionCirculationComposedProofTests`込み。Topolactor.Integration.Tests 245/246 pass、1件のみ既知の`UiTopologyLayoutPatchRollbackIntegrationTests`stale table参照——PR #602本文に既報のpre-existing failureで本roundと無関係）、`deno test -A frontend/tests/`（2086/2086 pass — 新規`projectionShellHubNavigationRenderProof.test.ts`/`sqlAttentionCirculationFinalStateProof.test.ts`込み）。
 
+### Cross-cutting audit findings — round 11 top DB-schema SSOT再整合（2026-08-16、PR #602 round 11）
+
+**問題点:** round 10で新設した`production_projection_connectivity_invariant`は、orphan禁止という方向自体はOwner authorityと一致していたが、「production projection manifest」と「standalone/internal/system-utility manifest」を分離し、後者にrelation無しを許容する例外意味論を導入していた。これは`docs/design/db-schema.yaml`の`hub_relations`定義（`role: manifest_scoped_topology_sequence_chain`、`parent_table: hubs.topology_manifests`）——manifest種別による区別を一切設けていない top authority——と不整合だった。また round 10の「残る未解消点」記述（上記46行目、本節挿入前の行番号）は「enforcement機構をどのmanifest種別へ適用するか未決定」としていたが、これも本roundで具体的なfail-close機構を決定・実装したため陳腐化した。
+
+**目的:** `docs/design/db-schema.yaml`をauthorityとして、全`hubs.topology_manifests`行に一律で「最低1件のactiveかつcanonicalにresolvableな`hubs.hub_relations`」を要求するminimum-cardinality completion invariantへ整合させ、manifest種別によるrelation requirementの例外分類を除去し、既存Manifest lifecycle（authoring/promotion/hub relation mutation）を調査した上でcanonical fail-close boundaryを実装する。
+
+**改善方針・対応内容:**
+- `docs/design/db-schema.yaml` `hub_relations.minimum_cardinality_completion_invariant`（新設、top authority）: 全`hubs.topology_manifests`行は、最低1件の`status='active'`かつ`related_hub_id`が正確に1件のactive `hubs.topology_manifests`へ解決する`hubs.hub_relations`行を持たなければならない、と明記。zero relation・deprecated-only relation・canonical解決不能なrelationはいずれもvalid completionではない。`applies_to: every hubs.topology_manifests row, not a subset classified by manifest kind`と明記し、manifest種別分類を明示的に禁止した。fabrication禁止（PR #584）は維持。
+- `docs/design/runtime-orchestration-ssot.yaml` `production_projection_connectivity_invariant`を全面改訂——「production projection manifest」対「standalone/internal/utility manifest」の分類を除去し、`docs/design/db-schema.yaml`のtop authorityを直接参照する形へ再整合。`enforcement_boundary`フィールドに、2つのboundaryが責務を分担する設計（理由付き）を記録：(1) `hub_navigation:deprecate`は既存relation countを減らせる唯一の既存mutationであり、live write-time fail-close guardとして実装した。(2) `hub_navigation:create`および manifest promotion/authoring（`ManifestCanonicalProjection.ProjectOnPromoteAsync`/`ProjectOnAuthoringDraftAsync`）ではblockingを行わない——`docs/design/admin-normal-surface-projection-seed-ssot.yaml` `design_blocking.sequencing_note`が「hub relation authoringはmanifestの内容構築完了後の構造的に最後のstep」であり「navigation_binding_authoring_and_verificationはsubBundleのtarget manifest buildを開始する前提条件になり得ない」と既に確定しているため、promotion時点でblockingすると新規authoringされた全manifestが最初のhub_relations行を持つ前に必ずpromotion失敗する、という矛盾を起こすためである。
+- `docs/framework-core.yaml`側の要約ポインタも同様に再整合、invariantキーを`production_projection_manifest_must_not_be_navigation_orphan`から`topology_manifest_must_not_be_navigation_orphan`へ改称（manifest種別分類が意味論から除去されたことを反映）。
+- **実装（enforcement boundary）:** `backend/repository/NpgsqlContentBundleRepository.cs` `DeprecateHubRelationAsync`——deprecate対象のrelationが属する`topology_manifest_id`について、deprecate後に残る`status='active'`行数を確認し、0件になる場合は新規エラーコード`HUB_RELATION_LAST_ACTIVE_FOR_MANIFEST`でfail-close（該当行は変更しない）。`backend/tests/Topolactor.Runtime.Tests/InMemoryContentBundleRepository.cs`の同メソッドにも同一guardをミラーし、live DBなしでunit testable化した。
+- **proof追加:** `backend/tests/Topolactor.Runtime.Tests/HubNavigationDeprecateOrphanGuardTests.cs`（新規、4 test）——最後のactive relationのdeprecateがfail-closeされ状態が変更されないこと、2件中1件のdeprecateは成功すること、guardがtopology_manifest_id単位でscopeされること（別manifestの最後の関係は独立してblockされる）、未知/既にdeprecated済みrelationは別のerror codeを返すことを証明。`backend/tests/Topolactor.Integration.Tests/HubRelationOrphanInvariantLiveDbTests.cs`（新規、2 test、real DB必須）——実`hub_navigation:create`/`hub_navigation:deprecate`/`hub_navigation:get_hub_relations`の実dispatch経路を通し、fail-close時にrelationが実DB上で本当にactiveのまま残ること、成功時は残った1件のみがresolution chainに反映されることを証明。既存`backend/tests/Topolactor.Runtime.Tests/AdminRuntimeContentBundleTests.cs`の`HubNavigation_Deprecate_SetsDeprecatedStatus`はfixtureの唯一のactive relationをdeprecateして成功を期待していたため、新guardと整合するよう2件目のrelationを先に追加する形へ修正した（振る舞いの後退ではなく、新invariantに対する既存testの前提更新）。
+- 既存`HubNavigationResolver`→`Emission.NavigationSequence`→`resolveHubNavigationLinks`→`ProjectionShell` navigationは無変更。`frontend/tests/projectionShellHubNavigationRenderProof.test.ts`はnavigation rendering proofとして維持し、本roundのN≧1 enforcement proofの代替にはしていない。
+
+**Finding 2（SQL Attention composed proof）は本roundで変更していない。Implementedのまま維持し、再openしていない。**
+
+**対応資料:** `docs/design/db-schema.yaml`（`hub_relations.minimum_cardinality_completion_invariant`）、`docs/design/runtime-orchestration-ssot.yaml`（`production_projection_connectivity_invariant`）、`docs/framework-core.yaml`（同invariant要約）、`docs/design/admin-normal-surface-projection-seed-ssot.yaml`（`design_blocking.sequencing_note`、既存authorityとして参照のみ・変更なし）
+
+**対象ファイル名:** `backend/repository/NpgsqlContentBundleRepository.cs`、`backend/tests/Topolactor.Runtime.Tests/InMemoryContentBundleRepository.cs`、`backend/tests/Topolactor.Runtime.Tests/HubNavigationDeprecateOrphanGuardTests.cs`、`backend/tests/Topolactor.Integration.Tests/HubRelationOrphanInvariantLiveDbTests.cs`、`backend/tests/Topolactor.Runtime.Tests/AdminRuntimeContentBundleTests.cs`
+
+**対象関数名:** `NpgsqlContentBundleRepository.DeprecateHubRelationAsync`、`InMemoryContentBundleRepository.DeprecateHubRelationAsync`、`AdminRuntime.HubNavigationDeprecateAsync`
+
+**検証:** `bash .agent/tests/check-static-ssot-purity.sh`（3 SSOTファイルすべてPASS）、`bash .agent/tests/check-unified-test-gate.sh`（9 lanes pass）、`dotnet test`（Topolactor.Runtime.Tests 1678/1678 pass — 新規4 test込み。Topolactor.Integration.Tests 247/248 pass、既知のpre-existing 1件のみ）、`deno test -A frontend/tests/`（2086/2086 pass、回帰なし）。
+
 ---
 ## Bundle `seed-template-runtime-interaction-assignment`
 

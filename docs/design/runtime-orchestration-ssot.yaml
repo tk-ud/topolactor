@@ -415,24 +415,31 @@ runtime_orchestration_ssot:
 
     production_projection_connectivity_invariant:
       note: >-
-        Owner design decision (2026-08-16, PR #602 round 10 -- carried over from round 9's
-        common-navigation audit finding recorded against the admin-surface-topology-seed-conversion
-        Bundle in the repository's agent task tracking surface).
-        Generalizes the per-subBundle navigation_binding_authoring_and_verification /
-        navigation_binding_resolution_criterion gate already proven in
+        Owner design decision (2026-08-16, PR #602 round 10, re-aligned round 11 to
+        docs/design/db-schema.yaml hub_relations.minimum_cardinality_completion_invariant as the
+        top authority). Generalizes the per-subBundle navigation_binding_authoring_and_verification
+        / navigation_binding_resolution_criterion gate already proven in
         docs/design/admin-normal-surface-projection-seed-ssot.yaml design_blocking.subbundle_status
         (and this contract's own test_proof_contract above) from a one-time seed-conversion
-        completion checklist item into a standing architectural invariant for any production
-        projection manifest, present or future -- not scoped to the five named
-        admin-surface-topology-seed-conversion subBundles only.
+        completion checklist item into a standing architectural invariant for every
+        hubs.topology_manifests row, present or future -- not scoped to the five named
+        admin-surface-topology-seed-conversion subBundles only. Round 10 first stated this
+        invariant scoped to "production projection manifests" as distinct from a
+        "standalone/internal/system-utility manifest" exception class; round 11 removed that
+        distinction as inconsistent with db-schema.yaml's hub_relations.role
+        (manifest_scoped_topology_sequence_chain, parent_table hubs.topology_manifests) top
+        authority, which draws no such manifest-kind boundary -- every hubs.topology_manifests row
+        is subject to the same cardinality requirement, not a subset classified by manifest kind.
       invariant: >-
-        A production projection manifest (any manifest whose runtime_destination resolves a real
-        business-facing screen, as opposed to a purely internal/system-utility manifest) must
-        resolve at least one active hubs.hub_relations row through the exact same resolution_chain
-        this contract's test_proof_contract already defines -- HubNavigationResolver ->
-        Emission.NavigationSequence -> resolveHubNavigationLinks -> ProjectionShell's own nav bar /
-        target-manifest round trip. A production projection manifest with zero active hub_relations
-        is not a valid completion state ("navigation orphan").
+        Every hubs.topology_manifests row must resolve at least one active hubs.hub_relations row
+        through the exact same resolution_chain this contract's test_proof_contract already defines
+        -- HubNavigationResolver -> Emission.NavigationSequence -> resolveHubNavigationLinks ->
+        ProjectionShell's own nav bar / target-manifest round trip. A topology_manifest with zero
+        active hub_relations, with only deprecated-status hub_relations, or whose only active
+        hub_relations row's target does not resolve to exactly one active topology_manifest, is
+        not a valid completion state ("navigation orphan") -- see
+        docs/design/db-schema.yaml hub_relations.minimum_cardinality_completion_invariant, the top
+        authority this addendum mirrors.
       not_the_solution: >-
         This invariant is about topology/authoring completeness, not frontend UI. It must not be
         satisfied by adding a dedicated navbar/header/sidebar/Home-button fallback component, nor
@@ -442,33 +449,58 @@ runtime_orchestration_ssot:
         non-empty -- frontend/islands/ProjectionShell.tsx) is unchanged by this invariant; the fix
         belongs at the authoring/proof layer, never as a frontend paper-over.
       not_a_fabrication_license: >-
-        Does not authorize fabricating hub_relations, hubs, or manifests that would not otherwise
-        exist merely to satisfy connectivity -- PR #584's ban on "an empty/fake manifest just to
-        give something a hub relation source" (agent task tracking surface) remains in force. A manifest
-        with no legitimate business reason to connect to another surface (a genuinely standalone
-        utility manifest) is not itself a violation; this invariant applies to production
-        projection surfaces meant to be part of the navigable topology.
+        Does not authorize fabricating hub_relations, hubs, or topology_manifests rows that would
+        not otherwise exist merely to satisfy this cardinality -- PR #584's ban on "an empty/fake
+        manifest just to give something a hub relation source" (agent task tracking surface)
+        remains in force, mirrored in db-schema.yaml's does_not_authorize field on the same
+        invariant.
       proof_shape: >-
         Authoring-side: reuses this contract's own test_proof_contract resolution_chain/proof_boundary
         above unchanged (real hub_navigation:create authoring dispatch, never a raw SQL insert
         standing in for authoring; full resolution_chain to a scalar Emission) -- no new proof
-        mechanism invented. Frontend-side: a real DOM-render assertion (ProjectionShell mounted for
-        real, asserting actual rendered <a>/<span> hub-navigation elements from a real
-        NavigationSequence, not source-string grep) -- see
-        frontend/tests/projectionShellHubNavigationRenderProof.test.ts.
+        mechanism invented. Regression-side: backend/tests/Topolactor.Integration.Tests/
+        HubRelationOrphanInvariantLiveDbTests.cs proves the enforcement_boundary guard below through
+        the real hub_navigation:deprecate dispatch path against a real database, in both the
+        blocked (last active relation) and successful (one of several) cases, and
+        backend/tests/Topolactor.Runtime.Tests/HubNavigationDeprecateOrphanGuardTests.cs proves the
+        same guard at unit level, including that it is scoped per topology_manifest_id (one
+        manifest's last relation does not block a different manifest's own mutation). Frontend-side:
+        a real DOM-render assertion (ProjectionShell mounted for real, asserting actual rendered
+        <a>/<span> hub-navigation elements from a real NavigationSequence, not source-string grep)
+        -- see frontend/tests/projectionShellHubNavigationRenderProof.test.ts.
       enforcement_boundary: >-
-        This addendum establishes the invariant and its proof shape only. It does not itself add a
-        blocking DB constraint, trigger, or manifest-promotion-time validator that would reject an
-        orphan manifest at write time -- scoping exactly which manifest kinds are subject to
-        automatic runtime enforcement (all manifests vs. only business-facing production
-        projections) is a further design decision left open for Owner confirmation, tracked in
-        the repository's agent task tracking surface rather than guessed into this change.
+        The canonical fail-close boundary is hub_navigation:deprecate
+        (NpgsqlContentBundleRepository.DeprecateHubRelationAsync), the only existing mutation able
+        to reduce a topology_manifest's active hub_relations count (hub_navigation:update replaces
+        related_hub_id in place; hub_navigation:reorder never changes status) -- it now fails
+        closed with HUB_RELATION_LAST_ACTIVE_FOR_MANIFEST when deprecating the given row would
+        leave its topology_manifest_id with zero active rows. This invariant is deliberately NOT
+        enforced at hub_relations authoring (hub_navigation:create) or at topology_manifest
+        promotion/authoring (ManifestCanonicalProjection.ProjectOnPromoteAsync /
+        ProjectOnAuthoringDraftAsync) -- docs/design/admin-normal-surface-projection-seed-ssot.yaml
+        design_blocking's own sequencing_note establishes that hub relation authoring is
+        structurally the LAST step after a topology_manifest's own content is built (physical DB
+        definition -> in-topology relation/function definition -> UI definition -> hub relation
+        definition), and that navigation_binding_authoring_and_verification "can never be a
+        precondition for starting a subBundle's own target manifest build." Blocking promotion on
+        zero hub_relations would contradict that established sequencing (every newly authored
+        topology_manifest would fail promotion before its first hub_relations row could exist).
+        Two boundaries therefore share responsibility for this one invariant by design, not by
+        omission: hub_navigation:deprecate is the live write-time guard preventing regression of an
+        already-connected topology_manifest into an orphan; navigation_binding_resolution_criterion
+        (design_blocking.subbundle_status) is the completion-judgment/proof boundary that decides
+        whether a topology_manifest counts as done, evaluated after its own content-build phase, not
+        during it. A blocking DB constraint or promotion-time validator applied uniformly to every
+        topology_manifest would fire on every newly authored one before hub relation authoring can
+        happen; this addendum deliberately excludes that mechanism as a design boundary, not an
+        oversight.
       scope: >-
-        Applies to admin-surface-topology-seed-conversion's five subBundles (the existing concrete
-        proof precedent: admin-dashboard/admin-enum/credential-management already resolved per
-        navigation_binding_resolution_criterion; team-dashboard/scheduler-settings remain
-        unresolved_before_seed) and generalizes forward to any future production projection surface
-        built under this framework -- not scoped to seed-conversion specifically.
+        Applies to every hubs.topology_manifests row per db-schema.yaml
+        hub_relations.minimum_cardinality_completion_invariant.applies_to -- not limited to
+        admin-surface-topology-seed-conversion's five subBundles, though those remain the existing
+        concrete proof precedent (admin-dashboard/admin-enum/credential-management already resolved
+        per navigation_binding_resolution_criterion; team-dashboard/scheduler-settings remain
+        unresolved_before_seed).
 
     canonical_default_entry_contract:
       note: >-

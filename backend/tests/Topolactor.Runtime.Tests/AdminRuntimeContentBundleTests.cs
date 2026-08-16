@@ -461,7 +461,18 @@ public class AdminRuntimeContentBundleTests
     [Fact]
     public async Task HubNavigation_Deprecate_SetsDeprecatedStatus()
     {
-        var runtime = CreateRuntime(new InMemoryContentBundleRepository());
+        // production_projection_connectivity_invariant (docs/design/db-schema.yaml
+        // hub_relations.minimum_cardinality_completion_invariant): deprecating a topology_manifest's
+        // ONLY active hub_relations row now fails closed (see
+        // HubNavigationDeprecateOrphanGuardTests for that behavior) — a second active relation is
+        // seeded here first so this test can still exercise the ordinary success path.
+        var repo = new InMemoryContentBundleRepository();
+        repo.AddHubRelation(
+            Guid.NewGuid(),
+            InMemoryContentBundleRepository.FixtureTopologyManifestId,
+            InMemoryContentBundleRepository.FixtureRelatedHubId,
+            2);
+        var runtime = CreateRuntime(repo);
         var payload = JsonSerializer.SerializeToElement(new
         {
             hubRelationId = InMemoryContentBundleRepository.FixtureHubRelationId.ToString(),

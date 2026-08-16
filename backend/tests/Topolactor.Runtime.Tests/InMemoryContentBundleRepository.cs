@@ -390,6 +390,18 @@ internal class InMemoryContentBundleRepository : ContentBundleRepository
                     "Hub relation not found or not active.", "HUB_RELATION_NOT_FOUND"), null));
 
         var existing = _hubRelations[idx];
+        // production_projection_connectivity_invariant: mirrors NpgsqlContentBundleRepository's
+        // last-active-relation fail-close guard so this behavior is unit-testable without a live DB.
+        var remaining = _hubRelations.Count(hr =>
+            hr.TopologyManifestId == existing.TopologyManifestId && hr.Status == "active" &&
+            hr.HubRelationId != hubRelationId);
+        if (remaining == 0)
+            return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
+                (new HubNavigationLifecycleResponseDto(false, hubRelationId.ToString(), "error",
+                    "Cannot deprecate the last active hub_relations row for this topology manifest -- " +
+                    "would leave the manifest with zero active hub relations (navigation orphan).",
+                    "HUB_RELATION_LAST_ACTIVE_FOR_MANIFEST"), null));
+
         _hubRelations[idx] = (existing.HubRelationId, existing.TopologyManifestId, existing.RelatedHubId, existing.SequencePosition, "deprecated");
         return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
             (new HubNavigationLifecycleResponseDto(true, hubRelationId.ToString(), "deprecated", "Hub relation deprecated."), null));
