@@ -646,6 +646,28 @@ function dispatchRuntimeComponentCommandAndForwardResult(
     });
 }
 
+/**
+ * Reserved payloadFrom field name: when an authored payloadFrom map resolves a field
+ * literally named "idOrHubId", that value is the dispatch's record-identity target
+ * (RuntimeDispatchSpec.idOrHubId -> DispatchRequest.idOrHubId on the wire) rather than an
+ * ordinary payload field — the same mechanism dedicated frontend callers (e.g.
+ * teamMarkdownApi.ts) already use directly for backend actions that key their target
+ * record off vector.IdOrHubId (team_markdown:saved_view:get/update/refresh/clone/rebind/
+ * archive) instead of a payload field. Every pre-existing wiring authors record identity
+ * as an ordinary payload field instead (enum's groupId/indexNum, credential's recordId)
+ * and never authors this reserved key, so this is additive/opt-in and changes no existing
+ * dispatch payload shape.
+ */
+function splitIdOrHubIdFromResolvedPayload(
+  resolved: Record<string, unknown>,
+): { idOrHubId?: string; payload: Record<string, unknown> } {
+  if (!("idOrHubId" in resolved)) return { payload: resolved };
+  const { idOrHubId: rawIdOrHubId, ...rest } = resolved;
+  return typeof rawIdOrHubId === "string" && rawIdOrHubId.length > 0
+    ? { idOrHubId: rawIdOrHubId, payload: rest }
+    : { payload: rest };
+}
+
 function emitBoundEvent(
   spec: RuntimeComponentSpec,
   trigger: string,
@@ -810,7 +832,17 @@ function emitBoundEvent(
             payload,
           );
           if (!fresh.ok) return { ok: false, error: fresh.errors.join("; ") };
-          return { ok: true, value: { ...runtimeDispatch, payload: fresh.payload } };
+          const { idOrHubId, payload: restPayload } = splitIdOrHubIdFromResolvedPayload(
+            fresh.payload,
+          );
+          return {
+            ok: true,
+            value: {
+              ...runtimeDispatch,
+              ...(idOrHubId !== undefined ? { idOrHubId } : {}),
+              payload: restPayload,
+            },
+          };
         },
         deferLocalStateMutationToDispatchSuccess
           ? applyDeferredLocalStateMutationOnSuccess

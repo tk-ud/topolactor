@@ -1192,6 +1192,120 @@ Deno.test("emitBoundEvent: admin_runtime runtimeDispatch forwards event-time pay
   }
 });
 
+Deno.test("emitBoundEvent: a payloadFrom-resolved 'idOrHubId' field is forwarded as the top-level DispatchRequest.idOrHubId, not left inside payload", async () => {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  let capturedBody: Record<string, unknown> | null = null;
+  globalThis.fetch = ((_url: string, init?: RequestInit) => {
+    capturedBody = JSON.parse(String(init?.body ?? "{}"));
+    return Promise.resolve(
+      new Response(JSON.stringify({ success: true, errors: [] }), { status: 200 }),
+    );
+  }) as typeof fetch;
+  try {
+    const savedViewId = "00000000-0000-0000-0000-0000000000aa";
+    const emission: Emission = {
+      layoutId: "layout-team-markdown-idorhubid-001",
+      layoutNodes: [{
+        nodeId: "node-team-markdown-write",
+        nodeKind: "catalog_component",
+        componentId: "comp-team-markdown-write-001",
+        componentKind: "action/button",
+        componentKey: "button.primitive",
+        orderIndex: 0,
+        wiringKind: "admin_runtime",
+        targetSurface: "manifest",
+        targetRef: "manifest:00000000-0000-0000-0000-0000000ad900:team_markdown:saved_view:update",
+        dispatchTargetRefByTrigger: {
+          click: "manifest:00000000-0000-0000-0000-0000000ad900:team_markdown:saved_view:update",
+        },
+        dispatchPayloadFromByTrigger: {
+          click: {
+            idOrHubId: `literal:${savedViewId}`,
+            renderedMarkdown: "literal:updated body",
+            dryRun: "literal:true",
+          },
+        },
+      }],
+    };
+    const specs = renderEmission(emission, emptyRegistry);
+    assertExists(specs[0].runtimeSpec, "runtimeSpec must exist");
+    const result = factoryTestOnly.emitBoundEvent(specs[0].runtimeSpec!, "click", {});
+    assertEquals(result.ok, true);
+    for (let i = 0; i < 20 && capturedBody === null; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assertExists(capturedBody, "the api_command_lane request body must have been captured");
+    const body = capturedBody as Record<string, unknown>;
+    // idOrHubId travels as a top-level DispatchRequest field (OperationVectorResolver.cs
+    // reads request.IdOrHubId -> vector.IdOrHubId, consumed by AdminRuntime.TeamMarkdown.cs's
+    // saved_view:* actions), never nested inside payload alongside ordinary typed fields.
+    assertEquals(body.idOrHubId, savedViewId);
+    const payload = body.payload as Record<string, unknown>;
+    assertEquals(payload.renderedMarkdown, "updated body");
+    assertEquals(payload.dryRun, "true");
+    assertEquals(
+      "idOrHubId" in payload,
+      false,
+      "idOrHubId must not also be duplicated inside payload",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
+});
+
+Deno.test("emitBoundEvent: payloadFrom with no 'idOrHubId' key leaves RuntimeDispatchSpec.idOrHubId unset (pre-existing wirings unchanged)", async () => {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  let capturedBody: Record<string, unknown> | null = null;
+  globalThis.fetch = ((_url: string, init?: RequestInit) => {
+    capturedBody = JSON.parse(String(init?.body ?? "{}"));
+    return Promise.resolve(
+      new Response(JSON.stringify({ success: true, errors: [] }), { status: 200 }),
+    );
+  }) as typeof fetch;
+  try {
+    const emission: Emission = {
+      layoutId: "layout-no-idorhubid-001",
+      layoutNodes: [{
+        nodeId: "node-enum-update-group",
+        nodeKind: "catalog_component",
+        componentId: "comp-enum-update-group-001",
+        componentKind: "action/button",
+        componentKey: "button.primitive",
+        orderIndex: 0,
+        wiringKind: "admin_runtime",
+        targetSurface: "manifest",
+        targetRef: `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:update_group`,
+        dispatchTargetRefByTrigger: {
+          click: `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:update_group`,
+        },
+        dispatchPayloadFromByTrigger: {
+          click: { groupId: "literal:group-1", groupName: "literal:Status", dryRun: "literal:true" },
+        },
+      }],
+    };
+    const specs = renderEmission(emission, emptyRegistry);
+    assertExists(specs[0].runtimeSpec, "runtimeSpec must exist");
+    const result = factoryTestOnly.emitBoundEvent(specs[0].runtimeSpec!, "click", {});
+    assertEquals(result.ok, true);
+    for (let i = 0; i < 20 && capturedBody === null; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assertExists(capturedBody);
+    const body = capturedBody as Record<string, unknown>;
+    assertEquals("idOrHubId" in body, false);
+    const payload = body.payload as Record<string, unknown>;
+    assertEquals(payload.groupId, "group-1");
+  } finally {
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
+});
+
 // ─── high_frequency_policy runtime guard: emitBoundEvent fails close, not only authoring/apply ──
 
 Deno.test("emitBoundEvent: high-frequency trigger + dispatchExternalPort without debounceMs fails close and never enqueues", () => {

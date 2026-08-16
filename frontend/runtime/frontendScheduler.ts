@@ -368,6 +368,16 @@ export type RuntimeDispatchSpec = {
    * branch) is unchanged.
    */
   payloadFrom?: Record<string, string>;
+  /**
+   * Record-identity dispatch target (DispatchRequest.idOrHubId on the wire), for backend
+   * actions that key their target record off vector.IdOrHubId instead of a payload field
+   * (e.g. team_markdown:saved_view:get/update/refresh/clone/rebind/archive). Resolved by
+   * emitBoundEvent from a reserved "idOrHubId" key in an authored payloadFrom map — see
+   * runtimeComponentFactory.ts's payloadFrom resolution branch — never authored directly
+   * here. Absent for every pre-existing wiring (payload-field-keyed identity, e.g. enum's
+   * groupId/indexNum, external_api_credential's recordId), so this is additive/opt-in.
+   */
+  idOrHubId?: string;
 };
 
 export type ExternalPortDispatchSpec = {
@@ -405,6 +415,7 @@ export async function enqueueRuntimeComponentCommand(
       target: spec.target,
       layer: spec.layer,
       action: spec.action,
+      ...(spec.idOrHubId ? { idOrHubId: spec.idOrHubId } : {}),
       ...(Object.keys(payload).length > 0 ? { payload } : {}),
     },
     token,

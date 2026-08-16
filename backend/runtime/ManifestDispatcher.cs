@@ -619,9 +619,13 @@ public class ManifestDispatcher
     /// Mirrors frontend/runtime/renderEmission.ts's ADMIN_RUNTIME_TARGET_REF_RE exactly:
     /// "manifest:&lt;36-char-uuid&gt;:&lt;layer&gt;:&lt;action&gt;" — a proper subset of
     /// TryParseManifestTargetRef's lenient Guid.TryParse-based manifest-id extraction above.
+    /// The action group is "(.+)$" (not "([^:]+)$"): team_markdown's entire action
+    /// vocabulary is "&lt;resource&gt;:&lt;verb&gt;" shaped (e.g. "saved_view:update"), so a
+    /// colon-free action group would reject every team_markdown target_ref as malformed. The
+    /// layer group stays colon-free — no existing layer name contains a colon.
     /// </summary>
     private static readonly Regex AdminRuntimeTargetRefRe =
-        new(@"^manifest:([0-9a-fA-F-]{36}):([^:]+):([^:]+)$", RegexOptions.Compiled);
+        new(@"^manifest:([0-9a-fA-F-]{36}):([^:]+):(.+)$", RegexOptions.Compiled);
 
     /// <summary>
     /// Round 17/18 hardening: validates that an admin_runtime-destined target_ref's embedded

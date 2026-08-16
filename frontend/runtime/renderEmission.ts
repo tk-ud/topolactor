@@ -156,14 +156,18 @@ export function isNavigationWiringKind(wiringKind: string): boolean {
  * (enum_dictionary:*, auth_users:*, team_markdown:*, scheduler_jobs:*, ...),
  * never a single surface's dedicated handler. Returns null (fail-close, no
  * partial parse) when targetRef is absent or not exactly
- * "manifest:<uuid>:<layer>:<action>" (4 colon-separated segments, uuid a
- * syntactically plausible UUID, layer/action non-empty).
+ * "manifest:<uuid>:<layer>:<action>" (uuid a syntactically plausible UUID,
+ * layer non-empty and colon-free — action non-empty, everything after the
+ * layer's own colon, and MAY itself contain colons: team_markdown's entire
+ * action vocabulary is "<resource>:<verb>" shaped, e.g. layer="team_markdown"
+ * action="saved_view:update" — a colon-free action group would wrongly reject
+ * every team_markdown target_ref as malformed).
  * SSOT: docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
  * lane_storage_boundary.known_gaps admin_runtime_layer_action_dispatch_lane_not_yet_defined
  * (extend_wiring_kind_vocabulary direction).
  */
 const ADMIN_RUNTIME_TARGET_REF_RE =
-  /^manifest:([0-9a-fA-F-]{36}):([^:]+):([^:]+)$/;
+  /^manifest:([0-9a-fA-F-]{36}):([^:]+):(.+)$/;
 
 function parseAdminRuntimeLayerAction(
   targetRef: string | null | undefined,

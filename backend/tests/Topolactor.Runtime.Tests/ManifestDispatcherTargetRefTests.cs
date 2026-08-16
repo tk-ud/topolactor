@@ -274,6 +274,30 @@ public class ManifestDispatcherTargetRefTests
     }
 
     [Fact]
+    public async Task DispatchAsync_TargetRef_AdminRuntimeManifest_ColonContainingAction_ParsesAndDispatches()
+    {
+        // team_markdown's entire action vocabulary is "<resource>:<verb>" shaped
+        // (e.g. "saved_view:update", "template:create") -- AdminRuntimeTargetRefRe's action
+        // group must capture the WHOLE remainder after the layer's own colon, not stop at the
+        // action's own internal colon (a bug this fixture would have caught: the pre-fix
+        // "([^:]+):([^:]+)$" pattern rejects this target_ref as TARGET_REF_INVALID entirely,
+        // never reaching authorization or dispatch). Mirrors frontend/runtime/renderEmission.ts's
+        // ADMIN_RUNTIME_TARGET_REF_RE, tested against the identical shape in
+        // adminWiringExecutionLane.test.ts.
+        var repo = new ConfigurableManifestRepository(
+            KnownManifestId, status: "active", dispatcherMappingLayer: "team_markdown", dispatcherMappingAction: "saved_view:update");
+        var dispatcher = BuildDispatcher(repo, new Dictionary<string, IDispatchableRuntime>
+        {
+            ["admin_runtime"] = new StubSuccessRuntime(),
+        });
+        var targetRef = $"manifest:{KnownManifestId}:team_markdown:saved_view:update";
+
+        var response = await dispatcher.DispatchAsync(MakeAdminRuntimeRequest("team_markdown", "saved_view:update", targetRef));
+
+        Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
+    }
+
+    [Fact]
     public async Task DispatchAsync_TargetRef_AdminRuntimeManifest_NonLayerActionShape_SkipsAuthorization_StillDispatches()
     {
         // Round 17 correction (caught by live-DB CI, not locally reproducible without real
