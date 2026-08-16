@@ -87,7 +87,7 @@ VALUES ('sql_attention_hub_attractor_exploration', 'default_policy',
         '{""norm_level_high"":10.0,""norm_level_medium"":1.0,""exploration_budget_tiers"":{""weak"":{""topK_per_hub_kind"":1,""max_hub_tables_per_kind"":2,""phase_expansion_limit"":1,""search_mode"":""near_neighbor_narrow_topK""},""mid"":{""topK_per_hub_kind"":3,""max_hub_tables_per_kind"":5,""phase_expansion_limit"":1,""search_mode"":""normal_topK""},""high"":{""topK_per_hub_kind"":5,""max_hub_tables_per_kind"":10,""phase_expansion_limit"":3,""search_mode"":""expanded_distance_band_or_permutation""}},""max_hub_kinds_per_current"":5,""max_attention_rows_saved"":10,""neighbor_score_min"":0.0,""strong_hit_threshold"":0.95,""normal_hit_threshold"":0.90,""exploratory_hit_threshold"":0.85}'::jsonb, true)
 ON CONFLICT (function_name, parameter_key) DO NOTHING;
 INSERT INTO hubs.hub (hub_id, relation) VALUES (@hub_id, '{}'::jsonb), (@related_hub_id, '{}'::jsonb);
-INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key) VALUES (@manifest_id, @hub_id, @manifest_key);
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status) VALUES (@manifest_id, @hub_id, @manifest_key, 'active');
 INSERT INTO hubs.hub_relations (hub_relation_id, topology_manifest_id, related_hub_id, sequence_position, relation_config)
 VALUES (@relation_id, @manifest_id, @related_hub_id, 1, '{""sql_attention_score"":0.93}'::jsonb);
 INSERT INTO topology.physical_tables (table_ref) VALUES (@table_ref) RETURNING physical_table_id", conn))

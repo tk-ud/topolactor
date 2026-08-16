@@ -52,14 +52,15 @@ builder.Services.AddSingleton<UiTopologyRepository>(sp =>
     new NpgsqlUiTopologyRepository(
         sp.GetRequiredService<ILogger<NpgsqlUiTopologyRepository>>(),
         connectionString));
-builder.Services.AddSingleton<ManifestRepository>(sp =>
-    new NpgsqlManifestRepository(
-        sp.GetRequiredService<ILogger<NpgsqlManifestRepository>>(),
-        connectionString));
 builder.Services.AddSingleton<ContentBundleRepository>(sp =>
     new NpgsqlContentBundleRepository(
         sp.GetRequiredService<ILogger<NpgsqlContentBundleRepository>>(),
         connectionString));
+builder.Services.AddSingleton<ManifestRepository>(sp =>
+    new NpgsqlManifestRepository(
+        sp.GetRequiredService<ILogger<NpgsqlManifestRepository>>(),
+        connectionString,
+        sp.GetRequiredService<ContentBundleRepository>()));
 builder.Services.AddSingleton<DbNotifyRepository>(sp =>
     new NpgsqlDbNotifyRepository(
         sp.GetRequiredService<ILogger<NpgsqlDbNotifyRepository>>(),

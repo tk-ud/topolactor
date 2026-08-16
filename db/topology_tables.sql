@@ -124,8 +124,8 @@ CREATE TABLE IF NOT EXISTS hubs.topology_manifests (
     topology_manifest_id  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     hub_id                UUID        NOT NULL REFERENCES hubs.hub (hub_id) ON DELETE CASCADE,
     manifest_key          TEXT        NOT NULL,
-    status                TEXT        NOT NULL DEFAULT 'active'
-                          CHECK (status IN ('active', 'deprecated')),
+    status                TEXT        NOT NULL DEFAULT 'draft'
+                          CHECK (status IN ('draft', 'active', 'deprecated')),
     topology_jsonb        JSONB       NOT NULL DEFAULT '{}'::jsonb,
     created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -134,7 +134,12 @@ CREATE TABLE IF NOT EXISTS hubs.topology_manifests (
 COMMENT ON TABLE hubs.topology_manifests IS
     'Child of hubs.hub. Hub-side manifest grouping surface. Canonical manifest reference for Phase Attention '
     'ID-space semantics (y = topology_manifest_id; z is the registered hub_id). '
-    'Parent of hubs.hub_relations. Not a wiring table; topology.wiring_physical_to_package owns package wiring.';
+    'Parent of hubs.hub_relations. Not a wiring table; topology.wiring_physical_to_package owns package wiring. '
+    'status mirrors the owning public.manifest row''s draft/active/deprecated lifecycle phase (see '
+    'ManifestCanonicalProjection.UpsertTopologyManifestAsync) -- draft is a valid transient authoring state '
+    '(hub relation authoring is permitted against a draft row), active is the sole runtime/navigation '
+    'resolution authority (see idx_topology_manifests_status below and hub_relations.'
+    'minimum_cardinality_completion_invariant in docs/design/db-schema.yaml).';
 
 CREATE INDEX IF NOT EXISTS idx_topology_manifests_hub_id
     ON hubs.topology_manifests (hub_id);

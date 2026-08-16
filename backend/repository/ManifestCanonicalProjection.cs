@@ -176,21 +176,29 @@ public static class ManifestCanonicalProjection
             entries = detail.Topology,
         });
 
+        // status mirrors detail.Status (the owning public.manifest row's own draft/active/deprecated
+        // lifecycle phase at the moment this projection runs) -- ProjectOnAuthoringDraftAsync always
+        // passes a "draft" detail (create/update-draft callers), ProjectOnPromoteAsync always passes
+        // an "active" detail (its callers already flip public.manifest to active, in the same
+        // transaction, before calling this). Never hardcode 'active' here: that was the Round 11/12
+        // phase mismatch (a draft public.manifest producing an immediately-active topology_manifests
+        // row) this round realigns. See db/topology_tables.sql hubs.topology_manifests.status comment.
         await using var upsert = conn.CreateCommand();
         upsert.Transaction = tx;
         upsert.CommandText =
             "INSERT INTO hubs.topology_manifests " +
             "(topology_manifest_id, hub_id, manifest_key, status, topology_jsonb) " +
-            "VALUES (@id, @hub, @key, 'active', @topo::jsonb) " +
+            "VALUES (@id, @hub, @key, @status, @topo::jsonb) " +
             "ON CONFLICT (topology_manifest_id) DO UPDATE SET " +
             "hub_id = EXCLUDED.hub_id, " +
             "manifest_key = EXCLUDED.manifest_key, " +
-            "status = 'active', " +
+            "status = EXCLUDED.status, " +
             "topology_jsonb = EXCLUDED.topology_jsonb, " +
             "updated_at = now()";
         upsert.Parameters.AddWithValue("id", detail.ManifestId);
         upsert.Parameters.AddWithValue("hub", hubId);
         upsert.Parameters.AddWithValue("key", manifestKey);
+        upsert.Parameters.AddWithValue("status", detail.Status);
         upsert.Parameters.AddWithValue("topo", topologyJsonb);
         await upsert.ExecuteNonQueryAsync(ct);
         return null;

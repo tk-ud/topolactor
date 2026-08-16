@@ -33,8 +33,9 @@ internal static class HubRelationUiProjectionResolutionChainProof
         var topoVector = new TopologyVectorRuntime(NullLogger<TopologyVectorRuntime>.Instance, ctxRepo);
         var registrar = new RegistrarValidationService(NullLogger<RegistrarValidationService>.Instance, topoRepo, topoVector);
         var pkg = new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, uiRepo);
-        var manifestRepo = new NpgsqlManifestRepository(NullLogger<NpgsqlManifestRepository>.Instance, connectionString);
         var contentBundleRepo = new NpgsqlContentBundleRepository(NullLogger<NpgsqlContentBundleRepository>.Instance, connectionString);
+        var manifestRepo = new NpgsqlManifestRepository(
+            NullLogger<NpgsqlManifestRepository>.Instance, connectionString, contentBundleRepo);
         var hubNavResolver = new HubNavigationResolver(contentBundleRepo, manifestRepo);
         var adminRuntime = new AdminRuntime(
             NullLogger<AdminRuntime>.Instance,

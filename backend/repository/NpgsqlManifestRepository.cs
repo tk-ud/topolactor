@@ -22,13 +22,16 @@ namespace Topolactor.Repository;
 public class NpgsqlManifestRepository : ManifestRepository
 {
     private readonly string _connectionString;
+    private readonly ContentBundleRepository? _contentBundleRepository;
 
     public NpgsqlManifestRepository(
         ILogger<NpgsqlManifestRepository> logger,
-        string connectionString)
+        string connectionString,
+        ContentBundleRepository? contentBundleRepository = null)
         : base(logger)
     {
         _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
+        _contentBundleRepository = contentBundleRepository;
     }
 
     /// <inheritdoc/>
@@ -355,6 +358,27 @@ public class NpgsqlManifestRepository : ManifestRepository
             return (null, first);
         }
 
+        // production_projection_connectivity_invariant (docs/design/db-schema.yaml
+        // hub_relations.minimum_cardinality_completion_invariant): draft -> active promotion is the
+        // canonical completion boundary for this invariant (a draft manifest legitimately has zero
+        // hub_relations while its own content is still being authored -- see
+        // admin-normal-surface-projection-seed-ssot.yaml design_blocking.sequencing_note). Checked
+        // against already-committed hub_relations data via a separate connection (not this
+        // promotion transaction) -- hub relations are authored through the independent
+        // hub_navigation:* actions before promotion is ever attempted, so there is nothing this
+        // transaction itself needs to make visible first.
+        if (_contentBundleRepository is null)
+            return (null, new ValidationError(
+                "CONTENT_BUNDLE_REPOSITORY_NOT_AVAILABLE", "Content bundle repository is not registered."));
+        if (!await _contentBundleRepository.HasResolvableActiveHubRelationAsync(manifestId, ct))
+        {
+            return (null, new ValidationError(
+                "HUB_RELATION_REQUIRED_FOR_PROMOTION",
+                $"Manifest {manifestId} cannot be promoted: it has no active hub_relations row that " +
+                "resolves to exactly one active target topology_manifest (zero relations, deprecated-only " +
+                "relations, and an unresolvable-target-only relation all fail this check)."));
+        }
+
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
@@ -407,21 +431,45 @@ public class NpgsqlManifestRepository : ManifestRepository
 
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
 
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText =
-            "UPDATE manifest SET status = 'deprecated', updated_at = now() " +
-            "WHERE manifest_id = @id AND status = 'active' " +
-            "RETURNING manifest_id, relation_registry_id, topology, status, created_at, updated_at";
-        cmd.Parameters.AddWithValue("id", manifestId);
-
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct))
+        ManifestDetailRecord deprecated;
+        await using (var cmd = conn.CreateCommand())
         {
-            return (null, new ValidationError("MANIFEST_DEPRECATE_FAILED", $"Failed to deprecate manifest {manifestId}."));
+            cmd.Transaction = tx;
+            cmd.CommandText =
+                "UPDATE manifest SET status = 'deprecated', updated_at = now() " +
+                "WHERE manifest_id = @id AND status = 'active' " +
+                "RETURNING manifest_id, relation_registry_id, topology, status, created_at, updated_at";
+            cmd.Parameters.AddWithValue("id", manifestId);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct))
+            {
+                await tx.RollbackAsync(ct);
+                return (null, new ValidationError("MANIFEST_DEPRECATE_FAILED", $"Failed to deprecate manifest {manifestId}."));
+            }
+
+            deprecated = ReadDetailRecord(reader);
         }
 
-        return (ReadDetailRecord(reader), null);
+        // Keep hubs.topology_manifests.status in the same draft/active/deprecated lifecycle phase
+        // as public.manifest for this identity (topology_manifest_id == manifest_id by convention)
+        // -- a deprecated manifest must also stop being a valid navigation/runtime target (see
+        // LoadHubNavigationSequenceAsync's tm2.status='active' target resolution). No-op (0 rows)
+        // when no topology_manifests row was ever projected for this manifest, which is not an error.
+        await using (var tmCmd = conn.CreateCommand())
+        {
+            tmCmd.Transaction = tx;
+            tmCmd.CommandText =
+                "UPDATE hubs.topology_manifests SET status = 'deprecated', updated_at = now() " +
+                "WHERE topology_manifest_id = @id AND status != 'deprecated'";
+            tmCmd.Parameters.AddWithValue("id", manifestId);
+            await tmCmd.ExecuteNonQueryAsync(ct);
+        }
+
+        await tx.CommitAsync(ct);
+        return (deprecated, null);
     }
 
     /// <inheritdoc/>

@@ -1215,6 +1215,14 @@ public class ManifestCanonicalProjectionUnitTests
                 conn,
                 "SELECT count(*) FROM topology.wiring_physical_to_package WHERE package_id = @id",
                 manifestId));
+
+            // production_projection_connectivity_invariant realignment: ProjectOnAuthoringDraftAsync
+            // must mirror detail.Status ("draft" here) onto hubs.topology_manifests.status rather
+            // than hardcoding 'active' -- the phase mismatch this round's realignment resolves.
+            await using var statusCmd = new NpgsqlCommand(
+                "SELECT status FROM hubs.topology_manifests WHERE topology_manifest_id = @id", conn);
+            statusCmd.Parameters.AddWithValue("id", manifestId);
+            Assert.Equal("draft", (string?)await statusCmd.ExecuteScalarAsync());
         }
         finally
         {

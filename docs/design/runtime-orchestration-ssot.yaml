@@ -417,8 +417,10 @@ runtime_orchestration_ssot:
       note: >-
         Owner design decision (2026-08-16, PR #602 round 10, re-aligned round 11 to
         docs/design/db-schema.yaml hub_relations.minimum_cardinality_completion_invariant as the
-        top authority). Generalizes the per-subBundle navigation_binding_authoring_and_verification
-        / navigation_binding_resolution_criterion gate already proven in
+        top authority; re-aligned round 13 to the existing public.manifest draft -> active ->
+        deprecated lifecycle as the canonical completion boundary -- see enforcement_boundary
+        below). Generalizes the per-subBundle navigation_binding_authoring_and_verification /
+        navigation_binding_resolution_criterion gate already proven in
         docs/design/admin-normal-surface-projection-seed-ssot.yaml design_blocking.subbundle_status
         (and this contract's own test_proof_contract above) from a one-time seed-conversion
         completion checklist item into a standing architectural invariant for every
@@ -430,16 +432,26 @@ runtime_orchestration_ssot:
         (manifest_scoped_topology_sequence_chain, parent_table hubs.topology_manifests) top
         authority, which draws no such manifest-kind boundary -- every hubs.topology_manifests row
         is subject to the same cardinality requirement, not a subset classified by manifest kind.
+        Round 12 audited whether any production authority represented "this manifest's build is
+        finished" distinct from status='active' (set at manifest creation, before round 13, which
+        made status='active' meaningless as a completion signal since it was set unconditionally on
+        every authoring upsert) and found none, recording navigation_binding_resolution_criterion
+        (design_blocking.subbundle_status) as a manually-tracked 5-subBundle documentation
+        convention only, not a general runtime boundary -- that framing is now corrected by round
+        13: the boundary was never missing, hubs.topology_manifests.status was simply wired wrong
+        (see enforcement_boundary).
       invariant: >-
-        Every hubs.topology_manifests row must resolve at least one active hubs.hub_relations row
-        through the exact same resolution_chain this contract's test_proof_contract already defines
-        -- HubNavigationResolver -> Emission.NavigationSequence -> resolveHubNavigationLinks ->
-        ProjectionShell's own nav bar / target-manifest round trip. A topology_manifest with zero
-        active hub_relations, with only deprecated-status hub_relations, or whose only active
-        hub_relations row's target does not resolve to exactly one active topology_manifest, is
-        not a valid completion state ("navigation orphan") -- see
-        docs/design/db-schema.yaml hub_relations.minimum_cardinality_completion_invariant, the top
-        authority this addendum mirrors.
+        Every hubs.topology_manifests row with status='active' must resolve at least one active
+        hubs.hub_relations row through the exact same resolution_chain this contract's
+        test_proof_contract already defines -- HubNavigationResolver -> Emission.NavigationSequence
+        -> resolveHubNavigationLinks -> ProjectionShell's own nav bar / target-manifest round trip.
+        An active topology_manifest with zero active hub_relations, with only deprecated-status
+        hub_relations, or whose only active hub_relations row's target does not resolve to exactly
+        one active topology_manifest, is not a valid completion state ("navigation orphan"). A
+        status='draft' topology_manifest is exempt while authoring is in progress and is never
+        itself resolved as a navigation/runtime target -- see
+        docs/design/db-schema.yaml hub_relations.minimum_cardinality_completion_invariant
+        (draft_transient_state_carve_out), the top authority this addendum mirrors.
       not_the_solution: >-
         This invariant is about topology/authoring completeness, not frontend UI. It must not be
         satisfied by adding a dedicated navbar/header/sidebar/Home-button fallback component, nor
@@ -458,42 +470,56 @@ runtime_orchestration_ssot:
         Authoring-side: reuses this contract's own test_proof_contract resolution_chain/proof_boundary
         above unchanged (real hub_navigation:create authoring dispatch, never a raw SQL insert
         standing in for authoring; full resolution_chain to a scalar Emission) -- no new proof
-        mechanism invented. Regression-side: backend/tests/Topolactor.Integration.Tests/
-        HubRelationOrphanInvariantLiveDbTests.cs proves the enforcement_boundary guard below through
-        the real hub_navigation:deprecate dispatch path against a real database, in both the
-        blocked (last active relation) and successful (one of several) cases, and
-        backend/tests/Topolactor.Runtime.Tests/HubNavigationDeprecateOrphanGuardTests.cs proves the
-        same guard at unit level, including that it is scoped per topology_manifest_id (one
-        manifest's last relation does not block a different manifest's own mutation). Frontend-side:
-        a real DOM-render assertion (ProjectionShell mounted for real, asserting actual rendered
-        <a>/<span> hub-navigation elements from a real NavigationSequence, not source-string grep)
-        -- see frontend/tests/projectionShellHubNavigationRenderProof.test.ts.
+        mechanism invented. Promotion-boundary-side (round 13):
+        backend/tests/Topolactor.Integration.Tests/ManifestDraftActivePromotionLifecycleLiveDbTests.cs
+        proves, against a real database and NpgsqlManifestRepository.PromoteAsync: draft create
+        projects a draft topology_manifest with legitimate N=0 hub_relations; a resolvable active
+        relation authored on the draft (via real hub_navigation:create dispatch) lets promotion
+        succeed and both public.manifest and hubs.topology_manifests become active; zero,
+        deprecated-only, and unresolved-only-target relations each fail promotion closed with
+        HUB_RELATION_REQUIRED_FOR_PROMOTION and leave both tables in their prior draft state; and
+        NpgsqlManifestRepository.DeprecateAsync mirrors 'deprecated' onto hubs.topology_manifests,
+        making the manifest stop resolving as a navigation target. Deprecate-regression-side
+        (round 11, unmodified by round 13): backend/tests/Topolactor.Integration.Tests/
+        HubRelationOrphanInvariantLiveDbTests.cs proves the hub_navigation:deprecate guard below
+        through the real dispatch path, in both the blocked (last active relation) and successful
+        (one of several) cases, and backend/tests/Topolactor.Runtime.Tests/
+        HubNavigationDeprecateOrphanGuardTests.cs proves the same guard at unit level, including
+        that it is scoped per topology_manifest_id. Frontend-side: a real DOM-render assertion
+        (ProjectionShell mounted for real, asserting actual rendered <a>/<span> hub-navigation
+        elements from a real NavigationSequence, not source-string grep) -- see
+        frontend/tests/projectionShellHubNavigationRenderProof.test.ts.
       enforcement_boundary: >-
-        The canonical fail-close boundary is hub_navigation:deprecate
-        (NpgsqlContentBundleRepository.DeprecateHubRelationAsync), the only existing mutation able
-        to reduce a topology_manifest's active hub_relations count (hub_navigation:update replaces
-        related_hub_id in place; hub_navigation:reorder never changes status) -- it now fails
-        closed with HUB_RELATION_LAST_ACTIVE_FOR_MANIFEST when deprecating the given row would
-        leave its topology_manifest_id with zero active rows. This invariant is deliberately NOT
-        enforced at hub_relations authoring (hub_navigation:create) or at topology_manifest
-        promotion/authoring (ManifestCanonicalProjection.ProjectOnPromoteAsync /
-        ProjectOnAuthoringDraftAsync) -- docs/design/admin-normal-surface-projection-seed-ssot.yaml
-        design_blocking's own sequencing_note establishes that hub relation authoring is
-        structurally the LAST step after a topology_manifest's own content is built (physical DB
-        definition -> in-topology relation/function definition -> UI definition -> hub relation
-        definition), and that navigation_binding_authoring_and_verification "can never be a
-        precondition for starting a subBundle's own target manifest build." Blocking promotion on
-        zero hub_relations would contradict that established sequencing (every newly authored
-        topology_manifest would fail promotion before its first hub_relations row could exist).
-        Two boundaries therefore share responsibility for this one invariant by design, not by
-        omission: hub_navigation:deprecate is the live write-time guard preventing regression of an
-        already-connected topology_manifest into an orphan; navigation_binding_resolution_criterion
-        (design_blocking.subbundle_status) is the completion-judgment/proof boundary that decides
-        whether a topology_manifest counts as done, evaluated after its own content-build phase, not
-        during it. A blocking DB constraint or promotion-time validator applied uniformly to every
-        topology_manifest would fire on every newly authored one before hub relation authoring can
-        happen; this addendum deliberately excludes that mechanism as a design boundary, not an
-        oversight.
+        The canonical completion boundary (round 13) is NpgsqlManifestRepository.PromoteAsync --
+        the existing public.manifest draft -> active transition, not a new concept. Before opening
+        its transaction, PromoteAsync queries
+        ContentBundleRepository.HasResolvableActiveHubRelationAsync (reusing
+        LoadHubNavigationSequenceAsync's own resolution semantics; not a duplicated COUNT-only
+        query) and fails closed with HUB_RELATION_REQUIRED_FOR_PROMOTION on zero, deprecated-only,
+        or unresolved-only-target relations, leaving both tables untouched. hub_relations authoring
+        (hub_navigation:create) remains deliberately unblocked on a draft topology_manifest --
+        docs/design/admin-normal-surface-projection-seed-ssot.yaml design_blocking's own
+        sequencing_note establishes that hub relation authoring is structurally the LAST step after
+        a topology_manifest's own content is built, and "can never be a precondition for starting a
+        subBundle's own target manifest build"; that sequencing is unaffected because the new check
+        is a promotion-time gate, not an authoring-time or draft-creation-time one -- a draft may
+        have zero hub_relations for as long as authoring takes, and only promotion (an explicit,
+        author-initiated action taken once the manifest's own content is believed complete) is
+        gated. Round 10-12 described this as two independently-scoped boundaries sharing
+        responsibility "by design, not by omission," with navigation_binding_resolution_criterion
+        (design_blocking.subbundle_status) standing in as the completion-judgment boundary; round 13
+        supersedes that framing -- navigation_binding_resolution_criterion was a manually-tracked
+        5-subBundle documentation convention, not a runtime path, and the actual gap it was
+        approximating (hubs.topology_manifests going active before public.manifest's own promotion,
+        because ManifestCanonicalProjection hardcoded status='active' on every authoring upsert) is
+        now closed at the real production boundary. hub_navigation:deprecate
+        (NpgsqlContentBundleRepository.DeprecateHubRelationAsync) remains a second, independent
+        fail-close boundary -- unmodified by round 13 -- guarding regression after activation: it
+        fails closed with HUB_RELATION_LAST_ACTIVE_FOR_MANIFEST when deprecating a row would leave
+        its topology_manifest_id with zero active relations, regardless of that manifest's own
+        draft/active status (hub_navigation:update replaces related_hub_id in place;
+        hub_navigation:reorder never changes status, so deprecate is the only other mutation able to
+        reduce the active count).
       scope: >-
         Applies to every hubs.topology_manifests row per db-schema.yaml
         hub_relations.minimum_cardinality_completion_invariant.applies_to -- not limited to

@@ -103,6 +103,41 @@
 
 **Round 11の`hub_navigation:deprecate`（`NpgsqlContentBundleRepository.DeprecateHubRelationAsync`）N=1→0 regression guardは撤回・弱体化していない。Manifest create/promotionはblockingしていない（既存canonical authoring sequenceを破壊しない）。N=0 Manifestの存在自体を即時invalid化する変更も、逆に無期限にvalid completion扱いする変更も行っていない——現状の（audit-judgment頼みの）状態を維持したまま、その限界を正直に記録したのみである。Round 10 Finding 2（SQL Attention composed proof）、credential-management/admin-enum/admin-dashboardのImplemented evidenceはいずれも本roundで変更していない。**
 
+### Cross-cutting audit findings — round 13 実装: round 12の`design_change required`をpublic.manifestの既存`draft→active→deprecated` lifecycleへ再整合し解消（2026-08-16、PR #602 round 13、`implementation_change`実装済み）
+
+**問題点（round 12所見の再分類）:** round 12は「`status='active'`とは別に`このManifestは構築完了である`を表すcanonical production authorityが一件も存在しない」ことを`design_change required`として報告したが、Owner指摘によりこれは design gap ではなく実装バグと判明した——`public.manifest`には既に`draft → active → deprecated`のcanonical lifecycle（`NpgsqlManifestRepository.CreateDraftAsync`/`UpdateDraftAsync`/`PromoteAsync`/`DeprecateAsync`）が存在していたが、`ManifestCanonicalProjection.ProjectOnAuthoringDraftAsync`（`UpsertTopologyManifestAsync`内部）が`hubs.topology_manifests.status`を全upsertで無条件に`'active'`へ固定していたため、`public.manifest`がまだ`draft`の段階で`hubs.topology_manifests`が既に`active`になる位相不整合（phase mismatch）が生じていた。round 12が「completion authorityが存在しない」と観測したのは、この位相不整合により`status='active'`が作成直後に付与される無意味な値と化し、promotion（構築完了の実際の宣言点）と連動していなかったためである。
+
+**目的:** `public.manifest`と`hubs.topology_manifests`のstatusを同一Manifest identityについて常に同じlifecycle phaseへ揃え、既存のdraft→active promotion transitionをcanonical completion boundaryとして使用し、promotion時にN≧1のactive・canonically-resolvableなhub_relationsをfail-closeする。draft段階のN=0は引き続き正当な一時的authoring状態として許容する。
+
+**改善方針（実装済み）:**
+- `db/topology_tables.sql`: `hubs.topology_manifests.status`のDEFAULTを`'active'`→`'draft'`、CHECK制約を`('active','deprecated')`→`('draft','active','deprecated')`へ変更。
+- `ManifestCanonicalProjection.UpsertTopologyManifestAsync`: `status`列を`detail.Status`（呼び出し元の`public.manifest`行が持つ実際のstatus）から反映するよう変更。ハードコードされた`'active'`は撤去。
+- `ContentBundleRepository.HasResolvableActiveHubRelationAsync`（新規、virtual、default実装あり）: 既存`LoadHubNavigationSequenceAsync`の解決semantics（`hr.status='active'`かつtarget側`tm2.status='active'`かつ`HAVING COUNT(*)=1`）を再利用し、専用COUNTクエリを複製しない。
+- `NpgsqlManifestRepository.PromoteAsync`: transaction開始前に`HasResolvableActiveHubRelationAsync`を呼び、zero/deprecated-only/unresolved-only-targetの場合`HUB_RELATION_REQUIRED_FOR_PROMOTION`でfail-close（何もtransaction/connectionを開いていないため、失敗時は両テーブルとも一切書き込まれない）。
+- `NpgsqlManifestRepository.DeprecateAsync`: 従来`public.manifest`のみUPDATEしていたが、同一transaction内で`hubs.topology_manifests`のstatusも`'deprecated'`へ揃えるUPDATEを追加（既存の位相不整合の一部としてこのroundで発見・修正した副次的gap）。
+- `Program.cs` / `HubRelationUiProjectionResolutionChainProof.cs`: `NpgsqlManifestRepository`の第3引数`ContentBundleRepository`をDI/共有test helperへ配線（optional引数のため、`PromoteAsync`を呼ばない既存test construction siteは無変更のまま動作）。
+- Round 11の`hub_navigation:deprecate`（N=1→0 regression guard）は無変更のまま維持——「connected manifestの最後のactive relationをdeprecateできない」という判定基準はmanifest自身のdraft/active statusに関わらず適用される既存挙動のままとした（NG軸「Round 11 guardを回帰させない」を文字通り遵守）。
+
+**検証（8項目のrequired proof、全て`backend/tests/Topolactor.Integration.Tests/ManifestDraftActivePromotionLifecycleLiveDbTests.cs`で live DB proof、加えて既存test 1件強化）:**
+1. draft create直後、canonical topology側も`status='draft'`（`CreateDraftAsync_ProjectsDraftTopologyManifest_WithZeroHubRelations_DuringAuthoring`、および`AdminRuntimeManifestManagementTests.ProjectOnAuthoringDraft_WritesTopologyManifest_WithoutWiringTableRef`へ`status='draft'` assertionを追加）。
+2. draft N=0はauthoring中legitimateに存在可能（同上test内でN=0時にerrorが起きないことを確認）。
+3. hub relation authoring後（実dispatcher経由の`hub_navigation:create`）かつcanonical-resolvableならpromotion成功し双方`active`になる（`PromoteAsync_ResolvableActiveHubRelation_Succeeds_BothManifestAndTopologyManifestBecomeActive`）。
+4. zero relation promotionはfail-close（`PromoteAsync_ZeroHubRelations_FailsClosed_LeavesDraftStateTransactionallyIntact`）。
+5. deprecated-only relation promotionはfail-close（`PromoteAsync_DeprecatedOnlyHubRelation_FailsClosed_LeavesDraftStateIntact`）。
+6. unresolved-only-target relation promotionはfail-close（`PromoteAsync_UnresolvedOnlyHubRelation_TargetTopologyManifestStillDraft_FailsClosed`——targetが未promoteのdraftのままのケース）。
+7. promotion failure時、draft状態がtransactionally維持される（上記4-6全てで`public.manifest`/`hubs.topology_manifests`の両方が`draft`のままであることをraw SQLで確認——failure pathはtransaction/connectionを開く前に判定するため自明に両テーブル無変更）。
+8. active後のlast-relation deprecateはRound 11 guardでfail-close済み——本round未変更の`HubRelationOrphanInvariantLiveDbTests.cs`（2 test）が無変更のまま regression なく pass することで確認（新規test追加なし、既存test継続pass）。加えて`DeprecateAsync_ActiveManifest_MirrorsStatusToTopologyManifests_TargetBecomesUnresolvable`で、manifest-level deprecateが`hubs.topology_manifests`側もdeprecatedへ揃え、上流の別manifestからの参照が即座に解決不能になることを確認。
+
+**round 12が提示した2方向のOwner判断待ち事項は本roundで解消・moot化した:** 方向1（新規admin action新設）は不要と判明——既存`manifest:promote`がまさにその「明示的にrelation authoringを終えたと宣言する既存action」であった。方向2（proof-based auditのみに留める）も不採用——DBが実際にfail-closeするruntime enforcementが可能かつ既存lifecycleの自然な延長として実装できたため。`navigation_binding_resolution_criterion`（5subBundle限定の手動追跡慣習）を全Manifestへの一般化されたcompletion authorityであるかのように読める、というround 12の指摘は妥当だったため、`docs/design/runtime-orchestration-ssot.yaml` `production_projection_connectivity_invariant.enforcement_boundary`を本roundで書き改め、実際のcanonical completion boundary（`NpgsqlManifestRepository.PromoteAsync`）を明記した。
+
+**対応資料:** `docs/design/db-schema.yaml`（`hub_relations.minimum_cardinality_completion_invariant`——`draft_transient_state_carve_out`追加、`enforcement_boundary`書き換え、`topology_manifest_group.status_lifecycle_phase_mirror`新設）、`docs/design/runtime-orchestration-ssot.yaml`（`production_projection_connectivity_invariant`——`note`/`invariant`/`proof_shape`/`enforcement_boundary`書き換え）、`docs/framework-core.yaml`（`production_projection_connectivity_invariant`ミラー書き換え）
+
+**対象ファイル名:** `db/topology_tables.sql`、`backend/repository/ManifestCanonicalProjection.cs`、`backend/repository/ContentBundleRepository.cs`、`backend/repository/NpgsqlManifestRepository.cs`、`backend/Program.cs`、`backend/tests/Topolactor.Integration.Tests/HubRelationUiProjectionResolutionChainProof.cs`、`backend/tests/Topolactor.Integration.Tests/ManifestDraftActivePromotionLifecycleLiveDbTests.cs`（新規）、`backend/tests/Topolactor.Runtime.Tests/AdminRuntimeManifestManagementTests.cs`、`backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs`、`backend/tests/Topolactor.Runtime.Tests/SqlAttentionCirculationComposedProofTests.cs`
+
+**対象関数名:** `ManifestCanonicalProjection.UpsertTopologyManifestAsync`、`ContentBundleRepository.HasResolvableActiveHubRelationAsync`、`NpgsqlManifestRepository.PromoteAsync`、`NpgsqlManifestRepository.DeprecateAsync`
+
+**検証:** `bash .agent/tests/check-static-ssot-purity.sh`（PASS）、`bash .agent/tests/check-db-schema.sh`（真にfresh DBに対しPASS——同一DBへ二重適用した場合の`external_credential_vault_reference_key_unique`冪等性gapは本roundの変更と無関係のpre-existing事象であり、テスト方法論上の artifact であって回帰ではないことを確認済み）、`bash .agent/tests/check-unified-test-gate.sh`（9 lanes中8 lanes pass、`RUNTIME_INTEGRATION`は下記pre-existing failureのみ）、`dotnet test`（Topolactor.Runtime.Tests 1678/1678 pass。Topolactor.Integration.Tests 253/254 pass——新規6 test込み、唯一の失敗は`UiTopologyLayoutPatchRollbackIntegrationTests`の`ui_layout_registry`未定義参照で、本roundの変更と完全に無関係のpre-existing事象——`git diff`で本roundがそのfileや`db/ui_topology_tables.sql`を一切触っていないことを確認済み）。フロントエンド: `deno test -A frontend/tests/`は79件failureがあるが全て`UiBuilderAdmin.tsx`削除・`AdminEnumsRoster`削除・preset seed contract等、本roundと無関係の既存状態であることを`git diff --stat`で確認済み（本round frontend file変更ゼロ）。`check-unified-test-gate.sh`の`FRONTEND_ALL_TESTS`/`FRONTEND_CONTRACT`/`CATALOG_SSOT_ALIGNMENT`/`CLIENT_COMMAND_LANE`は全てpassしており、CI-gatingされているfrontend surfaceには回帰なし。
+
 ---
 ## Bundle `seed-template-runtime-interaction-assignment`
 
