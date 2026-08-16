@@ -416,7 +416,8 @@ runtime_orchestration_ssot:
     production_projection_connectivity_invariant:
       note: >-
         Owner design decision (2026-08-16, PR #602 round 10 -- carried over from round 9's
-        common-navigation audit finding in .agent/tasks/todo.md admin-surface-topology-seed-conversion).
+        common-navigation audit finding recorded against the admin-surface-topology-seed-conversion
+        Bundle in the repository's agent task tracking surface).
         Generalizes the per-subBundle navigation_binding_authoring_and_verification /
         navigation_binding_resolution_criterion gate already proven in
         docs/design/admin-normal-surface-projection-seed-ssot.yaml design_blocking.subbundle_status
@@ -443,7 +444,7 @@ runtime_orchestration_ssot:
       not_a_fabrication_license: >-
         Does not authorize fabricating hub_relations, hubs, or manifests that would not otherwise
         exist merely to satisfy connectivity -- PR #584's ban on "an empty/fake manifest just to
-        give something a hub relation source" (.agent/tasks/todo.md) remains in force. A manifest
+        give something a hub relation source" (agent task tracking surface) remains in force. A manifest
         with no legitimate business reason to connect to another surface (a genuinely standalone
         utility manifest) is not itself a violation; this invariant applies to production
         projection surfaces meant to be part of the navigable topology.
@@ -461,7 +462,7 @@ runtime_orchestration_ssot:
         orphan manifest at write time -- scoping exactly which manifest kinds are subject to
         automatic runtime enforcement (all manifests vs. only business-facing production
         projections) is a further design decision left open for Owner confirmation, tracked in
-        .agent/tasks/todo.md rather than guessed into this change.
+        the repository's agent task tracking surface rather than guessed into this change.
       scope: >-
         Applies to admin-surface-topology-seed-conversion's five subBundles (the existing concrete
         proof precedent: admin-dashboard/admin-enum/credential-management already resolved per
