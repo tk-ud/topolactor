@@ -52,14 +52,15 @@ builder.Services.AddSingleton<UiTopologyRepository>(sp =>
     new NpgsqlUiTopologyRepository(
         sp.GetRequiredService<ILogger<NpgsqlUiTopologyRepository>>(),
         connectionString));
-builder.Services.AddSingleton<ManifestRepository>(sp =>
-    new NpgsqlManifestRepository(
-        sp.GetRequiredService<ILogger<NpgsqlManifestRepository>>(),
-        connectionString));
 builder.Services.AddSingleton<ContentBundleRepository>(sp =>
     new NpgsqlContentBundleRepository(
         sp.GetRequiredService<ILogger<NpgsqlContentBundleRepository>>(),
         connectionString));
+builder.Services.AddSingleton<ManifestRepository>(sp =>
+    new NpgsqlManifestRepository(
+        sp.GetRequiredService<ILogger<NpgsqlManifestRepository>>(),
+        connectionString,
+        sp.GetRequiredService<ContentBundleRepository>()));
 builder.Services.AddSingleton<DbNotifyRepository>(sp =>
     new NpgsqlDbNotifyRepository(
         sp.GetRequiredService<ILogger<NpgsqlDbNotifyRepository>>(),
@@ -141,6 +142,10 @@ builder.Services.AddSingleton<IAbstractFunctionManifestRepository>(_ =>
     new NpgsqlAbstractFunctionManifestRepository(connectionString));
 builder.Services.AddSingleton<ISchedulerJobManifestRepository>(_ =>
     new NpgsqlSchedulerJobManifestRepository(connectionString));
+builder.Services.AddSingleton<IExternalApiCredentialAdminRepository>(sp =>
+    new NpgsqlExternalApiCredentialAdminRepository(connectionString, sp.GetRequiredService<IExternalCredentialCrypto>()));
+builder.Services.AddSingleton<IExternalInstanceCredentialAdminRepository>(_ =>
+    new NpgsqlExternalInstanceCredentialAdminRepository(connectionString));
 builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(_ =>
     new CallPostgresFunctionPrimitiveAdapter(connectionString));
 builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter, CallInstancePostgresFunctionPrimitiveAdapter>();
@@ -280,7 +285,10 @@ builder.Services.AddSingleton<AdminRuntime>(sp =>
         sp.GetRequiredService<ISchedulerJobManifestRepository>(),
         sp.GetRequiredService<IBackendErrorEvidenceAppender>(),
         sp.GetRequiredService<AggregateTriggerRepository>(),
-        sp.GetRequiredService<IAbstractFunctionManifestRepository>()));
+        sp.GetRequiredService<IAbstractFunctionManifestRepository>(),
+        sp.GetRequiredService<IExternalApiCredentialAdminRepository>(),
+        sp.GetRequiredService<IExternalInstanceCredentialAdminRepository>(),
+        sp.GetRequiredService<AuthService>()));
 builder.Services.AddSingleton<TopologyFunctionBinder>();
 builder.Services.AddSingleton<HubNavigationResolver>(sp =>
     new HubNavigationResolver(sp.GetRequiredService<ContentBundleRepository>(), sp.GetRequiredService<ManifestRepository>()));

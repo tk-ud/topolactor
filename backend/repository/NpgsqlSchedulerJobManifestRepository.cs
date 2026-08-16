@@ -128,7 +128,44 @@ public interface ISchedulerJobManifestRepository
     Task<Guid> CreateJobAsync(SchedulerJobDraft draft, CancellationToken ct = default);
     Task<bool> UpdateJobAsync(Guid schedulerJobId, SchedulerJobDraft draft, CancellationToken ct = default);
     Task<bool> SetJobActiveAsync(Guid schedulerJobId, bool active, CancellationToken ct = default);
+
+    /// <summary>
+    /// credential-management consumer_reference_binding (docs/design/admin-normal-surface-projection-
+    /// seed-ssot.yaml surface_axes.admin.surfaces.credentials.categories.external_api_credential.
+    /// consumer_reference_binding). Writes ONLY credential_requirement_ref / external_port_ref on the
+    /// given scheduler_job_id, validated by existence against topology.external_credential_vault /
+    /// external_access_ports / external_response_ports / external_hook_ports reference_key columns
+    /// (never against payload-declared table/column authority). Never touches job_key, trigger_kind,
+    /// schedule_policy_kind, step chain, or any other /admin/contents-authored field, and never writes
+    /// the vault/port tables themselves.
+    /// </summary>
+    Task<SchedulerJobCredentialBindingResult> UpdateCredentialBindingAsync(
+        Guid schedulerJobId, string? credentialRequirementRef, string? externalPortRef, CancellationToken ct = default);
+
+    /// <summary>
+    /// Read-only counterpart of <see cref="UpdateCredentialBindingAsync"/> — runs the identical
+    /// scheduler_job/credential-vault/port existence checks without locking or writing anything.
+    /// Used for the mutation_confirmation_contract preview/validate stage (payload.dryRun=true) so
+    /// an invalid candidate is never reported "valid" without ever having been checked; the confirmed
+    /// write path re-runs the identical checks itself rather than trusting this result as prior proof.
+    /// Outcome.Updated here means "the candidate passes validation," not that any row changed.
+    /// </summary>
+    Task<SchedulerJobCredentialBindingResult> ValidateCredentialBindingAsync(
+        Guid schedulerJobId, string? credentialRequirementRef, string? externalPortRef, CancellationToken ct = default);
 }
+
+public enum SchedulerJobCredentialBindingOutcome
+{
+    Updated,
+    SchedulerJobNotFound,
+    CredentialRequirementRefNotFound,
+    ExternalPortRefNotFound,
+}
+
+public sealed record SchedulerJobCredentialBindingResult(
+    SchedulerJobCredentialBindingOutcome Outcome,
+    string? PreviousCredentialRequirementRef = null,
+    string? PreviousExternalPortRef = null);
 
 /// <summary>
 /// Admin/seed-authored manifest draft. Holds only references and policy data —
@@ -581,6 +618,143 @@ public sealed class NpgsqlSchedulerJobManifestRepository : ISchedulerJobManifest
         cmd.Parameters.AddWithValue("id", schedulerJobId);
         cmd.Parameters.AddWithValue("active", active);
         return await cmd.ExecuteNonQueryAsync(ct) > 0;
+    }
+
+    public async Task<SchedulerJobCredentialBindingResult> UpdateCredentialBindingAsync(
+        Guid schedulerJobId, string? credentialRequirementRef, string? externalPortRef, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+
+        bool found;
+        string? previousCredRef = null;
+        string? previousPortRef = null;
+        await using (var current = conn.CreateCommand())
+        {
+            current.Transaction = tx;
+            current.CommandText =
+                "SELECT credential_requirement_ref, external_port_ref FROM topology.scheduler_jobs " +
+                "WHERE scheduler_job_id = @id FOR UPDATE";
+            current.Parameters.AddWithValue("id", schedulerJobId);
+            // Reader must be fully disposed before any further command (e.g. RollbackAsync below)
+            // runs on the same connection -- Npgsql fails closed with
+            // NpgsqlOperationInProgressException if a rollback is attempted while a reader from
+            // this same connection is still open.
+            await using (var reader = await current.ExecuteReaderAsync(ct))
+            {
+                found = await reader.ReadAsync(ct);
+                if (found)
+                {
+                    previousCredRef = reader.IsDBNull(0) ? null : reader.GetString(0);
+                    previousPortRef = reader.IsDBNull(1) ? null : reader.GetString(1);
+                }
+            }
+        }
+        if (!found)
+        {
+            await tx.RollbackAsync(ct);
+            return new SchedulerJobCredentialBindingResult(SchedulerJobCredentialBindingOutcome.SchedulerJobNotFound);
+        }
+
+        if (credentialRequirementRef is not null)
+        {
+            await using var vaultCheck = conn.CreateCommand();
+            vaultCheck.Transaction = tx;
+            vaultCheck.CommandText =
+                "SELECT 1 FROM topology.external_credential_vault WHERE reference_key = @ref";
+            vaultCheck.Parameters.AddWithValue("ref", credentialRequirementRef);
+            if (await vaultCheck.ExecuteScalarAsync(ct) is null)
+            {
+                await tx.RollbackAsync(ct);
+                return new SchedulerJobCredentialBindingResult(
+                    SchedulerJobCredentialBindingOutcome.CredentialRequirementRefNotFound);
+            }
+        }
+
+        if (externalPortRef is not null)
+        {
+            await using var portCheck = conn.CreateCommand();
+            portCheck.Transaction = tx;
+            portCheck.CommandText = """
+                SELECT 1 FROM topology.external_access_ports WHERE reference_key = @ref
+                UNION ALL
+                SELECT 1 FROM topology.external_response_ports WHERE reference_key = @ref
+                UNION ALL
+                SELECT 1 FROM topology.external_hook_ports WHERE reference_key = @ref
+                LIMIT 1
+                """;
+            portCheck.Parameters.AddWithValue("ref", externalPortRef);
+            if (await portCheck.ExecuteScalarAsync(ct) is null)
+            {
+                await tx.RollbackAsync(ct);
+                return new SchedulerJobCredentialBindingResult(
+                    SchedulerJobCredentialBindingOutcome.ExternalPortRefNotFound);
+            }
+        }
+
+        await using (var update = conn.CreateCommand())
+        {
+            update.Transaction = tx;
+            update.CommandText = """
+                UPDATE topology.scheduler_jobs
+                SET credential_requirement_ref = @credRef, external_port_ref = @portRef, updated_at = now()
+                WHERE scheduler_job_id = @id
+                """;
+            update.Parameters.AddWithValue("id", schedulerJobId);
+            update.Parameters.AddWithValue("credRef", (object?)credentialRequirementRef ?? DBNull.Value);
+            update.Parameters.AddWithValue("portRef", (object?)externalPortRef ?? DBNull.Value);
+            await update.ExecuteNonQueryAsync(ct);
+        }
+
+        await tx.CommitAsync(ct);
+        return new SchedulerJobCredentialBindingResult(
+            SchedulerJobCredentialBindingOutcome.Updated, previousCredRef, previousPortRef);
+    }
+
+    public async Task<SchedulerJobCredentialBindingResult> ValidateCredentialBindingAsync(
+        Guid schedulerJobId, string? credentialRequirementRef, string? externalPortRef, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using (var jobCheck = conn.CreateCommand())
+        {
+            jobCheck.CommandText = "SELECT 1 FROM topology.scheduler_jobs WHERE scheduler_job_id = @id";
+            jobCheck.Parameters.AddWithValue("id", schedulerJobId);
+            if (await jobCheck.ExecuteScalarAsync(ct) is null)
+                return new SchedulerJobCredentialBindingResult(SchedulerJobCredentialBindingOutcome.SchedulerJobNotFound);
+        }
+
+        if (credentialRequirementRef is not null)
+        {
+            await using var vaultCheck = conn.CreateCommand();
+            vaultCheck.CommandText =
+                "SELECT 1 FROM topology.external_credential_vault WHERE reference_key = @ref";
+            vaultCheck.Parameters.AddWithValue("ref", credentialRequirementRef);
+            if (await vaultCheck.ExecuteScalarAsync(ct) is null)
+                return new SchedulerJobCredentialBindingResult(
+                    SchedulerJobCredentialBindingOutcome.CredentialRequirementRefNotFound);
+        }
+
+        if (externalPortRef is not null)
+        {
+            await using var portCheck = conn.CreateCommand();
+            portCheck.CommandText = """
+                SELECT 1 FROM topology.external_access_ports WHERE reference_key = @ref
+                UNION ALL
+                SELECT 1 FROM topology.external_response_ports WHERE reference_key = @ref
+                UNION ALL
+                SELECT 1 FROM topology.external_hook_ports WHERE reference_key = @ref
+                LIMIT 1
+                """;
+            portCheck.Parameters.AddWithValue("ref", externalPortRef);
+            if (await portCheck.ExecuteScalarAsync(ct) is null)
+                return new SchedulerJobCredentialBindingResult(
+                    SchedulerJobCredentialBindingOutcome.ExternalPortRefNotFound);
+        }
+
+        return new SchedulerJobCredentialBindingResult(SchedulerJobCredentialBindingOutcome.Updated);
     }
 
     private static void BindDraft(NpgsqlCommand cmd, SchedulerJobDraft draft)

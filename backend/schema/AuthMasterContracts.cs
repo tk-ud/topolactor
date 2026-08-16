@@ -87,3 +87,13 @@ public record EnumDictionaryDeleteItemRequestDto(
 public record EnumDictionarySetGroupItemsRequestDto(
     [property: JsonPropertyName("groupId")] string GroupId,
     [property: JsonPropertyName("enumIndexNums")] IReadOnlyList<int> EnumIndexNums);
+
+// credential-management external_api_credential.consumer_reference_binding
+// (docs/design/admin-normal-surface-projection-seed-ssot.yaml). Both reference fields are
+// identifiers only (reference_key values), never credential plaintext or connection detail.
+// Omitted/null clears that side of the binding — the mutation_confirmation_contract preview step
+// surfaces the resulting before/after so an unintended clear is visible before explicit_confirm.
+public record CredentialManagementSchedulerBindingRequestDto(
+    [property: JsonPropertyName("schedulerJobId")] string SchedulerJobId,
+    [property: JsonPropertyName("credentialRequirementRef")] string? CredentialRequirementRef = null,
+    [property: JsonPropertyName("externalPortRef")] string? ExternalPortRef = null);

@@ -33,8 +33,9 @@ internal static class HubRelationUiProjectionResolutionChainProof
         var topoVector = new TopologyVectorRuntime(NullLogger<TopologyVectorRuntime>.Instance, ctxRepo);
         var registrar = new RegistrarValidationService(NullLogger<RegistrarValidationService>.Instance, topoRepo, topoVector);
         var pkg = new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, uiRepo);
-        var manifestRepo = new NpgsqlManifestRepository(NullLogger<NpgsqlManifestRepository>.Instance, connectionString);
         var contentBundleRepo = new NpgsqlContentBundleRepository(NullLogger<NpgsqlContentBundleRepository>.Instance, connectionString);
+        var manifestRepo = new NpgsqlManifestRepository(
+            NullLogger<NpgsqlManifestRepository>.Instance, connectionString, contentBundleRepo);
         var hubNavResolver = new HubNavigationResolver(contentBundleRepo, manifestRepo);
         var adminRuntime = new AdminRuntime(
             NullLogger<AdminRuntime>.Instance,
@@ -60,7 +61,26 @@ internal static class HubRelationUiProjectionResolutionChainProof
             // not change behavior for the other two consumers (grep-confirmed neither references
             // sqlAttentionLogsRepository or a *_NOT_AVAILABLE code gated by its absence).
             sqlAttentionLogsRepository: new NpgsqlSqlAttentionLogsRepository(
-                NullLogger<NpgsqlSqlAttentionLogsRepository>.Instance, connectionString));
+                NullLogger<NpgsqlSqlAttentionLogsRepository>.Instance, connectionString),
+            // credential_management:configure_scheduler_job_credential_or_port_binding (credential-
+            // management consumer_reference_binding) needs this wired, or that admin_runtime case
+            // fails closed with SCHEDULER_JOB_MANIFEST_NOT_CONFIGURED regardless of manifest/wiring
+            // resolution -- same rationale as sqlAttentionLogsRepository above.
+            schedulerJobManifestRepository: new NpgsqlSchedulerJobManifestRepository(connectionString),
+            // external_api_credential:search/get/create/update/delete (credential-management base
+            // CRUD over topology.external_credential_vault/external_access_ports/
+            // external_response_ports/external_hook_ports) needs this wired, or every
+            // external_api_credential:* case in AdminRuntime.ExecuteDataAsync fails closed with
+            // EXTERNAL_API_CREDENTIAL_NOT_AVAILABLE regardless of manifest/wiring resolution.
+            externalApiCredentialAdminRepository: new NpgsqlExternalApiCredentialAdminRepository(
+                connectionString, new AesExternalCredentialCrypto()),
+            // external_instance_credential:search/get/create/update/delete (credential-management
+            // instance-port-backed category, round 5) needs this wired, or every
+            // external_instance_credential:* case in AdminRuntime.ExecuteDataAsync fails closed
+            // with EXTERNAL_INSTANCE_CREDENTIAL_NOT_AVAILABLE regardless of manifest/wiring
+            // resolution -- same rationale as externalApiCredentialAdminRepository above.
+            externalInstanceCredentialAdminRepository: new NpgsqlExternalInstanceCredentialAdminRepository(
+                connectionString));
         var adminAdapter = new AdminRuntimeDispatchAdapter(adminRuntime, new OperationVectorResolver());
 
         var targetOverride = new TargetDispatchOverride(NullLogger<TargetDispatchOverride>.Instance, adminRuntime);

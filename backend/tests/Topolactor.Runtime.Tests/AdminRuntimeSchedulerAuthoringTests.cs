@@ -57,6 +57,25 @@ public class AdminRuntimeSchedulerAuthoringTests
         public Task<IReadOnlyList<SchedulerInputRow>> LeaseDueInputRowsAsync(SchedulerJobRecord job, DateTimeOffset now, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<SchedulerInputRow>>(Array.Empty<SchedulerInputRow>());
         public Task UpdateInputRowStatusAsync(SchedulerJobRecord job, string id, string s, CancellationToken ct = default) => Task.CompletedTask;
         public Task UpsertAuthorizedOutputAsync(SchedulerJobRecord job, SchedulerStepResultBinding b, IReadOnlyDictionary<string, object?> v, CancellationToken ct = default) => Task.CompletedTask;
+
+        public List<(Guid SchedulerJobId, string? CredentialRequirementRef, string? ExternalPortRef)> CredentialBindingUpdates { get; } = new();
+        public List<(Guid SchedulerJobId, string? CredentialRequirementRef, string? ExternalPortRef)> CredentialBindingValidations { get; } = new();
+        public SchedulerJobCredentialBindingResult CredentialBindingResult { get; set; } =
+            new(SchedulerJobCredentialBindingOutcome.Updated);
+        /// <summary>Defaults to CredentialBindingResult's outcome when null (the common case: validate and write agree).</summary>
+        public SchedulerJobCredentialBindingResult? CredentialBindingValidationResult { get; set; }
+        public Task<SchedulerJobCredentialBindingResult> UpdateCredentialBindingAsync(
+            Guid schedulerJobId, string? credentialRequirementRef, string? externalPortRef, CancellationToken ct = default)
+        {
+            CredentialBindingUpdates.Add((schedulerJobId, credentialRequirementRef, externalPortRef));
+            return Task.FromResult(CredentialBindingResult);
+        }
+        public Task<SchedulerJobCredentialBindingResult> ValidateCredentialBindingAsync(
+            Guid schedulerJobId, string? credentialRequirementRef, string? externalPortRef, CancellationToken ct = default)
+        {
+            CredentialBindingValidations.Add((schedulerJobId, credentialRequirementRef, externalPortRef));
+            return Task.FromResult(CredentialBindingValidationResult ?? CredentialBindingResult);
+        }
     }
 
     [Fact]
@@ -345,5 +364,151 @@ public class AdminRuntimeSchedulerAuthoringTests
         Assert.DoesNotContain("api_key", raw);
         Assert.DoesNotContain("access_token", raw);
         Assert.DoesNotContain("client_secret", raw);
+    }
+
+    // ─── credential-management: configure_scheduler_job_credential_or_port_binding ────────────
+    // docs/design/admin-normal-surface-projection-seed-ssot.yaml
+    // surface_axes.admin.surfaces.credentials.categories.external_api_credential.consumer_reference_binding
+
+    private static OperationVector CredentialManagementVector(string action, object payload) =>
+        new("admin", "credential_management", action, null, "admin", JsonSerializer.SerializeToElement(payload), null);
+
+    [Fact]
+    public async Task ConfigureSchedulerJobCredentialOrPortBinding_DryRun_ValidatesButDoesNotWrite()
+    {
+        var repo = new StubSchedulerRepo();
+        var runtime = CreateRuntime(repo);
+        var id = Guid.NewGuid();
+
+        var (data, error) = await runtime.ExecuteDataAsync(CredentialManagementVector(
+            "configure_scheduler_job_credential_or_port_binding",
+            new { schedulerJobId = id.ToString(), credentialRequirementRef = "weather_credential_requirement", dryRun = true }),
+            default);
+
+        Assert.Null(error);
+        Assert.True(data!.Value.GetProperty("ok").GetBoolean());
+        Assert.True(data.Value.GetProperty("dryRun").GetBoolean());
+        Assert.Equal(
+            "weather_credential_requirement",
+            data.Value.GetProperty("preview").GetProperty("credentialRequirementRef").GetString());
+        // real validation ran (ValidateCredentialBindingAsync) but no write (UpdateCredentialBindingAsync).
+        var validated = Assert.Single(repo.CredentialBindingValidations);
+        Assert.Equal(id, validated.SchedulerJobId);
+        Assert.Equal("weather_credential_requirement", validated.CredentialRequirementRef);
+        Assert.Empty(repo.CredentialBindingUpdates);
+    }
+
+    [Fact]
+    public async Task ConfigureSchedulerJobCredentialOrPortBinding_DryRun_InvalidCandidate_FailsClosed_NeverReportsValidTrue()
+    {
+        var repo = new StubSchedulerRepo
+        {
+            CredentialBindingValidationResult = new SchedulerJobCredentialBindingResult(
+                SchedulerJobCredentialBindingOutcome.CredentialRequirementRefNotFound),
+        };
+        var runtime = CreateRuntime(repo);
+        var id = Guid.NewGuid();
+
+        var (data, error) = await runtime.ExecuteDataAsync(CredentialManagementVector(
+            "configure_scheduler_job_credential_or_port_binding",
+            new { schedulerJobId = id.ToString(), credentialRequirementRef = "does_not_exist", dryRun = true }),
+            default);
+
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("CREDENTIAL_REQUIREMENT_REF_NOT_FOUND", error!.Code);
+        Assert.Empty(repo.CredentialBindingUpdates);
+    }
+
+    [Fact]
+    public async Task ConfigureSchedulerJobCredentialOrPortBinding_NotConfirmed_FailsClosed()
+    {
+        var repo = new StubSchedulerRepo();
+        var runtime = CreateRuntime(repo);
+        var id = Guid.NewGuid();
+
+        var (_, error) = await runtime.ExecuteDataAsync(CredentialManagementVector(
+            "configure_scheduler_job_credential_or_port_binding",
+            new { schedulerJobId = id.ToString(), externalPortRef = "weather_access_port" }),
+            default);
+
+        Assert.NotNull(error);
+        Assert.Equal("CREDENTIAL_MANAGEMENT_SCHEDULER_BINDING_WRITE_NOT_CONFIRMED", error!.Code);
+        Assert.Empty(repo.CredentialBindingUpdates);
+    }
+
+    [Fact]
+    public async Task ConfigureSchedulerJobCredentialOrPortBinding_Confirmed_WritesOnlyReferenceColumns()
+    {
+        var repo = new StubSchedulerRepo();
+        var runtime = CreateRuntime(repo);
+        var id = Guid.NewGuid();
+
+        var (data, error) = await runtime.ExecuteDataAsync(CredentialManagementVector(
+            "configure_scheduler_job_credential_or_port_binding",
+            new
+            {
+                schedulerJobId = id.ToString(),
+                credentialRequirementRef = "weather_credential_requirement",
+                externalPortRef = "weather_access_port",
+                confirmed = true,
+            }),
+            default);
+
+        Assert.Null(error);
+        Assert.True(data!.Value.GetProperty("ok").GetBoolean());
+        var update = Assert.Single(repo.CredentialBindingUpdates);
+        Assert.Equal(id, update.SchedulerJobId);
+        Assert.Equal("weather_credential_requirement", update.CredentialRequirementRef);
+        Assert.Equal("weather_access_port", update.ExternalPortRef);
+    }
+
+    [Fact]
+    public async Task ConfigureSchedulerJobCredentialOrPortBinding_SchedulerJobNotFound_FailsClosed()
+    {
+        var repo = new StubSchedulerRepo
+        {
+            CredentialBindingResult = new SchedulerJobCredentialBindingResult(SchedulerJobCredentialBindingOutcome.SchedulerJobNotFound),
+        };
+        var runtime = CreateRuntime(repo);
+
+        var (_, error) = await runtime.ExecuteDataAsync(CredentialManagementVector(
+            "configure_scheduler_job_credential_or_port_binding",
+            new { schedulerJobId = Guid.NewGuid().ToString(), confirmed = true }),
+            default);
+
+        Assert.NotNull(error);
+        Assert.Equal("SCHEDULER_JOB_NOT_FOUND", error!.Code);
+    }
+
+    [Fact]
+    public async Task ConfigureSchedulerJobCredentialOrPortBinding_UnknownReferenceKey_FailsClosed()
+    {
+        var repo = new StubSchedulerRepo
+        {
+            CredentialBindingResult = new SchedulerJobCredentialBindingResult(
+                SchedulerJobCredentialBindingOutcome.CredentialRequirementRefNotFound),
+        };
+        var runtime = CreateRuntime(repo);
+
+        var (_, error) = await runtime.ExecuteDataAsync(CredentialManagementVector(
+            "configure_scheduler_job_credential_or_port_binding",
+            new { schedulerJobId = Guid.NewGuid().ToString(), credentialRequirementRef = "does_not_exist", confirmed = true }),
+            default);
+
+        Assert.NotNull(error);
+        Assert.Equal("CREDENTIAL_REQUIREMENT_REF_NOT_FOUND", error!.Code);
+    }
+
+    [Fact]
+    public async Task ConfigureSchedulerJobCredentialOrPortBinding_Unconfigured_ReturnsNotConfigured()
+    {
+        var runtime = CreateRuntime(null);
+        var (_, error) = await runtime.ExecuteDataAsync(CredentialManagementVector(
+            "configure_scheduler_job_credential_or_port_binding",
+            new { schedulerJobId = Guid.NewGuid().ToString(), confirmed = true }),
+            default);
+        Assert.NotNull(error);
+        Assert.Equal("SCHEDULER_JOB_MANIFEST_NOT_CONFIGURED", error!.Code);
     }
 }

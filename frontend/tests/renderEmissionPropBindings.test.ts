@@ -19,10 +19,11 @@ import {
   buildVisualLayoutPatchJson,
   parseVisualLayoutPatchJson,
 } from "../runtime/visualLayoutUtils.ts";
-import type { DispatchResponse, Emission } from "../api/dispatch.ts";
+import type { DispatchResponse, Emission, LayoutNode } from "../api/dispatch.ts";
 import type { RuntimeDispatchSpec } from "../runtime/frontendScheduler.ts";
 import type { RuntimeDispatchResultContext } from "../runtime/runtimeComponentAdapter.ts";
 import { ensureRuntimeComponentRegistryInitialized } from "../runtime/runtimeComponentRegistry.ts";
+import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
 
 const ADMIN_ENUM_MANIFEST_ID = "00000000-0000-0000-0000-0000000ae200";
 
@@ -1179,4 +1180,72 @@ Deno.test("renderEmission: dispatchTargetRefByTrigger override intentionally OMI
     .runtimeDispatch as Record<string, unknown>;
   assertEquals(submitRd.wiringKey, "admin.enum.management.projection.read.wiring");
   assertEquals(submitRd.wiringId, "11111111-1111-1111-1111-111111111111");
+});
+
+// ── credential-management: credential_result_list (round 4, unified round 5) ────────────────
+//
+// The seeded credential_result_list node (db/seed_empty.sql cd002/cd004, manifest 092's own
+// credential_search_section, shared across all three categories since round 5) declares
+// propBindings.rows.source = "emission.data.records" -- the SAME generic mechanism admin-enum's
+// enum_table already proves (propBindings: rows and columns bound separately for table, above).
+// This test uses the REAL, checked-in bare-entry fixture's own credential_result_list LayoutNode
+// (not a hand-authored stand-in) to prove: (1) with no search response yet (bare entry), it
+// renders zero rows, never an error (the RUNTIME_PRIMITIVE_RENDERER_INVALID_TABLE_PROPS
+// regression this seed's propsJson rows:[] default guards against); (2) given a synthetic search
+// response's emission.data.records shape (matching AdminRuntime.ExternalApiCredential.cs's
+// ToProjection field set exactly, never including a secret field), propBindings resolves those
+// records into the table's rows prop.
+Deno.test("credential_result_list: real seeded node renders zero rows (never an error) on bare entry, and resolves emission.data.records when populated", async () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const fixtureText = await Deno.readTextFile(
+    new URL("./fixtures/manifest_0092_bare_entry_layout_nodes.json", import.meta.url),
+  );
+  const layoutNodes = JSON.parse(fixtureText) as LayoutNode[];
+  const resultListNode = layoutNodes.find((n) => n.nodeId === "credential_result_list");
+  assertExists(resultListNode, "expected the real fixture to contain credential_result_list");
+
+  const bareEmission: Emission = {
+    layoutId: "00000000-0000-0000-0000-0000000cd002",
+    layoutNodes: [resultListNode!],
+    packageId: "00000000-0000-0000-0000-0000000cd005",
+    manifestId: "00000000-0000-0000-0000-000000000092",
+  };
+  const bareSpecs = renderEmission(bareEmission, defaultComponentRegistry);
+  assertEquals(bareSpecs.length, 1);
+  assertEquals(bareSpecs[0].componentType === "error", false);
+  assertEquals(bareSpecs[0].runtimeSpec?.props?.rows, []);
+
+  const record = {
+    recordKind: "vault",
+    recordId: "11111111-1111-1111-1111-111111111111",
+    providerKind: "stripe",
+    requiredByBundle: "billing_bundle",
+    referenceKey: "ref-1",
+    active: true,
+    createdAt: "2026-08-15T00:00:00Z",
+    updatedAt: "2026-08-15T00:00:00Z",
+    tokenKind: "bearer",
+    expiresAt: null,
+    refreshBeforeSeconds: 300,
+    version: 1,
+    urlOrEnvReference: null,
+    credentialKind: null,
+    hookPath: null,
+    headerKey: null,
+    routeKey: null,
+  };
+  const searchEmission: Emission = {
+    ...bareEmission,
+    data: JSON.parse(JSON.stringify({ ok: true, records: [record] })),
+  };
+  const searchSpecs = renderEmission(searchEmission, defaultComponentRegistry);
+  assertEquals(searchSpecs.length, 1);
+  assertEquals(searchSpecs[0].componentType === "error", false);
+  assertEquals(searchSpecs[0].runtimeSpec?.props?.rows, [record]);
+  // Secret-shaped fields never appear in the record this test feeds through the SAME resolution
+  // path production search responses use -- a structural reminder, not a new invariant (the
+  // backend-side proof lives in ExternalApiCredentialLiveDbTests).
+  for (const forbidden of ["tokenHash", "encryptedPayload", "encryptionKeyReference", "plaintextSecret", "decryptedPayload", "tokenResponse"]) {
+    assertEquals(Object.prototype.hasOwnProperty.call(record, forbidden), false);
+  }
 });

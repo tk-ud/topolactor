@@ -779,6 +779,43 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         Guid hubRelationId, CancellationToken ct = default)
     {
         await using var conn = await OpenAsync(ct);
+
+        Guid? topologyManifestId = null;
+        await using (var lookup = conn.CreateCommand())
+        {
+            lookup.CommandText =
+                "SELECT topology_manifest_id FROM hubs.hub_relations " +
+                "WHERE hub_relation_id = @id AND status = 'active'";
+            lookup.Parameters.AddWithValue("id", hubRelationId);
+            if (await lookup.ExecuteScalarAsync(ct) is Guid tmid) topologyManifestId = tmid;
+        }
+
+        if (topologyManifestId is null)
+            return (new HubNavigationLifecycleResponseDto(false, hubRelationId.ToString(), "error",
+                "Hub relation not found or not active.", "HUB_RELATION_NOT_FOUND"), null);
+
+        // production_projection_connectivity_invariant (docs/design/db-schema.yaml manifest_hub_chain,
+        // docs/design/runtime-orchestration-ssot.yaml production_projection_connectivity_invariant):
+        // every hubs.topology_manifests row must retain at least one active hub_relations row.
+        // Deprecating the last one would regress an already-connected topology_manifest into a
+        // navigation orphan, so it fails closed here rather than silently allowed. hub_navigation:update
+        // (in-place relatedHubId replacement) and hub_navigation:reorder never reduce the active count,
+        // so this is the only existing mutation that can zero it out.
+        await using (var countCmd = conn.CreateCommand())
+        {
+            countCmd.CommandText =
+                "SELECT COUNT(*) FROM hubs.hub_relations " +
+                "WHERE topology_manifest_id = @tmid AND status = 'active' AND hub_relation_id <> @id";
+            countCmd.Parameters.AddWithValue("tmid", topologyManifestId.Value);
+            countCmd.Parameters.AddWithValue("id", hubRelationId);
+            var remaining = Convert.ToInt64(await countCmd.ExecuteScalarAsync(ct));
+            if (remaining == 0)
+                return (new HubNavigationLifecycleResponseDto(false, hubRelationId.ToString(), "error",
+                    "Cannot deprecate the last active hub_relations row for this topology manifest -- " +
+                    "would leave the manifest with zero active hub relations (navigation orphan).",
+                    "HUB_RELATION_LAST_ACTIVE_FOR_MANIFEST"), null);
+        }
+
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "UPDATE hubs.hub_relations SET status = 'deprecated', updated_at = now() " +

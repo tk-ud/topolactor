@@ -105,4 +105,20 @@ public abstract class ContentBundleRepository
     /// carries the marker — ambiguity is a configuration error, never silently resolved.
     /// </summary>
     public abstract Task<Guid?> ResolveCanonicalDefaultEntryManifestIdAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// production_projection_connectivity_invariant (docs/design/db-schema.yaml
+    /// hub_relations.minimum_cardinality_completion_invariant): true only when
+    /// topologyManifestId has at least one hub_relations row that is both status='active' AND
+    /// resolves to exactly one active target topology_manifest -- the same resolution semantics
+    /// LoadHubNavigationSequenceAsync already applies (reused here, not duplicated as a separate
+    /// COUNT-only query, per the reusable-abstraction-first rule: zero relations, deprecated-only
+    /// relations, and an active-but-unresolvable-target relation all correctly evaluate to false).
+    /// </summary>
+    public virtual async Task<bool> HasResolvableActiveHubRelationAsync(
+        Guid topologyManifestId, CancellationToken ct = default)
+    {
+        var sequence = await LoadHubNavigationSequenceAsync(topologyManifestId, ct);
+        return sequence.Any(item => item.TargetManifestId is not null);
+    }
 }
