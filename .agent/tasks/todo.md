@@ -31,6 +31,42 @@
 - `helper-manual`: **仕様確定後 scope 維持**。helper manual は仕様確定前に実装へ進めず、user-facing helper manual SSOT に従う後段 scope とする。
 - `ui-projection-surface-architecture-reinforcement`: **移管済み / 維持**。PR574 reference evidence、`/demo` cleanup、UI Builder inspection、`ProjectionShell` route/package/manifest awareness、`projectionInput` collection preservation、`runtimeInteraction identity / projection-time idempotency identity` future direction はこの bundle の PR574後残 scope として維持する。route seed 化 / label boundary / admin Step wording / broad pipeline proof は無理に混ぜ潰さない。
 
+### Cross-cutting audit findings pending canonical Bundle ownership（2026-08-16、credential-management completion監査中に発見、PR #602 round 9）
+
+**この節の位置づけ:** 以下2件はcredential-management固有ではない、全production projectionに横断するfindingである。credential-management / admin-enum / admin-dashboardのImplemented判定には影響しない（各subBundleは自身のnavigation binding authoring/verificationを個別に満たしている）。どちらもSSOT上どのcanonical Bundleが所有すべきか確定できなかったため、推測で既存Bundleへ組み込まず、この節に問題点・目的・改善方針・対応資料・対象ファイル名・対象関数名を記録した上でOwner判断を仰ぐ。**具体的なnavbar/header/sidebar/Home button実装や、SQL Attention側の新規E2E platform実装をここで決定・指示するものではない**——両方ともOwnerがSSOT上でcompletion conditionまたは既存設計の最終仕様性を確認してから着手すべき設計判断を含む。
+
+#### Finding 1: common navigation/escape surfaceのcompletion condition未確定
+
+**問題点:** `frontend/islands/ProjectionShell.tsx:873-931`のhub navigation nav bar（`resolveHubNavigationLinks`/`data-projection-hub-navigation`）は`hubNavigationLinks.length > 0`の場合のみ描画され、対象manifestに`hubs.hub_relations`行が1件も無い場合はnav bar自体が一切描画されない——「navigationが無い」ことを示すfallback/placeholderも無い、完全にsilentな挙動である。`docs/framework-core.yaml` `runtime_route_attention_boundary`（`docs/framework-policy.yaml`347-354行・`docs/design/runtime-orchestration-ssot.yaml` `route_attention_contract`1246-1284行に鏡像あり）、`docs/design/admin-console-workflow-ssot.yaml`（1297行）、`docs/design/admin-normal-surface-projection-seed-ssot.yaml`（637行）のいずれも、「全productionプロジェクション画面はnavigation/escape affordanceを描画しなければならない」というcompletion conditionを一切宣言していない——existing wiring（`emission.navigationSequence`がcanonical_route_tabのhub_relationsレーンであること）を記述しているのみ。既存proof（`frontend/tests/projectionEntry.test.ts`）は`resolveHubNavigationLinks`のdata-layer unit test、および`ProjectionShell.tsx`に対する`src.includes(...)`形式のsource-string grep（409-440行）のみで、いかなるproduction画面に対しても実DOM上へnav barが描画されることを証明していない。
+
+**目的:** 現在のsilent-conditional-nav-bar設計（hub_relations未authoring時は何も描画しない）がOwnerの意図した最終仕様か、それとも全画面が最低限のescape affordanceを持つべきという要求があるかをまず確認し、いずれの場合もSSOT上のcompletion conditionとして明文化した上で、代表的production画面に対する実DOM rendering proofを用意する。
+
+**改善方針:** (1) Ownerへ現行silent-conditional設計が最終仕様かどうかを確認する。(2) 最終仕様であれば、その旨を`docs/framework-core.yaml` `runtime_route_attention_boundary`または`docs/design/runtime-orchestration-ssot.yaml` `route_attention_contract`へ明記し、本findingをclosedとする。(3) 何らかのcompletion conditionが必要と判断された場合は、そのSSOT定義確定を実装より先に行う（design_change route）。(4) いずれの場合も、既にhub_relationsを持つ代表画面（admin-dashboard/admin-enum/credential-management等）に対する実DOM rendering proof（`render()`ベース、source-string grepではない）を用意する。具体的なUI実装（navbar/header/sidebar/Home button等）は本findingでは決定しない。
+
+**対応資料:** `docs/framework-core.yaml`（`runtime_route_attention_boundary`）、`docs/framework-policy.yaml`（347-354行）、`docs/design/runtime-orchestration-ssot.yaml`（`route_attention_contract`、1246-1284行）、`docs/design/admin-console-workflow-ssot.yaml`（1297行）、`docs/design/admin-normal-surface-projection-seed-ssot.yaml`（637行）
+
+**対象ファイル名:** `frontend/islands/ProjectionShell.tsx`（873-931行）、`frontend/runtime/projectionEntry.ts`（148-170行）、`frontend/tests/projectionEntry.test.ts`
+
+**対象関数名:** `resolveHubNavigationLinks`、ProjectionShell内のnav bar描画分岐（`hubNavigationLinks.length > 0`条件）
+
+**ownership候補（いずれも完全一致せず、Owner確認が必要）:** `admin-surface-topology-seed-conversion`は個別subBundleのnavigation binding authoring/verificationを扱うのみで、cross-projection completion conditionは扱わない——不一致。`ui-projection-surface-architecture-reinforcement`（本節直前の記述）は「`ProjectionShell` route/package/manifest awareness」を既存残scopeとして明示的に持つため、最も近い候補だが、現時点でこの具体findingを含む旨の記載は無い。
+
+#### Finding 2: SQL Attention candidateのbackend実生成→frontend実rendered最終stateまでのcomposed proof不在
+
+**問題点:** `RuntimeExecutor.cs`（255-266行）が生成する`RecommendNavigationProjectionSpec`（`backend/schema/ContextRouteContracts.cs`275-329行）→`EmissionBuilder.cs`（31行）の`Emission.RecommendNavigationProjection`という経路は、実はSQL Attention candidateデータ自体を運ばない——`SqlAttentionProjectionChildSpec`（同ファイル261-267行、296-301行）はStatus/SourceSetIdのみを保持し、コード自身のコメントが「frontend may fetch the dedicated SQL Attention projection API」と明記している。実candidateは`frontend/components/SqlAttentionProjectionBlock.tsx`が独立して発行する**別の**dispatch（`sql_attention:list_projection` → `AdminRuntime.ExecuteDataAsync` → `SqlAttentionTopologyProjectionRuntime.ProjectAsync`）を経由し、Emissionが運ぶsourceSetIdでgatingされるのみである。既存proof surfaceはいずれも単一tierに留まる: `SqlAttentionLiveDbEndToEndTests.cs`は実DBだが`AdminRuntime`/frontendへ到達しない、`AdminRuntimeSqlAttentionProjectionTests.cs`は実dispatch経路だがtest-double repository（実DB無し）、frontend側3test（`recommendNavigationIsland.test.ts`/`sqlAttentionProjectionApi.test.ts`/`sqlAttentionProjectionPanel.test.ts`）はsource-string scan・mock fetch・DOM無しobject構築のみ。`docs/design/pipeline-continuity-ssot.yaml`（111-115行）は`backend_runtime_result_affects_frontend_final_state`に該当する変更へtier_2 composed scenario harnessを要求し、162-166行で`backend_ok_true_only_is_not_completion_pass`/`frontend_render_only_is_not_completion_pass`を明示的に禁じている——SQL Attention circulation経路にはこのtier_2 harnessが存在しない。
+
+**目的:** 実DB生成のSQL Attention candidateが、実`AdminRuntime`/`SqlAttentionTopologyProjectionRuntime.ProjectAsync`経由の実dispatchを通り、frontend側の実`SqlAttentionProjectionBlock`/`RecommendNavigationIsland`のrendered最終stateまで到達することを証明する、単一のcomposed scenario proofを用意する。
+
+**改善方針:** `docs/design/pipeline-continuity-ssot.yaml`の`ui_builder_runtime_interaction_representative_scenario`（`button_click_modal_open_close`、116-147行）を既存の実現パターンとして参照し、新規E2E platformを発明せず既存test helper/lane testを合成する形で同水準のtier_2 harnessをSQL Attention circulation経路向けに構成する（同SSOT112-115行の方針通り）。実装前に、`RecommendNavigationProjectionSpec`が今後もstatus-onlyのままで良い設計か、将来candidateデータ自体を運ぶよう拡張すべきかをOwnerへ確認する（本監査ではどちらが正しいか判定しない）。加えて、`backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs`が`docs/design/pipeline-continuity-ssot.yaml`のtier_1 `dispatch_backend_runtime_test`一覧に引用されているが、実際には`RecommendNavigationProjectionSpec`/`RecommendNavigationProjection`への参照を一切含まない点も、SSOT記述がstaleな可能性としてOwnerへ確認する。
+
+**対応資料:** `docs/design/pipeline-continuity-ssot.yaml`（111-166行、test tier policy）、`backend/runtime/RuntimeExecutor.cs`（255-266行）、`backend/runtime/EmissionBuilder.cs`（31行）、`backend/schema/ContextRouteContracts.cs`（261-267行、275-329行、296-301行）
+
+**対象ファイル名:** `backend/runtime/RuntimeExecutor.cs`、`backend/runtime/EmissionBuilder.cs`、`backend/schema/ContextRouteContracts.cs`、`frontend/islands/ProjectionShell.tsx`（932-936行）、`frontend/components/RecommendNavigationIsland.tsx`、`frontend/components/SqlAttentionProjectionBlock.tsx`、`frontend/api/sqlAttentionProjection.ts`、`backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs`、`backend/tests/Topolactor.Runtime.Tests/AdminRuntimeSqlAttentionProjectionTests.cs`、`backend/tests/Topolactor.Runtime.Tests/RecommendNavigationProjectionSpecTests.cs`、`frontend/tests/recommendNavigationIsland.test.ts`、`frontend/tests/sqlAttentionProjectionApi.test.ts`、`frontend/tests/sqlAttentionProjectionPanel.test.ts`
+
+**対象関数名:** `RuntimeExecutor`内のrecommendation生成箇所、`RecommendNavigationProjectionSpec.FromRecommendation`、`SqlAttentionTopologyProjectionRuntime.ProjectAsync`、`fetchSqlAttentionProjection`
+
+**ownership候補（いずれも完全一致せず、Owner確認が必要）:** `product-nocode-loop-acceptance`（Status: `acceptance_pending`）は「SQL Attention feedback projection」を実装済みscopeとして既に記載しているが、その受入条件はOwnerによるmanual/hand-debug UX受入であり、本findingが求めるautomated tier_2 proofとは種類が異なる——不一致。`test-orchestration-review`（Status: `not_started`、`docs/design/pipeline-continuity-ssot.yaml`をprimary SSOTとする）はtest tier/scenario harness点検という趣旨自体は一致するが、現在の記載scopeはroute registry proof/seed CRUD renderability proof/route removal replacement proof等、seed conversion後のroute retirement関連proofに限定されており、SQL Attentionへの言及は無い。いずれのBundleへ統合するか、または新規Bundleとするかを含め、Owner判断が必要。
+
 ---
 ## Bundle `seed-template-runtime-interaction-assignment`
 
