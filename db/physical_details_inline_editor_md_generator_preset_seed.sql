@@ -27,7 +27,7 @@ WITH upserted_preset AS (
         'physical_details_inline_editor_md_generator.v1',
         'Physical Details / Inline Editor / Markdown Generator preset seed',
         'ui_builder_canvas',
-        'physical_details_inline_editor_md_generator.v1.seed.2026-06-12',
+        'physical_details_inline_editor_md_generator.v1.seed.2026-08-16',
         $$
         {
           "seedKind": "ui_builder_canvas_preset_seed",
@@ -46,7 +46,15 @@ WITH upserted_preset AS (
             "promote": "content_bundle:promote_draft"
           },
           "payloadFromResolver": "frontend/runtime/payloadFromResolver.ts",
-          "knownGaps": []
+          "markdownGeneration": {
+            "authoringNode": "details_markdown_body",
+            "previewNode": "details_markdown_preview",
+            "rendererRef": "frontend/lib/markdownRenderer.ts renderMarkdownToVNodes",
+            "note": "editable Markdown-shaped draft field (content_bundle:update_entity_draft, same flow as every other tab1_details field) plus a safe read-only rendered preview (md_viewer.projection bare-markdown mode) -- not a topology.team_markdown_saved_view row"
+          },
+          "knownGaps": [
+            {"nodeId": "details_markdown_preview", "reason": "emission.data.markdownBody is a generic field-name placeholder, same idiom as details_field_label_1's placeholder label -- author binds it to the real physical table's markdown-shaped column/jsonb path after preset load", "knownGapRef": "markdown_body_field_binding_generic_placeholder"}
+          ]
         }
         $$::jsonb,
         $$
@@ -61,6 +69,8 @@ WITH upserted_preset AS (
             { "nodeId": "details_save_button", "componentKey": "confirmed_update_button.primitive", "componentKind": "inline_edit/confirmed_update_button", "parentNodeId": "details_tabs" },
             { "nodeId": "details_history_list", "componentKey": "audit_diff_drawer.primitive", "componentKind": "inline_edit/audit_diff_drawer", "parentNodeId": "details_tabs" },
             { "nodeId": "details_history_drawer_button", "componentKey": "button.primitive", "componentKind": "action/button", "parentNodeId": "details_tabs" },
+            { "nodeId": "details_markdown_body", "componentKey": "textarea.template", "componentKind": "form_input/textarea_template", "parentNodeId": "details_tabs" },
+            { "nodeId": "details_markdown_preview", "componentKey": "md_viewer.projection", "componentKind": "data_display/md_viewer", "parentNodeId": "details_tabs" },
             { "nodeId": "details_full_history_drawer", "componentKey": "row_detail_drawer.primitive", "componentKind": "table_op/row_detail_drawer", "parentNodeId": "details_shell" },
             { "nodeId": "details_debug_json", "componentKey": "json_viewer.template", "componentKind": "data_display/json", "parentNodeId": "details_shell" }
           ]
@@ -109,7 +119,7 @@ WITH upserted_preset AS (
             '{"layoutIntent":"export_action"}'::jsonb, 'mapped'),
         ((SELECT preset_id FROM preset), 'details_tabs', 'details_tabs', 'catalog_component', 'tabs.template', 'disclosure/tabs', 'details_shell', 'content', 3,
             '{"x":24,"y":72,"width":976,"height":640}'::jsonb,
-            '{"tabs":[{"key":"details","label":"Details"},{"key":"history","label":"Field History"}]}'::jsonb,
+            '{"tabs":[{"key":"details","label":"Details"},{"key":"history","label":"Field History"},{"key":"markdown","label":"Markdown"}]}'::jsonb,
             '{"layoutIntent":"main_tabs"}'::jsonb, 'mapped'),
         ((SELECT preset_id FROM preset), 'details_field_label_1', 'details_field_label_1', 'catalog_component', 'inline_editable_field.primitive', 'inline_edit/inline_editable_field', 'details_tabs', 'details', 4,
             '{"x":48,"y":136,"width":448,"height":64}'::jsonb,
@@ -131,11 +141,19 @@ WITH upserted_preset AS (
             '{"x":48,"y":600,"width":160,"height":40}'::jsonb,
             '{"label":"Full history","variant":"secondary"}'::jsonb,
             '{"layoutIntent":"full_history_trigger"}'::jsonb, 'mapped'),
-        ((SELECT preset_id FROM preset), 'details_full_history_drawer', 'details_full_history_drawer', 'catalog_component', 'row_detail_drawer.primitive', 'table_op/row_detail_drawer', 'details_shell', 'drawers', 9,
+        ((SELECT preset_id FROM preset), 'details_markdown_body', 'details_markdown_body', 'catalog_component', 'textarea.template', 'form_input/textarea_template', 'details_tabs', 'markdown', 9,
+            '{"x":48,"y":136,"width":448,"height":280}'::jsonb,
+            '{"label":"Markdown body","placeholder":"# Heading\n\nMarkdown content..."}'::jsonb,
+            '{"layoutIntent":"markdown_authoring_field"}'::jsonb, 'mapped'),
+        ((SELECT preset_id FROM preset), 'details_markdown_preview', 'details_markdown_preview', 'catalog_component', 'md_viewer.projection', 'data_display/md_viewer', 'details_tabs', 'markdown', 10,
+            '{"x":512,"y":136,"width":416,"height":280}'::jsonb,
+            '{"title":"Markdown preview"}'::jsonb,
+            '{"layoutIntent":"markdown_preview"}'::jsonb, 'mapped'),
+        ((SELECT preset_id FROM preset), 'details_full_history_drawer', 'details_full_history_drawer', 'catalog_component', 'row_detail_drawer.primitive', 'table_op/row_detail_drawer', 'details_shell', 'drawers', 11,
             '{"x":680,"y":72,"width":320,"height":680}'::jsonb,
             '{"title":"Full field history"}'::jsonb,
             '{"layoutIntent":"full_history_drawer"}'::jsonb, 'mapped'),
-        ((SELECT preset_id FROM preset), 'details_debug_json', 'details_debug_json', 'catalog_component', 'json_viewer.template', 'data_display/json', 'details_shell', 'debug', 10,
+        ((SELECT preset_id FROM preset), 'details_debug_json', 'details_debug_json', 'catalog_component', 'json_viewer.template', 'data_display/json', 'details_shell', 'debug', 12,
             '{"x":24,"y":720,"width":640,"height":40}'::jsonb,
             '{"title":"Emission debug"}'::jsonb,
             '{"layoutIntent":"debug_projection"}'::jsonb, 'mapped')
@@ -168,14 +186,16 @@ VALUES (
         {"nodeId":"details_shell","nodeKind":"catalog_component","componentKey":"section.alias","componentKind":"disclosure_structure/section","isDraftOnly":false,"slotKey":"root","orderIndex":0,"parentNodeId":null,"x":0,"y":0,"width":1024,"height":768,"propsJson":"{\"title\":\"Record Details\",\"description\":\"Detail view, inline edit, and field history. Wire each action to the contents topology assigned operation refs.\"}"},
         {"nodeId":"details_back_button","nodeKind":"catalog_component","componentKey":"button.primitive","componentKind":"action/button","isDraftOnly":false,"slotKey":"header","orderIndex":1,"parentNodeId":"details_shell","x":24,"y":16,"width":96,"height":40,"propsJson":"{\"label\":\"← Back\"}"},
         {"nodeId":"details_pdf_export_button","nodeKind":"catalog_component","componentKey":"button.primitive","componentKind":"action/button","isDraftOnly":false,"slotKey":"header","orderIndex":2,"parentNodeId":"details_shell","x":896,"y":16,"width":128,"height":40,"propsJson":"{\"label\":\"Export PDF\",\"variant\":\"secondary\"}"},
-        {"nodeId":"details_tabs","nodeKind":"catalog_component","componentKey":"tabs.template","componentKind":"disclosure/tabs","isDraftOnly":false,"slotKey":"content","orderIndex":3,"parentNodeId":"details_shell","x":24,"y":72,"width":976,"height":640,"propsJson":"{\"tabs\":[{\"key\":\"details\",\"label\":\"Details\"},{\"key\":\"history\",\"label\":\"Field History\"}]}"},
+        {"nodeId":"details_tabs","nodeKind":"catalog_component","componentKey":"tabs.template","componentKind":"disclosure/tabs","isDraftOnly":false,"slotKey":"content","orderIndex":3,"parentNodeId":"details_shell","x":24,"y":72,"width":976,"height":640,"propsJson":"{\"tabs\":[{\"key\":\"details\",\"label\":\"Details\"},{\"key\":\"history\",\"label\":\"Field History\"},{\"key\":\"markdown\",\"label\":\"Markdown\"}]}"},
         {"nodeId":"details_field_label_1","nodeKind":"catalog_component","componentKey":"inline_editable_field.primitive","componentKind":"inline_edit/inline_editable_field","isDraftOnly":false,"slotKey":"details","orderIndex":4,"parentNodeId":"details_tabs","x":48,"y":136,"width":448,"height":64,"propsJson":"{\"label\":\"Field 1\",\"placeholder\":\"Enter value...\"}"},
         {"nodeId":"details_status_select","nodeKind":"catalog_component","componentKey":"select.template","componentKind":"form_input/select","isDraftOnly":false,"slotKey":"details","orderIndex":5,"parentNodeId":"details_tabs","x":512,"y":136,"width":240,"height":48,"propsJson":"{\"label\":\"Status\"}"},
         {"nodeId":"details_save_button","nodeKind":"catalog_component","componentKey":"confirmed_update_button.primitive","componentKind":"inline_edit/confirmed_update_button","isDraftOnly":false,"slotKey":"details","orderIndex":6,"parentNodeId":"details_tabs","x":864,"y":680,"width":136,"height":40,"propsJson":"{\"label\":\"Save changes\"}"},
         {"nodeId":"details_history_list","nodeKind":"catalog_component","componentKey":"audit_diff_drawer.primitive","componentKind":"inline_edit/audit_diff_drawer","isDraftOnly":false,"slotKey":"history","orderIndex":7,"parentNodeId":"details_tabs","x":48,"y":136,"width":880,"height":440,"propsJson":"{\"title\":\"Field history\",\"emptyText\":\"No history yet.\"}","propBindings":{"entries":{"source":"emission.data.history"}}},
         {"nodeId":"details_history_drawer_button","nodeKind":"catalog_component","componentKey":"button.primitive","componentKind":"action/button","isDraftOnly":false,"slotKey":"history","orderIndex":8,"parentNodeId":"details_tabs","x":48,"y":600,"width":160,"height":40,"propsJson":"{\"label\":\"Full history\",\"variant\":\"secondary\"}"},
-        {"nodeId":"details_full_history_drawer","nodeKind":"catalog_component","componentKey":"row_detail_drawer.primitive","componentKind":"table_op/row_detail_drawer","isDraftOnly":false,"slotKey":"drawers","orderIndex":9,"parentNodeId":"details_shell","x":680,"y":72,"width":320,"height":680,"propsJson":"{\"title\":\"Full field history\"}"},
-        {"nodeId":"details_debug_json","nodeKind":"catalog_component","componentKey":"json_viewer.template","componentKind":"data_display/json","isDraftOnly":false,"slotKey":"debug","orderIndex":10,"parentNodeId":"details_shell","x":24,"y":720,"width":640,"height":40,"propsJson":"{\"title\":\"Emission debug\"}","propBindings":{"data":{"source":"emission.data"}}}
+        {"nodeId":"details_markdown_body","nodeKind":"catalog_component","componentKey":"textarea.template","componentKind":"form_input/textarea_template","isDraftOnly":false,"slotKey":"markdown","orderIndex":9,"parentNodeId":"details_tabs","x":48,"y":136,"width":448,"height":280,"propsJson":"{\"label\":\"Markdown body\",\"placeholder\":\"# Heading\"}"},
+        {"nodeId":"details_markdown_preview","nodeKind":"catalog_component","componentKey":"md_viewer.projection","componentKind":"data_display/md_viewer","isDraftOnly":false,"slotKey":"markdown","orderIndex":10,"parentNodeId":"details_tabs","x":512,"y":136,"width":416,"height":280,"propsJson":"{\"title\":\"Markdown preview\"}","propBindings":{"markdown":{"source":"emission.data.markdownBody"}}},
+        {"nodeId":"details_full_history_drawer","nodeKind":"catalog_component","componentKey":"row_detail_drawer.primitive","componentKind":"table_op/row_detail_drawer","isDraftOnly":false,"slotKey":"drawers","orderIndex":11,"parentNodeId":"details_shell","x":680,"y":72,"width":320,"height":680,"propsJson":"{\"title\":\"Full field history\"}"},
+        {"nodeId":"details_debug_json","nodeKind":"catalog_component","componentKey":"json_viewer.template","componentKind":"data_display/json","isDraftOnly":false,"slotKey":"debug","orderIndex":12,"parentNodeId":"details_shell","x":24,"y":720,"width":640,"height":40,"propsJson":"{\"title\":\"Emission debug\"}","propBindings":{"data":{"source":"emission.data"}}}
       ],
       "layoutClassRefs": []
     }

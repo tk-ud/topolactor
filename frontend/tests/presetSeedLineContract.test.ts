@@ -21,6 +21,7 @@
 
 import {
   assert,
+  assertEquals,
 } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
   parseVisualLayoutPatchJson,
@@ -339,5 +340,47 @@ Deno.test("[preset-line] physical_details_inline_editor history binds emission.d
   assert(
     !snapshot.unresolvedJson.some((item) => item.knownGapRef === "logs_diff_record_history_binding"),
     "logs_diff_record_history_binding must not remain in unresolved_json",
+  );
+});
+
+Deno.test("[preset-line] physical_details_inline_editor_md_generator: Markdown authoring field + safe preview node survive the compiler pipeline intact", async () => {
+  const sql = await Deno.readTextFile("db/physical_details_inline_editor_md_generator_preset_seed.sql");
+  const snapshot = extractCompileSnapshot(sql, "db/physical_details_inline_editor_md_generator_preset_seed.sql");
+  const byId = new Map(snapshot.layoutPatchJson.nodes.map((node) => [String(node.nodeId), node]));
+
+  // The preset's own role claims "Markdown saved view generation surface" — this proves the
+  // layout_patch_json (the preset compiler's own output, not just descriptive SSOT/source text)
+  // actually carries the corresponding nodes, not just the name/role claim.
+  const markdownBody = byId.get("details_markdown_body") as Record<string, unknown> | undefined;
+  assert(markdownBody, "details_markdown_body (Markdown authoring field) must exist in compiled layout_patch_json");
+  assertEquals(
+    markdownBody!.componentKey,
+    "textarea.template",
+    "Markdown authoring field reuses the existing generic textarea component — no bespoke editor component",
+  );
+
+  const markdownPreview = byId.get("details_markdown_preview") as Record<string, unknown> | undefined;
+  assert(markdownPreview, "details_markdown_preview (safe Markdown preview) must exist in compiled layout_patch_json");
+  assertEquals(
+    markdownPreview!.componentKey,
+    "md_viewer.projection",
+    "Markdown preview reuses the existing md_viewer.projection component — no bespoke renderer component",
+  );
+  const previewBindings = markdownPreview!.propBindings as Record<string, { source: string }> | undefined;
+  assert(
+    previewBindings?.markdown?.source?.startsWith("emission.data"),
+    "Markdown preview binds a live emission.data source, not a static/hardcoded string",
+  );
+
+  // Both new nodes are children of the same details_tabs the preset's other tabs already use —
+  // confirms this is a genuine third tab, not a disconnected/orphaned node pair.
+  assertEquals(markdownBody!.parentNodeId, "details_tabs");
+  assertEquals(markdownPreview!.parentNodeId, "details_tabs");
+
+  const tabsNode = byId.get("details_tabs") as Record<string, unknown> | undefined;
+  const tabsPropsJson = JSON.parse(String(tabsNode?.propsJson ?? "{}")) as { tabs?: { key: string }[] };
+  assert(
+    tabsPropsJson.tabs?.some((t) => t.key === "markdown"),
+    "details_tabs must declare the markdown tab, not just host orphaned child nodes",
   );
 });

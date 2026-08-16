@@ -1988,6 +1988,86 @@ PR #600（round14〜24、コミット履歴は上記の各round実装記録を�
 
 ---
 
+## Bundle `physical-details-inline-editor-md-generator-preset-completion`
+
+**Status:** `implemented`（`physical_details_inline_editor_md_generator.v1` preset自体のcompletion boundaryを充足。`admin-surface-topology-seed-conversion`の`team-dashboard`/`scheduler-settings`は本Bundleの完了によって一切影響を受けない——別Bundleであり、本Bundleはteam-dashboard manifest/hub relation実装には一切進んでいない）。
+**Primary SSOT:** `docs/design/ui-builder-preset-ecosystem-ssot.yaml`（`physical_details_inline_editor_md_generator_preset`、本Bundleの正本）
+**補助SSOT:** `docs/design/mock-preset-intake-compiler-ssot.yaml`（compiler/UIBuilder load contract）, `docs/design/team-markdown-dashboard-saved-view-ssot.yaml`（`markdown_template_contract.validation_rules`、Markdown security ruleの正本）
+
+### 問題点
+
+`docs/design/ui-builder-preset-ecosystem-ssot.yaml`の`physical_details_inline_editor_md_generator_preset`は`role: physical record detail view, inline edit, and Markdown saved view generation surface`と宣言しながら、`layout_tree`にMarkdown表示/authoring nodeが一つも存在せず、`known_gaps: []`でこの不整合自体を記録していなかった。対応する`db/physical_details_inline_editor_md_generator_preset_seed.sql`（`source_snapshot_json`/`visual_tree_json`/`object_mapping`/`compile_snapshot`）も同様にMarkdown nodeを一切持たない。加えて`seed_ref`が`db/migrations/physical_details_inline_editor_md_generator_preset_seed.sql`という存在しないpath（`db/migrations/`ディレクトリ自体が repo に存在しない）を指しており、実ファイルは`db/`直下にあった——調査の結果、これは本presetだけでなく本SSOTの4 preset全て（hub_search/physical_search_crud_aggregate/physical_details_inline_editor_md_generator/aggregate_dashboard）に共通するstale pathだった。
+
+既存Markdown componentの実体調査でも別の不整合を発見した: `frontend/components/MdViewer.tsx`の`RenderedMarkdownPanel`は`<pre>{markdown}</pre>`でMarkdown本文をescaped rawテキストとして表示するのみで、見出し/リスト/リンク/コード等のMarkdown ruleに従ったrenderingを一切行っていなかった（`dangerouslySetInnerHTML`は使っておらずXSS安全ではあるが、「Markdown Viewer」としての機能を果たしていない——安全性とrendering capabilityは別軸の問題という論点が的中していた）。
+
+### 目的
+
+`physical_details_inline_editor_md_generator.v1`をSSOT/SQL seed/component runtime/security contractまで再監査し、名前だけではない再利用可能presetとしてcompletionさせる。team-dashboard実装（別途進行中、`admin-surface-topology-seed-conversion` Bundle）へは進まない。
+
+### 改善方針・実装内容
+
+1. **SSOT `seed_ref`是正**: 4 preset全ての`seed_ref`を`db/migrations/<file>`から実在する`db/<file>`へ修正（stale path全件、本presetに限らず repo 全体の整合性のため）。
+2. **共有Markdown安全レンダラーの新設**: `frontend/lib/markdownRenderer.ts`（`renderMarkdownToVNodes`）— HTML文字列を一切生成せず、`dangerouslySetInnerHTML`を一切使わず、Markdownの制限された構文（見出し/段落/リスト/blockquote/fenced code/inline code/bold/italic/link）を直接Preact VNodeへ変換する。生のHTML/scriptタグはテキストとして解釈されるのみ（構造的にHTMLとして解釈される経路が存在しない）。リンクは許可scheme（http/https/mailto）のみ`<a href>`化し、それ以外（javascript:/data:/vbscript:/未知scheme）はplain textへfail-close。これはteam-dashboard専用の実装ではなく、`MdViewer.tsx`と本presetの両方が再利用する単一の共有substrate。
+3. **`MdViewer.tsx`の`RenderedMarkdownPanel`をこの安全レンダラーへ切替**——既存production team-dashboard機能（`docs/design/team-markdown-dashboard-saved-view-ssot.yaml`）の表示忠実度も同時に是正される副次効果。既存team_markdown write/persistence authorityには一切触れていない。
+4. **`mdViewerPreviewFactory`（`frontend/runtime/runtimeComponentFactory.ts`）へbare-markdown modeを追加**——`props.savedView`が無く`props.markdown`（文字列）のみがある場合、`SavedViewDetail`型を持たない汎用物理recordのMarkdown-shaped fieldでも同じ安全レンダラーで直接previewできる。既存`props.savedView`契約は無変更・優先順位も維持（savedView優先）。新しいcomponent/catalog entryは追加していない——既存`md_viewer.projection`/`data_display/md_viewer`のfactory関数を拡張しただけ。
+5. **preset本体へMarkdownタブを追加**（SSOT`layout_tree.tab3_markdown` + SQL seed）: `details_markdown_body`（`textarea.template`、既存汎用generic textarea component、`details_save_button`/`content_bundle:update_entity_draft`の既存flowで保存——新規write pathなし）+ `details_markdown_preview`（`md_viewer.projection`のbare-markdown mode、`propBindings.markdown.source: emission.data.markdownBody`）。`details_tabs`の`tabs`配列へ`markdown`タブを追加。`emission.data.markdownBody`は`details_field_label_1`の"Field 1"labelと同じ汎用placeholder慣習（本presetはtable-agnosticなため実列名を先験的に持てない）——`known_gaps`（SSOT・SQL双方）へ`markdown_body_field_binding_generic_placeholder`として明示。
+6. **`topology.team_markdown_saved_view`への永続化は行っていない**——`team_markdown:*` operationはcontents topologyの`content_bundle:*`語彙と非互換であり、本presetの`design_intent`が明示する「Does NOT implement bespoke detail CRUD logic」境界外。Markdown生成 = 「physical recordが持つMarkdown-shaped fieldをauthoring/previewできる」ことであり、team-dashboardのsaved-view機能を複製する意味ではない。
+
+### 対応資料
+
+- `docs/design/ui-builder-preset-ecosystem-ssot.yaml`
+- `docs/design/mock-preset-intake-compiler-ssot.yaml`
+- `docs/design/team-markdown-dashboard-saved-view-ssot.yaml`（`markdown_template_contract.validation_rules`）
+- `docs/design/component-catalog-classification-ssot.yaml`
+
+### 対象ファイル名
+
+- `docs/design/ui-builder-preset-ecosystem-ssot.yaml`
+- `db/physical_details_inline_editor_md_generator_preset_seed.sql`
+- `frontend/lib/markdownRenderer.ts`（新設）
+- `frontend/components/MdViewer.tsx`
+- `frontend/runtime/runtimeComponentFactory.ts`
+- `frontend/tests/markdownRenderer.test.ts`（新設）
+- `frontend/tests/mdViewerRuntimeCompletion.test.ts`
+- `frontend/tests/presetSeedLineContract.test.ts`
+
+### 対象関数名
+
+- `renderMarkdownToVNodes`、`renderInline`、`parseBlocks`、`isAllowedLinkUrl`（`markdownRenderer.ts`、新設）
+- `mdViewerPreviewFactory`（bare-markdown modeを追加）
+- `RenderedMarkdownPanel`（`MdViewer.tsx`、レンダラー差し替え）
+
+### Governance NG boundary遵守（Gate0 evidence）
+
+- team-dashboard専用Markdown component/runtime/APIは作っていない——`markdownRenderer.ts`とbare-markdown modeは`MdViewer.tsx`/`md_viewer.projection`双方が再利用する共有substrateであり、いずれのsurfaceにも専用ではない。
+- presetをactive runtime topologyとして扱っていない——`package_membership_candidate_json.activeTopologyWrite: false`は無変更、`preview_validate_apply_boundary: mandatory`も無変更。既存汎用compile contract（`frontend/tests/presetSeedLineContract.test.ts`の6 contract、全45 test）がpresetそのままpassしている。
+- presetからactive topologyへの直接writeを追加していない——新規wiring candidateは追加せず、既存`details_save_button`/`content_bundle:update_entity_draft`flowへMarkdown fieldを乗せただけ。
+- Markdown本文をruntime SSOTへ昇格していない——`team_markdown:*`のsaved_view persistenceには一切触れていない。
+- `dangerouslySetInnerHTML`等の未検証Markdown/HTML直接DOM投影は一切ない（`markdownRenderer.ts`はHTML文字列を生成しない設計そのものによりこの経路が構造的に存在しない）。
+- script tagだけを個別除去する場当たり的sanitizerではない——allow-list方式（許可された構文のみVNode化、それ以外はplain text）でfail-close。
+- raw HTMLを暗黙許可していない——raw HTMLは常にplain textとして扱われ、有効化するモードは存在しない。
+- 既存Markdown ruleを迂回していない——`docs/design/team-markdown-dashboard-saved-view-ssot.yaml`の`markdown_template_contract.validation_rules`（raw_html_is_disabled_by_default, markdown_template_must_not_contain_executable_script）に従う。
+- Markdown nodeをSQL seedだけへ追加してSSOTを追従させていない——SSOT `layout_tree.tab3_markdown`とSQL seedを同一round内で同期。
+- SSOTだけ修正してproduction seed/runtime evidenceを作らない、ということもしていない——SQL seed・frontend runtime factory・testすべてを同一roundで実装済み。
+- 既存generic preset compiler / UIBuilder load / component catalog / runtime factoryを迂回していない——新規nodeは既存`presetSeedLineContract.test.ts`の6 contract（`parseVisualLayoutPatchJson`互換性含む）へそのまま合格している。
+- Markdown専用editor componentは新設していない——`textarea.template`（既存汎用component）を再利用。
+
+### 検証
+
+- `deno test -A frontend/tests/`（2103 passed / 0 failed、repo rootから実行——`db/*.sql`を読む一部testはcwdがrepo rootでないと`NotFound`になる点に注意、`.agent/tests/check-frontend-all-tests.sh`と同じ実行方法）
+- `bash .agent/tests/check-frontend-types.sh`（PASS）
+- `bash .agent/tests/check-structure.sh`（PASS）
+- `dotnet build`（0 errors、backend変更なしのため無影響確認のみ）
+- `.agent/tools/agent-ui-local-test`全chain（`run-worktype-tests`→`read-senario-tmp`→`checklist`→`checks`→`summary`）
+
+### 次にこの preset を触る Agent への引き継ぎ
+
+- `emission.data.markdownBody`は汎用placeholder——実際のroute packageへpresetをloadした後、authorが対象物理テーブルの実際のMarkdown-shaped column/jsonb pathへ`details_markdown_preview`のpropBindings sourceを差し替える必要がある（`details_field_label_1`等、他の全content_bundle-boundフィールドと同じ既存パターン）。
+- `topology.team_markdown_saved_view`への永続化・team-dashboard機能との統合は本Bundleのscope外——将来必要になった場合は別Bundleとして起票し、`content_bundle:*`と`team_markdown:*`という非互換operation語彙をどう橋渡しするかを設計判断すること（本Bundleは意図的にこの統合を行っていない）。
+- `frontend/lib/markdownRenderer.ts`は意図的に制限された構文のみ対応（画像は非対応、テーブルは非対応）——将来これらが必要になった場合はallow-list方式を維持したまま拡張すること（denylistへの転換や`dangerouslySetInnerHTML`の導入はGate0違反になる）。
+
+---
+
 ## Bundle `admin-runtime-operation-dispatch-lane-determination`
 
 **Status:** `implemented`（owner decision・汎用mechanism実装・admin-enum read circuitの実dispatch化+live-DB証明に加え、2026-07-24にremaining_write_payload_capture_gapを解消し、本Bundleの3つの受入条件すべてを充足した——下記「2026-07-24 remaining_write_payload_capture_gap解消」節参照。admin-enum/team-dashboard/scheduler-settings自身の本番write UI実装は別bundle `admin-surface-topology-seed-conversion` の各subBundle scopeであり、本Bundleの`implemented`はそれらのwrite-dispatchが正規contractに従って「進められる状態になった」ことを指す——それら自身の完了を意味しない）

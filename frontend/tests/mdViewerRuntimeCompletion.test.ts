@@ -153,6 +153,89 @@ Deno.test("mdViewerPreviewFactory: explicit error when savedView props invalid (
   }
 });
 
+// ─── Bare-markdown mode (props.markdown, no persisted saved-view record) ────
+
+Deno.test("mdViewerPreviewFactory: bare-markdown mode renders safely when props.savedView is absent but props.markdown is a string", () => {
+  const factory = resolveRuntimeComponentFactory("data_display/md_viewer");
+  assertExists(factory, "factory must exist");
+  const spec = {
+    componentId: "test-md-viewer-bare",
+    componentType: "data_display/md_viewer",
+    props: { markdown: "# Bare markdown\n\nSome **bold** text." },
+    eventBinding: {},
+    previewMode: false,
+  };
+  // deno-lint-ignore no-explicit-any
+  const result = factory!.render(spec as any);
+  assertEquals(result.ok, true, "bare-markdown mode must succeed without a savedView object");
+  if (result.ok) {
+    assertExists(result.node, "bare-markdown mode must return a VNode");
+  }
+});
+
+Deno.test("mdViewerPreviewFactory: props.savedView takes priority over props.markdown when both are present (existing contract unchanged)", () => {
+  const factory = resolveRuntimeComponentFactory("data_display/md_viewer");
+  assertExists(factory, "factory must exist");
+  const spec = {
+    componentId: "test-md-viewer-both",
+    componentType: "data_display/md_viewer",
+    props: {
+      markdown: "# should not be used",
+      savedView: {
+        savedViewId: "00000000-0000-0000-0000-0000000000aa",
+        title: "Real saved view",
+        renderedMarkdown: "# Real",
+        completedPresetSeedJson: {
+          seed_version: "1.0",
+          template_ref: { templateId: "tpl-001", templateName: "Test Template" },
+          source_ref: { sourceTable: "entity", sourceRecordId: "rec-001" },
+          binding_ref: {
+            required_placeholder_keys: ["{{name}}"],
+            optional_placeholder_keys: ["{{notes}}"],
+          },
+          render_ref: {
+            rendered_markdown_hash: "sha256-abc123def456",
+            rendered_at: "2024-01-01T00:00:00Z",
+            renderer_version: "1.0",
+            unresolved_placeholder_keys: [],
+          },
+          adjustment_ref: { user_adjustment_patch_json: null },
+          dashboard_ref: { tags: [], card_metadata_json: {} },
+          lineage_ref: { created_from_preset: "md_viewer.projection" },
+        },
+      },
+    },
+    eventBinding: {},
+    previewMode: false,
+  };
+  // deno-lint-ignore no-explicit-any
+  const result = factory!.render(spec as any);
+  assertEquals(result.ok, true, "savedView-shaped props must still take the full MdViewer path");
+});
+
+Deno.test("mdViewerPreviewFactory: bare-markdown mode never uses dangerouslySetInnerHTML — script tag stays inert", () => {
+  const factory = resolveRuntimeComponentFactory("data_display/md_viewer");
+  assertExists(factory, "factory must exist");
+  const spec = {
+    componentId: "test-md-viewer-bare-security",
+    componentType: "data_display/md_viewer",
+    props: { markdown: "<script>window.__pwned = true;</script>" },
+    eventBinding: {},
+    previewMode: false,
+  };
+  // deno-lint-ignore no-explicit-any
+  const result = factory!.render(spec as any);
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    // deno-lint-ignore no-explicit-any
+    const props = (result.node as any).props;
+    assert(
+      props?.dangerouslySetInnerHTML === undefined,
+      "bare-markdown mode must never set dangerouslySetInnerHTML",
+    );
+  }
+});
+
 // ─── completedPresetSeedJson structure validation ───────────────────────────
 
 Deno.test("normalizeMdViewerSavedView: completedPresetSeedJson:{} fails — RUNTIME_MD_VIEWER_INVALID_SAVED_VIEW_PROPS", () => {
