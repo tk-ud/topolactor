@@ -79,6 +79,30 @@
 
 **検証:** `bash .agent/tests/check-static-ssot-purity.sh`（3 SSOTファイルすべてPASS）、`bash .agent/tests/check-unified-test-gate.sh`（9 lanes pass）、`dotnet test`（Topolactor.Runtime.Tests 1678/1678 pass — 新規4 test込み。Topolactor.Integration.Tests 247/248 pass、既知のpre-existing 1件のみ）、`deno test -A frontend/tests/`（2086/2086 pass、回帰なし）。
 
+### Cross-cutting audit findings — round 12 監査: initial N=0→completed orphan防止のcanonical completion boundaryは存在せず、`design_change required`（2026-08-16、PR #602 round 12、実装なし）
+
+**問題点:** Round 11は「connected Manifestがdeprecateによってorphanへ回帰する」経路（N=1→0）を`hub_navigation:deprecate`のfail-close guardで閉じたが、「新規Manifestがrelation authoringを一度も経ずtransient N=0のまま放置される」経路（initial N=0→completed orphan）は未閉鎖のまま残っていた。本round はManifest lifecycle全体（`public.manifest`のdraft/active/deprecated、`hubs.topology_manifests`のactive/deprecated、`ManifestCanonicalProjection.ProjectOnAuthoringDraftAsync`/`ProjectOnPromoteAsync`、`AdminRuntime`の`manifest:*`全action、`RegistrarValidationService`、`PromotionManifestValidator`〔これは無関係な別機能——サイト内告知/promotion bannerのvalidatorであり、Manifest draft→active promotionとは別概念、誤認しないこと〕、`.agent/tests/*.sh`全体）を監査した結果、**「このManifestは構築完了である」を`status='active'`（Manifest作成時点で即座に付与される）とは別に表現するcanonical production authorityが一件も存在しないことを確認した**——新規のstatus column、timestamp column、boolean flag、admin action（`manifest:finalize`/`close`/`complete`相当）、CI structural check のいずれも存在しない。
+
+唯一の意味的候補である`docs/design/admin-normal-surface-projection-seed-ssot.yaml`の`design_blocking.target_surface_manifest_readiness.navigation_binding_resolution_criterion`（`subbundle_status`）は、admin-dashboard/admin-enum/credential-management/team-dashboard/scheduler-settingsという**5件の名指しされたsubBundleについてのみ手動で記録される、テスト成果物＋YAML文書上のproof-tracking慣習**であり、(a) 実行時に何かを計算・永続化するruntime code pathではなく、(b) 将来登場する未知のtopology_manifestへ一般化する仕組みを持たない。
+
+一方、`docs/design/runtime-orchestration-ssot.yaml` `production_projection_connectivity_invariant.enforcement_boundary`（Round 11で追記）は、この`navigation_binding_resolution_criterion`を「a topology_manifestがdoneかどうかを決めるcompletion-judgment/proof boundary」と記述しており、これはinvariant自体の`scope`（`every hubs.topology_manifests row`、Round 11でmanifest種別分類を除去し全件へ一般化済み）と併せて読むと、実態より広く適用されるかのように読める——5件限定の手動追跡慣習を、全Manifestへ一般化されたcompletion authorityであるかのように記述している点は、正確ではない。ただしこれは今回のaudit発見であり、本round では`docs/design/*.yaml`を変更していない（audit worktypeのscope境界を尊重し、記述修正はOwner確認後のdesign_change roundへ委ねる）。
+
+**目的:** 新規Manifestがrelation authoring前に一時的にN=0で存在できる既存sequence（`hub_navigation:create`は`/admin/manifests`がtarget topology_manifestの存在を前提とするため、Manifestの内容構築が先、hub relation authoringが後という順序——`docs/design/admin-normal-surface-projection-seed-ssot.yaml` `design_blocking.sequencing_note`で確定済み）を破壊せずに、「relation authoringが実行されない・失敗する・中断されたまま放置されたManifest」を`completed`として扱わせないためのcanonical boundaryを特定する。既存boundaryが無い場合、推測でad hoc機構を作らず、Ownerが決定すべき具体的な設計分岐を提示する。
+
+**改善方針（今回は実装せず、report済み）:** 既存production lifecycleにcanonical completion boundaryが一件も存在しないため、`design_change required`として次の2方向をOwnerへ提示する（いずれもAgentが独断で選択しない）。
+  1. **新しい明示的lifecycle event/admin actionを新設する方向**（例: `hub_navigation:mark_manifest_navigation_complete`相当——admin operatorがrelation authoringを終えたと明示的に宣言する新規action）。この場合、そのactionの中でN≧1かつcanonical-resolvableなrelationをfail-closeできる。ただし新規admin action・新規status概念の追加はNG軸で明示的に禁止されている「Agentが推測でその場に作る」行為に該当するため、Owner承認済みの新規authorityとして正式にSSOT化してから実装する必要がある。
+  2. **既存のnavigation_binding_resolution_criterion（proof-based audit judgment）を、5subBundle限定から全topology_manifest汎用の一般原則として明文化し直し、runtime上のlive write-time enforcementはRound 11のdeprecate guard一件のみに留める方向**。この場合、「completed」はrun-time DBが強制するものではなく、audit/proof（今回のような監査、または将来のCI構造チェック）によって継続的に検証される性質のものだと明確にする。
+
+どちらを取るかはOwner判断であり、本roundはどちらか一方を推測実装していない。
+
+**対応資料:** `docs/design/db-schema.yaml`（`hub_relations.minimum_cardinality_completion_invariant`）、`docs/design/runtime-orchestration-ssot.yaml`（`production_projection_connectivity_invariant.enforcement_boundary`——記述の精度について上記「問題点」参照、本round未変更）、`docs/design/admin-normal-surface-projection-seed-ssot.yaml`（`design_blocking.target_surface_manifest_readiness`、`sequencing_note`、`navigation_binding_resolution_criterion`、`subbundle_status`）、`docs/design/admin-console-workflow-ssot.yaml`（`subbundle_target_readiness`）
+
+**対象ファイル名（調査のみ、変更なし）:** `db/manifest_tables.sql`、`db/topology_tables.sql`、`backend/repository/ManifestCanonicalProjection.cs`、`backend/repository/NpgsqlManifestRepository.cs`、`backend/runtime/AdminRuntime.cs`（`manifest:*`全action、`hub_navigation:*`全action）、`backend/runtime/RegistrarValidationService.cs`、`backend/repository/PromotionManifestValidator.cs`（無関係——誤読注意）
+
+**対象関数名（調査のみ）:** `ManifestCanonicalProjection.ProjectOnAuthoringDraftAsync`、`ManifestCanonicalProjection.ProjectOnPromoteAsync`、`AdminRuntime.DataManifestPromoteAsync`、`AdminRuntime.DataManifestValidateAsync`、`AdminRuntime.HubNavigationCreateAsync`
+
+**Round 11の`hub_navigation:deprecate`（`NpgsqlContentBundleRepository.DeprecateHubRelationAsync`）N=1→0 regression guardは撤回・弱体化していない。Manifest create/promotionはblockingしていない（既存canonical authoring sequenceを破壊しない）。N=0 Manifestの存在自体を即時invalid化する変更も、逆に無期限にvalid completion扱いする変更も行っていない——現状の（audit-judgment頼みの）状態を維持したまま、その限界を正直に記録したのみである。Round 10 Finding 2（SQL Attention composed proof）、credential-management/admin-enum/admin-dashboardのImplemented evidenceはいずれも本roundで変更していない。**
+
 ---
 ## Bundle `seed-template-runtime-interaction-assignment`
 
