@@ -413,6 +413,62 @@ runtime_orchestration_ssot:
         - this contract does not authorize a dedicated credential-management route, dedicated
             panel, or new runtime_destination
 
+    production_projection_connectivity_invariant:
+      note: >-
+        Owner design decision (2026-08-16, PR #602 round 10 -- carried over from round 9's
+        common-navigation audit finding in .agent/tasks/todo.md admin-surface-topology-seed-conversion).
+        Generalizes the per-subBundle navigation_binding_authoring_and_verification /
+        navigation_binding_resolution_criterion gate already proven in
+        docs/design/admin-normal-surface-projection-seed-ssot.yaml design_blocking.subbundle_status
+        (and this contract's own test_proof_contract above) from a one-time seed-conversion
+        completion checklist item into a standing architectural invariant for any production
+        projection manifest, present or future -- not scoped to the five named
+        admin-surface-topology-seed-conversion subBundles only.
+      invariant: >-
+        A production projection manifest (any manifest whose runtime_destination resolves a real
+        business-facing screen, as opposed to a purely internal/system-utility manifest) must
+        resolve at least one active hubs.hub_relations row through the exact same resolution_chain
+        this contract's test_proof_contract already defines -- HubNavigationResolver ->
+        Emission.NavigationSequence -> resolveHubNavigationLinks -> ProjectionShell's own nav bar /
+        target-manifest round trip. A production projection manifest with zero active hub_relations
+        is not a valid completion state ("navigation orphan").
+      not_the_solution: >-
+        This invariant is about topology/authoring completeness, not frontend UI. It must not be
+        satisfied by adding a dedicated navbar/header/sidebar/Home-button fallback component, nor
+        by component-specific/nodeId-specific/manifest-UUID-specific hardcoding, nor by any
+        frontend fallback rendered when the underlying hub_relations authoring gap is real.
+        ProjectionShell's existing conditional nav bar (renders only when NavigationSequence is
+        non-empty -- frontend/islands/ProjectionShell.tsx) is unchanged by this invariant; the fix
+        belongs at the authoring/proof layer, never as a frontend paper-over.
+      not_a_fabrication_license: >-
+        Does not authorize fabricating hub_relations, hubs, or manifests that would not otherwise
+        exist merely to satisfy connectivity -- PR #584's ban on "an empty/fake manifest just to
+        give something a hub relation source" (.agent/tasks/todo.md) remains in force. A manifest
+        with no legitimate business reason to connect to another surface (a genuinely standalone
+        utility manifest) is not itself a violation; this invariant applies to production
+        projection surfaces meant to be part of the navigable topology.
+      proof_shape: >-
+        Authoring-side: reuses this contract's own test_proof_contract resolution_chain/proof_boundary
+        above unchanged (real hub_navigation:create authoring dispatch, never a raw SQL insert
+        standing in for authoring; full resolution_chain to a scalar Emission) -- no new proof
+        mechanism invented. Frontend-side: a real DOM-render assertion (ProjectionShell mounted for
+        real, asserting actual rendered <a>/<span> hub-navigation elements from a real
+        NavigationSequence, not source-string grep) -- see
+        frontend/tests/projectionShellHubNavigationRenderProof.test.ts.
+      enforcement_boundary: >-
+        This addendum establishes the invariant and its proof shape only. It does not itself add a
+        blocking DB constraint, trigger, or manifest-promotion-time validator that would reject an
+        orphan manifest at write time -- scoping exactly which manifest kinds are subject to
+        automatic runtime enforcement (all manifests vs. only business-facing production
+        projections) is a further design decision left open for Owner confirmation, tracked in
+        .agent/tasks/todo.md rather than guessed into this change.
+      scope: >-
+        Applies to admin-surface-topology-seed-conversion's five subBundles (the existing concrete
+        proof precedent: admin-dashboard/admin-enum/credential-management already resolved per
+        navigation_binding_resolution_criterion; team-dashboard/scheduler-settings remain
+        unresolved_before_seed) and generalizes forward to any future production projection surface
+        built under this framework -- not scoped to seed-conversion specifically.
+
     canonical_default_entry_contract:
       note: >-
         Minimal design addendum defining the means by which a bare/no-selection projection entry

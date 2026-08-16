@@ -1,0 +1,11 @@
+{
+  "status": "ok",
+  "candidates": [
+    {
+      "attractorKey": "hubs.hub_relations",
+      "scoreBand": "normal",
+      "hitRank": 1,
+      "lane": "sql_attention_projection"
+    }
+  ]
+}

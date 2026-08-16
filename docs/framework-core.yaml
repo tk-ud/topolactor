@@ -232,6 +232,7 @@ data_driven_topology_runtime_framework:
       - frontend_is_projection_surface_only
       - spa_is_runtime_authoritative_projection
       - runtime_route_resolver_owns_screen_transition_next_task_and_business_branching
+      - production_projection_manifest_must_not_be_navigation_orphan
     projection_tabs:
       canonical_route_tab:
         owns:
@@ -282,6 +283,22 @@ data_driven_topology_runtime_framework:
         to: 0
         planned: 0
         note: route_missing_is_currentAddress_to_zero_because_next_planned_cannot_be_resolved
+    production_projection_connectivity_invariant:
+      note: >-
+        Owner design decision (2026-08-16, PR #602 round 10). Full definition, proof shape, and
+        enforcement boundary live in
+        docs/design/runtime-orchestration-ssot.yaml route_attention_contract's mirror sibling
+        ui_projection_render_reachability_contract.production_projection_connectivity_invariant
+        -- this is a pointer, not a duplicate, to avoid two independently-drifting copies of the
+        proof_shape/enforcement_boundary detail.
+      invariant: production_projection_manifest_must_not_be_navigation_orphan
+      summary: >-
+        A production projection manifest must resolve at least one active hubs.hub_relations row
+        (proven via the existing navigation_binding_resolution_criterion resolution-chain pattern,
+        not a new mechanism). Not satisfied by a dedicated navbar/header/sidebar/Home-button
+        fallback or component/nodeId/manifest-UUID-specific hardcoding -- the fix belongs at the
+        authoring/proof layer. Does not authorize fabricating hub_relations/hubs/manifests to
+        satisfy connectivity (PR #584 ban remains in force).
 
   ci_attention_projection_axis:
     ci_role:
