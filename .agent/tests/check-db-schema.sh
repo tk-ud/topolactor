@@ -147,6 +147,7 @@ run_sql_file "db/context_route_tables.sql"
 run_sql_file "db/ui_topology_tables.sql"
 run_sql_file "db/manifest_tables.sql"
 run_sql_file "db/sql_attention_logs_tables.sql"
+run_sql_file "db/team_dashboard_tables.sql"
 run_sql_file "db/seed_empty.sql"
 
 echo "=== Validating hub_relations legacy migration idempotency ==="

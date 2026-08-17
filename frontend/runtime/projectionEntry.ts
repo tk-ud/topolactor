@@ -29,6 +29,15 @@ export type ProjectionEntrySelection = {
   routeTarget?: string;
   /** Applied manifest id — dispatched as payload.target_ref. */
   manifestId?: string;
+  /**
+   * Applied manifest identity by hubs.topology_manifests.manifest_key — dispatched as
+   * payload.target_ref ("manifest_key:<key>:projection_entry"), resolved backend-side via the
+   * generic manifest_key_target_ref_resolution_contract (ManifestDispatcher.cs
+   * ContentBundleRepository.ResolveActiveManifestIdByManifestKeyAsync — same "exactly one active
+   * row" fail-close discipline as canonical_default_entry resolution). Ignored when manifestId is
+   * also present — an explicit UUID always wins over a key.
+   */
+  manifestKey?: string;
   /** Expected packageId, confirmed against emission.packageId. */
   packageId?: string;
 };
@@ -85,12 +94,15 @@ export function parseProjectionEntrySelection(
 export function isDefaultProjectionEntry(
   selection: ProjectionEntrySelection,
 ): boolean {
-  return !selection.routeTarget && !selection.manifestId && !selection.packageId;
+  return !selection.routeTarget && !selection.manifestId && !selection.manifestKey &&
+    !selection.packageId;
 }
 
 /**
  * Resolves the initial dispatch axes for the production projection entry.
  * - manifest selection → payload.target_ref (backend manifest resolution authority)
+ * - manifest KEY selection (no manifestId) → payload.target_ref, resolved backend-side by
+ *   manifest_key instead of a raw UUID — see ProjectionEntrySelection.manifestKey
  * - route selection → target axis (backend axes resolution authority)
  * - no selection → existing default entry axes (default/screen_list/Search)
  * layer/action stay on the canonical screen read lane (ScreenDataShapeQueryRuntime).
@@ -108,6 +120,10 @@ export function resolveProjectionEntryAxes(
   if (selection.manifestId) {
     axes.payload = {
       target_ref: `manifest:${selection.manifestId}:projection_entry`,
+    };
+  } else if (selection.manifestKey) {
+    axes.payload = {
+      target_ref: `manifest_key:${selection.manifestKey}:projection_entry`,
     };
   }
   return axes;

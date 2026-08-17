@@ -5182,3 +5182,197 @@ INSERT INTO topology.cli_reader_ports (
     file_stream_enabled = EXCLUDED.file_stream_enabled,
     config_json = EXCLUDED.config_json,
     updated_at = now();
+
+-- =============================================================================
+-- team-dashboard subBundle (admin-surface-topology-seed-conversion)
+-- SSOT: docs/design/admin-normal-surface-projection-seed-ssot.yaml
+--   surface_axes.admin.surfaces.team_dashboard /
+--   surface_axes.normal.surfaces.dashboard.team_dashboard_canonical_shared_contract
+--
+-- ONE shared physical table (topology.team_dashboard_note, ONE canonical row) is read by
+-- BOTH the admin (edit) and normal (read-only) manifests below via the same team_dashboard:get
+-- action -- no duplicated data identity between axes. Only the admin manifest's own tensor
+-- carries the editable Textarea + Save button nodes (team_dashboard:update, admin-role-gated
+-- in-method by AdminRuntime.TeamDashboard.cs) -- the normal manifest's tensor never includes
+-- them at all, so there is no edit control in the Normal-rendered DOM to reach, not merely a
+-- hidden one. Component composition (textarea.template + md_viewer.projection bare-markdown
+-- mode) reuses physical_details_inline_editor_md_generator_preset's own proven node shape
+-- (PR #604) -- not a new Markdown component/editor/runtime lane.
+-- =============================================================================
+
+-- ---------------------------------------------------------------------------
+-- topology.team_dashboard_note: physical table registration + the single canonical row.
+-- ---------------------------------------------------------------------------
+INSERT INTO topology.physical_tables (table_ref, schema_name, category, active)
+VALUES ('topology.team_dashboard_note', 'topology', 'team_dashboard', true)
+ON CONFLICT (table_ref) DO UPDATE
+    SET schema_name = EXCLUDED.schema_name,
+        category    = EXCLUDED.category,
+        active      = EXCLUDED.active;
+
+INSERT INTO topology.team_dashboard_note (note_id, title, body_markdown)
+VALUES (
+    '00000000-0000-0000-0000-0000000dd001',
+    'Team Dashboard',
+    '# Team Dashboard' || chr(10) || chr(10) || 'Shared notes go here.'
+)
+ON CONFLICT (note_id) DO NOTHING;
+
+-- ---------------------------------------------------------------------------
+-- Admin edit manifest: team_dashboard.admin.projection
+-- ---------------------------------------------------------------------------
+WITH upserted_manifest AS (
+    INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+    VALUES (
+        '00000000-0000-0000-0000-0000000dd010',
+        NULL,
+        ARRAY[
+            '{"type":"hub_grouping","manifestKey":"team_dashboard.admin.projection","bundle":"admin-surface-topology-seed-conversion"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"team_dashboard","action":"get","default_screen_read":true}'::jsonb,
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"team_dashboard","action":"update"}'::jsonb,
+            '{"type":"ui_projection","packageIds":["00000000-0000-0000-0000-0000000dd016"],"layoutId":"00000000-0000-0000-0000-0000000dd013","wiringId":"00000000-0000-0000-0000-0000000dd014","tensorId":"00000000-0000-0000-0000-0000000dd015"}'::jsonb
+        ]::jsonb[],
+        'active'
+    )
+    ON CONFLICT (manifest_id) DO UPDATE SET topology = EXCLUDED.topology, status = EXCLUDED.status
+    RETURNING manifest_id, status
+)
+INSERT INTO topology.ui_component_package (package_id, package_key, package_kind, package_schema_json, status)
+SELECT '00000000-0000-0000-0000-0000000dd012', 'team_dashboard.admin.projection.component_group_bundle',
+       'fixed_form_projection', '{"seedKey":"team_dashboard.admin.projection"}'::jsonb, 'active'
+FROM upserted_manifest
+ON CONFLICT (package_id) DO UPDATE SET package_schema_json = EXCLUDED.package_schema_json, status = EXCLUDED.status;
+
+INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind, layout_schema_json, status)
+VALUES ('00000000-0000-0000-0000-0000000dd013', 'team_dashboard.admin.projection.layout',
+        'fixed_form_projection', '{"records":[]}'::jsonb, 'active')
+ON CONFLICT (layout_id) DO UPDATE SET layout_schema_json = EXCLUDED.layout_schema_json, status = EXCLUDED.status;
+
+INSERT INTO topology.ui_wiring_registry (wiring_id, wiring_key, wiring_kind, target_surface, target_ref, wiring_schema_json, status)
+VALUES ('00000000-0000-0000-0000-0000000dd014', 'team_dashboard.admin.projection.wiring',
+        'admin_runtime', 'manifest', 'team_dashboard.admin.projection',
+        '{"actions":["team_dashboard:get","team_dashboard:update"]}'::jsonb, 'active')
+ON CONFLICT (wiring_id) DO UPDATE SET wiring_schema_json = EXCLUDED.wiring_schema_json, status = EXCLUDED.status;
+
+INSERT INTO topology.components_package_design (package_id, name, layout, state)
+VALUES ('00000000-0000-0000-0000-0000000dd016', 'team_dashboard.admin.projection.package', '[]'::jsonb, 'active')
+ON CONFLICT (package_id) DO UPDATE SET name = EXCLUDED.name, state = EXCLUDED.state;
+
+INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
+VALUES (
+    '00000000-0000-0000-0000-0000000dd015',
+    'admin/team-dashboard#default',
+    '00000000-0000-0000-0000-0000000dd012',
+    '00000000-0000-0000-0000-0000000dd013',
+    '00000000-0000-0000-0000-0000000dd014',
+    'default', 0,
+    $$
+    {"nodes":[
+      {"nodeId":"team_dashboard_admin_viewer","nodeKind":"catalog_component","runtimeInteractions":[],"componentKey":"md_viewer.projection","propsJson":"{\"label\": \"Rendered preview\"}","propBindings":{"markdown":{"source":"emission.data.bodyMarkdown"}}},
+      {"nodeId":"team_dashboard_admin_body","nodeKind":"catalog_component","runtimeInteractions":[],"componentKey":"textarea.template","propsJson":"{\"label\": \"Markdown body\"}","propBindings":{"value":{"source":"emission.data.bodyMarkdown"}}},
+      {"nodeId":"team_dashboard_admin_save_button","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"openModal","targetNodeId":"team_dashboard_admin_save_confirm_modal","statePath":"open","sourceActionKey":"team_dashboard_admin_save_button"}],"componentKey":"button.primitive","dispatchTargetRefByTrigger":{"click":"manifest:00000000-0000-0000-0000-0000000dd010:team_dashboard:update"},"dispatchPayloadFromByTrigger":{"click":{"bodyMarkdown":"node:team_dashboard_admin_body.value","dryRun":"literal:true"}},"propsJson":"{\"label\": \"Save\"}"},
+      {"nodeId":"team_dashboard_admin_save_confirm_modal","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"toggle","actionType":"closeModal","targetNodeId":"team_dashboard_admin_save_confirm_modal","statePath":"open","sourceActionKey":"team_dashboard_admin_save_confirm_modal"}],"componentKey":"modal.template","componentKind":"disclosure/modal","propsJson":"{\"data\": {\"open\": false, \"title\": \"Save team dashboard\", \"body\": \"Save the edited Markdown as the team dashboard's shared content.\"}}"},
+      {"nodeId":"team_dashboard_admin_save_confirm_button","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"team_dashboard_admin_save_confirm_modal","statePath":"open","sourceActionKey":"team_dashboard_admin_save_confirm_button"}],"componentKey":"button.primitive","dispatchTargetRefByTrigger":{"click":"manifest:00000000-0000-0000-0000-0000000dd010:team_dashboard:update"},"dispatchPayloadFromByTrigger":{"click":{"bodyMarkdown":"node:team_dashboard_admin_body.value","confirmed":"literal:true"}},"propsJson":"{\"label\": \"Save\"}"},
+      {"nodeId":"team_dashboard_admin_save_cancel_button","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"team_dashboard_admin_save_confirm_modal","statePath":"open","sourceActionKey":"team_dashboard_admin_save_cancel_button"}],"componentKey":"button.primitive","propsJson":"{\"label\": \"Cancel\"}"}
+    ]}
+    $$::jsonb
+)
+ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE SET layout_patch_json = EXCLUDED.layout_patch_json;
+
+-- Hub + hubs.topology_manifests mirror + physical table binding for the admin manifest.
+INSERT INTO hubs.hub (hub_id, relation)
+VALUES ('00000000-0000-0000-0000-0000000dd011', '{"description":"team_dashboard_admin","system":true}'::jsonb)
+ON CONFLICT (hub_id) DO NOTHING;
+
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+SELECT m.manifest_id, '00000000-0000-0000-0000-0000000dd011'::uuid,
+       'team_dashboard.admin.projection', m.status, to_jsonb(m.topology)
+FROM manifest m WHERE m.manifest_id = '00000000-0000-0000-0000-0000000dd010'
+ON CONFLICT (topology_manifest_id) DO UPDATE
+    SET manifest_key = EXCLUDED.manifest_key, status = EXCLUDED.status, topology_jsonb = EXCLUDED.topology_jsonb, updated_at = now();
+
+INSERT INTO topology.physical_table_manifest_bindings (physical_table_id, topology_manifest_id, active, binding_evidence_json)
+SELECT pt.physical_table_id, '00000000-0000-0000-0000-0000000dd010'::uuid, true,
+       '{"note":"team_dashboard.admin.projection reads/writes topology.team_dashboard_note via team_dashboard:get/update"}'::jsonb
+FROM topology.physical_tables pt WHERE pt.table_ref = 'topology.team_dashboard_note'
+ON CONFLICT (physical_table_id, topology_manifest_id) DO UPDATE
+    SET active = EXCLUDED.active, binding_evidence_json = EXCLUDED.binding_evidence_json, updated_at = now();
+
+-- ---------------------------------------------------------------------------
+-- Normal read-only manifest: team_dashboard.normal.projection
+-- Same underlying data (topology.team_dashboard_note via team_dashboard:get) — no editor nodes.
+-- ---------------------------------------------------------------------------
+WITH upserted_manifest AS (
+    INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+    VALUES (
+        '00000000-0000-0000-0000-0000000dd020',
+        NULL,
+        ARRAY[
+            '{"type":"hub_grouping","manifestKey":"team_dashboard.normal.projection","bundle":"admin-surface-topology-seed-conversion"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
+            '{"type":"dispatcher_mapping","role":"normal","target":"admin","layer":"team_dashboard","action":"get","default_screen_read":true}'::jsonb,
+            '{"type":"capability_requirement","layer":"screen_list","action":"Search"}'::jsonb,
+            '{"type":"capability_requirement","layer":"team_dashboard","action":"get"}'::jsonb,
+            '{"type":"ui_projection","packageIds":["00000000-0000-0000-0000-0000000dd026"],"layoutId":"00000000-0000-0000-0000-0000000dd023","wiringId":"00000000-0000-0000-0000-0000000dd024","tensorId":"00000000-0000-0000-0000-0000000dd025"}'::jsonb
+        ]::jsonb[],
+        'active'
+    )
+    ON CONFLICT (manifest_id) DO UPDATE SET topology = EXCLUDED.topology, status = EXCLUDED.status
+    RETURNING manifest_id, status
+)
+INSERT INTO topology.ui_component_package (package_id, package_key, package_kind, package_schema_json, status)
+SELECT '00000000-0000-0000-0000-0000000dd022', 'team_dashboard.normal.projection.component_group_bundle',
+       'fixed_form_projection', '{"seedKey":"team_dashboard.normal.projection"}'::jsonb, 'active'
+FROM upserted_manifest
+ON CONFLICT (package_id) DO UPDATE SET package_schema_json = EXCLUDED.package_schema_json, status = EXCLUDED.status;
+
+INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind, layout_schema_json, status)
+VALUES ('00000000-0000-0000-0000-0000000dd023', 'team_dashboard.normal.projection.layout',
+        'fixed_form_projection', '{"records":[]}'::jsonb, 'active')
+ON CONFLICT (layout_id) DO UPDATE SET layout_schema_json = EXCLUDED.layout_schema_json, status = EXCLUDED.status;
+
+INSERT INTO topology.ui_wiring_registry (wiring_id, wiring_key, wiring_kind, target_surface, target_ref, wiring_schema_json, status)
+VALUES ('00000000-0000-0000-0000-0000000dd024', 'team_dashboard.normal.projection.wiring',
+        'admin_runtime', 'manifest', 'team_dashboard.normal.projection',
+        '{"actions":["team_dashboard:get"]}'::jsonb, 'active')
+ON CONFLICT (wiring_id) DO UPDATE SET wiring_schema_json = EXCLUDED.wiring_schema_json, status = EXCLUDED.status;
+
+INSERT INTO topology.components_package_design (package_id, name, layout, state)
+VALUES ('00000000-0000-0000-0000-0000000dd026', 'team_dashboard.normal.projection.package', '[]'::jsonb, 'active')
+ON CONFLICT (package_id) DO UPDATE SET name = EXCLUDED.name, state = EXCLUDED.state;
+
+INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
+VALUES (
+    '00000000-0000-0000-0000-0000000dd025',
+    'dashboard#default',
+    '00000000-0000-0000-0000-0000000dd022',
+    '00000000-0000-0000-0000-0000000dd023',
+    '00000000-0000-0000-0000-0000000dd024',
+    'default', 0,
+    $$
+    {"nodes":[
+      {"nodeId":"team_dashboard_normal_viewer","nodeKind":"catalog_component","runtimeInteractions":[],"componentKey":"md_viewer.projection","propsJson":"{\"label\": \"Rendered preview\"}","propBindings":{"markdown":{"source":"emission.data.bodyMarkdown"}}}
+    ]}
+    $$::jsonb
+)
+ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE SET layout_patch_json = EXCLUDED.layout_patch_json;
+
+-- Hub + hubs.topology_manifests mirror + physical table binding for the normal manifest.
+INSERT INTO hubs.hub (hub_id, relation)
+VALUES ('00000000-0000-0000-0000-0000000dd021', '{"description":"team_dashboard_normal","system":true}'::jsonb)
+ON CONFLICT (hub_id) DO NOTHING;
+
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+SELECT m.manifest_id, '00000000-0000-0000-0000-0000000dd021'::uuid,
+       'team_dashboard.normal.projection', m.status, to_jsonb(m.topology)
+FROM manifest m WHERE m.manifest_id = '00000000-0000-0000-0000-0000000dd020'
+ON CONFLICT (topology_manifest_id) DO UPDATE
+    SET manifest_key = EXCLUDED.manifest_key, status = EXCLUDED.status, topology_jsonb = EXCLUDED.topology_jsonb, updated_at = now();
+
+INSERT INTO topology.physical_table_manifest_bindings (physical_table_id, topology_manifest_id, active, binding_evidence_json)
+SELECT pt.physical_table_id, '00000000-0000-0000-0000-0000000dd020'::uuid, true,
+       '{"note":"team_dashboard.normal.projection reads topology.team_dashboard_note via team_dashboard:get (read-only, no write path)"}'::jsonb
+FROM topology.physical_tables pt WHERE pt.table_ref = 'topology.team_dashboard_note'
+ON CONFLICT (physical_table_id, topology_manifest_id) DO UPDATE
+    SET active = EXCLUDED.active, binding_evidence_json = EXCLUDED.binding_evidence_json, updated_at = now();

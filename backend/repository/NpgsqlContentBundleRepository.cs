@@ -887,6 +887,35 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         return results[0];
     }
 
+    public override async Task<Guid?> ResolveActiveManifestIdByManifestKeyAsync(
+        string manifestKey, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(manifestKey);
+
+        await using var conn = await OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT topology_manifest_id FROM hubs.topology_manifests " +
+            "WHERE status = 'active' AND manifest_key = @manifest_key " +
+            "LIMIT 2";
+        cmd.Parameters.AddWithValue("manifest_key", manifestKey);
+
+        var results = new List<Guid>();
+        await using (var reader = await cmd.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+                results.Add(reader.GetGuid(0));
+        }
+
+        if (results.Count == 0) return null;
+        if (results.Count > 1)
+            throw new InvalidOperationException(
+                $"MANIFEST_KEY_AMBIGUOUS: multiple active hubs.topology_manifests rows share " +
+                $"manifest_key='{manifestKey}'. Ambiguity is prohibited; exactly one active row " +
+                "may carry a given manifest_key.");
+        return results[0];
+    }
+
     public override async Task<IReadOnlyList<HubNavigationSequenceItemDto>> LoadHubNavigationSequenceAsync(
         Guid topologyManifestId, CancellationToken ct = default)
     {

@@ -181,10 +181,69 @@ public class ManifestDispatcher
             }
             else if (TryGetRawTargetRef(request, out var rawTargetRef))
             {
-                // target_ref present in payload — must parse as "manifest:{uuid}:{wiring_key}".
-                // Malformed target_ref returns TARGET_REF_INVALID: silent axes-fallback risks
-                // routing to an unintended manifest when the admin-configured ref is broken.
-                if (!TryParseManifestTargetRef(rawTargetRef!, out var targetRefManifestId))
+                // target_ref present in payload — must parse as "manifest:{uuid}:{wiring_key}" OR
+                // the generic key-based shape "manifest_key:{manifest_key}:{wiring_key}"
+                // (manifest_key_target_ref_resolution_contract, docs/design/runtime-orchestration-
+                // ssot.yaml dispatcher_contract) — a route/entry point may identify its target
+                // manifest by hubs.topology_manifests.manifest_key, the same stable, already-
+                // existing, human-readable identity every manifest in the system already carries,
+                // instead of a raw UUID constant. Resolution uses the SAME "exactly one active row"
+                // discipline as ResolveCanonicalDefaultEntryManifestIdAsync (fail-close on zero or
+                // multiple matches, never first-match/oldest/MIN), then flows into the IDENTICAL
+                // LoadByIdAsync/active-check/layer-action-authorization pipeline below as the
+                // UUID-based path -- this is purely an additional way to ARRIVE at manifestId, never
+                // a parallel authorization surface. Malformed target_ref returns TARGET_REF_INVALID:
+                // silent axes-fallback risks routing to an unintended manifest when the
+                // admin-configured ref is broken.
+                Guid targetRefManifestId;
+                if (rawTargetRef!.StartsWith("manifest_key:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var keyParts = rawTargetRef.Split(':', 3);
+                    var manifestKey = keyParts.Length >= 2 ? keyParts[1].Trim() : "";
+                    if (manifestKey.Length == 0)
+                    {
+                        return new EndpointResponseDto(
+                            Success: false,
+                            Emission: null,
+                            Errors: [new ValidationError(
+                                "TARGET_REF_INVALID",
+                                $"target_ref '{rawTargetRef}' is not a valid manifest_key reference. Expected format: manifest_key:<manifest_key>:<wiring_key>.")]);
+                    }
+
+                    Guid? resolvedByKey;
+                    try
+                    {
+                        resolvedByKey = _hubNavigationResolver is null
+                            ? null
+                            : await _hubNavigationResolver.ResolveActiveManifestIdByKeyAsync(manifestKey, ct);
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        _logger.LogWarning(ex,
+                            "ManifestDispatcher: manifest_key target_ref '{TargetRef}' is ambiguous.",
+                            rawTargetRef);
+                        return new EndpointResponseDto(
+                            Success: false,
+                            Emission: null,
+                            Errors: [new ValidationError("MANIFEST_KEY_AMBIGUOUS", ex.Message)]);
+                    }
+
+                    if (resolvedByKey is null)
+                    {
+                        _logger.LogWarning(
+                            "ManifestDispatcher: no active manifest found for manifest_key='{ManifestKey}' (target_ref='{TargetRef}').",
+                            manifestKey, rawTargetRef);
+                        return new EndpointResponseDto(
+                            Success: false,
+                            Emission: null,
+                            Errors: [new ValidationError(
+                                "MANIFEST_NOT_FOUND",
+                                $"No active manifest found for manifest_key='{manifestKey}'.")]);
+                    }
+
+                    targetRefManifestId = resolvedByKey.Value;
+                }
+                else if (!TryParseManifestTargetRef(rawTargetRef!, out targetRefManifestId))
                 {
                     _logger.LogWarning(
                         "ManifestDispatcher: malformed target_ref '{TargetRef}' — expected manifest:{{uuid}}:{{key}} format.",
@@ -392,7 +451,8 @@ public class ManifestDispatcher
             // for target_ref paths that bypass role-axis filtering.
             if (manifest is not null)
             {
-                var capabilityError = ValidateCapabilityRequirement(manifest.Topology, request.Role);
+                var capabilityError = ValidateCapabilityRequirement(
+                    manifest.Topology, request.Role, request.Layer, request.Action);
                 if (capabilityError is not null)
                 {
                     _logger.LogWarning(
@@ -472,16 +532,51 @@ public class ManifestDispatcher
                 response.Errors.Count == 1 &&
                 response.Errors[0].Code == "ADMIN_OPERATION_NOT_FOUND")
             {
-                response = new EndpointResponseDto(
-                    Success: true,
-                    Emission: new Emission(
-                        StructureMapId: null,
-                        PackageId: null,
-                        SchemaId: null,
-                        ComponentIds: [],
-                        Data: null,
-                        Errors: []),
-                    Errors: []);
+                // [design_change 2026-08-17] default_screen_read_override (docs/design/
+                // runtime-orchestration-ssot.yaml ui_projection_render_reachability_contract):
+                // a manifest MAY declare exactly one dispatcher_mapping entry with
+                // "default_screen_read": true — the real action to invoke here instead of
+                // synthesizing an empty-Data success, so propBindings sourced from emission.data.*
+                // (e.g. a single-row live viewer with no search/filter/select interaction that would
+                // otherwise populate it) resolve to real content on the very first structural render.
+                // The declared action's OWN capability_requirement is independently re-validated —
+                // reaching this fallback via the request's screen-read axes never implicitly
+                // authorizes the declared action. A manifest declaring no such entry keeps today's
+                // synthesized-empty-Data fallback exactly (e.g. admin.enum.management.projection).
+                var defaultRead = DispatcherMappingAxisAuthority.FindDeclaredDefaultScreenRead(manifest.Topology);
+                if (defaultRead is { } declaredDefaultRead)
+                {
+                    var defaultReadCapabilityError = ValidateCapabilityRequirement(
+                        manifest.Topology, request.Role, declaredDefaultRead.Layer, declaredDefaultRead.Action);
+                    if (defaultReadCapabilityError is not null)
+                    {
+                        response = new EndpointResponseDto(
+                            Success: false,
+                            Emission: null,
+                            Errors: [defaultReadCapabilityError]);
+                    }
+                    else
+                    {
+                        response = await DispatchToHandlerAsync(
+                            destination,
+                            request with { Layer = declaredDefaultRead.Layer, Action = declaredDefaultRead.Action },
+                            manifest.ManifestId,
+                            ct);
+                    }
+                }
+                else
+                {
+                    response = new EndpointResponseDto(
+                        Success: true,
+                        Emission: new Emission(
+                            StructureMapId: null,
+                            PackageId: null,
+                            SchemaId: null,
+                            ComponentIds: [],
+                            Data: null,
+                            Errors: []),
+                        Errors: []);
+                }
             }
 
             if (!response.Success || response.Emission is null)
@@ -920,7 +1015,7 @@ public class ManifestDispatcher
             return new(false, null);
         }
 
-        return new(true, ValidateCapabilityRequirement(axesManifest.Topology, requestRole));
+        return new(true, ValidateCapabilityRequirement(axesManifest.Topology, requestRole, requestLayer, requestAction));
     }
 
     /// <summary>
@@ -1109,9 +1204,11 @@ public class ManifestDispatcher
     /// </summary>
     private static ValidationError? ValidateCapabilityRequirement(
         IReadOnlyList<JsonElement> topology,
-        string? requestRole)
+        string? requestRole,
+        string? layer = null,
+        string? action = null)
     {
-        var requiredRole = ResolveRequiredRole(topology);
+        var requiredRole = ResolveRequiredRole(topology, layer, action);
         if (requiredRole is null) return null;
 
         if (!string.Equals(requestRole, requiredRole, StringComparison.Ordinal))
@@ -1123,17 +1220,24 @@ public class ManifestDispatcher
     }
 
     /// <summary>
-    /// Resolves the required_role a manifest's topology demands, from an explicit
-    /// capability_requirement entry (highest priority) or inferred from
-    /// runtime_mapping.runtime_destination=admin_runtime. Returns null when no requirement can be
-    /// determined. Shared by ValidateCapabilityRequirement (mutation/dispatch authority) and
-    /// HubNavigationResolver (read-only relation fallback role filtering) so both reuse the exact
-    /// same manifest capability authority instead of maintaining parallel role-resolution logic.
+    /// Resolves the required_role a manifest's topology demands, from a layer/action-scoped
+    /// capability_requirement entry (highest priority — [design_change 2026-08-17], see
+    /// docs/design/auth-db-session-credential-ssot.yaml manifest_capability_requirement.
+    /// layer_action_scoped_override), else an unscoped explicit capability_requirement entry, else
+    /// inferred from runtime_mapping.runtime_destination=admin_runtime. Returns null when no
+    /// requirement can be determined. Shared by ValidateCapabilityRequirement (mutation/dispatch
+    /// authority) and HubNavigationResolver (read-only relation fallback role filtering — always
+    /// called with layer/action omitted, so it only ever sees the unscoped/inferred resolution, since
+    /// link-visibility filtering has no single specific action to scope against) so both reuse the
+    /// exact same manifest capability authority instead of maintaining parallel role-resolution logic.
     /// </summary>
-    internal static string? ResolveRequiredRole(IReadOnlyList<JsonElement> topology)
+    internal static string? ResolveRequiredRole(
+        IReadOnlyList<JsonElement> topology, string? layer = null, string? action = null)
     {
         string? explicitRequired = null;
         string? inferredRequired = null;
+        string? scopedRequired = null;
+        var scopedMatchFound = false;
 
         foreach (var entry in topology)
         {
@@ -1141,13 +1245,36 @@ public class ManifestDispatcher
             if (!entry.TryGetProperty("type", out var typeEl) || typeEl.ValueKind != JsonValueKind.String) continue;
             var type = typeEl.GetString();
 
-            // Explicit capability_requirement overrides any inference.
             if (string.Equals(type, "capability_requirement", StringComparison.OrdinalIgnoreCase))
             {
-                if (entry.TryGetProperty("required_role", out var reqEl) && reqEl.ValueKind == JsonValueKind.String)
+                var r = entry.TryGetProperty("required_role", out var reqEl) && reqEl.ValueKind == JsonValueKind.String
+                    ? reqEl.GetString()
+                    : null;
+                if (string.IsNullOrWhiteSpace(r)) r = null;
+
+                var entryLayer = entry.TryGetProperty("layer", out var layerEl) && layerEl.ValueKind == JsonValueKind.String
+                    ? layerEl.GetString()
+                    : null;
+                var entryAction = entry.TryGetProperty("action", out var actionEl) && actionEl.ValueKind == JsonValueKind.String
+                    ? actionEl.GetString()
+                    : null;
+
+                if (!string.IsNullOrWhiteSpace(entryLayer) && !string.IsNullOrWhiteSpace(entryAction))
                 {
-                    var r = reqEl.GetString();
-                    if (!string.IsNullOrWhiteSpace(r))
+                    // Scoped entry: only participates when the caller asked to resolve against a
+                    // specific (layer, action) and this entry's own declared pair matches it.
+                    if (layer is not null && action is not null &&
+                        string.Equals(entryLayer, layer, StringComparison.OrdinalIgnoreCase) &&
+                        string.Equals(entryAction, action, StringComparison.OrdinalIgnoreCase))
+                    {
+                        scopedMatchFound = true;
+                        scopedRequired = r; // present role, or null meaning "explicitly open for this action"
+                    }
+                }
+                else
+                {
+                    // Unscoped entry: manifest-wide, semantics unchanged from before this addition.
+                    if (r is not null)
                         explicitRequired = r;
                 }
             }
@@ -1163,6 +1290,7 @@ public class ManifestDispatcher
             }
         }
 
+        if (scopedMatchFound) return scopedRequired;
         return explicitRequired ?? inferredRequired;
     }
 

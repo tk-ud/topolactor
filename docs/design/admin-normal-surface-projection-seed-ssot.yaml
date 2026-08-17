@@ -723,6 +723,160 @@ admin_normal_surface_projection_seed_ssot:
                 responsibility: explicit enable or disable confirmation for one scheduler job row; never create/edit
             loading_empty_error_projection: [loading_scheduler_jobs, empty_scheduler_jobs, scheduler_job_error_fail_close]
             mutation_confirmation_contract: [explicit_confirm, write, diff_log]
+        team_dashboard:
+          status: added_2026_08_16_design_change_owner_confirmed_lightweight_shared_dashboard
+          design_change_note: >-
+            Added by owner-confirmed design_change (2026-08-16) as the team-dashboard subBundle's
+            REAL canonical admin edit contract, replacing the team_markdown-backed approach that
+            normal.surfaces.dashboard previously declared as this subBundle's completion authority.
+            See normal.surfaces.dashboard.canonical_authority_status below for the full retirement
+            record and normal.surfaces.dashboard.team_dashboard_canonical_shared_contract for the
+            shared data authority both this admin surface and the normal read-only surface bind to.
+            Team Markdown Dashboard Saved View itself (docs/design/team-markdown-dashboard-saved-
+            view-ssot.yaml) is a separate, unaffected feature — not deleted, not regressed, remounted
+            at /admin/team-markdown (was /admin/team-dashboard) so this new canonical surface can own
+            that route name.
+          role: shared_dashboard_admin_edit_surface
+          authority_boundary: >-
+            This surface owns Admin's edit capability over the ONE shared team-dashboard note. It
+            does not own, duplicate, or fork the underlying data: the same physical row
+            (topology.team_dashboard_note) is read by normal.surfaces.dashboard's read-only
+            projection through the SAME team_dashboard:get action — no separate Admin-only data
+            copy, no separate Manifest/data identity per axis. Only the edit/save capability differs
+            per axis (existing axis-scoped seed_contract composition, not a hardcoded component or
+            route branch — see team_dashboard_canonical_shared_contract.capability_boundary below
+            for why this is the sanctioned mechanism, not a new one).
+          data_authority_ref: topology.team_dashboard_note
+          physical_schema_ref: [topology.team_dashboard_note]
+          operations: [read, update]
+          reusable_component_composition_ref: >-
+            Reuses the SAME generic component composition docs/design/ui-builder-preset-ecosystem-
+            ssot.yaml physical_details_inline_editor_md_generator_preset already proved end-to-end
+            (frontend/lib/markdownRenderer.ts shared safe renderer, textarea.template generic
+            component + form_input/textarea_template propBindings.value carrier, md_viewer.projection
+            bare-markdown mode) — not a new Markdown component, not a new editor, not a new runtime
+            lane. The preset itself stays an unapplied UIBuilder draft (activeTopologyWrite: false,
+            unchanged — the preset row is a reusable authoring template, not itself a runtime
+            screen). UPDATED (2026-08-17, UIBuilder-lineage closure round 3): this surface's own
+            package/layout/wiring/tensor rows are no longer hand-authored active content -- they are
+            generated through the REAL react_schema_topology_seed_translator.py two-stage intake
+            (generate-react-schema -> generate-topology-seed), the same preview/validate/apply
+            boundary manifest 092 / ae200's own declared_seed_surface_catalog entries use, from
+            .agent/tests/fixtures/react-schema-topology-seed-translator/team-dashboard-admin.
+            input.json (stage 1) and team-dashboard-admin.topology-seed.input.json (stage 2), gated
+            "pass" with zero validationErrors and zero knownGapRefs — declared as
+            team_dashboard.admin.projection in react-schema-topology-seed-translator-ssot.yaml
+            declared_seed_surface_catalog.known_declared_surfaces, whose own known_gaps is now []
+            (see that entry's historical_known_gaps_closed_2026_08_17_uibuilder_lineage_closure_
+            round_3 for the full closure record). db/seed_empty.sql's dd015 tensor row IS the
+            clean generator output verbatim — zero post-generation patches, zero hand-authored
+            tensor content — proven end to end through the real live-DB layout_patch:preview ->
+            layout_patch:validate -> layout_patch:apply pipeline
+            (backend/tests/Topolactor.Integration.Tests/
+            TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs).
+          capability_requirements:
+            read: required
+            mutation: [update_body_markdown]
+          canonical_role_gate_binding: >-
+            team_dashboard:update requires AuthenticatedRole=="admin" via an explicit, non-spoofable,
+            in-method check inside backend/runtime/AdminRuntime.TeamDashboard.cs
+            ExecuteTeamDashboardAsync (AuthenticatedRole sourced only from the JWT-verified
+            DispatchAuthContext stamp) — the SAME idiom
+            backend/runtime/AdminRuntime.TeamMarkdown.cs ExecuteTeamMarkdownAsync already established
+            for team_markdown mutation actions (TeamMarkdownMutationActions role check), reused
+            verbatim for a second domain rather than re-invented. This manifest (dd010) declares no
+            layer/action-scoped capability_requirement entries of its own (docs/design/
+            auth-db-session-credential-ssot.yaml manifest_capability_requirement.
+            layer_action_scoped_override) — team_dashboard:get on THIS manifest therefore stays
+            admin-gated too, via the same runtime_mapping.runtime_destination=admin_runtime inference
+            as team_dashboard:update, keeping the whole Admin surface uniformly admin-only end to end
+            (both its structural projection_entry render and its real read/mutation actions). Normal
+            role read of the SAME underlying data is served entirely by the separate normal-axis
+            manifest (dd020, surface_axes.normal.surfaces.dashboard.
+            team_dashboard_canonical_shared_contract), which independently declares its OWN
+            scoped-open entries — this manifest is never widened to serve that purpose.
+          seed_contract:
+            component_tree:
+              - node_key: team_dashboard_admin_viewer
+                component_key: md_viewer.projection
+                responsibility: read-only safe-rendered preview of the current body_markdown (bare-markdown mode)
+              - node_key: team_dashboard_admin_body
+                component_key: textarea.template
+                responsibility: editable raw Markdown source, initial value bound from emission.data.bodyMarkdown
+              - node_key: team_dashboard_admin_save_button
+                component_key: button.primitive
+                responsibility: >-
+                  dryRun preview of team_dashboard:update with the Textarea's current tracked value,
+                  then opens team_dashboard_admin_save_confirm_modal — never a direct write (updated
+                  2026-08-17, mutation_confirmation_contract closure round)
+              - node_key: team_dashboard_admin_save_confirm_modal
+                component_key: modal.template
+                responsibility: explicit-confirm dialog pairing the preview button per validate_admin_runtime_preview_action_pairing
+              - node_key: team_dashboard_admin_save_confirm_button
+                component_key: button.primitive
+                responsibility: dispatch the SAME team_dashboard:update target_ref with confirmed=true — the real write
+              - node_key: team_dashboard_admin_save_cancel_button
+                component_key: button.primitive
+                responsibility: closes the confirm modal without dispatching; no persisted state or diff row is produced
+            prop_bindings:
+              - node_key: team_dashboard_admin_viewer
+                props: [markdown]
+                source_ref: emission.data.bodyMarkdown (same field team_dashboard:get populates for both axes)
+              - node_key: team_dashboard_admin_body
+                props: [value]
+                source_ref: emission.data.bodyMarkdown (propBindings.value, form_input/textarea_template generic carrier)
+            event_bindings:
+              - event_key: save_dryrun_click
+                source_node: team_dashboard_admin_save_button
+                event_kind: click
+                target_ref: team_dashboard:update
+                payload_from: {bodyMarkdown: "node:team_dashboard_admin_body.value", dryRun: "literal:true"}
+                secondary_disclosure: {actionType: openModal, targetNodeId: team_dashboard_admin_save_confirm_modal}
+              - event_key: save_confirm_click
+                source_node: team_dashboard_admin_save_confirm_button
+                event_kind: click
+                target_ref: team_dashboard:update
+                payload_from: {bodyMarkdown: "node:team_dashboard_admin_body.value", confirmed: "literal:true"}
+              - event_key: save_cancel_click
+                source_node: team_dashboard_admin_save_cancel_button
+                event_kind: click
+                target_ref: ui-local:team_dashboard_admin_save_confirm_modal.close
+            mutation_confirmation_contract: [dryrun_preview, explicit_confirm, write, diff_log]
+            diff_log_mechanism: >-
+              backend/runtime/AdminMasterRosterAudit.cs AppendAsync -> logs.diff
+              (source_set_id=admin_master_roster, physical_table_name=topology.team_dashboard_note)
+              — the SAME generic, cross-domain diff/audit-trail helper enum_dictionary/
+              credential_management/external_api_credential/external_instance_credential/auth_users
+              already share, never a team-dashboard-specific diff writer. Read back through the
+              canonical physical_record:list_history action, proven live by
+              backend/tests/Topolactor.Integration.Tests/
+              TeamDashboardHubRelationUiProjectionLiveDbTests.cs
+              DispatchAsync_TeamDashboardUpdate_WritesLogsDiffEvidence_ReadableViaCanonicalPhysicalRecordHistory.
+            loading_empty_error_projection: [loading_team_dashboard, empty_team_dashboard_note, team_dashboard_error_fail_close]
+          hub_relation_navigation_binding_ref: >-
+            Reachable directly at /admin/team-dashboard (frontend/routes/admin/team-dashboard/index.tsx,
+            a thin ProjectionShell wrapper) — a route mount, not a hub_relations cross-navigation
+            link, matching how every other admin/normal route is reached today. UPDATED
+            (2026-08-17, generic route→Manifest identity resolution round): the route pins by
+            manifest_key ("team_dashboard.admin.projection", via ProjectionShell's manifestKey
+            prop), not a raw manifest_id UUID constant — resolved backend-side through the generic
+            manifest_key_target_ref_resolution_contract (docs/design/runtime-orchestration-ssot.yaml
+            dispatcher_contract), the same "exactly one active row" fail-close discipline
+            canonical_default_entry resolution already uses. /admin/enums (admin.enum.management.
+            projection) still pins by raw UUID — this round did not touch other already-Implemented
+            subBundles' routes, per the audit's own instruction to close the generic mechanism
+            without an unrelated repo-wide route migration. Real hub_relations cross-navigation
+            FROM another existing manifest INTO this surface (or vice versa) remains a separate,
+            owner-decided future addition (same acknowledged-open shape as self_account_capability's
+            own navigation gap below) — not required for this surface's own manifest/tensor/wiring
+            to be considered built and dispatchable. 2026-08-17 addition (Owner-directed, not
+            hub_relations-based): frontend/islands/ProjectionShell.tsx renders a fixed "ホーム" link
+            (data-projection-home-link, href=/dashboard) in its own nav bar on EVERY mount,
+            including this admin route — a generic, manifest-identity-agnostic navigation affordance,
+            not a per-manifest hubs.hub_relations edge, so it does not close (or attempt to close)
+            the hub_relations cross-navigation item above; it only guarantees the Normal surface
+            below is reachable from anywhere ProjectionShell renders, per
+            team_dashboard_canonical_shared_contract.hub_relation_navigation_binding_ref.
     normal:
       axis_kind: projection_surface_axis
       not_role_or_rbac: true
@@ -775,11 +929,21 @@ admin_normal_surface_projection_seed_ssot:
           runtime/admin data, never duplicated here as a fixed "wired"/"unconnected" SSOT ledger.
         current_target_readiness:
           dashboard_team_markdown: >-
-            blocked — same as docs/design/admin-console-workflow-ssot.yaml
-            subbundle_target_readiness.team_dashboard: no per-screen ui_projection manifest exists yet
-            for the team markdown dashboard surface. 2026-07-18: the Bundle-level owner production
-            pause was lifted; this readiness gap is no longer pause-gated, it remains blocked solely
-            because the target manifest itself has not been produced yet.
+            UPDATED (2026-08-17, UIBuilder-lineage closure round): no longer blocked on target-
+            manifest readiness — team_dashboard.admin.projection (dd010) and
+            team_dashboard.normal.projection (dd020) are both real, seeded, translator-produced
+            ui_projection manifests (see surface_axes.admin.surfaces.team_dashboard.
+            reusable_component_composition_ref above and docs/design/admin-console-workflow-
+            ssot.yaml subbundle_target_readiness.team_dashboard for the full closure record). What
+            remains open is a DIFFERENT item, this contract's own literal hub_navigation_only
+            authoring (an admin-authored hubs.hub_relations row FROM some existing manifest INTO
+            dd010/dd020) — no eligible real, Normal-reachable source manifest exists to author such
+            a relation FROM (same finding as team_dashboard_canonical_shared_contract.
+            hub_relation_navigation_binding_ref below), and the Owner redirected the underlying
+            round-trip-navigability intent to the ProjectionShell common Home link instead of a
+            fabricated source. See runtime-orchestration-ssot.yaml
+            admin_route_retirement_matrix.routes /admin/team-dashboard entry
+            (status=superseded_by_owner_directed_alternate) for the full record.
           self_account_capability: >-
             blocked — no ui_projection manifest exists yet for this capability at all (see
             surface_axes.normal.surfaces.self_account_capability.seed_contract.status). Additionally,
@@ -796,6 +960,134 @@ admin_normal_surface_projection_seed_ssot:
           - producing_seed_rows_or_authoring_a_live_relation_before_topology_ui_seed_production_resumes
       surfaces:
         dashboard:
+          canonical_authority_status: superseded_by_lightweight_shared_dashboard_contract_2026_08_16
+          superseding_authority_note: >-
+            2026-08-16, owner-confirmed design_change: this surface's team_markdown-backed contract
+            below (data_authority_ref through hub_relation_navigation_binding_ref, including
+            responsibilities/mutation_flow/seed_contract/inputer_runtime_adapter_contract/
+            viewer_runtime_reachability) is RETIRED as team-dashboard's completion authority and kept
+            below verbatim as historical record only — it no longer gates or describes this
+            subBundle's completion condition. Reason: the owner's confirmed requirement is a SINGLE
+            shared dashboard projection (Admin read+edit, Normal read-only, no duplicated
+            Manifest/data identity per axis) backed by a lightweight Markdown/text source, reusing
+            the generic textarea.template + md_viewer.projection composition
+            physical_details_inline_editor_md_generator_preset already proved end-to-end (PR #604) —
+            not the team_markdown saved-view apparatus (templates, per-record binding_json,
+            versioned completed_preset_seed_json lineage, card metadata, search index), which is
+            structurally heavier than "one shared editable note" and was never actually reachable
+            from a real topology UI seed for this subBundle regardless (see
+            inputer_runtime_adapter_contract.status below — reopened, never resolved). Team Markdown
+            Dashboard Saved View itself (docs/design/team-markdown-dashboard-saved-view-ssot.yaml) is
+            NOT deleted, NOT regressed, and keeps its own full production authority — it is simply no
+            longer team-dashboard's data/write authority, and its admin route moves from
+            /admin/team-dashboard to /admin/team-markdown (frontend/islands/TeamMarkdownDashboard.tsx
+            unchanged, only the route file mounting it moves) so /admin/team-dashboard can host the
+            new canonical surface below instead. The NEW canonical contract is
+            team_dashboard_canonical_shared_contract (this surface's read-only half) and
+            surface_axes.admin.surfaces.team_dashboard (the edit half) — those two, not the retired
+            block below, define team-dashboard's actual completion-condition scope now.
+          team_dashboard_canonical_shared_contract:
+            data_authority_ref: topology.team_dashboard_note
+            physical_schema_ref: [topology.team_dashboard_note]
+            role: read_only_shared_projection
+            component_key: md_viewer.projection
+            owns_mutation: false
+            operations: [read]
+            capability_requirements:
+              read: required
+              mutation: []
+            projection_fields: [body_markdown, title, updated_at]
+            forbidden_authority: [mutation_write, topology_promotion, schema_generation, markdown_as_runtime_ssot]
+            capability_boundary: >-
+              No admin required_role is enforced on this axis's own read action or manifest — read is
+              open to any authenticated role, matching this surface's own pre-existing "no admin
+              capability requirement" rule below. Runtime mechanism (2026-08-17, canonical
+              ManifestDispatcher reachability round): this manifest's runtime_mapping.
+              runtime_destination=admin_runtime would otherwise infer required_role=admin uniformly for
+              every action on the manifest (docs/design/auth-db-session-credential-ssot.yaml
+              manifest_capability_requirement) — this axis's own topology (db/seed_empty.sql dd020)
+              declares layer/action-SCOPED capability_requirement entries (layer_action_scoped_override,
+              same SSOT section) with no required_role for exactly the two (layer, action) pairs this
+              axis's own production dispatch reaches — (screen_list, Search), the structural entry
+              ProjectionShell's default projection_entry dispatch sends, and (team_dashboard, get), the
+              real read action — so those two are explicitly open while the admin_runtime inference
+              remains fully intact and unaffected for every OTHER manifest/action, including this same
+              manifest's sibling Admin surface (dd010, which declares no scoped-open entries and stays
+              admin-gated for both its get and update actions). No required_role=none sentinel is
+              introduced; the field is simply omitted on each scoped entry, preserving the pre-existing
+              "omitted = no requirement" semantics. The Admin-only edit capability lives entirely in the
+              SEPARATE surface_axes.admin.surfaces.team_dashboard entry (its own tensor/layout with the
+              Textarea+Save nodes and its own team_dashboard:update role gate) — this axis's own
+              seed_contract never includes those nodes at all, so a Normal session has no edit control
+              to reach in the rendered DOM, not merely a hidden/disabled one. This is the existing
+              generic admin-axis/normal-axis seed_contract composition mechanism this SSOT already uses
+              for every other surface pair (e.g. surface_axes.admin.surfaces.enum vs this same normal
+              axis), not a new hardcoded component/route branch invented for this surface.
+              Backend/runtime capability boundary is independently maintained regardless:
+              team_dashboard:update itself requires AuthenticatedRole=="admin"
+              (surface_axes.admin.surfaces.team_dashboard.canonical_role_gate_binding) even if it were
+              somehow dispatched directly.
+            data_population_on_initial_render: >-
+              This axis's own md_viewer.projection node sources its markdown prop from
+              emission.data.bodyMarkdown (seed_contract.prop_bindings below), but the structural
+              projection_entry dispatch alone never populates Emission.Data — screen_data_shape/
+              ScreenDataShapeQueryRuntime is a topology_transform_runtime-only mechanism admin_runtime
+              manifests never reach, and this axis has no user-interactive trigger (search/filter/
+              select) that would otherwise populate it. This axis's dispatcher_mapping team_dashboard:get
+              entry declares default_screen_read=true (docs/design/runtime-orchestration-ssot.yaml
+              ui_projection_render_reachability_contract.default_screen_read_override), so the SAME
+              structural dispatch that renders LayoutNodes also carries real Data on first render, not
+              merely after a user-triggered dispatch — this axis is a real production display-lane
+              authority, not merely a seed/proof artifact.
+            seed_contract:
+              component_tree:
+                - node_key: team_dashboard_normal_viewer
+                  component_key: md_viewer.projection
+                  responsibility: read-only safe-rendered preview of the current body_markdown (bare-markdown mode) — no editor/save nodes exist on this axis's own tensor
+              prop_bindings:
+                - node_key: team_dashboard_normal_viewer
+                  props: [markdown]
+                  source_ref: emission.data.bodyMarkdown (team_dashboard:get, same action + same physical row surface_axes.admin.surfaces.team_dashboard's own viewer reads)
+              loading_empty_error_projection: [loading_team_dashboard, empty_team_dashboard_note, team_dashboard_error_fail_close]
+            hub_relation_navigation_binding_ref: >-
+              Reachable directly at a normal-facing route (frontend/routes/dashboard/index.tsx, a thin
+              ProjectionShell wrapper, no AdminAuthGate) — the same route-mount pattern
+              surface_axes.admin.surfaces.team_dashboard uses for its own admin route. UPDATED
+              (2026-08-17, generic route→Manifest identity resolution round): the route pins by
+              manifest_key ("team_dashboard.normal.projection", via ProjectionShell's manifestKey
+              prop), not a raw manifest_id UUID constant — resolved backend-side through the
+              generic manifest_key_target_ref_resolution_contract (docs/design/runtime-
+              orchestration-ssot.yaml dispatcher_contract), proven live against production
+              hubs.topology_manifests data (backend/tests/Topolactor.Integration.Tests/
+              TeamDashboardHubRelationUiProjectionLiveDbTests.cs
+              DispatchAsync_NormalManifest_ProjectionEntry_ByManifestKey_ResolvesSameProductionManifest).
+              hubs.hub_relations cross-navigation into this surface from an existing
+              production manifest genuinely reachable by a Normal role is not authored (audited
+              2026-08-17: surface_axes.normal.surfaces has exactly two members — dashboard [this axis
+              itself] and self_account_capability [no frontend component exists at all]; the site's
+              own canonical_default_entry, manifest 092/credential-management, is admin_runtime with
+              no scoped-open capability_requirement and was confirmed live against PostgreSQL to
+              return AUTH_CAPABILITY_DENIED for role=normal — so no OTHER manifest a Normal session
+              can actually dispatch exists today to author a relation FROM). Reachability "from
+              anywhere" is instead closed generically, Owner-directed 2026-08-17: frontend/islands/
+              ProjectionShell.tsx renders a fixed "ホーム" link (data-projection-home-link, href=
+              /dashboard) in its own nav bar on every mount (see frontend/tests/
+              projectionShellHubNavigationRenderProof.test.ts), independent of any specific manifest's
+              own hub_relations state — this is a generic ProjectionShell affordance, not a
+              per-manifest authored edge, and not team-dashboard-specific (it renders identically on
+              every ProjectionShell-backed route). A real hubs.hub_relations-authored cross-navigation
+              edge into this surface remains possible once ANY other manifest becomes genuinely
+              Normal-reachable (the same acknowledged, pre-existing gap self_account_capability
+              already has) but is no longer required for this surface to be reachable from anywhere in
+              the running application.
+          retired_team_markdown_backed_contract_historical_record:
+            note: >-
+              Everything below this point (data_authority_ref through the end of this dashboard:
+              block, i.e. responsibilities/operations/mutation_flow/seed_contract/
+              inputer_runtime_adapter_contract/viewer_runtime_reachability) is the PRE-2026-08-16
+              team_markdown-backed contract, preserved verbatim as historical record per
+              superseding_authority_note above. Do not treat any of it as team-dashboard's current
+              completion authority.
           data_authority_ref:
             - docs/design/team-markdown-dashboard-saved-view-ssot.yaml
             - topology.team_markdown_template_registry
@@ -1122,9 +1414,14 @@ admin_normal_surface_projection_seed_ssot:
         target_authority: scheduler_jobs:* authority from docs/design/scheduler-job-manifest-ssot.yaml, list_settings/enable/disable actions only.
         operation_mapping: list/search/filter/enable/disable over existing scheduler_jobs columns; create/edit/step-chain map to /admin/contents physical_table_and_page_binding, never to this surface or to content_bundle:* refs.
       normal.dashboard:
-        reusable_shape: preview/validate/apply boundary and payloadFrom/payloadResolverRef event-binding shape may be reused.
-        target_authority: team Markdown authority from docs/design/team-markdown-dashboard-saved-view-ssot.yaml
-        operation_mapping: viewer read remains ungated normal projection; inputer preview/validate/write/diff maps to team Markdown operations plus capability_requirement.required_role=admin.
+        status: superseded_2026_08_16_see_team_dashboard_entry_below
+        reusable_shape: preview/validate/apply boundary and payloadFrom/payloadResolverRef event-binding shape may be reused. (historical — see team_dashboard entry below for the current mapping.)
+        target_authority: team Markdown authority from docs/design/team-markdown-dashboard-saved-view-ssot.yaml (historical — retired as team-dashboard's authority, see surface_axes.normal.surfaces.dashboard.superseding_authority_note)
+        operation_mapping: viewer read remains ungated normal projection; inputer preview/validate/write/diff maps to team Markdown operations plus capability_requirement.required_role=admin. (historical)
+      team_dashboard:
+        reusable_shape: search/filter/result composition is not needed (single-row surface); the reusable shape here is component composition only — textarea.template + md_viewer.projection, plus payloadFrom node:<id>.value/event-binding shape, as proved end-to-end by physical_details_inline_editor_md_generator_preset (PR #604).
+        target_authority: team_dashboard:get/team_dashboard:update authority (backend/runtime/AdminRuntime.TeamDashboard.cs), a thin per-domain action pair over topology.team_dashboard_note — the SAME shape team_markdown/enum_dictionary/credential_management already use, deliberately NOT content_bundle:* (see crud_preset_physical_reference_assessment.not_reused_as_authority.content_bundle_operation_refs_must_not_be_copied above — content_bundle:* target_ref values from the CRUD preset are explicitly not reusable as a real surface's operation authority).
+        operation_mapping: admin viewer+editor read/update map to team_dashboard:get (open) / team_dashboard:update (capability_requirement.required_role=admin, enforced in-method); normal viewer-only read maps to the SAME team_dashboard:get, never to content_bundle:* refs.
     insufficiency_rule: If a target surface cannot be expressed with the existing generic CRUD preset shape and the authority-specific operation refs above, the seed task must report the missing substrate for owner decision instead of inventing a new component, action wiring, payload resolver, runtime lane, or route.
 
   design_blocking:
@@ -1206,7 +1503,34 @@ admin_normal_surface_projection_seed_ssot:
             subBundle is fully implemented -- the enum_dictionary:* write-dispatch wiring gap
             (.agent/tasks/todo.md admin-enum subBundle 実装記録) remains open and is a separate
             concern from this hub-relation-navigation design_blocking id.
-        team-dashboard: unresolved_before_seed
+        team-dashboard:
+          target_manifest: resolved
+          evidence_ref: >-
+            manifest 00000000-0000-0000-0000-0000000dd010 (team_dashboard.admin.projection) and
+            manifest 00000000-0000-0000-0000-0000000dd020 (team_dashboard.normal.projection), both
+            built 2026-08-16, real ui_projection tensors per
+            surface_axes.admin.surfaces.team_dashboard.seed_contract and
+            surface_axes.normal.surfaces.dashboard.team_dashboard_canonical_shared_contract.
+            seed_contract, both reading the same topology.team_dashboard_note row via team_dashboard:get.
+          navigation_binding_authoring_and_verification: resolved
+          navigation_binding_evidence_ref: >-
+            backend/tests/Topolactor.Integration.Tests/TeamDashboardHubRelationUiProjectionLiveDbTests.cs
+            -- combines the hub_navigation:create real authoring dispatch path (never a raw SQL
+            insert) with the full resolution_chain against manifest dd010's own real hub/seed rows,
+            meeting navigation_binding_resolution_criterion above, the same combined-proof pattern
+            AdminEnumHubRelationUiProjectionLiveDbTests.cs / CredentialManagementHubRelationUi
+            ProjectionLiveDbTests.cs established. This design_blocking id's own closure criterion
+            never required a hubs.hub_relations-authored edge from a real production Normal-reachable
+            entry point; both routes (/admin/team-dashboard, /dashboard) reach their own manifest
+            directly via a pinned ProjectionShell mount, the same pattern every other admin/normal
+            route already uses. 2026-08-17 audit found and closed the SEPARATE "real end-user
+            cross-navigation from anywhere" item Owner-directed: no other manifest in production is
+            genuinely Normal-reachable to author a relation FROM (see
+            team_dashboard_canonical_shared_contract.hub_relation_navigation_binding_ref for the full
+            audit), so ProjectionShell itself now renders a fixed "ホーム" link (href=/dashboard) on
+            every mount instead -- see frontend/islands/ProjectionShell.tsx and frontend/tests/
+            projectionShellHubNavigationRenderProof.test.ts. This closes team-dashboard's remaining
+            open navigation item without a hub_relations edge.
         scheduler-settings: unresolved_before_seed
     - id: external_instance_projection_columns
       blocking_condition: External instance credential category depends on instance-port substrate authority; if a concrete existing physical table/column set is not present for required instance settings, the seed task must stop and reference the instance-port SSOT instead of inventing fields.
@@ -1268,7 +1592,18 @@ admin_normal_surface_projection_seed_ssot:
         admin-dashboard: subBundle_not_applicable
         credential-management: subBundle_not_applicable
         admin-enum: subBundle_not_applicable
-        team-dashboard: unresolved_before_seed
+        team-dashboard: >-
+          retired_superseded_2026_08_16 -- md_translation_authoring_surface.authoring (this id's own
+          blocking_condition) is no longer team-dashboard's inputer component at all; the design_change
+          documented in surface_axes.normal.surfaces.dashboard.superseding_authority_note retired the
+          entire team_markdown-backed inputer/adapter approach in favor of
+          surface_axes.admin.surfaces.team_dashboard's own textarea.template + team_dashboard:update
+          composition (no runtime adapter gap exists for that composition -- textarea.template is
+          already a registered runtime factory, proved reachable end-to-end by
+          physical_details_inline_editor_md_generator_preset's own tests). This id's blocking_condition
+          therefore no longer applies to team-dashboard; not marked "resolved" (nothing about the
+          ORIGINAL blocked component was fixed) -- marked retired/superseded instead, per the same
+          historical-record-not-deletion convention as the dashboard: surface block above.
         scheduler-settings: subBundle_not_applicable
     - id: normal_dashboard_write_operation_binding
       status: resolved
@@ -1282,7 +1617,13 @@ admin_normal_surface_projection_seed_ssot:
         admin-dashboard: subBundle_not_applicable
         credential-management: subBundle_not_applicable
         admin-enum: subBundle_not_applicable
-        team-dashboard: resolved
+        team-dashboard: >-
+          retired_superseded_2026_08_16 -- team_markdown:saved_view:update is no longer team-dashboard's
+          write authority (surface_axes.normal.surfaces.dashboard.superseding_authority_note); the
+          current write authority is team_dashboard:update
+          (surface_axes.admin.surfaces.team_dashboard.canonical_role_gate_binding), a new,
+          already-bound-and-implemented dispatch action, not a pending gap. See the team_dashboard
+          entry in surface_operation_mapping above for the current mapping.
         scheduler-settings: subBundle_not_applicable
     - id: credentials_users_account_transaction_binding
       status: resolved

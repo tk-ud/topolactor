@@ -107,6 +107,23 @@ public abstract class ContentBundleRepository
     public abstract Task<Guid?> ResolveCanonicalDefaultEntryManifestIdAsync(CancellationToken ct = default);
 
     /// <summary>
+    /// Generic route/projection-entry identity resolution: resolves the ACTIVE
+    /// hubs.topology_manifests row whose manifest_key equals manifestKey, so a frontend entry
+    /// point can identify its target manifest by a stable, already-existing, human-readable
+    /// identity string instead of a raw UUID constant. Mirrors
+    /// ResolveCanonicalDefaultEntryManifestIdAsync's own "exactly one active row" idiom exactly —
+    /// the same no_implicit_join_nullable_fallback_or_oldest_manifest_fallback discipline
+    /// db-schema.yaml already requires for hub_relations target resolution, applied here to
+    /// manifest_key lookup instead: zero active rows returns null (caller must not guess or fall
+    /// back to an arbitrary manifest); more than one active row throws
+    /// InvalidOperationException("MANIFEST_KEY_AMBIGUOUS: ...") — ambiguity is a configuration
+    /// error (two active manifests sharing the same manifest_key), never silently resolved via
+    /// first-match/oldest/MIN. Not scoped to any one surface — any route/consumer with a known,
+    /// stable manifest_key may resolve through this same method.
+    /// </summary>
+    public abstract Task<Guid?> ResolveActiveManifestIdByManifestKeyAsync(string manifestKey, CancellationToken ct = default);
+
+    /// <summary>
     /// production_projection_connectivity_invariant (docs/design/db-schema.yaml
     /// hub_relations.minimum_cardinality_completion_invariant): true only when
     /// topologyManifestId has at least one hub_relations row that is both status='active' AND

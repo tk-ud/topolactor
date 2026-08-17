@@ -100,12 +100,20 @@ export type ProjectionShellProps = {
    * default, never an override of a real user navigation.
    */
   manifestId?: string;
+  /**
+   * Generic route→Manifest identity resolution (2026-08-17): lets a same-URL thin route wrapper
+   * pin its default entry by hubs.topology_manifests.manifest_key — the same stable,
+   * already-existing, human-readable identity every manifest in the system already carries —
+   * instead of a raw UUID constant. Same default-only-fill-in behavior as `manifestId` (an
+   * explicit URL selection always wins); ignored when `manifestId` is also given.
+   */
+  manifestKey?: string;
 };
 
 const ProjectionShell: FunctionComponent<ProjectionShellProps> = (
   props,
 ) => {
-  const { manifestId } = props;
+  const { manifestId, manifestKey } = props;
   const [loading, setLoading] = useState(true);
   const [emission, setEmission] = useState<Emission | null>(null);
   const [specs, setSpecs] = useState<ComponentSpec[]>([]);
@@ -255,10 +263,16 @@ const ProjectionShell: FunctionComponent<ProjectionShellProps> = (
         setLoading(false);
         return;
       }
-      // A `manifestId` prop only ever fills in a DEFAULT entry (no explicit route/package/
-      // manifest in the URL) -- a real user navigation (?manifest=/?route=/?package=) always wins.
-      const entrySelection = manifestId && isDefaultProjectionEntry(entryParse.selection)
+      // A `manifestId`/`manifestKey` prop only ever fills in a DEFAULT entry (no explicit
+      // route/package/manifest in the URL) -- a real user navigation (?manifest=/?route=/?package=)
+      // always wins. `manifestId` (an explicit UUID) takes priority over `manifestKey` when a
+      // route somehow supplies both.
+      const entrySelection = !isDefaultProjectionEntry(entryParse.selection)
+        ? entryParse.selection
+        : manifestId
         ? { ...entryParse.selection, manifestId }
+        : manifestKey
+        ? { ...entryParse.selection, manifestKey }
         : entryParse.selection;
 
       const initialAxes: UserOperation = resolveProjectionEntryAxes(
@@ -893,42 +907,47 @@ const ProjectionShell: FunctionComponent<ProjectionShellProps> = (
         specs={specs}
         layoutId={emission?.layoutId}
       />
-      {hubNavigationLinks.length > 0 && (
-        <nav
-          data-projection-hub-navigation
-          class="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-3 text-xs"
+      <nav
+        data-projection-hub-navigation
+        class="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-3 text-xs"
+      >
+        <a
+          href="/dashboard"
+          class="link font-semibold"
+          data-projection-home-link
         >
-          {hubNavigationLinks.map((link) =>
-            link.resolvable
-              ? (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  class="link"
-                  data-hub-navigation-resolvable
-                >
-                  {link.label}
-                </a>
-              )
-              : (
-                <span
-                  key={`unresolvable-${link.sequencePosition}-${link.label}`}
-                  class="text-gray-400"
-                  title="複数または未登録の画面設定のため直接移動できません"
-                  data-hub-navigation-unresolvable
-                >
-                  {link.label}
-                </span>
-              )
-          )}
-          {emission?.manifestId && (
-            <details class="ml-auto text-gray-400">
-              <summary class="cursor-pointer">技術情報</summary>
-              <code class="font-mono">{emission.manifestId}</code>
-            </details>
-          )}
-        </nav>
-      )}
+          ホーム
+        </a>
+        {hubNavigationLinks.map((link) =>
+          link.resolvable
+            ? (
+              <a
+                key={link.href}
+                href={link.href}
+                class="link"
+                data-hub-navigation-resolvable
+              >
+                {link.label}
+              </a>
+            )
+            : (
+              <span
+                key={`unresolvable-${link.sequencePosition}-${link.label}`}
+                class="text-gray-400"
+                title="複数または未登録の画面設定のため直接移動できません"
+                data-hub-navigation-unresolvable
+              >
+                {link.label}
+              </span>
+            )
+        )}
+        {emission?.manifestId && (
+          <details class="ml-auto text-gray-400">
+            <summary class="cursor-pointer">技術情報</summary>
+            <code class="font-mono">{emission.manifestId}</code>
+          </details>
+        )}
+      </nav>
       {recommendProjection && (
         <RecommendNavigationIsland
           spec={recommendProjection}

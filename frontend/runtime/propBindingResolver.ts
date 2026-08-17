@@ -48,6 +48,14 @@ export const COMPONENT_ARRAY_PROP_CAPABILITIES: Record<string, string[]> = {
   "data_display/list": ["rows", "items"],
   "data_display/tree": ["nodes", "items"],
   "data_display/json": ["data"],
+  // Scalar, not an array -- same shape as form_input/search_input's "value" below. Lets
+  // md_viewer.projection's bare-markdown mode (frontend/runtime/runtimeComponentFactory.ts
+  // mdViewerPreviewFactory, proved end-to-end by physical_details_inline_editor_md_generator_
+  // preset, PR #604) bind its displayed markdown from an existing read action's emission.data —
+  // first used by a REAL (non-draft) tensor in the team-dashboard subBundle (.agent/tasks/todo.md),
+  // which is why this entry didn't need to exist before (draft preset compile_snapshots are
+  // resolved through the UIBuilder preview path, not this validator).
+  "data_display/md_viewer": ["markdown"],
   "display/card_list": ["items"],
   "disclosure/accordion": ["items"],
   "form_input/select": ["options"],
@@ -63,6 +71,11 @@ export const COMPONENT_ARRAY_PROP_CAPABILITIES: Record<string, string[]> = {
   // .agent/tasks/todo.md) -- SAME generic propBindings.value mechanism as
   // form_input/search_input above, one more component kind, not a new one.
   "form_input/input": ["value"],
+  // physical-details-inline-editor-md-generator-preset-completion Bundle closure round
+  // (.agent/tasks/todo.md) -- SAME generic propBindings.value mechanism as form_input/input
+  // above, one more component kind, not a Markdown-specific carrier. Any textarea-backed
+  // field may bind its initial value from emission.data this way, not only Markdown bodies.
+  "form_input/textarea_template": ["value"],
   "table_op/faceted_filter_bar": ["filters"],
   "table_op/column_filter": ["options"],
   "table_op/column_visibility_editor": ["columns"],
@@ -120,6 +133,8 @@ function isRecognizedPropBindingSource(source: string, propName: string): boolea
 
 function acceptsNonArrayResolvedValue(componentKind: string, propName: string): boolean {
   if (propName === "value" && componentKind === "form_input/search_input") return true;
+  if (propName === "value" && componentKind === "form_input/textarea_template") return true;
+  if (propName === "markdown" && componentKind === "data_display/md_viewer") return true;
   if (propName !== "data") return false;
   return componentKind === "data_display/json" ||
     componentKind === "calc_topology/aggregation_preview_table" ||

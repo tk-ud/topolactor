@@ -318,7 +318,7 @@ ui_builder_preset_ecosystem_ssot:
 
   hub_search_preset:
     preset_key: hub_search.readonly.v1
-    seed_ref: db/migrations/hub_search_preset_seed.sql
+    seed_ref: db/hub_search_preset_seed.sql
     role: read-only hub / topology search view seed
     status: active_seed
     authoring_boundary_ref: cross_preset_authoring_boundary
@@ -378,7 +378,7 @@ ui_builder_preset_ecosystem_ssot:
 
   physical_search_crud_aggregate_preset:
     preset_key: physical_search_crud_aggregate.v1
-    seed_ref: db/migrations/physical_search_crud_aggregate_preset_seed.sql
+    seed_ref: db/physical_search_crud_aggregate_preset_seed.sql
     role: physical table / jsonb record search, CRUD, and aggregation surface
     status: active_seed
     authoring_boundary_ref: cross_preset_authoring_boundary
@@ -492,7 +492,7 @@ ui_builder_preset_ecosystem_ssot:
 
   physical_details_inline_editor_md_generator_preset:
     preset_key: physical_details_inline_editor_md_generator.v1
-    seed_ref: db/migrations/physical_details_inline_editor_md_generator_preset_seed.sql
+    seed_ref: db/physical_details_inline_editor_md_generator_preset_seed.sql
     role: physical record detail view, inline edit, and Markdown saved view generation surface
     status: active_seed
     authoring_boundary_ref: cross_preset_authoring_boundary
@@ -500,10 +500,19 @@ ui_builder_preset_ecosystem_ssot:
 
     design_intent: >
       Reusable detail surface fed by CRUD card/detail selection. Provides header with back
-      button and PDF export preview, main tabs (details + history), inline editable fields
-      for the selected entity, field history via audit_diff_drawer, and full-history drawer.
-      All mutation flows use contents topology assigned detail/edit/history operation refs.
-      Does NOT implement bespoke detail CRUD logic inside the preset.
+      button and PDF export preview, main tabs (details + history + markdown), inline editable
+      fields for the selected entity, field history via audit_diff_drawer, full-history drawer,
+      and a Markdown generator tab (editable Markdown-shaped field plus a safe read-only
+      rendered preview, reusing the same md_viewer.projection component and shared
+      frontend/lib/markdownRenderer.ts safe-rendering core the team_markdown saved-view surface
+      uses). All mutation flows use contents topology assigned detail/edit/history operation
+      refs; the Markdown field is authored/saved through the SAME content_bundle:
+      update_entity_draft / promote_draft flow as every other detail field, not a bespoke or
+      parallel write path. Does NOT implement bespoke detail CRUD logic inside the preset, and
+      does NOT persist a topology.team_markdown_saved_view row — that is a distinct feature
+      (docs/design/team-markdown-dashboard-saved-view-ssot.yaml) with its own contents_topology-
+      incompatible operation vocabulary (team_markdown:*, not content_bundle:*), out of reach
+      for this preset's declared mutation boundary.
 
     contents_topology_binding:
       get_detail_operation: content_bundle:get_entity
@@ -552,6 +561,24 @@ ui_builder_preset_ecosystem_ssot:
           componentKey: button.primitive
           componentKind: action/button
           wiring: click → opens details_full_history_drawer
+      tab3_markdown:
+        - nodeId: details_markdown_body
+          componentKey: textarea.template
+          componentKind: form_input/textarea_template
+          wiring: save → content_bundle:update_entity_draft (same details_save_button / promote_draft
+            flow as tab1_details — the Markdown field is one more draft field, not a separate write path)
+          note: generic Markdown-shaped field placeholder, same authoring-scope idiom as
+            details_field_label_1 above — the author binds it to the actual physical table's
+            markdown-shaped column/jsonb path after loading this preset (see known_gaps below)
+        - nodeId: details_markdown_preview
+          componentKey: md_viewer.projection
+          componentKind: data_display/md_viewer
+          propBindings:
+            markdown: { source: "emission.data.markdownBody" }
+          note: read-only safe-rendered preview of the SAME field details_markdown_body edits,
+            reusing md_viewer.projection's bare-markdown mode (frontend/runtime/
+            runtimeComponentFactory.ts mdViewerPreviewFactory, props.markdown — additive to its
+            existing props.savedView contract) — never a bespoke Markdown renderer for this preset
       full_history_drawer:
         - nodeId: details_full_history_drawer
           componentKey: row_detail_drawer.primitive
@@ -570,13 +597,42 @@ ui_builder_preset_ecosystem_ssot:
     preview_validate_apply_boundary: mandatory
     active_topology_write: prohibited_until_explicit_apply
 
-    known_gaps: []
+    known_gaps:
+      - id: markdown_body_field_binding_generic_placeholder
+        detail: >
+          emission.data.markdownBody (details_markdown_preview's propBindings source and
+          details_markdown_body's own propBindings.value source) is a generic field-name
+          placeholder, the same idiom as details_field_label_1's "Field 1" label — this preset
+          is table-agnostic, so it cannot know a real physical table's actual markdown-shaped
+          column/jsonb path in advance. The author renames this binding to the real field path
+          after loading the preset into a route package's tmp canvas draft, before apply
+          (Design Inspector propBindings tab, layout_patch:apply). This does not block preset
+          completion (declared reusable-carrier status, not a per-table-bound production
+          screen) and matches the pre-existing unaddressed pattern for every other
+          content_bundle-bound field in this preset. Per cross_preset_authoring_boundary.
+          gap_classification_rule this gap is also propagated into the compiled seed's own
+          mock_preset_compile_snapshot.unresolved_json (db/physical_details_inline_editor_md_
+          generator_preset_seed.sql), not left source-snapshot-only, so UIBuilder/authors see
+          it as pending authoring work at the same surface they author it from. Separately,
+          the value CARRIER itself (Textarea initial bind + change capture + save payloadFrom
+          into content_bundle:update_entity_draft) is fully wired and generic — only the field
+          NAME is a pending author choice; see frontend/tests/presetSeedLineContract.test.ts
+          "Textarea initial bind -> change -> save click carries the raw Markdown string...".
     implemented_evidence:
       logs_diff_record_history_binding:
         repository_method: backend/repository/SqlAttentionLogsRepository.cs LoadPhysicalRecordHistoryAsync(tableId, recordId, ct)
         npgsql_method: backend/repository/NpgsqlSqlAttentionLogsRepository.cs reads logs.diff by physical_table_id + record_id
         admin_runtime_action: backend/runtime/AdminRuntime.cs physical_record:list_history
         tests: backend/tests/Topolactor.Runtime.Tests/PhysicalRecordHistoryRuntimeTests.cs
+      markdown_generation_surface:
+        renderer: frontend/lib/markdownRenderer.ts renderMarkdownToVNodes (shared safe-rendering
+          core, also used by MdViewer.tsx RenderedMarkdownPanel for the team_markdown saved-view
+          surface — one substrate, not a per-surface reimplementation)
+        runtime_factory: frontend/runtime/runtimeComponentFactory.ts mdViewerPreviewFactory
+          bare-markdown mode (props.markdown, additive to the existing props.savedView contract)
+        security_tests: frontend/tests/markdownRenderer.test.ts (positive rendering-fidelity
+          proof and negative script/raw-HTML/disallowed-link-scheme proof, reported separately),
+          frontend/tests/mdViewerRuntimeCompletion.test.ts (bare-markdown mode factory tests)
 
   # ---------------------------------------------------------------------------
   # aggregate_dashboard.v1
@@ -584,7 +640,7 @@ ui_builder_preset_ecosystem_ssot:
 
   aggregate_dashboard_preset:
     preset_key: aggregate_dashboard.v1
-    seed_ref: db/migrations/aggregate_dashboard_preset_seed.sql
+    seed_ref: db/aggregate_dashboard_preset_seed.sql
     role: aggregation / grouped measure / dashboard card surface
     status: active_seed
     authoring_boundary_ref: cross_preset_authoring_boundary

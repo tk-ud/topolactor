@@ -452,6 +452,53 @@ ROWS_SOURCE_SHAPE_RE = re.compile(r"^emission\.data(\..+)?$")
 # promotion note.
 FIELD_VALUE_FROM_NODE_REF_RE = re.compile(r"^node:[A-Za-z0-9_-]+\.value(?:\.[A-Za-z0-9_]+)*$")
 
+# Generic componentKind -> ui_component_registry.component_key convention for tensor nodes this
+# translator itself emits (a TENSOR-ONLY-AUTHORED layout_patch_json.nodes[] entry -- distinct from
+# the SEPARATE components_layout_design.layout_schema_json.records[]-driven
+# LayoutSchemaTensorComposer.FieldControlToComponentKey/TableDisplayToComponentKey resolution path
+# backend/repository/LayoutSchemaTensorComposer.cs uses for SCHEMA-COMPOSED layouts, which this
+# translator never produces). Mirrors frontend/components/catalog.ts's own
+# COMPONENT_TEMPLATE_CATALOG_IDENTITIES/RUNTIME_ALIAS_CATALOG_IDENTITIES componentKind<->componentKey
+# pairs verbatim -- never a second, independently-invented identity mapping -- and is cross-verified
+# against that exact file by check_react_schema_topology_seed_translator.py (the only place allowed
+# to read frontend/*.ts for evidence, same convention as its db/*.sql cross-references). A Field's
+# own `control` attribute is already authored as a real componentKind string (e.g.
+# "data_display/md_viewer", "form_input/textarea_template" -- see per_unit_grammar.field), so this
+# table is keyed directly by componentKind, not by a separate "control convention" vocabulary.
+# componentId is deliberately NEVER emitted here: backend/repository/NpgsqlTopologyRepository.cs
+# EnrichCatalogComponentIdsFromRegistryAsync already resolves componentId generically from
+# componentKey against topology.ui_component_registry at read time for any tensor-only-authored
+# catalog_component node missing it -- duplicating that UUID mapping here would be a second,
+# driftable copy of an already-generic mechanism, not a new capability.
+COMPONENT_KIND_TO_COMPONENT_KEY = {
+    "data_display/md_viewer": "md_viewer.projection",
+    "form_input/form_field": "form_field.template",
+    "form_input/input": "input.primitive",
+    "form_input/search_input": "search_input.alias",
+    "form_input/select": "select.template",
+    "form_input/textarea_template": "textarea.template",
+    "action/button": "button.primitive",
+    "disclosure/modal": "modal.template",
+}
+
+# Generic componentKind -> scalar propBindings target prop name for a Field's own valueFrom
+# source, mirroring frontend/runtime/propBindingResolver.ts's own
+# COMPONENT_ARRAY_PROP_CAPABILITIES table verbatim (never a second, independently-invented prop-
+# name convention): every entry here is that table's single-element scalar-prop entry for the
+# matching componentKind. Absent from this table (the default) means "value" -- the SAME target
+# every Field.valueFrom emission used before this table existed, so an unlisted control is a
+# strictly backward-compatible default, not a behavior change. Only componentKinds
+# frontend/runtime/propBindingResolver.ts's acceptsNonArrayResolvedValue also accepts an
+# emission.data-shaped source for are meaningfully different from "value" today (data_display/
+# md_viewer -> "markdown"); listing the others explicitly here is documentation, not a functional
+# change, and keeps this table a direct mirror of the frontend one rather than a hand-picked subset.
+FIELD_CONTROL_TO_VALUE_PROP_NAME = {
+    "data_display/md_viewer": "markdown",
+    "form_input/search_input": "value",
+    "form_input/input": "value",
+    "form_input/textarea_template": "value",
+}
+
 
 def find_display_columns_issues(raw):
     """Round 3 (preview-gap audit): strict re-parse of the SAME raw displayColumns string
@@ -549,26 +596,35 @@ def validate_field_value_from_source(node, errors, path="$.root"):
     """SSOT: docs/design/react-schema-topology-seed-translator-ssot.yaml
     input_text_markup_grammar_contract.per_unit_grammar.field's valueFrom attribute.
     Fail-close, generic (never Field-key-specific, never admin-enum-specific): a Field's
-    valueFrom, when present, must be a node:<id>.value(.<path>)* reference -- the SAME grammar
-    payloadFrom already uses at dispatch time (frontend/runtime/payloadFromResolver.ts), reused
-    here for display-time selected-row-relative prefill (frontend/runtime/
-    liveNodeValueTracker.ts cascadeNodeValueReferences) rather than invented as a second
-    parallel source vocabulary. An emission.data-shaped source belongs to the OTHER, pre-existing
-    propBindings.value resolution path (seedTrackerFromPropBindingsValue against emissionData) and
-    is out of scope for valueFrom, which exists specifically for the node-reference case that path
-    cannot express.
+    valueFrom, when present, must resolve to ONE of the two shapes the runtime prop-binding
+    resolvers actually accept for a scalar prop source:
+      1. node:<id>.value(.<path>)* -- the SAME grammar payloadFrom already uses at dispatch time
+         (frontend/runtime/payloadFromResolver.ts), reused here for display-time selected-row-
+         relative prefill (frontend/runtime/liveNodeValueTracker.ts
+         cascadeNodeValueReferences).
+      2. emission.data(.<path>)* -- the SAME ROWS_SOURCE_SHAPE_RE shape Table's rowsSource and
+         Field's optionsSource already accept, reused here (never a third, field-specific regex)
+         for a Field prop bound directly from the dispatched Emission's own data
+         (frontend/runtime/propBindingResolver.ts isRecognizedPropBindingSource: every
+         catalog_component scalar prop -- "value" for form_input controls, "markdown" for
+         data_display/md_viewer -- accepts an emission.data-shaped source). Neither shape is
+         Field-key-specific or componentKind-specific; which prop name the resolved source binds
+         to is decided later, at tensor-node emission time, from the Field's own control.
     """
     if node.get("kind") == "Field":
         node_path = node.get("_path", path)
         key = node.get("key")
         value_from = node.get("valueFrom") or ""
-        if value_from and not FIELD_VALUE_FROM_NODE_REF_RE.match(value_from):
+        if value_from and not (
+            FIELD_VALUE_FROM_NODE_REF_RE.match(value_from)
+            or ROWS_SOURCE_SHAPE_RE.match(value_from)
+        ):
             errors.append(err(
                 "FIELD_VALUE_FROM_INVALID", node_path, "blocking",
                 f"Field '{key}' valueFrom '{value_from}' must be \"node:<id>.value\" or "
                 f"\"node:<id>.value.<path>\" (the SAME grammar payloadFrom already resolves at "
-                f"dispatch time) -- never an emission.data path, which belongs to the separate, "
-                f"pre-existing propBindings.value resolution against emissionData",
+                f"dispatch time), or \"emission.data\" / \"emission.data.<path>\" (the SAME shape "
+                f"Table's rowsSource and Field's optionsSource already accept)",
             ))
     for c in node.get("children") or []:
         validate_field_value_from_source(c, errors, path)
@@ -2143,25 +2199,43 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
             # branch, which sets record["runtimeInteractions"] to a toggle->closeModal entry
             # sourceActionKey'd to the modal's own key): that entry must be projected into
             # tensorAdoptionCandidates the SAME way an Action/Step's runtimeInteractions are
-            # (below), scoped by the modal's OWNING parent's resolved identity -- Compose looks
-            # up a leaf's runtimeInteractions via "{itsResolvedParentNodeId}::{itsOwnKey}", and a
-            # Modal is itself such a leaf when composing its parent Section/Form. Without this
-            # branch the toggle entry was silently dropped at this stage (never read from any
-            # record_type other than topology_ui_action/topology_ui_workflow_step above), so
-            # EVERY translator-generated Modal would fail modalFactory's
-            # requireBinding(spec, "toggle") in real production despite validating clean and
-            # despite a hand-built DOM-mock test appearing to prove it worked (round 26 finding).
+            # (below).
+            #
+            # UIBuilder-lineage closure round: keyed at the Modal's OWN this_resolved_key, never
+            # an owning-parent redirect. Direct read/proof of BOTH real consumers settles this:
+            # (1) a TENSOR-ONLY-authored layout (empty components_layout_design.
+            # layout_schema_json.records[], e.g. team_dashboard's own production layout) has no
+            # Compose step at all -- NpgsqlTopologyRepository.LoadLayoutNodesAsync returns
+            # layout_patch_json.nodes[] verbatim, and frontend/runtime builds each rendered
+            # component's eventBinding strictly from THAT SAME node's own runtimeInteractions
+            # (frontend/runtime/renderEmission.ts: `rawLocalInteractions =
+            # node.runtimeInteractions`, grep-confirmed) -- an owning-parent placement would leave
+            # a Section/Category container (never a real interactive component) holding the
+            # toggle entry, and the real Modal component would never satisfy modalFactory's
+            # requireBinding(spec, "toggle"); proven by a real live-DB layout_patch:preview ->
+            # validate -> apply round trip
+            # (TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs), which additionally
+            # surfaced that an owning-parent-keyed entry with no componentKey of its own (a
+            # Category/Section is never a registry-backed catalog leaf) fails
+            # LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED outright for a tensor-only layout -- so
+            # emitting it is not merely redundant there, it is actively invalid. (2) for a
+            # SCHEMA-composed layout, backend/repository/LayoutSchemaTensorComposer.cs
+            # BuildInteractionsBySourceActionKey/Compose consumes this candidate only via
+            # db/seed_empty.sql's own frozen, hand-adopted bootstrap content (never through this
+            # live validate/apply path, a structural fact this file's own class-level
+            # doc comment already establishes) -- this generator's OWN raw candidate output is
+            # never itself pushed through Compose, so this_resolved_key is the correct, single,
+            # generic placement for the one real consumption path this translator's output is
+            # actually proven against end-to-end today.
             modal_interactions = record.get("runtimeInteractions") or []
+            modal_component_key = COMPONENT_KIND_TO_COMPONENT_KEY.get(record.get("componentKind"))
             if modal_interactions:
-                owning_form_key = (
-                    last_resolved_key_by_raw_key.get(wrapper.get("parentKey"), wrapper.get("parentKey"))
-                    if wrapper.get("parentKey") is not None
-                    else this_resolved_key
-                )
                 tensor_nodes.append({
-                    "nodeId": owning_form_key,
+                    "nodeId": this_resolved_key,
                     "nodeKind": "catalog_component",
                     "runtimeInteractions": list(modal_interactions),
+                    "componentKey": modal_component_key,
+                    "componentKind": record.get("componentKind"),
                 })
             # preview-gap round: the Modal's own display props (open/title/body) -- unlike
             # runtimeInteractions above (owned by the PARENT per Compose's
@@ -2174,6 +2248,19 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
             # generate-topology-seed -- every regeneration silently dropped it until a caller
             # noticed and re-patched it by hand. title/body are optional per
             # react_schema_contract (a Modal with neither still gets open:false).
+            #
+            # componentKey/componentKind (UIBuilder-lineage closure round): a tensor-only-authored
+            # catalog_component node requires an explicit componentKey
+            # (LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED,
+            # backend/repository/NpgsqlUiTopologyRepository.cs) -- componentId is deliberately
+            # NEVER emitted here (see COMPONENT_KIND_TO_COMPONENT_KEY's own doc comment; resolved
+            # generically at read time from componentKey instead). componentKind is additionally
+            # required directly on a disclosure-family node's OWN raw JSON (never resolved via a
+            # DB lookup) because layout_patch:validate's RUNTIME_INTERACTION_TARGET_KIND_MISMATCH
+            # check for an openModal/closeModal/toggleModal target reads componentKind from the
+            # target node's own JSON only -- record["componentKind"] is already generically
+            # authored for every Modal (build_node, unconditional, never team-dashboard-specific),
+            # simply carried through here rather than dropped.
             modal_props_data = {"open": False}
             if record.get("title"):
                 modal_props_data["title"] = record["title"]
@@ -2184,6 +2271,8 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                 "nodeKind": "catalog_component",
                 "runtimeInteractions": [],
                 "propsJson": json.dumps({"data": modal_props_data}),
+                "componentKey": modal_component_key,
+                "componentKind": record.get("componentKind"),
             })
 
         if record_type == "topology_ui_table" and record.get("displayColumns"):
@@ -2230,22 +2319,46 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
             })
 
         if record_type == "topology_ui_field" and record.get("valueFrom"):
-            # selected-row-relative field prefill (admin-enum subBundle closure round): the
-            # authored valueFrom (already grammar-validated by validate_field_value_from_source
-            # earlier in this same generate-topology-seed call) becomes this Field's own
-            # propBindings.value.source -- consumed at RUNTIME not by seedTrackerFromPropBindingsValue
-            # (that function's own componentKind gate and resolveRuntimeDataPath-against-emissionData
-            # resolution are for the OTHER, pre-existing emission.data-sourced case) but by
-            # ProjectionShell.tsx's handleNodeValueChange -> cascadeNodeValueReferences
-            # (frontend/runtime/liveNodeValueTracker.ts), fired when the REFERENCED node's own
-            # tracked value changes (e.g. a table row select) -- never at every render, never on an
-            # unrelated rerender. Same NodeLocalData-by-own-nodeId convention as the Table/Modal
-            # branches above: a Field is never itself a Form/Section owner.
+            # selected-row-relative field prefill (admin-enum subBundle closure round), widened
+            # (UIBuilder-lineage closure round) to ALSO accept an emission.data-shaped source
+            # (see validate_field_value_from_source): the authored valueFrom becomes this Field's
+            # own propBindings.<prop>.source, where <prop> is resolved generically from the
+            # Field's own control via FIELD_CONTROL_TO_VALUE_PROP_NAME (default "value") -- never
+            # a Field-key-specific or team-dashboard-specific rule, and never a second attribute:
+            # ONE valueFrom attribute, ONE grammar, its resolved prop target decided purely by
+            # componentKind, the same way frontend/runtime/propBindingResolver.ts's own
+            # COMPONENT_ARRAY_PROP_CAPABILITIES decides it at validation time.
+            #   - A node:<id>.value(.<path>)* source is consumed at RUNTIME not by
+            #     seedTrackerFromPropBindingsValue (that function's own componentKind gate and
+            #     resolveRuntimeDataPath-against-emissionData resolution are for the emission.data
+            #     case below) but by ProjectionShell.tsx's handleNodeValueChange ->
+            #     cascadeNodeValueReferences (frontend/runtime/liveNodeValueTracker.ts), fired
+            #     when the REFERENCED node's own tracked value changes (e.g. a table row select).
+            #   - An emission.data(.<path>)* source is consumed by seedTrackerFromPropBindingsValue
+            #     against the dispatched Emission's own data (e.g. a Markdown viewer/editor's
+            #     initial content bound from the SAME read action's response the projection
+            #     already dispatches) -- the SAME resolution path Table's rowsSource and Field's
+            #     optionsSource already use, never a field-specific special case.
+            # Same NodeLocalData-by-own-nodeId convention as the Table/Modal branches above: a
+            # Field is never itself a Form/Section owner. componentKey is required for a
+            # tensor-only-authored catalog_component node (LAYOUT_PATCH_CATALOG_COMPONENT_KEY_
+            # REQUIRED) -- resolved the SAME way, from the Field's own control (COMPONENT_KIND_TO_
+            # COMPONENT_KEY); componentId is deliberately never emitted (see that table's own doc
+            # comment).
+            value_prop_name = FIELD_CONTROL_TO_VALUE_PROP_NAME.get(record.get("control"), "value")
             tensor_nodes.append({
                 "nodeId": this_resolved_key,
                 "nodeKind": "catalog_component",
                 "runtimeInteractions": [],
-                "propBindings": {"value": {"source": record["valueFrom"]}},
+                "propBindings": {value_prop_name: {"source": record["valueFrom"]}},
+                "componentKey": COMPONENT_KIND_TO_COMPONENT_KEY.get(record.get("control")),
+                # propsJson.label (UIBuilder-lineage closure round): sourced from this SAME
+                # record's own already-authored `label`, same generic single-key convention as
+                # the Action branch's own propsJson.label below -- textareaTemplateFactory reads
+                # data.label as its own (optional but user-visible) field label;
+                # mdViewerPreviewFactory's bare-markdown mode never reads any propsJson field at
+                # all, so this key is simply inert there, not a control-specific special case.
+                "propsJson": json.dumps({"label": record.get("label")}),
             })
 
         if record_type == "topology_ui_field" and record.get("optionsSource"):
@@ -2271,6 +2384,7 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                         "valuePath": record["optionsValuePath"],
                     },
                 },
+                "componentKey": COMPONENT_KIND_TO_COMPONENT_KEY.get(record.get("control")),
             })
 
         if record_type == "topology_ui_field" and record.get("adminRuntimeDispatchOverride"):
@@ -2287,6 +2401,7 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                 "nodeKind": "catalog_component",
                 "runtimeInteractions": [],
                 "adminRuntimeDispatchOverride": record["adminRuntimeDispatchOverride"],
+                "componentKey": COMPONENT_KIND_TO_COMPONENT_KEY.get(record.get("control")),
             })
 
         if record_type in ("topology_ui_action", "topology_ui_workflow_step"):
@@ -2316,26 +2431,28 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
             # discipline for adminRuntimeDispatchOverride (round 17).
             interactions = record.get("runtimeInteractions") or []
             admin_runtime_override = record.get("adminRuntimeDispatchOverride")
+            action_component_key = COMPONENT_KIND_TO_COMPONENT_KEY["action/button"]
             if interactions:
-                parent_key = wrapper.get("parentKey")
-                # Resolve against the OWNING Form's disambiguated identity (the running map
-                # built above), never the raw parentKey string alone -- two different Form
-                # instances that happen to share a key must never merge their actions'
-                # runtimeInteractions into the same tensor node. Correct for runtimeInteractions
-                # specifically: backend/repository/LayoutSchemaTensorComposer.cs's
-                # BuildInteractionsBySourceActionKey groups tensor entries by
-                # "{formTensorNodeId}::{sourceActionKey}" and Compose looks them up against each
-                # LEAF's OWN resolved nodeId scoped by ITS OWNING FORM -- the tensor node carrying
-                # runtimeInteractions is deliberately keyed by the FORM, not the leaf.
-                owning_form_key = (
-                    last_resolved_key_by_raw_key.get(parent_key, parent_key)
-                    if parent_key is not None
-                    else this_resolved_key
-                )
+                # UIBuilder-lineage closure round: keyed at the Action/Step's own
+                # this_resolved_key, never an owning-parent redirect (see the Modal branch's own
+                # doc comment above for the full real-consumer proof, including the concrete
+                # LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED failure a real live-DB
+                # layout_patch:validate round trip surfaced for an owning-parent-keyed entry with
+                # no componentKey of its own -- the SAME reasoning applies here unchanged).
                 tensor_nodes.append({
-                    "nodeId": owning_form_key,
+                    "nodeId": this_resolved_key,
                     "nodeKind": "catalog_component",
                     "runtimeInteractions": list(interactions),
+                    "componentKey": action_component_key,
+                    # propsJson.label (UIBuilder-lineage closure round): frontend/runtime/
+                    # runtimeComponentFactory.ts buttonFactory REQUIRES props.data.label to be
+                    # a string or the whole node fails to render
+                    # (RUNTIME_PRIMITIVE_RENDERER_INVALID_BUTTON_PROPS) -- unlike Field's
+                    # optional label, a button's label is not cosmetic. Sourced from this
+                    # SAME record's own already-authored `label` (record_common_required_
+                    # fields -- every record type carries one), never a translator-invented
+                    # literal.
+                    "propsJson": json.dumps({"label": record.get("label")}),
                 })
             if admin_runtime_override:
                 # Round 19 fix: dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger are NOT
@@ -2351,12 +2468,21 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                 # DispatchAsync_AdminEnumManagementManifest_CreateGroupFormNode_..., which failed
                 # with a null DispatchTargetRefByTrigger before this fix). The override must be
                 # keyed by the ACTION LEAF's own resolved identity instead, matching every other
-                # NodeLocalData field's convention.
+                # NodeLocalData field's convention. componentKey (UIBuilder-lineage closure round):
+                # required for a tensor-only-authored catalog_component node
+                # (LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED); Action/WorkflowStep resolve
+                # generically to the shared button primitive (see ActionComponentKey's own C#
+                # mirror, backend/repository/LayoutSchemaTensorComposer.cs).
                 tensor_nodes.append({
                     "nodeId": this_resolved_key,
                     "nodeKind": "catalog_component",
                     "runtimeInteractions": [],
                     "adminRuntimeDispatchOverride": admin_runtime_override,
+                    "componentKey": action_component_key,
+                    # propsJson.label: same requirement/source as the interactions branch above --
+                    # first-write-wins merge (see the merge step below) means it does not matter
+                    # which of this Action's own contributing entries carries it.
+                    "propsJson": json.dumps({"label": record.get("label")}),
                 })
 
     layout_candidates = []
@@ -2405,6 +2531,8 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                     "dispatchPayloadFromByTrigger": {},
                     "propsJson": None,
                     "propBindings": None,
+                    "componentKey": None,
+                    "componentKind": None,
                 }
                 order.append(nid)
                 override_source_action_keys_by_node[nid] = []
@@ -2426,9 +2554,37 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                 merged[nid]["propsJson"] = node["propsJson"]
             if node.get("propBindings") is not None and merged[nid]["propBindings"] is None:
                 merged[nid]["propBindings"] = node["propBindings"]
+            # componentKey/componentKind (UIBuilder-lineage closure round): SAME first-write-wins
+            # policy as propsJson/propBindings above -- every branch that resolves a componentKey
+            # for a given nodeId resolves it from that SAME record's own control/componentKind, so
+            # two contributing entries for one nodeId never disagree in practice; this merge is
+            # purely about tolerating a later entry that legitimately carries none (e.g. the
+            # adminRuntimeDispatchOverride entry from a DIFFERENT record type never overwriting an
+            # already-resolved value with None).
+            if node.get("componentKey") is not None and merged[nid]["componentKey"] is None:
+                merged[nid]["componentKey"] = node["componentKey"]
+            if node.get("componentKind") is not None and merged[nid]["componentKind"] is None:
+                merged[nid]["componentKind"] = node["componentKind"]
 
         def _clean_tensor_node(n):
             out = {"nodeId": n["nodeId"], "nodeKind": n["nodeKind"], "runtimeInteractions": n["runtimeInteractions"]}
+            # componentKey/componentKind (UIBuilder-lineage closure round): componentKey is
+            # required for a tensor-only-authored catalog_component node
+            # (LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED,
+            # backend/repository/NpgsqlUiTopologyRepository.cs) -- absent only for a node kind
+            # this generator does not yet resolve one for (none exist among this file's own
+            # tensor_nodes.append call sites today -- every one sets componentKey).
+            # Deliberately no orderIndex here: it is optional (NpgsqlTopologyRepository.cs
+            # defaults an absent orderIndex to 0 at read time) and every consumer sorts with a
+            # stable sort, so an omitted orderIndex preserves this array's own document order
+            # identically to an explicit, monotonically-increasing one -- inventing a literal
+            # here would be pure cosmetic parity with a hand-authored shape, not a functional
+            # requirement, and every OTHER surface this generator already serves (e.g.
+            # admin.enum.management.projection's own tensor) has never carried one either.
+            if n["componentKey"] is not None:
+                out["componentKey"] = n["componentKey"]
+            if n["componentKind"] is not None:
+                out["componentKind"] = n["componentKind"]
             if n["dispatchTargetRefByTrigger"]:
                 out["dispatchTargetRefByTrigger"] = n["dispatchTargetRefByTrigger"]
             if n["dispatchPayloadFromByTrigger"]:

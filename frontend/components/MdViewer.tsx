@@ -22,6 +22,7 @@ import type {
   CompletedPresetSeed,
   SavedViewDetail,
 } from "../api/teamMarkdownApi.ts";
+import { renderMarkdownToVNodes } from "../lib/markdownRenderer.ts";
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -315,7 +316,7 @@ function RenderedMarkdownPanel({ markdown }: { markdown: string }) {
       class="md-viewer-rendered-markdown"
       aria-label="Rendered Markdown content"
     >
-      <pre class="md-viewer-markdown-pre">{markdown}</pre>
+      {renderMarkdownToVNodes(markdown)}
     </div>
   );
 }

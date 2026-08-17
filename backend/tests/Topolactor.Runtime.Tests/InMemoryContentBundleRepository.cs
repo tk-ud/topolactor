@@ -37,6 +37,23 @@ internal class InMemoryContentBundleRepository : ContentBundleRepository
     public override Task<Guid?> ResolveCanonicalDefaultEntryManifestIdAsync(CancellationToken ct = default) =>
         Task.FromResult(CanonicalDefaultEntryManifestId);
 
+    /// <summary>Test-settable manifest_key -> resolved active manifest id map. A key absent from
+    /// this dictionary mirrors "zero active rows for this manifest_key" (returns null). To
+    /// simulate ambiguity, set <see cref="AmbiguousManifestKeys"/> instead of adding the key here.</summary>
+    public Dictionary<string, Guid> ActiveManifestIdsByKey { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Test-settable set of manifest_key values that should simulate the "multiple active
+    /// rows share this manifest_key" ambiguity case (throws, mirroring the real repository).</summary>
+    public HashSet<string> AmbiguousManifestKeys { get; } = new(StringComparer.Ordinal);
+
+    public override Task<Guid?> ResolveActiveManifestIdByManifestKeyAsync(string manifestKey, CancellationToken ct = default)
+    {
+        if (AmbiguousManifestKeys.Contains(manifestKey))
+            throw new InvalidOperationException(
+                $"MANIFEST_KEY_AMBIGUOUS: multiple active hubs.topology_manifests rows share manifest_key='{manifestKey}'.");
+        return Task.FromResult(ActiveManifestIdsByKey.TryGetValue(manifestKey, out var id) ? (Guid?)id : null);
+    }
+
     public override Task<IReadOnlyList<ContentBundleListItemDto>> ListContentHubsAsync(CancellationToken ct = default)
     {
         IReadOnlyList<ContentBundleListItemDto> items =

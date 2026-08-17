@@ -34,6 +34,14 @@ public class HubNavigationResolver
         _contentBundleRepository.ResolveCanonicalDefaultEntryManifestIdAsync(ct);
 
     /// <summary>
+    /// Generic route/projection-entry identity resolution by hubs.topology_manifests.manifest_key
+    /// — see ContentBundleRepository.ResolveActiveManifestIdByManifestKeyAsync for the full
+    /// "exactly one active row" fail-close contract this delegates to unchanged.
+    /// </summary>
+    public Task<Guid?> ResolveActiveManifestIdByKeyAsync(string manifestKey, CancellationToken ct = default) =>
+        _contentBundleRepository.ResolveActiveManifestIdByManifestKeyAsync(manifestKey, ct);
+
+    /// <summary>
     /// Read-only navigation link-list fallback for authenticated surfaces with no business
     /// projection of their own: resolves the canonical default entry manifest, then its outbound
     /// hub_relations sequence — the exact same two existing hub_relation authority calls

@@ -44,6 +44,11 @@ public class StructureMapResolver
             ["data_display/list"]               = new HashSet<string>(StringComparer.Ordinal) { "rows", "items" },
             ["data_display/tree"]               = new HashSet<string>(StringComparer.Ordinal) { "nodes", "items" },
             ["data_display/json"]               = new HashSet<string>(StringComparer.Ordinal) { "data" },
+            // Scalar, not an array -- team-dashboard subBundle closure round (.agent/tasks/todo.md).
+            // Lets md_viewer.projection's bare-markdown mode bind its displayed markdown from an
+            // existing read action's emission.data, the same scalar-value idiom form_input/
+            // search_input and form_input/textarea_template already use for their own "value" prop.
+            ["data_display/md_viewer"]          = new HashSet<string>(StringComparer.Ordinal) { "markdown" },
             ["display/card_list"]               = new HashSet<string>(StringComparer.Ordinal) { "items" },
             ["disclosure/accordion"]            = new HashSet<string>(StringComparer.Ordinal) { "items" },
             ["form_input/select"]               = new HashSet<string>(StringComparer.Ordinal) { "options" },
@@ -67,6 +72,12 @@ public class StructureMapResolver
             // this capability whitelist only gates WHICH componentKinds may carry a `value`
             // propBinding at all, not which source grammar resolves it.
             ["form_input/input"]                = new HashSet<string>(StringComparer.Ordinal) { "value" },
+            // physical-details-inline-editor-md-generator-preset-completion Bundle closure round
+            // (.agent/tasks/todo.md) -- SAME generic propBindings.value mechanism as
+            // form_input/input above, one more component kind, not a Markdown-specific carrier.
+            // Any textarea-backed field may bind its initial value from emission.data this way,
+            // not only Markdown bodies.
+            ["form_input/textarea_template"]    = new HashSet<string>(StringComparer.Ordinal) { "value" },
             ["table_op/faceted_filter_bar"]     = new HashSet<string>(StringComparer.Ordinal) { "filters" },
             ["table_op/column_filter"]          = new HashSet<string>(StringComparer.Ordinal) { "options" },
             ["table_op/column_visibility_editor"] = new HashSet<string>(StringComparer.Ordinal) { "columns" },

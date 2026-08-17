@@ -12,11 +12,16 @@
  * feeds it a real-shaped Emission carrying navigationSequence, and asserts the actual rendered DOM:
  *   - a resolvable link renders as a real <a href="?manifest=..."> anchor.
  *   - an unresolvable link (no TargetManifestId) renders as a real <span>, not a clickable anchor.
- *   - when navigationSequence is absent/empty, no <nav data-projection-hub-navigation> element
- *     renders at all — this is the Owner-confirmed intentional design (an isolated/orphan
- *     production projection is a data/authoring-time invariant, not something a frontend fallback
- *     UI element papers over — see .agent/tasks/todo.md admin-surface-topology-seed-conversion),
- *     so this file proves the CURRENT conditional behavior rather than asserting it is a defect.
+ *   - a fixed "ホーム" link to /dashboard always renders inside the SAME nav bar, regardless of
+ *     whether navigationSequence carries any hub_relations-derived items (Owner-confirmed 2026-08-17:
+ *     a dashboard-style surface must be reachable from anywhere, so this is a generic ProjectionShell
+ *     affordance — not a per-manifest hub_relations edge, and not team-dashboard-specific; it renders
+ *     on every ProjectionShell mount).
+ *   - when navigationSequence is absent/empty, the nav bar still renders (for the fixed home link)
+ *     but carries no hub-navigation-resolvable/unresolvable elements — superseding the prior
+ *     Owner-confirmed conditional-nav design (nav absent entirely with no navigationSequence), see
+ *     .agent/tasks/todo.md admin-surface-topology-seed-conversion 2026-08-17 entry for the design
+ *     change record.
  */
 import { assert, assertEquals, assertExists } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { h, options, render } from "preact";
@@ -131,6 +136,10 @@ Deno.test(
         "an unresolvable navigationSequence item (no targetManifestId) must render as a real <span>, not a clickable anchor",
       );
       assertEquals(unresolvableSpan!.textContent, "未登録の複数候補");
+
+      const homeLink = container.querySelector("a[data-projection-home-link]");
+      assertExists(homeLink, "the fixed home link must render alongside hub_relations-derived links");
+      assertEquals(homeLink!.getAttribute("href"), "/dashboard");
     } finally {
       globalThis.fetch = originalFetch;
       (globalThis as unknown as { EventSource: unknown }).EventSource = originalEventSource;
@@ -141,7 +150,7 @@ Deno.test(
 );
 
 Deno.test(
-  "ProjectionShell (real mount): a real dispatched emission with no navigationSequence renders no hub-navigation nav bar at all (current Owner-confirmed conditional design)",
+  "ProjectionShell (real mount): a real dispatched emission with no navigationSequence still renders the fixed home link, with no hub-navigation-derived links",
   async () => {
     const { container, cleanup } = setupDom();
     const originalEventSource = (globalThis as unknown as { EventSource?: unknown }).EventSource;
@@ -159,15 +168,21 @@ Deno.test(
 
       render(h(ProjectionShell, {}), container);
 
-      // No nav bar to wait for — wait one real dispatch/render cycle instead, keyed on the
-      // primary projection island having mounted at all.
-      await waitFor(() => container.querySelector("[data-primary-dom-projection]") !== null);
-      await flushUpdates();
+      let navEl: Element | null = null;
+      await waitFor(() => {
+        navEl = container.querySelector("[data-projection-hub-navigation]");
+        return navEl !== null;
+      });
+      assertExists(navEl, "the nav bar must still render (for the fixed home link) with no navigationSequence");
 
-      const navEl = container.querySelector("[data-projection-hub-navigation]");
+      const homeLink = container.querySelector("a[data-projection-home-link]");
+      assertExists(homeLink, "the fixed home link must render even with no navigationSequence at all");
+      assertEquals(homeLink!.getAttribute("href"), "/dashboard");
+
       assert(
-        navEl === null,
-        "no hub-navigation nav bar element should render when the manifest has no active hub_relations",
+        container.querySelector("[data-hub-navigation-resolvable]") === null &&
+          container.querySelector("[data-hub-navigation-unresolvable]") === null,
+        "no hub_relations-derived link should render when the manifest has no active hub_relations",
       );
     } finally {
       globalThis.fetch = originalFetch;

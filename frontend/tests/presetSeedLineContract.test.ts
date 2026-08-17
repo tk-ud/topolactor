@@ -21,11 +21,19 @@
 
 import {
   assert,
+  assertEquals,
+  assertExists,
 } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
   parseVisualLayoutPatchJson,
 } from "../runtime/visualLayoutUtils.ts";
 import { parsePayloadFromSource } from "../runtime/payloadFromResolver.ts";
+import { renderEmission } from "../runtime/renderEmission.ts";
+import type { Emission } from "../api/dispatch.ts";
+import { ensureRuntimeComponentRegistryInitialized } from "../runtime/runtimeComponentRegistry.ts";
+import { __testOnly as factoryTestOnly } from "../runtime/runtimeComponentFactory.ts";
+import { __testOnly as schedulerTestOnly } from "../runtime/frontendScheduler.ts";
+import { createLiveNodeValueTracker } from "../runtime/liveNodeValueTracker.ts";
 
 // ─── Seed file registry ───────────────────────────────────────────────────────
 // Add new seed SQL paths here to include them in all 6 contract checks.
@@ -340,4 +348,254 @@ Deno.test("[preset-line] physical_details_inline_editor history binds emission.d
     !snapshot.unresolvedJson.some((item) => item.knownGapRef === "logs_diff_record_history_binding"),
     "logs_diff_record_history_binding must not remain in unresolved_json",
   );
+});
+
+Deno.test("[preset-line] physical_details_inline_editor_md_generator: Markdown authoring field + safe preview node survive the compiler pipeline intact", async () => {
+  const sql = await Deno.readTextFile("db/physical_details_inline_editor_md_generator_preset_seed.sql");
+  const snapshot = extractCompileSnapshot(sql, "db/physical_details_inline_editor_md_generator_preset_seed.sql");
+  const byId = new Map(snapshot.layoutPatchJson.nodes.map((node) => [String(node.nodeId), node]));
+
+  // The preset's own role claims "Markdown saved view generation surface" — this proves the
+  // layout_patch_json (the preset compiler's own output, not just descriptive SSOT/source text)
+  // actually carries the corresponding nodes, not just the name/role claim.
+  const markdownBody = byId.get("details_markdown_body") as Record<string, unknown> | undefined;
+  assert(markdownBody, "details_markdown_body (Markdown authoring field) must exist in compiled layout_patch_json");
+  assertEquals(
+    markdownBody!.componentKey,
+    "textarea.template",
+    "Markdown authoring field reuses the existing generic textarea component — no bespoke editor component",
+  );
+
+  const markdownPreview = byId.get("details_markdown_preview") as Record<string, unknown> | undefined;
+  assert(markdownPreview, "details_markdown_preview (safe Markdown preview) must exist in compiled layout_patch_json");
+  assertEquals(
+    markdownPreview!.componentKey,
+    "md_viewer.projection",
+    "Markdown preview reuses the existing md_viewer.projection component — no bespoke renderer component",
+  );
+  const previewBindings = markdownPreview!.propBindings as Record<string, { source: string }> | undefined;
+  assert(
+    previewBindings?.markdown?.source?.startsWith("emission.data"),
+    "Markdown preview binds a live emission.data source, not a static/hardcoded string",
+  );
+
+  // Both new nodes are children of the same details_tabs the preset's other tabs already use —
+  // confirms this is a genuine third tab, not a disconnected/orphaned node pair.
+  assertEquals(markdownBody!.parentNodeId, "details_tabs");
+  assertEquals(markdownPreview!.parentNodeId, "details_tabs");
+
+  const tabsNode = byId.get("details_tabs") as Record<string, unknown> | undefined;
+  const tabsPropsJson = JSON.parse(String(tabsNode?.propsJson ?? "{}")) as { tabs?: { key: string }[] };
+  assert(
+    tabsPropsJson.tabs?.some((t) => t.key === "markdown"),
+    "details_tabs must declare the markdown tab, not just host orphaned child nodes",
+  );
+});
+
+Deno.test("[preset-line] physical_details_inline_editor_md_generator: Markdown authoring value carrier (initial bind + save payloadFrom) is complete", async () => {
+  const sql = await Deno.readTextFile("db/physical_details_inline_editor_md_generator_preset_seed.sql");
+  const snapshot = extractCompileSnapshot(sql, "db/physical_details_inline_editor_md_generator_preset_seed.sql");
+  const byId = new Map(snapshot.layoutPatchJson.nodes.map((node) => [String(node.nodeId), node]));
+
+  // Initial/read value: details_markdown_body must bind its displayed value from emission.data,
+  // never a static/hardcoded initial value.
+  const markdownBody = byId.get("details_markdown_body") as Record<string, unknown> | undefined;
+  assert(markdownBody, "details_markdown_body must exist");
+  const bodyBindings = markdownBody!.propBindings as Record<string, { source: string }> | undefined;
+  assertEquals(
+    bodyBindings?.value?.source,
+    "emission.data.markdownBody",
+    "details_markdown_body's displayed value must bind to a live emission.data source",
+  );
+
+  // Save payload: details_save_button's payloadFrom must carry the Markdown field's current
+  // tracked value through the SAME generic node:<id>.value mechanism entityId already uses --
+  // not a Markdown-specific carrier, not a duplicated/parallel write path.
+  const saveWiring = snapshot.wiringCandidateJson.find((wc) => wc.nodeId === "details_save_button") as
+    | { binding?: { payloadFrom?: Record<string, string> } }
+    | undefined;
+  assert(saveWiring, "details_save_button wiring candidate must exist");
+  assertEquals(
+    saveWiring!.binding?.payloadFrom?.markdownBody,
+    "node:details_markdown_body.value",
+    "details_save_button payloadFrom must carry details_markdown_body's live tracked value",
+  );
+  assertEquals(
+    saveWiring!.binding?.payloadFrom?.entityId,
+    "event.record.id",
+    "the pre-existing entityId payloadFrom entry must be unchanged (additive fix, not a rewrite)",
+  );
+});
+
+Deno.test("[preset-line] physical_details_inline_editor_md_generator: markdown_body_field_binding_generic_placeholder is a compile-snapshot unresolved authoring-carrier entry, not source-text-only", async () => {
+  const sql = await Deno.readTextFile("db/physical_details_inline_editor_md_generator_preset_seed.sql");
+  const snapshot = extractCompileSnapshot(sql, "db/physical_details_inline_editor_md_generator_preset_seed.sql");
+
+  const entry = snapshot.unresolvedJson.find((item) =>
+    (item as Record<string, unknown>).knownGapRef === "markdown_body_field_binding_generic_placeholder"
+  ) as Record<string, unknown> | undefined;
+  assert(
+    entry,
+    "markdown_body_field_binding_generic_placeholder must propagate into compile_snapshot.unresolved_json " +
+      "(the carrier UIBuilder/authors actually observe), not remain source_snapshot_json.knownGaps-only",
+  );
+  assert("nodeId" in entry! || "sourceObjectId" in entry!, "unresolved entry must identify a node");
+  assert(
+    typeof entry!.reason === "string" && entry!.reason.length > 0,
+    "unresolved entry must have a non-empty reason",
+  );
+  // Resolution metadata per cross_preset_authoring_boundary.author_resolution_map.propBindings --
+  // proves this is classified as author-selection-pending authoring work (a UIBuilder surface CAN
+  // author and persist the value), not an unclassified/backend/catalog gap.
+  assertEquals(entry!.authoringSurface, "Design Inspector propBindings tab");
+  assertEquals(entry!.saveAction, "layout_patch:apply");
+  assertEquals(entry!.persistedField, "topology.ui_topology_tensor.layout_patch_json.nodes[].propBindings");
+});
+
+// ─── Production-equivalent value-flow proof (not a node-existence check) ──────
+//
+// Proves the seed's OWN declared node/propBindings/payloadFrom content (read from the real SQL
+// file, not a hand-typed duplicate) actually carries a live-edited Markdown value from a rendered
+// Textarea's initial bind, through a change event, into a save dispatch's request payload — via
+// the SAME generic mechanisms every other seeded write action uses (renderEmission propBindings
+// resolution, liveNodeValueTracker, payloadFromResolver's node:<id>.value). The two seed nodes
+// are reused as-is; only the wiringKind/dispatchTargetRefByTrigger fields a real post-apply
+// tensor row would carry (absent from this preset's own draft compile_snapshot schema) are added
+// here to simulate "this preset applied to a real route", per the actual admin_runtime dispatch
+// convention (manifest:<uuid>:<layer>:<action>) every other seeded surface (team_markdown,
+// enum_dictionary) already uses in production.
+
+Deno.test("[preset-line] physical_details_inline_editor_md_generator: Textarea initial bind -> change -> save click carries the raw Markdown string into the dispatch payload (not HTML-converted)", async () => {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+
+  const sql = await Deno.readTextFile("db/physical_details_inline_editor_md_generator_preset_seed.sql");
+  const snapshot = extractCompileSnapshot(sql, "db/physical_details_inline_editor_md_generator_preset_seed.sql");
+  const byId = new Map(snapshot.layoutPatchJson.nodes.map((node) => [String(node.nodeId), node]));
+  const saveWiring = snapshot.wiringCandidateJson.find((wc) => wc.nodeId === "details_save_button") as
+    | { binding?: { payloadFrom?: Record<string, string> } }
+    | undefined;
+  assertExists(saveWiring?.binding?.payloadFrom, "seed must declare details_save_button's payloadFrom");
+
+  const manifestId = "00000000-0000-0000-0000-0000000ad900";
+  const markdownBodyNode = byId.get("details_markdown_body") as Record<string, unknown>;
+  const saveButtonNode = byId.get("details_save_button") as Record<string, unknown>;
+  assertExists(markdownBodyNode, "details_markdown_body must exist in the real compiled seed");
+  assertExists(saveButtonNode, "details_save_button must exist in the real compiled seed");
+
+  const initialMarkdown = "# Original\n\nOriginal body.";
+  const editedMarkdown = "# Edited\n\n<script>window.__pwned = true;</script> and more text.";
+
+  // Simulates "this preset applied to a real admin_runtime-wired route" — wiringKind/
+  // dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger are real-tensor-only fields this
+  // preset's own draft compile_snapshot schema does not carry (see module doc comment above).
+  // The payloadFrom VALUE is copied verbatim from the seed's own declared wiring candidate, not
+  // hand-invented, so this test fails if the seed's payloadFrom content ever regresses.
+  // componentId (distinct from nodeId) is only assigned once a preset's draft layout_patch_json
+  // is actually applied to a real ui_topology_tensor row -- this preset's own draft compile_snapshot
+  // schema never carries it (see extractCompileSnapshot's nodes, which only have nodeId/componentKey/
+  // componentKind). Same "comp-<nodeId>-001" convention used by other seed-driven end-to-end tests
+  // (see projectionShellAdminRuntimeWritePayloadCapture.test.ts buildConfirmModalLayoutNodes).
+  const emission: Emission = {
+    layoutId: "layout-physical-details-md-value-flow",
+    layoutNodes: [
+      {
+        ...markdownBodyNode,
+        componentId: "comp-details-markdown-body-001",
+        wiringKind: "admin_runtime",
+      },
+      {
+        ...saveButtonNode,
+        componentId: "comp-details-save-button-001",
+        wiringKind: "admin_runtime",
+        targetSurface: "manifest",
+        dispatchTargetRefByTrigger: {
+          click: `manifest:${manifestId}:content_bundle:update_entity_draft`,
+        },
+        dispatchPayloadFromByTrigger: {
+          click: saveWiring!.binding!.payloadFrom,
+        },
+      },
+      // deno-lint-ignore no-explicit-any
+    ] as any,
+    data: { markdownBody: initialMarkdown },
+  };
+
+  const tracker = createLiveNodeValueTracker();
+  const specs = renderEmission(emission, {}, {
+    payloadFromNodeValues: tracker.snapshot(),
+    onNodeValueChange: (nodeId, value) => tracker.set(nodeId, value),
+  });
+
+  // 1. Initial bind: the rendered Textarea's resolved `value` prop must come from
+  // emission.data.markdownBody (propBindings resolution), never a static/hardcoded default.
+  const markdownBodySpec = specs.find((s) => s.runtimeSpec?.componentId === "comp-details-markdown-body-001");
+  assertExists(markdownBodySpec?.runtimeSpec, "details_markdown_body runtimeSpec must exist");
+  assertEquals(
+    (markdownBodySpec!.runtimeSpec!.props as Record<string, unknown>).value,
+    initialMarkdown,
+    "Textarea's initial value must bind to emission.data.markdownBody",
+  );
+
+  // 2. Change event: typing into the Textarea updates the live node-value tracker via the SAME
+  // generic Lane 3 mechanism every other seeded typed field uses — no Markdown-specific state.
+  const changeResult = factoryTestOnly.emitBoundEvent(
+    markdownBodySpec!.runtimeSpec!,
+    "change",
+    { value: editedMarkdown },
+  );
+  assertEquals(changeResult.ok, true, "change event on the Markdown Textarea must succeed");
+  assertEquals(
+    tracker.snapshot()["details_markdown_body"],
+    editedMarkdown,
+    "the live node-value tracker must hold the just-typed Markdown string verbatim",
+  );
+
+  // 3. Save click: capture the real dispatch request body and assert it carries the RAW Markdown
+  // string (never converted to/through HTML — save authority is raw source, security/rendering
+  // authority is the Viewer, and those two responsibilities must stay separate).
+  let capturedBody: Record<string, unknown> | null = null;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = ((_url: string, init?: RequestInit) => {
+    capturedBody = JSON.parse(String(init?.body ?? "{}"));
+    return Promise.resolve(
+      new Response(JSON.stringify({ success: true, errors: [] }), { status: 200 }),
+    );
+  }) as typeof fetch;
+  try {
+    const saveButtonSpec = specs.find((s) => s.runtimeSpec?.componentId === "comp-details-save-button-001");
+    assertExists(saveButtonSpec?.runtimeSpec, "details_save_button runtimeSpec must exist");
+    // The save button's own payloadFrom resolution reads the tracker via
+    // spec.payloadFromNodeValues -- re-supply the CURRENT snapshot (same backing object
+    // liveNodeValueTracker.snapshot() always returns) so fire-time resolution sees step 2's update.
+    const saveResult = factoryTestOnly.emitBoundEvent(
+      { ...saveButtonSpec!.runtimeSpec!, payloadFromNodeValues: tracker.snapshot() },
+      "click",
+      { record: { id: "test-record-1" } },
+    );
+    assertEquals(saveResult.ok, true, "click on the save button must succeed");
+
+    for (let i = 0; i < 20 && capturedBody === null; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assertExists(capturedBody, "the api_command_lane request body must have been captured");
+    const payload = (capturedBody as Record<string, unknown>).payload as Record<string, unknown>;
+    assertEquals(
+      payload.markdownBody,
+      editedMarkdown,
+      "dispatch payload.markdownBody must be the raw, unmodified Markdown source string",
+    );
+    // The pre-existing entityId carrier must survive unchanged alongside the new field.
+    assertEquals(payload.entityId, "test-record-1");
+    assert(
+      typeof payload.markdownBody === "string" &&
+        payload.markdownBody.includes("<script>") &&
+        !String(capturedBody).includes("&lt;script&gt;"),
+      "the saved payload must carry the literal Markdown source (including any raw-looking text) " +
+        "unescaped and unconverted -- HTML-escaping/sanitizing is the Viewer's responsibility, not save's",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
 });

@@ -104,6 +104,7 @@ import { Textarea } from "../components/Textarea.tsx";
 import { Tabs } from "../components/Tabs.tsx";
 import { Tree } from "../components/Tree.tsx";
 import { MdViewer } from "../components/MdViewer.tsx";
+import { renderMarkdownToVNodes } from "../lib/markdownRenderer.ts";
 import { AudioPlayer } from "../components/AudioPlayer.tsx";
 import { VideoPlayer } from "../components/VideoPlayer.tsx";
 import type { MdViewerDisabledActionReasons } from "../components/MdViewer.tsx";
@@ -3409,6 +3410,28 @@ function mdViewerPreviewFactory(spec: RuntimeComponentSpec): RenderResult {
         !Array.isArray(props.savedView))
       ? props.savedView as Record<string, unknown>
       : null;
+  // Bare-markdown mode: a caller that only has a raw Markdown string (no persisted saved-view
+  // record — e.g. a generic physical-record field with a Markdown-shaped value, not a
+  // topology.team_markdown_saved_view row) reuses the SAME safe rendering core via `props.markdown`
+  // instead of `props.savedView`. This intentionally skips MdViewer's own saved-view chrome (title,
+  // source ref, template ref, seed summary, action toolbar) — none of that data exists for a bare
+  // string — and renders only the safe Markdown content itself, through the identical
+  // renderMarkdownToVNodes() core MdViewer's own RenderedMarkdownPanel uses. `savedView` takes
+  // priority when both are present (unchanged existing behavior); `markdown` is additive/opt-in and
+  // does not alter the pre-existing savedView-shaped contract in any way.
+  if (!savedViewRaw && typeof props.markdown === "string") {
+    return {
+      ok: true,
+      node: h(
+        "div",
+        {
+          class: "md-viewer-bare-markdown-preview",
+          "aria-label": "Markdown preview",
+        },
+        renderMarkdownToVNodes(props.markdown),
+      ),
+    };
+  }
   if (!savedViewRaw) {
     return { ok: false, error: "RUNTIME_MD_VIEWER_MISSING_SAVED_VIEW_PROPS" };
   }

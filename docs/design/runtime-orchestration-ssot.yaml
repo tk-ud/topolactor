@@ -104,6 +104,7 @@ runtime_orchestration_ssot:
       - /admin/contents
       - /admin/ui-builder
       - /admin/team-dashboard
+      - /admin/team-markdown
       - /admin/enums
       - /admin/users
       - /admin/scheduler
@@ -149,11 +150,35 @@ runtime_orchestration_ssot:
         - route: /admin/team-dashboard
           retirement_kind: hub_navigation_only
           replacement: same_url_plus_hub_entry
-          status: pending
+          status: superseded_by_owner_directed_alternate
           precondition: >-
-            requires a real per-screen ui_projection manifest for the team markdown dashboard
-            surface (same prerequisite as /admin/enums above). The route itself is not retired;
-            only hub-reachability is added once that manifest exists. Not retired by this change.
+            STALE (pre-team-dashboard-seed-conversion round): "requires a real per-screen
+            ui_projection manifest for the team markdown dashboard surface, which does not exist
+            yet" is no longer true — team_dashboard.admin.projection (dd010) and
+            team_dashboard.normal.projection (dd020) are both real, seeded, live-dispatchable
+            ui_projection manifests (see admin-normal-surface-projection-seed-ssot.yaml
+            surface_axes.admin.surfaces.team_dashboard / surface_axes.normal.surfaces.dashboard).
+            CURRENT: an exhaustive audit (admin-normal-surface-projection-seed-ssot.yaml
+            design_blocking.target_surface_manifest_readiness's own team-dashboard closure record)
+            found no existing, real, Normal-reachable production topology_manifest besides
+            team-dashboard's own two manifests to author a genuine hub_navigation:create relation
+            FROM — fabricating a synthetic/demo source manifest solely to close this literal
+            retirement_kind was explicitly rejected, the same "no fake hub_relations source"
+            discipline the /admin-own-outbound-relation note elsewhere in this Bundle already
+            establishes. Presented with this finding, the Owner redirected the underlying intent
+            (an end user must always be able to navigate back to the dashboard from anywhere) to a
+            route/manifest-agnostic fix instead of literal hub_navigation authoring:
+            frontend/islands/ProjectionShell.tsx now renders a fixed data-projection-home-link
+            ("ホーム" → /dashboard) in its own nav bar unconditionally on every mount, independent
+            of any manifest's own hub_relations/navigationSequence state. This is not a
+            hub_navigation_only retirement in the literal sense this matrix defines above (no
+            hubs.hub_relations row was authored for dd010/dd020), so status is not "done"; it is
+            not "pending" either, since the reachability problem this retirement_kind exists to
+            solve is already closed by a different, Owner-approved mechanism — hence
+            status=superseded_by_owner_directed_alternate. Left open for a future genuine
+            hub_navigation:create authoring round if/when a real Normal-reachable source manifest
+            is introduced elsewhere in the system; not a blocking precondition for the rest of
+            team-dashboard's own completion state.
         - route: /admin/scheduler
           retirement_kind: hub_navigation_only
           replacement: same_url_plus_hub_entry
@@ -348,6 +373,45 @@ runtime_orchestration_ssot:
         Only ADMIN_OPERATION_NOT_FOUND on a screen-read axes combination is eligible for this
         fallback. Any other admin_runtime error (including ADMIN_OPERATION_NOT_FOUND on a
         non-screen-read axes combination) is returned unchanged as a real failure.
+    default_screen_read_override:
+      added: 2026-08-17
+      owner: manifest_dispatcher
+      trigger: >-
+        The admin_runtime_structural_read_fallback above is about to fire (ADMIN_OPERATION_NOT_FOUND
+        on a screen-read axes combination for an admin_runtime manifest with a declared ui_projection
+        entry) and the manifest's own topology declares a dispatcher_mapping entry with
+        "default_screen_read": true.
+      rule: >-
+        Instead of synthesizing an empty-Data success Emission, ManifestDispatcher re-dispatches to the
+        SAME admin_runtime destination using the declared entry's own (layer, action) in place of the
+        request's screen-read axes, and returns THAT dispatch's real result (Data included) as the
+        response. The declared (layer, action)'s own capability_requirement (scoped or unscoped/inferred
+        — see auth-db-session-credential-ssot.yaml manifest_capability_requirement) is independently
+        re-validated against request.Role before the re-dispatch — reaching this fallback via the
+        request's OWN screen-read axes never implicitly authorizes the declared action; each must clear
+        its own gate. This closes the gap where a manifest's propBindings source real content from
+        emission.data.* (e.g. a single-row live viewer) but the manifest declares no screen_data_shape
+        entry (screen_data_shape/ScreenDataShapeQueryRuntime is a topology_transform_runtime-only
+        mechanism — admin_runtime manifests never reach it) and has no user-interactive trigger (search/
+        filter/select) that would otherwise populate it — the initial render would stay permanently
+        empty without this override.
+      opt_in: >-
+        Author-declared per manifest (db/seed_empty.sql), never inferred from action name or manifest
+        shape — mirrors identity_selector_read's own idiom
+        (admin-uibuilder-ui-structure-wiring-ssot.yaml). A manifest that declares no
+        default_screen_read=true entry keeps today's synthesized-empty-Data fallback exactly
+        (backward compatible) — e.g. admin.enum.management.projection (ae200) declares none and is
+        unaffected; its own initial render stays structural-only, matching its already-accepted
+        search/filter-driven UX.
+      first_adopter: >-
+        team_dashboard.admin.projection (dd010) and team_dashboard.normal.projection (dd020) — both
+        declare default_screen_read=true on their team_dashboard:get dispatcher_mapping entry, so
+        their md_viewer.projection node's emission.data.bodyMarkdown propBinding resolves to the real
+        topology.team_dashboard_note row content on initial mount, not merely after a user-triggered
+        dispatch.
+      resolution_owner: >-
+        backend/repository/ManifestRepository.cs DispatcherMappingAxisAuthority.
+        FindDeclaredDefaultScreenRead / backend/runtime/ManifestDispatcher.cs DispatchAsync
     test_proof_contract:
       note: >-
         Minimal design addendum defining what a completion proof for this reachability contract
@@ -582,6 +646,68 @@ runtime_orchestration_ssot:
           - draft_or_deprecated_manifest_named_by_the_marked_relation_resolves_to_no_manifest
           - two_active_rows_carrying_the_marker_resolves_to_canonical_default_entry_ambiguous
           - no_row_carrying_the_marker_resolves_to_manifest_not_found
+
+    manifest_key_target_ref_resolution_contract:
+      note: >-
+        Generic route/projection-entry identity resolution (2026-08-17, cross-cutting closure
+        round): lets a frontend entry point identify its target manifest by
+        hubs.topology_manifests.manifest_key -- the same stable, already-existing,
+        human-readable identity string every manifest in the system already carries -- instead of
+        a raw manifest_id UUID constant embedded in route source. Distinct from
+        canonical_default_entry_contract above (which resolves the SINGLE, explicitly-marked
+        site-root fallback for the bare/no-selection axes combination): this contract is a
+        general-purpose, unlimited-cardinality resolver any route/entry point may invoke by
+        naming its own manifest_key, not scoped to one singleton relation marker.
+      target_ref_shape: >-
+        payload.target_ref = "manifest_key:<manifest_key>:<wiring_key>" -- a sibling grammar to
+        the pre-existing "manifest:<uuid>:<wiring_key>" shape (ManifestDispatcher.cs
+        TryParseManifestTargetRef), recognized alongside it in the SAME target_ref dispatch
+        branch. Resolution to a manifest_id happens FIRST (this contract's own scope); every
+        downstream step (LoadByIdAsync, active-status check, admin_runtime layer/action
+        authorization, capability_requirement validation) is the IDENTICAL, unmodified pipeline
+        the UUID-based shape already uses -- this contract only ever changes HOW a manifest_id is
+        arrived at, never what happens once one is resolved.
+      owner: hubs.topology_manifests.manifest_key
+      resolution_rule: >-
+        Exactly one ACTIVE hubs.topology_manifests row may carry a given manifest_key at a time
+        (the same no_implicit_join_nullable_fallback_or_oldest_manifest_fallback discipline
+        db-schema.yaml already requires for hub_relations target resolution, applied here to
+        manifest_key lookup instead -- ContentBundleRepository.
+        ResolveActiveManifestIdByManifestKeyAsync, "SELECT ... WHERE status='active' AND
+        manifest_key=@key LIMIT 2"). manifest_key itself carries no UNIQUE DB constraint (deferred
+        deprecated/draft rows may freely reuse a key), so this resolver filters on status='active'
+        rather than relying on a schema-level guarantee.
+      failure_semantics:
+        missing: >-
+          Zero active rows share the manifest_key -> MANIFEST_NOT_FOUND, identical in shape to the
+          pre-existing UUID-not-found error -- never a guessed manifest.
+        ambiguous: >-
+          More than one active row shares the manifest_key -> MANIFEST_KEY_AMBIGUOUS, an explicit
+          configuration-error response -- never a silent first-match/oldest/MIN pick.
+        malformed: >-
+          Empty manifest_key segment ("manifest_key::wiring_key") -> TARGET_REF_INVALID, the same
+          code the UUID shape already returns for its own malformed cases.
+      prohibited:
+        - first_match_oldest_or_min_fallback_when_multiple_active_rows_share_a_key
+        - inventing_a_new_per_route_identity_vocabulary_distinct_from_manifest_key
+        - a_dedicated_per_route_or_per_surface_resolver_bypassing_this_shared_generic_method
+        - treating_manifest_key_resolution_as_a_separate_authorization_surface_from_the_uuid_path
+      test_proof_contract:
+        note: >-
+          A completion proof for this contract must dispatch a REAL manifest_key-shaped
+          target_ref through ManifestDispatcher.DispatchAsync against canonical (non-demo) seed
+          data and observe Emission.ManifestId resolving to the SAME manifest the equivalent
+          UUID-shaped target_ref would reach -- not merely that the resolver method returns the
+          expected UUID in isolation.
+        negative_cases:
+          - manifest_key_with_zero_active_rows_resolves_to_manifest_not_found
+          - manifest_key_shared_by_two_active_rows_resolves_to_manifest_key_ambiguous
+          - empty_manifest_key_segment_resolves_to_target_ref_invalid
+        production_consumers: >-
+          frontend/routes/dashboard/index.tsx (team_dashboard.normal.projection) and
+          frontend/routes/admin/team-dashboard/index.tsx (team_dashboard.admin.projection) --
+          ProjectionShell manifestKey prop, replacing the prior hardcoded manifestId UUID
+          constant on both routes.
 
     layout_schema_structural_render_contract:
       note: >-

@@ -911,10 +911,12 @@ def main():
         # 36z6a-36z6b: parent_scoped_identity_reconstruction (docs/design/
         # runtime-orchestration-ssot.yaml ui_projection_render_reachability_contract.
         # layout_schema_structural_render_contract) -- split_flat_records_into_adoption_candidates
-        # must scope tensorAdoptionCandidates node identity by the owning Form's disambiguated
-        # (parentKey-namespaced when duplicated) key, never the raw Form key alone, so two
-        # different Form instances that happen to share an authored key never merge their
-        # actions' runtimeInteractions into the same tensor node.
+        # keys each Action/Step's own tensorAdoptionCandidates node by ITS OWN disambiguated
+        # (parentKey-namespaced when duplicated) resolved identity (UIBuilder-lineage closure
+        # round: never an owning-Form-keyed redirect -- see that branch's own doc comment in
+        # react_schema_topology_seed_translator.py for why a real live-DB layout_patch:validate
+        # round trip ruled that shape out), so two different Form instances that happen to share
+        # an authored key never merge their actions' runtimeInteractions into the same tensor node.
         duplicate_form_key_flat_records = [
             {"type": "topology_ui_seed_record", "seedKey": "seed", "parentKey": "cat_a", "record": {
                 "recordType": "topology_ui_form", "key": "shared_form", "label": "Form A",
@@ -946,14 +948,15 @@ def main():
             duplicate_form_key_adoption["tensorAdoptionCandidates"][0], "layoutPatchJson", "nodes",
         ) or []
         expect(
-            "36z6a. two Form instances sharing an authored key produce TWO separate tensorAdoptionCandidates nodes, not one merged node",
+            "36z6a. two Form instances sharing an authored key produce TWO separate leaf-keyed tensorAdoptionCandidates nodes (one per Action, at its OWN resolved identity), not one merged node",
             len(duplicate_form_key_tensor_nodes) == 2,
         )
-        node_a = next((n for n in duplicate_form_key_tensor_nodes if n["nodeId"] == "cat_a::shared_form"), None)
-        node_b = next((n for n in duplicate_form_key_tensor_nodes if n["nodeId"] == "cat_b::shared_form"), None)
+        node_a = next((n for n in duplicate_form_key_tensor_nodes if n["nodeId"] == "act_a"), None)
+        node_b = next((n for n in duplicate_form_key_tensor_nodes if n["nodeId"] == "act_b"), None)
         expect(
-            "36z6b. each duplicate Form's tensor node carries ONLY its own action's runtimeInteractions (no cross-contamination)",
+            "36z6b. each Action's own tensor node carries ONLY its own runtimeInteractions (no cross-contamination) and a resolved componentKey (button.primitive)",
             node_a is not None and node_b is not None
+            and node_a["componentKey"] == "button.primitive" and node_b["componentKey"] == "button.primitive"
             and len(node_a["runtimeInteractions"]) == 1 and node_a["runtimeInteractions"][0]["sourceActionKey"] == "act_a"
             and len(node_b["runtimeInteractions"]) == 1 and node_b["runtimeInteractions"][0]["sourceActionKey"] == "act_b",
         )
@@ -995,13 +998,13 @@ def main():
             duplicate_parent_and_child_adoption["tensorAdoptionCandidates"][0], "layoutPatchJson", "nodes",
         ) or []
         expect(
-            "36z6c. duplicate parent (Form) key AND duplicate child (Action) key simultaneously still produce TWO separate tensorAdoptionCandidates nodes, not one merged node",
+            "36z6c. duplicate parent (Form) key AND duplicate child (Action) key simultaneously still produce TWO separate leaf-keyed tensorAdoptionCandidates nodes, not one merged node",
             len(duplicate_parent_and_child_tensor_nodes) == 2,
         )
-        combined_node_a = next((n for n in duplicate_parent_and_child_tensor_nodes if n["nodeId"] == "cat_a::shared_form"), None)
-        combined_node_b = next((n for n in duplicate_parent_and_child_tensor_nodes if n["nodeId"] == "cat_b::shared_form"), None)
+        combined_node_a = next((n for n in duplicate_parent_and_child_tensor_nodes if n["nodeId"] == "cat_a::shared_form::shared_action"), None)
+        combined_node_b = next((n for n in duplicate_parent_and_child_tensor_nodes if n["nodeId"] == "cat_b::shared_form::shared_action"), None)
         expect(
-            "36z6d. each duplicate Form's tensor node carries ONLY its own duplicate-keyed action's runtimeInteractions (no cross-contamination) even when the action key is also duplicated",
+            "36z6d. each duplicate-keyed Action's OWN tensor node is namespaced by ITS OWN resolved Form parent (never colliding with the other instance) and carries only its own runtimeInteractions, even when the action key is also duplicated",
             combined_node_a is not None and combined_node_b is not None
             and len(combined_node_a["runtimeInteractions"]) == 1 and combined_node_a["runtimeInteractions"][0]["instanceTargetRef"] == "A"
             and len(combined_node_b["runtimeInteractions"]) == 1 and combined_node_b["runtimeInteractions"][0]["instanceTargetRef"] == "B",

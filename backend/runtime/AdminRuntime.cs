@@ -35,6 +35,7 @@ public partial class AdminRuntime
     private readonly AbstractFunctionExecutor? _abstractFunctionExecutor;
     private readonly MockPresetRepository? _mockPresetRepository;
     private readonly TeamMarkdownRepository? _teamMarkdownRepository;
+    private readonly TeamDashboardRepository? _teamDashboardRepository;
     private readonly IBackendErrorEvidenceAppender? _errorAppender;
     private readonly AggregateTriggerRepository? _aggregateTriggerRepository;
     private readonly IAbstractFunctionManifestRepository? _abstractFunctionManifestRepository;
@@ -80,6 +81,7 @@ public partial class AdminRuntime
         AbstractFunctionExecutor? abstractFunctionExecutor = null,
         MockPresetRepository? mockPresetRepository = null,
         TeamMarkdownRepository? teamMarkdownRepository = null,
+        TeamDashboardRepository? teamDashboardRepository = null,
         ISchedulerJobManifestRepository? schedulerJobManifestRepository = null,
         IBackendErrorEvidenceAppender? errorAppender = null,
         AggregateTriggerRepository? aggregateTriggerRepository = null,
@@ -107,6 +109,7 @@ public partial class AdminRuntime
         _abstractFunctionExecutor = abstractFunctionExecutor;
         _mockPresetRepository = mockPresetRepository;
         _teamMarkdownRepository = teamMarkdownRepository;
+        _teamDashboardRepository = teamDashboardRepository;
         _schedulerJobManifestRepository = schedulerJobManifestRepository;
         _errorAppender = errorAppender;
         _aggregateTriggerRepository = aggregateTriggerRepository;
@@ -376,6 +379,8 @@ public partial class AdminRuntime
             "scheduler_jobs:disable"                    => await DataDisableSchedulerJobAsync(vector, ct),
             var a when a.StartsWith("team_markdown:", StringComparison.OrdinalIgnoreCase)
                                                         => await ExecuteTeamMarkdownAsync(vector with { Action = a["team_markdown:".Length..] }, ct),
+            var a when a.StartsWith("team_dashboard:", StringComparison.OrdinalIgnoreCase)
+                                                        => await ExecuteTeamDashboardAsync(vector with { Action = a["team_dashboard:".Length..] }, ct),
             _ => (null, new ValidationError("ADMIN_OPERATION_NOT_FOUND",
                 $"Unknown admin operation: {layerAction}"))
         };

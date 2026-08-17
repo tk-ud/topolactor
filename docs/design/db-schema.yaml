@@ -1218,6 +1218,31 @@ db_schema:
             - topology.team_markdown_template_registry
             - topology.team_markdown_saved_view
             - topology.team_markdown_saved_view_event
+        team_dashboard_note:
+          status: bootstrap_included
+          reference: docs/design/admin-normal-surface-projection-seed-ssot.yaml
+          bootstrap_ddl: db/team_dashboard_tables.sql
+          parent_surface: admin-surface-topology-seed-conversion Bundle
+          child_surface: team_dashboard subBundle (admin edit / normal read-only shared note)
+          note: >-
+            DDL in db/team_dashboard_tables.sql; included in db/init.sql bootstrap (after
+            team_markdown_tables.sql). NpgsqlTeamDashboardRepository, AdminRuntime.TeamDashboard.cs
+            (team_dashboard:get / team_dashboard:update), and frontend md_viewer.projection /
+            textarea.template nodes available. Deliberately a lightweight, single-row physical
+            table — distinct from topology.team_markdown_saved_view (the separate, heavier Team
+            Markdown Dashboard Saved View feature with templates/versioned preset-seed lineage);
+            team_dashboard_note is a plain Markdown-shaped text column read/written through the
+            SAME generic topology.physical_tables / topology.physical_table_manifest_bindings
+            registration every other physical table in this schema uses. team_dashboard:update's
+            write authority is topology.team_dashboard_note itself (NpgsqlTeamDashboardRepository.
+            UpdateNoteAsync), gated behind the mutation_confirmation_contract idiom
+            (dryRun-preview -> explicit-confirm -> write) and audited through the generic
+            AdminMasterRosterAudit.AppendAsync -> logs.diff helper (source_set_id=
+            'admin_master_roster'), the same cross-domain diff-log pipeline enum_dictionary/
+            credential_management/external_api_credential/external_instance_credential/auth_users
+            already share — not a team-dashboard-specific diff writer.
+          topology_tables:
+            - topology.team_dashboard_note
     logs:
       role: SQL Attention signal, current, hub current, and attention evidence
       canonical_tables:
@@ -1310,6 +1335,21 @@ db_schema:
           - topology.team_markdown_template_registry
           - topology.team_markdown_saved_view
           - topology.team_markdown_saved_view_event
+      bootstrap_ddl_team_dashboard:
+        status: bootstrap_included
+        reference: docs/design/admin-normal-surface-projection-seed-ssot.yaml
+        bootstrap_ddl: db/team_dashboard_tables.sql
+        bootstrap_path: db/init.sql (includes team_dashboard_tables.sql after team_markdown_tables.sql)
+        ci_path: .github/workflows/backend-tests.yml "Apply DB schema" step
+        note: >-
+          Canonical DDL in db/team_dashboard_tables.sql; included in db/init.sql bootstrap and CI
+          backend-tests.yml schema setup. Single-row shared Markdown/text note, canonical data
+          authority for both team_dashboard.admin.projection (dd010, edit) and
+          team_dashboard.normal.projection (dd020, read-only) — both dispatch the SAME
+          team_dashboard:get action against this one physical table, never a duplicated data
+          identity. NpgsqlTeamDashboardRepository wired in Program.cs.
+        tables:
+          - topology.team_dashboard_note
     logs:
       role: sql_attention_parent_observation_plane_statistics_current_attention_evidence
       tables:

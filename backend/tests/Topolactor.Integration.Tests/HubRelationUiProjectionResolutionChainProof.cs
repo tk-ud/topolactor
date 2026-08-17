@@ -80,7 +80,12 @@ internal static class HubRelationUiProjectionResolutionChainProof
             // with EXTERNAL_INSTANCE_CREDENTIAL_NOT_AVAILABLE regardless of manifest/wiring
             // resolution -- same rationale as externalApiCredentialAdminRepository above.
             externalInstanceCredentialAdminRepository: new NpgsqlExternalInstanceCredentialAdminRepository(
-                connectionString));
+                connectionString),
+            // team_dashboard:get/update (team-dashboard subBundle) needs this wired, or those
+            // cases in AdminRuntime.ExecuteDataAsync fail closed with TEAM_DASHBOARD_NOT_CONFIGURED
+            // regardless of manifest/wiring resolution -- same rationale as the repositories above.
+            teamDashboardRepository: new NpgsqlTeamDashboardRepository(
+                NullLogger<NpgsqlTeamDashboardRepository>.Instance, connectionString));
         var adminAdapter = new AdminRuntimeDispatchAdapter(adminRuntime, new OperationVectorResolver());
 
         var targetOverride = new TargetDispatchOverride(NullLogger<TargetDispatchOverride>.Instance, adminRuntime);

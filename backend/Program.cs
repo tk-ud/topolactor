@@ -89,6 +89,10 @@ builder.Services.AddSingleton<TeamMarkdownRepository>(sp =>
     new NpgsqlTeamMarkdownRepository(
         sp.GetRequiredService<ILogger<NpgsqlTeamMarkdownRepository>>(),
         connectionString));
+builder.Services.AddSingleton<TeamDashboardRepository>(sp =>
+    new NpgsqlTeamDashboardRepository(
+        sp.GetRequiredService<ILogger<NpgsqlTeamDashboardRepository>>(),
+        connectionString));
 builder.Services.AddSingleton<IExternalPortPolicyRepository>(sp =>
     new NpgsqlExternalPortPolicyRepository(
         sp.GetRequiredService<ILogger<NpgsqlExternalPortPolicyRepository>>(),
@@ -282,6 +286,7 @@ builder.Services.AddSingleton<AdminRuntime>(sp =>
         sp.GetRequiredService<AbstractFunctionExecutor>(),
         sp.GetRequiredService<MockPresetRepository>(),
         sp.GetRequiredService<TeamMarkdownRepository>(),
+        sp.GetRequiredService<TeamDashboardRepository>(),
         sp.GetRequiredService<ISchedulerJobManifestRepository>(),
         sp.GetRequiredService<IBackendErrorEvidenceAppender>(),
         sp.GetRequiredService<AggregateTriggerRepository>(),
@@ -975,6 +980,7 @@ app.MapGet("/team-markdown/saved-views/{savedViewId:guid}", async (
         return Results.Json(new { success = false, errors = new[] { new ValidationError("SAVED_VIEW_NOT_FOUND", $"Saved view {savedViewId} not found") } }, statusCode: 404);
     return Results.Json(new { success = true, savedView = detail });
 });
+
 
 // GET /hub-navigation/relations — read-only navigation link-list fallback for authenticated
 // surfaces with no business projection of their own (e.g. Normal Dashboard Home). Any authenticated

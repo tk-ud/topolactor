@@ -227,6 +227,43 @@ public static class DispatcherMappingAxisAuthority
     }
 
     /// <summary>
+    /// [design_change 2026-08-17] Finds the FIRST dispatcher_mapping entry that declares itself,
+    /// via its OWN "default_screen_read": true field, as the real action ManifestDispatcher should
+    /// invoke — in place of synthesizing an empty-Data success — when this manifest's bare structural
+    /// screen-read (projection_entry / screen_list:Search) reaches the ADMIN_OPERATION_NOT_FOUND
+    /// admin_runtime_structural_read_fallback (see docs/design/runtime-orchestration-ssot.yaml
+    /// ui_projection_render_reachability_contract.default_screen_read_override). SSOT-owned per-entry
+    /// classification, author-declared (db/seed_empty.sql), never inferred from the action's name —
+    /// mirrors IsDeclaredIdentitySelectorRead's own idiom. Returns null when no dispatcher_mapping
+    /// entry declares this field true, or the declaring entry is missing a non-empty layer/action.
+    /// </summary>
+    public static (string Layer, string Action)? FindDeclaredDefaultScreenRead(
+        IReadOnlyList<JsonElement> topology)
+    {
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind != JsonValueKind.Object) continue;
+            if (!entry.TryGetProperty("type", out var typeEl) ||
+                !string.Equals(typeEl.GetString(), "dispatcher_mapping", StringComparison.Ordinal))
+                continue;
+            if (!entry.TryGetProperty("default_screen_read", out var flagEl) ||
+                flagEl.ValueKind != JsonValueKind.True)
+                continue;
+
+            var layer = entry.TryGetProperty("layer", out var layerEl) && layerEl.ValueKind == JsonValueKind.String
+                ? layerEl.GetString()
+                : null;
+            var action = entry.TryGetProperty("action", out var actionEl) && actionEl.ValueKind == JsonValueKind.String
+                ? actionEl.GetString()
+                : null;
+            if (string.IsNullOrWhiteSpace(layer) || string.IsNullOrWhiteSpace(action)) continue;
+
+            return (layer!, action!);
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Round 18: true when the topology declares AT LEAST ONE dispatcher_mapping entry, regardless
     /// of its axis values. Distinguishes an authored, operation-scoped manifest (e.g. ae210,
     /// scoped to create_group) — which always has one — from a deliberately bare
