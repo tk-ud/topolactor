@@ -42,22 +42,33 @@ public class TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests
     private static string? GetConnectionString() => AggregateTriggerRepositoryLiveDbTests.GetConnectionString();
 
     // Verbatim copy of db/seed_empty.sql's dd015 (admin) tensor layout_patch_json -- the exact
-    // production content, not a re-derived approximation.
+    // production content, not a re-derived approximation. UIBuilder-lineage closure round (third
+    // pass): this content is now itself the CLEAN react_schema_topology_seed_translator.py
+    // generation output (team-dashboard-admin.topology-seed.input.json), with zero
+    // post-generation patches. componentId is deliberately absent (resolved generically at read
+    // time by NpgsqlTopologyRepository.EnrichCatalogComponentIdsFromRegistryAsync from
+    // componentKey against topology.ui_component_registry). Each Action/Modal's own
+    // runtimeInteractions live on ITS OWN node -- never an owning-Section/Form redirect, which a
+    // real live-DB layout_patch:validate round trip proved both invalid
+    // (LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED -- a Section is never a registry-backed
+    // catalog leaf) and unnecessary (frontend/runtime never reads sourceActionKey; a rendered
+    // component's eventBinding is built strictly from that SAME node's own runtimeInteractions).
     private const string AdminTensorPatchJson = """
         {"nodes":[
-          {"nodeId":"team_dashboard_admin_viewer","nodeKind":"catalog_component","componentKey":"md_viewer.projection","componentId":"00000000-0000-0000-0001-000000000021","orderIndex":0,"propsJson":"{\"title\":\"Team Dashboard\"}","propBindings":{"markdown":{"source":"emission.data.bodyMarkdown"}}},
-          {"nodeId":"team_dashboard_admin_body","nodeKind":"catalog_component","componentKey":"textarea.template","componentId":"00000000-0000-0000-0001-00000000001f","orderIndex":1,"propsJson":"{\"label\":\"Markdown body\"}","propBindings":{"value":{"source":"emission.data.bodyMarkdown"}}},
-          {"nodeId":"team_dashboard_admin_save_button","nodeKind":"catalog_component","componentKey":"button.primitive","componentId":"00000000-0000-0000-0001-000000000010","orderIndex":2,"propsJson":"{\"label\":\"Save\"}","wiringKind":"admin_runtime","targetSurface":"manifest","dispatchTargetRefByTrigger":{"click":"manifest:00000000-0000-0000-0000-0000000dd010:team_dashboard:update"},"dispatchPayloadFromByTrigger":{"click":{"bodyMarkdown":"node:team_dashboard_admin_body.value","dryRun":"literal:true"}},"runtimeInteractions":[{"trigger":"click","actionType":"openModal","targetNodeId":"team_dashboard_admin_save_confirm_modal","statePath":"open","sourceActionKey":"team_dashboard_admin_save_button"}]},
-          {"nodeId":"team_dashboard_admin_save_confirm_modal","nodeKind":"catalog_component","componentKey":"modal.template","componentKind":"disclosure/modal","componentId":"00000000-0000-0000-0001-000000000015","orderIndex":3,"propsJson":"{\"data\": {\"open\": false, \"title\": \"Save team dashboard\", \"body\": \"Save the edited Markdown as the team dashboard's shared content.\"}}","runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"team_dashboard_admin_save_confirm_modal","statePath":"open","sourceActionKey":"team_dashboard_admin_save_confirm_button"},{"trigger":"click","actionType":"closeModal","targetNodeId":"team_dashboard_admin_save_confirm_modal","statePath":"open","sourceActionKey":"team_dashboard_admin_save_cancel_button"}]},
-          {"nodeId":"team_dashboard_admin_save_confirm_button","nodeKind":"catalog_component","componentKey":"button.primitive","componentId":"00000000-0000-0000-0001-000000000010","orderIndex":4,"propsJson":"{\"label\":\"Save\"}","wiringKind":"admin_runtime","targetSurface":"manifest","dispatchTargetRefByTrigger":{"click":"manifest:00000000-0000-0000-0000-0000000dd010:team_dashboard:update"},"dispatchPayloadFromByTrigger":{"click":{"bodyMarkdown":"node:team_dashboard_admin_body.value","confirmed":"literal:true"}}},
-          {"nodeId":"team_dashboard_admin_save_cancel_button","nodeKind":"catalog_component","componentKey":"button.primitive","componentId":"00000000-0000-0000-0001-000000000010","orderIndex":5,"propsJson":"{\"label\":\"Cancel\"}"}
+          {"nodeId":"team_dashboard_admin_viewer","nodeKind":"catalog_component","runtimeInteractions":[],"componentKey":"md_viewer.projection","propsJson":"{\"label\": \"Rendered preview\"}","propBindings":{"markdown":{"source":"emission.data.bodyMarkdown"}}},
+          {"nodeId":"team_dashboard_admin_body","nodeKind":"catalog_component","runtimeInteractions":[],"componentKey":"textarea.template","propsJson":"{\"label\": \"Markdown body\"}","propBindings":{"value":{"source":"emission.data.bodyMarkdown"}}},
+          {"nodeId":"team_dashboard_admin_save_button","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"openModal","targetNodeId":"team_dashboard_admin_save_confirm_modal","statePath":"open","sourceActionKey":"team_dashboard_admin_save_button"}],"componentKey":"button.primitive","dispatchTargetRefByTrigger":{"click":"manifest:00000000-0000-0000-0000-0000000dd010:team_dashboard:update"},"dispatchPayloadFromByTrigger":{"click":{"bodyMarkdown":"node:team_dashboard_admin_body.value","dryRun":"literal:true"}},"propsJson":"{\"label\": \"Save\"}"},
+          {"nodeId":"team_dashboard_admin_save_confirm_modal","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"toggle","actionType":"closeModal","targetNodeId":"team_dashboard_admin_save_confirm_modal","statePath":"open","sourceActionKey":"team_dashboard_admin_save_confirm_modal"}],"componentKey":"modal.template","componentKind":"disclosure/modal","propsJson":"{\"data\": {\"open\": false, \"title\": \"Save team dashboard\", \"body\": \"Save the edited Markdown as the team dashboard's shared content.\"}}"},
+          {"nodeId":"team_dashboard_admin_save_confirm_button","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"team_dashboard_admin_save_confirm_modal","statePath":"open","sourceActionKey":"team_dashboard_admin_save_confirm_button"}],"componentKey":"button.primitive","dispatchTargetRefByTrigger":{"click":"manifest:00000000-0000-0000-0000-0000000dd010:team_dashboard:update"},"dispatchPayloadFromByTrigger":{"click":{"bodyMarkdown":"node:team_dashboard_admin_body.value","confirmed":"literal:true"}},"propsJson":"{\"label\": \"Save\"}"},
+          {"nodeId":"team_dashboard_admin_save_cancel_button","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"team_dashboard_admin_save_confirm_modal","statePath":"open","sourceActionKey":"team_dashboard_admin_save_cancel_button"}],"componentKey":"button.primitive","propsJson":"{\"label\": \"Cancel\"}"}
         ]}
         """;
 
-    // Verbatim copy of db/seed_empty.sql's dd025 (normal) tensor layout_patch_json.
+    // Verbatim copy of db/seed_empty.sql's dd025 (normal) tensor layout_patch_json -- same
+    // UIBuilder-lineage closure round, same clean-generation provenance.
     private const string NormalTensorPatchJson = """
         {"nodes":[
-          {"nodeId":"team_dashboard_normal_viewer","nodeKind":"catalog_component","componentKey":"md_viewer.projection","componentId":"00000000-0000-0000-0001-000000000021","orderIndex":0,"propsJson":"{\"title\":\"Team Dashboard\"}","propBindings":{"markdown":{"source":"emission.data.bodyMarkdown"}}}
+          {"nodeId":"team_dashboard_normal_viewer","nodeKind":"catalog_component","runtimeInteractions":[],"componentKey":"md_viewer.projection","propsJson":"{\"label\": \"Rendered preview\"}","propBindings":{"markdown":{"source":"emission.data.bodyMarkdown"}}}
         ]}
         """;
 

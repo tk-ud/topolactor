@@ -757,26 +757,23 @@ admin_normal_surface_projection_seed_ssot:
             bare-markdown mode) — not a new Markdown component, not a new editor, not a new runtime
             lane. The preset itself stays an unapplied UIBuilder draft (activeTopologyWrite: false,
             unchanged — the preset row is a reusable authoring template, not itself a runtime
-            screen). UPDATED (2026-08-17, UIBuilder-lineage closure round): this surface's own
+            screen). UPDATED (2026-08-17, UIBuilder-lineage closure round 3): this surface's own
             package/layout/wiring/tensor rows are no longer hand-authored active content -- they are
             generated through the REAL react_schema_topology_seed_translator.py two-stage intake
             (generate-react-schema -> generate-topology-seed), the same preview/validate/apply
             boundary manifest 092 / ae200's own declared_seed_surface_catalog entries use, from
             .agent/tests/fixtures/react-schema-topology-seed-translator/team-dashboard-admin.
             input.json (stage 1) and team-dashboard-admin.topology-seed.input.json (stage 2), gated
-            "pass" with zero validationErrors — declared as team_dashboard.admin.projection in
-            react-schema-topology-seed-translator-ssot.yaml declared_seed_surface_catalog.
-            known_declared_surfaces, with its own tracked known_gaps
-            (team_dashboard_emission_data_prop_binding_not_yet_translator_expressible and
-            team_dashboard_tensor_componentkey_not_emitted_by_translator) for the two narrow,
-            explicitly-scoped points the translator's current grammar does not yet emit
-            (emission.data.* propBindings, and componentKey/componentId on action/modal leaves —
-            the same category of omission ae200/092's own real production tensors independently
-            exhibit for non-propBindings-carrying leaves) — resolved via a documented
-            post-generation patch onto the translator's own output, not by hand-writing the tensor
-            from scratch. db/seed_empty.sql's dd015 tensor row IS that (translator-output +
-            documented-patch) content, not an independent hand-authored artifact merely referencing
-            this preset's composition.
+            "pass" with zero validationErrors and zero knownGapRefs — declared as
+            team_dashboard.admin.projection in react-schema-topology-seed-translator-ssot.yaml
+            declared_seed_surface_catalog.known_declared_surfaces, whose own known_gaps is now []
+            (see that entry's historical_known_gaps_closed_2026_08_17_uibuilder_lineage_closure_
+            round_3 for the full closure record). db/seed_empty.sql's dd015 tensor row IS the
+            clean generator output verbatim — zero post-generation patches, zero hand-authored
+            tensor content — proven end to end through the real live-DB layout_patch:preview ->
+            layout_patch:validate -> layout_patch:apply pipeline
+            (backend/tests/Topolactor.Integration.Tests/
+            TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs).
           capability_requirements:
             read: required
             mutation: [update_body_markdown]

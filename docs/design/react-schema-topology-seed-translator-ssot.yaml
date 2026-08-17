@@ -2217,7 +2217,14 @@ react_schema_topology_seed_translator_ssot:
           (generate-react-schema) -> team-dashboard-admin.topology-seed.input.json
           (generate-topology-seed, inputText is the FIRST stage's own reactSchemaCandidate output
           verbatim) -- both runs report gateStatus=pass with zero validationErrors, mirroring
-          admin.enum.management.projection's own two-fixture generation evidence shape.
+          admin.enum.management.projection's own two-fixture generation evidence shape. UPDATED
+          (2026-08-17, UIBuilder-lineage closure round 3): both fixtures now regenerate CLEAN --
+          zero post-generation patches, zero hand-authored tensor content, zero knownGapRefs --
+          and the resulting adoptionCandidates.tensorAdoptionCandidates content IS db/seed_empty.sql's
+          dd015 tensor row verbatim (not a re-derived approximation), proven end to end through the
+          REAL live-DB layout_patch:preview -> layout_patch:validate -> layout_patch:apply pipeline
+          (backend/tests/Topolactor.Integration.Tests/
+          TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs).
         component_catalog_refs:
           catalog_ref: ui_catalog_boundary_contract.frontend_component_catalog
           componentKinds:
@@ -2238,50 +2245,92 @@ react_schema_topology_seed_translator_ssot:
           - lane: disclosure_state_wiring
             catalog_ref: wiring_lane_contract.lanes.disclosure_state_wiring
             targetRefs: ["ui-local:team_dashboard_admin_save_confirm_modal.open"]
-        known_gaps:
+        known_gaps: []
+        historical_known_gaps_closed_2026_08_17_uibuilder_lineage_closure_round_3:
           - gap: team_dashboard_emission_data_prop_binding_not_yet_translator_expressible
             classification: translator_grammar_gap
-            status: resolved_via_post_generation_prop_binding_patch
+            status: resolved_generically_in_translator
             note: >-
-              The Field grammar's valueFrom attribute (FIELD_VALUE_FROM_NODE_REF_RE) only accepts
-              "node:<id>.value..." sibling-node references, the same shape Table's rowsSource/
-              Field's optionsSource accept for "emission.data.<path>" but scoped to a DIFFERENT
-              prop name (rows/options, not markdown/value) -- there is no Field-level attribute to
-              bind an arbitrary prop (markdown, value) from the dispatched Emission's own data. This
-              is a real, tracked translator grammar gap, not an authoring mistake -- team_dashboard_
-              admin_viewer's markdown prop and team_dashboard_admin_body's value prop are both bound
-              to emission.data.bodyMarkdown by a post-generation patch applied to the translator's
-              own topologyUiSeedFlatRecords output before it is pasted into db/seed_empty.sql, the
-              SAME "generic placeholder, author resolves the real binding before finalizing" idiom
-              docs/design/ui-builder-preset-ecosystem-ssot.yaml physical_details_inline_editor_md_
-              generator_preset.known_gaps.markdown_body_field_binding_generic_placeholder already
-              established for this exact md_viewer.projection/textarea.template composition.
+              CLOSED as a generic grammar capability, not a team-dashboard-specific rule.
+              validate_field_value_from_source (react_schema_topology_seed_translator.py) now
+              accepts EITHER of two shapes for a Field's valueFrom: the pre-existing
+              "node:<id>.value(.<path>)*" sibling-node reference, OR the SAME ROWS_SOURCE_SHAPE_RE
+              "emission.data(.<path>)*" shape Table's rowsSource and Field's optionsSource already
+              accepted -- one owning regex reused, not a third invented one. Which propBindings key
+              the resolved source targets ("value" by default, "markdown" for
+              data_display/md_viewer) is resolved generically from the Field's own `control` via
+              FIELD_CONTROL_TO_VALUE_PROP_NAME, mirroring frontend/runtime/propBindingResolver.ts's
+              own COMPONENT_ARRAY_PROP_CAPABILITIES table verbatim (the same authority the runtime
+              itself validates against) -- never a field-key-specific or componentKind-hardcoded
+              special case. team_dashboard_admin_viewer/team_dashboard_admin_body author
+              valueFrom="emission.data.bodyMarkdown" directly in their DSL fixture and the clean
+              generation run produces their propBindings with zero post-generation edits.
           - gap: team_dashboard_tensor_componentkey_not_emitted_by_translator
             classification: translator_scope_boundary
-            status: resolved_via_post_generation_component_identity_patch
+            status: resolved_generically_in_translator
             note: >-
-              adoptionCandidates.tensorAdoptionCandidates never carries componentKey/componentId on
-              any node (confirmed against the real generation run) -- matching the SAME real,
-              production admin.enum.management.projection tensor (ae206)'s own shape for its action/
-              modal nodes, which likewise carry no componentKey/componentId (they have no
-              propBindings, so LayoutNodeComponentIdEnrichment's componentKind resolution is never
-              consulted for them). team_dashboard_admin_viewer/team_dashboard_admin_body DO need an
-              explicit componentId (they carry propBindings, and componentId->registry lookup is
-              what LoadComponentKindsByIdsAsync resolves componentKind from -- see PR #604 round 2's
-              own "componentId not resolving for md_viewer.projection/textarea.template" finding).
-              The post-generation patch adds componentKey/componentId to every node uniformly (not
-              only the two that strictly require it) as the same conservative, already-proven-correct
-              shape PR #604 round 2 originally authored by hand and verified end to end against a
-              real database -- this round's job was sourcing the STRUCTURE/wiring/interactions from a
-              real translator run, not re-deriving the componentId identity mapping from scratch.
-              UPDATED (2026-08-17, UIBuilder-lineage closure round 2): the patched node set (including
-              the confirm_modal node's explicit componentKind, a real gap the live pipeline itself
-              surfaced -- layout_patch:validate resolves componentKind from the node's own JSON field
-              only, never a DB lookup, unlike emission-time LayoutNodeComponentIdEnrichment) is proven
-              to pass the REAL layout_patch:preview -> layout_patch:validate -> layout_patch:apply
-              pipeline byte-for-byte (backend/tests/Topolactor.Integration.Tests/
-              TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs) -- not merely asserted
-              structurally correct by inspection.
+              CLOSED as a generic capability. COMPONENT_KIND_TO_COMPONENT_KEY
+              (react_schema_topology_seed_translator.py) mirrors
+              frontend/components/catalog.ts's own COMPONENT_TEMPLATE_CATALOG_IDENTITIES/
+              RUNTIME_ALIAS_CATALOG_IDENTITIES componentKind<->componentKey pairs, and every tensor
+              node this generator's split_flat_records_into_adoption_candidates builds (Field/
+              Action/WorkflowStep/Modal) now resolves componentKey from that table generically
+              (Field: from its own `control`; Action/WorkflowStep: fixed "button.primitive";
+              Modal: fixed "modal.template", with componentKind carried through unconditionally
+              from build_node's own "disclosure/modal" literal -- required because
+              layout_patch:validate's RUNTIME_INTERACTION_TARGET_KIND_MISMATCH check reads
+              componentKind from a disclosure-target node's own raw JSON, never a DB lookup).
+              componentId is deliberately NEVER emitted by the translator -- a real, GENERIC,
+              pre-existing backend mechanism (NpgsqlTopologyRepository.
+              EnrichCatalogComponentIdsFromRegistryAsync) already resolves componentId from
+              componentKey against topology.ui_component_registry at read time for any
+              tensor-only-authored catalog_component node missing it, so duplicating that UUID
+              mapping in the translator/SSOT would be a second, driftable copy of an
+              already-generic mechanism, not a new capability. Also closed the same round, same
+              root cause (a generation-time gap the live apply pipeline itself surfaced, not
+              originally one of the three named known_gaps): buttonFactory
+              (frontend/runtime/runtimeComponentFactory.ts) requires props.data.label to be a
+              string or the whole node fails to render -- every Action/WorkflowStep/Field tensor
+              node this generator builds now carries propsJson.label sourced from that SAME
+              record's own already-authored `label`. And: each Action/Modal's own
+              runtimeInteractions now attach to ITS OWN resolved tensor nodeId directly, never an
+              owning-Section/Form redirect -- a real live-DB layout_patch:validate round trip
+              proved the redirect placement both invalid
+              (LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED -- a Section/Category is never a
+              registry-backed catalog leaf) and unnecessary (frontend/runtime never reads
+              sourceActionKey; a rendered component's eventBinding is built strictly from that
+              SAME node's own runtimeInteractions). This last fix additionally corrected a real,
+              previously-undetected production defect: the ORIGINAL hand-authored dd015 attached
+              team_dashboard_admin_save_cancel_button's/_confirm_button's own closeModal behavior
+              to the Modal's own node instead of each button's own node, where it was never
+              actually reachable by the frontend -- clicking Cancel could not have closed the
+              modal at runtime under that shape.
+          - gap: team_dashboard_normal_tensor_empty_for_pure_display_field
+            classification: translator_scope_boundary
+            status: resolved_generically_in_translator
+            note: >-
+              CLOSED as a direct consequence of the valueFrom grammar widening above -- no
+              separate mechanism was needed. The Field+valueFrom tensor branch's gating condition
+              was always `record.get("valueFrom")` truthiness only, never a shape check, so once
+              team_dashboard_normal_viewer's Field authors
+              valueFrom="emission.data.bodyMarkdown" the SAME existing branch produces its tensor
+              node (componentKey=md_viewer.projection, propBindings.markdown) with zero additional
+              code. Regenerating team-dashboard-normal.topology-seed.input.json cleanly now
+              produces a ONE-node tensorAdoptionCandidates matching db/seed_empty.sql's dd025 row
+              verbatim, proven through the same real live-DB apply pipeline
+              (TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs, surface="normal").
+        continuous_proof_chain: >-
+          team-dashboard-admin.input.json/team-dashboard-normal.input.json (generate-react-schema,
+          gateStatus=pass, zero unresolvedGaps) -> team-dashboard-admin/normal.topology-seed.
+          input.json (generate-topology-seed, gateStatus=pass, zero validationErrors) ->
+          adoptionCandidates.tensorAdoptionCandidates (identical to db/seed_empty.sql's dd015/dd025
+          layout_patch_json) -> real live-DB layout_patch:preview -> layout_patch:validate ->
+          layout_patch:apply (TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs, both
+          surfaces) -> persisted row read back and asserted structurally identical to the authored
+          content -> dd010/dd020 Manifest -> ProjectionShell Admin edit / Normal read-only runtime
+          proof (TeamDashboardHubRelationUiProjectionLiveDbTests.cs,
+          AdminRuntimeTeamDashboardTests.cs, ManifestDispatcherManifestKeyTargetRefTests.cs, all
+          passing unchanged).
 
       - seed_surface_key: team_dashboard.normal.projection
         declared_by_yaml_ref: docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.normal.surfaces.dashboard.team_dashboard_canonical_shared_contract
@@ -2293,6 +2342,12 @@ react_schema_topology_seed_translator_ssot:
           .agent/tests/fixtures/react-schema-topology-seed-translator/team-dashboard-normal.input.json
           (generate-react-schema) -> team-dashboard-normal.topology-seed.input.json
           (generate-topology-seed) -- both runs report gateStatus=pass with zero validationErrors.
+          UPDATED (2026-08-17, UIBuilder-lineage closure round 3): regenerates CLEAN -- zero
+          post-generation patches, zero knownGapRefs -- producing a ONE-node
+          tensorAdoptionCandidates identical to db/seed_empty.sql's dd025 tensor row, proven end to
+          end through the real live-DB layout_patch:preview -> layout_patch:validate ->
+          layout_patch:apply pipeline (TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs,
+          surface="normal").
         component_catalog_refs:
           catalog_ref: ui_catalog_boundary_contract.frontend_component_catalog
           componentKinds:
@@ -2304,36 +2359,13 @@ react_schema_topology_seed_translator_ssot:
           catalog_ref: ui_catalog_boundary_contract.html_tag_catalog
           refs: []
         wiring_lane_refs: []
-        known_gaps:
-          - gap: team_dashboard_emission_data_prop_binding_not_yet_translator_expressible
-            classification: translator_grammar_gap
-            status: resolved_via_post_generation_prop_binding_patch
-            note: >-
-              Same gap and same resolution as team_dashboard.admin.projection's own entry above --
-              team_dashboard_normal_viewer's markdown prop is bound to emission.data.bodyMarkdown by
-              a post-generation patch, never a translator-emitted Field valueFrom (out of that
-              attribute's node-only scope).
-          - gap: team_dashboard_normal_tensor_empty_for_pure_display_field
-            classification: translator_scope_boundary
-            status: resolved_via_real_uibuilder_apply_pipeline_verification
-            note: >-
-              adoptionCandidates.tensorAdoptionCandidates is the empty array [] for this surface's
-              real generation run -- a Section containing a single display-only Field with no Action/
-              dispatch element gives the tensor-consolidation pass nothing to build a node list
-              around (confirmed against the real run, not assumed). The react_schema/layout structure
-              itself (Projection/Category/Section/Field, targetSurface resolution, componentKind
-              membership) is confirmed valid by the SAME zero-validationError generation run. UPDATED
-              (2026-08-17, UIBuilder-lineage closure round 2): the single team_dashboard_normal_viewer
-              tensor node is no longer carried forward on hand-verification alone -- it is proven to
-              pass the REAL, live, DB-writing production layout_patch:preview ->
-              layout_patch:validate -> layout_patch:apply pipeline byte-for-byte
-              (backend/tests/Topolactor.Integration.Tests/
-              TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs, surface="normal"), the SAME
-              dispatch actions frontend/islands/UiBuilderAdmin.tsx's real Apply button calls, against
-              a disposable scaffold. Still not itself a translator-emitted candidate (the translator's
-              own tensor-consolidation gap above remains unresolved for this specific node shape), but
-              no longer merely "hand-verified" -- machine-verified against the real authoring
-              authority pipeline instead.
+        known_gaps: []
+        historical_known_gaps_closed_2026_08_17_uibuilder_lineage_closure_round_3: >-
+          Same two gaps, same generic translator-level closure, as
+          team_dashboard.admin.projection's own historical_known_gaps_closed_2026_08_17_
+          uibuilder_lineage_closure_round_3 entry above (this surface shares the identical
+          emission.data valueFrom / empty-tensor-for-pure-display-Field root causes and the
+          identical fix) -- see that entry for the full note, not duplicated here.
 
       - seed_surface_key: ui_component_registry.preset_catalog_bootstrap.v1
         declared_by_yaml_ref: docs/design/component-catalog-classification-ssot.yaml catalog_vocabulary_contract
