@@ -2206,6 +2206,120 @@ react_schema_topology_seed_translator_ssot:
               sixth lane (it is node-local tensor data, not a new wiring_lane_contract entry) --
               this historical constraint is why the 7 write manifests still predate that mechanism
               and have not yet been re-wired to use it.
+      - seed_surface_key: team_dashboard.admin.projection
+        declared_by_yaml_ref: docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.team_dashboard
+        seed_role: team_dashboard_admin_edit_projection_manifest_seed
+        record_subjects: [manifest_projection, team_dashboard_note_projection]
+        exchange_units: [category, section, field, action, modal]
+        authority_boundary: preview_dryrun_then_explicit_confirm_write_diff_log
+        generation_evidence_ref: >-
+          .agent/tests/fixtures/react-schema-topology-seed-translator/team-dashboard-admin.input.json
+          (generate-react-schema) -> team-dashboard-admin.topology-seed.input.json
+          (generate-topology-seed, inputText is the FIRST stage's own reactSchemaCandidate output
+          verbatim) -- both runs report gateStatus=pass with zero validationErrors, mirroring
+          admin.enum.management.projection's own two-fixture generation evidence shape.
+        component_catalog_refs:
+          catalog_ref: ui_catalog_boundary_contract.frontend_component_catalog
+          componentKinds:
+            - data_display/md_viewer (md_viewer.projection)
+            - form_input/textarea_template (textarea.template)
+            - action/button (button.primitive)
+            - disclosure/modal (modal.template)
+        style_catalog_refs:
+          catalog_ref: ui_catalog_boundary_contract.style_catalog
+          refs: []
+        html_tag_catalog_refs:
+          catalog_ref: ui_catalog_boundary_contract.html_tag_catalog
+          refs: []
+        wiring_lane_refs:
+          - lane: admin_runtime_dispatch_override_wiring
+            catalog_ref: wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring
+            targetRefs: ["manifest:00000000-0000-0000-0000-0000000dd010:team_dashboard:update"]
+          - lane: disclosure_state_wiring
+            catalog_ref: wiring_lane_contract.lanes.disclosure_state_wiring
+            targetRefs: ["ui-local:team_dashboard_admin_save_confirm_modal.open"]
+        known_gaps:
+          - gap: team_dashboard_emission_data_prop_binding_not_yet_translator_expressible
+            classification: translator_grammar_gap
+            status: resolved_via_post_generation_prop_binding_patch
+            note: >-
+              The Field grammar's valueFrom attribute (FIELD_VALUE_FROM_NODE_REF_RE) only accepts
+              "node:<id>.value..." sibling-node references, the same shape Table's rowsSource/
+              Field's optionsSource accept for "emission.data.<path>" but scoped to a DIFFERENT
+              prop name (rows/options, not markdown/value) -- there is no Field-level attribute to
+              bind an arbitrary prop (markdown, value) from the dispatched Emission's own data. This
+              is a real, tracked translator grammar gap, not an authoring mistake -- team_dashboard_
+              admin_viewer's markdown prop and team_dashboard_admin_body's value prop are both bound
+              to emission.data.bodyMarkdown by a post-generation patch applied to the translator's
+              own topologyUiSeedFlatRecords output before it is pasted into db/seed_empty.sql, the
+              SAME "generic placeholder, author resolves the real binding before finalizing" idiom
+              docs/design/ui-builder-preset-ecosystem-ssot.yaml physical_details_inline_editor_md_
+              generator_preset.known_gaps.markdown_body_field_binding_generic_placeholder already
+              established for this exact md_viewer.projection/textarea.template composition.
+          - gap: team_dashboard_tensor_componentkey_not_emitted_by_translator
+            classification: translator_scope_boundary
+            status: resolved_via_post_generation_component_identity_patch
+            note: >-
+              adoptionCandidates.tensorAdoptionCandidates never carries componentKey/componentId on
+              any node (confirmed against the real generation run) -- matching the SAME real,
+              production admin.enum.management.projection tensor (ae206)'s own shape for its action/
+              modal nodes, which likewise carry no componentKey/componentId (they have no
+              propBindings, so LayoutNodeComponentIdEnrichment's componentKind resolution is never
+              consulted for them). team_dashboard_admin_viewer/team_dashboard_admin_body DO need an
+              explicit componentId (they carry propBindings, and componentId->registry lookup is
+              what LoadComponentKindsByIdsAsync resolves componentKind from -- see PR #604 round 2's
+              own "componentId not resolving for md_viewer.projection/textarea.template" finding).
+              The post-generation patch adds componentKey/componentId to every node uniformly (not
+              only the two that strictly require it) as the same conservative, already-proven-correct
+              shape PR #604 round 2 originally authored by hand and verified end to end against a
+              real database -- this round's job was sourcing the STRUCTURE/wiring/interactions from a
+              real translator run, not re-deriving the componentId identity mapping from scratch.
+
+      - seed_surface_key: team_dashboard.normal.projection
+        declared_by_yaml_ref: docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.normal.surfaces.dashboard.team_dashboard_canonical_shared_contract
+        seed_role: team_dashboard_normal_readonly_projection_manifest_seed
+        record_subjects: [manifest_projection, team_dashboard_note_projection]
+        exchange_units: [category, section, field]
+        authority_boundary: read_only_no_mutation_no_confirm
+        generation_evidence_ref: >-
+          .agent/tests/fixtures/react-schema-topology-seed-translator/team-dashboard-normal.input.json
+          (generate-react-schema) -> team-dashboard-normal.topology-seed.input.json
+          (generate-topology-seed) -- both runs report gateStatus=pass with zero validationErrors.
+        component_catalog_refs:
+          catalog_ref: ui_catalog_boundary_contract.frontend_component_catalog
+          componentKinds:
+            - data_display/md_viewer (md_viewer.projection)
+        style_catalog_refs:
+          catalog_ref: ui_catalog_boundary_contract.style_catalog
+          refs: []
+        html_tag_catalog_refs:
+          catalog_ref: ui_catalog_boundary_contract.html_tag_catalog
+          refs: []
+        wiring_lane_refs: []
+        known_gaps:
+          - gap: team_dashboard_emission_data_prop_binding_not_yet_translator_expressible
+            classification: translator_grammar_gap
+            status: resolved_via_post_generation_prop_binding_patch
+            note: >-
+              Same gap and same resolution as team_dashboard.admin.projection's own entry above --
+              team_dashboard_normal_viewer's markdown prop is bound to emission.data.bodyMarkdown by
+              a post-generation patch, never a translator-emitted Field valueFrom (out of that
+              attribute's node-only scope).
+          - gap: team_dashboard_normal_tensor_empty_for_pure_display_field
+            classification: translator_scope_boundary
+            status: resolved_via_reuse_of_prior_round_hand_verified_tensor
+            note: >-
+              adoptionCandidates.tensorAdoptionCandidates is the empty array [] for this surface's
+              real generation run -- a Section containing a single display-only Field with no Action/
+              dispatch element gives the tensor-consolidation pass nothing to build a node list
+              around (confirmed against the real run, not assumed). The react_schema/layout structure
+              itself (Projection/Category/Section/Field, targetSurface resolution, componentKind
+              membership) is confirmed valid by the SAME zero-validationError generation run. The
+              single team_dashboard_normal_viewer tensor node is therefore the SAME hand-verified
+              node PR #604 round 2 already proved end to end against a real database, carried forward
+              unchanged rather than re-authored, since the translator's own tensor stage does not yet
+              reach a pure single-Field-no-action projection.
+
       - seed_surface_key: ui_component_registry.preset_catalog_bootstrap.v1
         declared_by_yaml_ref: docs/design/component-catalog-classification-ssot.yaml catalog_vocabulary_contract
         seed_role: fixed_uuid_components_bucket_and_ui_component_registry_bootstrap_rows

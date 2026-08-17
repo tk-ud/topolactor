@@ -149,11 +149,30 @@ public class TeamDashboardHubRelationUiProjectionLiveDbTests
             Assert.NotNull(targetEmission.LayoutNodes);
             Assert.Contains(targetEmission.LayoutNodes!, n => n.NodeId == "team_dashboard_admin_viewer");
             Assert.Contains(targetEmission.LayoutNodes!, n => n.NodeId == "team_dashboard_admin_body");
+            // The Save button is the mutation_confirmation_contract's preview half: same
+            // dispatchTargetRefByTrigger as the confirm button below, but payloadFrom sends
+            // dryRun:true (never a direct write) and opens the confirm modal.
             var saveButton = Assert.Single(targetEmission.LayoutNodes!, n => n.NodeId == "team_dashboard_admin_save_button");
             Assert.Equal("admin_runtime", saveButton.WiringKind);
+            var resolvedUpdateTargetRef = saveButton.DispatchTargetRefByTrigger!.Value.GetProperty("click").GetString();
+            Assert.Equal($"manifest:{AdminManifestId}:team_dashboard:update", resolvedUpdateTargetRef);
             Assert.Equal(
-                $"manifest:{AdminManifestId}:team_dashboard:update",
-                saveButton.DispatchTargetRefByTrigger!.Value.GetProperty("click").GetString());
+                "literal:true",
+                saveButton.DispatchPayloadFromByTrigger!.Value.GetProperty("click").GetProperty("dryRun").GetString());
+
+            // The confirm modal and its own confirm/cancel buttons exist on the SAME tensor -- the
+            // preview/confirm pairing validate_admin_runtime_preview_action_pairing requires is
+            // structurally present, not just the preview half.
+            Assert.Contains(targetEmission.LayoutNodes!, n => n.NodeId == "team_dashboard_admin_save_confirm_modal");
+            var confirmButton = Assert.Single(
+                targetEmission.LayoutNodes!, n => n.NodeId == "team_dashboard_admin_save_confirm_button");
+            Assert.Equal(
+                resolvedUpdateTargetRef,
+                confirmButton.DispatchTargetRefByTrigger!.Value.GetProperty("click").GetString());
+            Assert.Equal(
+                "literal:true",
+                confirmButton.DispatchPayloadFromByTrigger!.Value.GetProperty("click").GetProperty("confirmed").GetString());
+            Assert.Contains(targetEmission.LayoutNodes!, n => n.NodeId == "team_dashboard_admin_save_cancel_button");
 
             var unresolvedLeaves = targetEmission.LayoutNodes!
                 .Where(n => n.NodeKind == "catalog_component" && n.ComponentId is null)
@@ -305,6 +324,7 @@ public class TeamDashboardHubRelationUiProjectionLiveDbTests
                 {
                     target_ref = $"manifest:{AdminManifestId}:team_dashboard:update",
                     bodyMarkdown = marker,
+                    confirmed = true,
                 }),
                 Context: new Dictionary<string, string> { [DispatchAuthContext.AuthenticatedRolesKey] = "admin" },
                 TriggerKind: "client", Role: "admin");
@@ -381,6 +401,171 @@ public class TeamDashboardHubRelationUiProjectionLiveDbTests
 
         Assert.False(response.Success);
         Assert.Contains(response.Errors, e => e.Code == "AUTH_CAPABILITY_DENIED");
+    }
+
+    /// <summary>
+    /// diff_log + canonical history read stage of team_dashboard:update's
+    /// mutation_confirmation_contract, mirroring AdminEnumHubRelationUiProjectionLiveDbTests.cs's own
+    /// CountLogsDiffRowsAsync-based proof for enum_dictionary: (1) a dryRun preview writes NO logs.diff
+    /// row at all -- proving the preview half is genuinely non-mutating, not just non-visible; (2) the
+    /// SAME action with payload.confirmed=true writes exactly one logs.diff row via
+    /// AdminMasterRosterAudit.AppendAsync (source_set_id='admin_master_roster',
+    /// physical_table_name='topology.team_dashboard_note') -- never a team-dashboard-specific diff
+    /// writer, the identical generic helper enum_dictionary/credential_management/external_api_
+    /// credential/external_instance_credential/auth_users already share; (3) that same history is
+    /// readable back through physical_record:list_history -- the SSOT-designated canonical history
+    /// read path (backend/runtime/PhysicalRecordHistoryRuntimeTests.cs), never a raw SQL SELECT on
+    /// logs.diff standing in as the sole read proof.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_TeamDashboardUpdate_WritesLogsDiffEvidence_ReadableViaCanonicalPhysicalRecordHistory()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+        var marker = $"live-db-diff-history-{Guid.NewGuid():N}";
+        var t0 = DateTimeOffset.UtcNow;
+
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+        string? originalBody = null;
+        try
+        {
+            await using (var readCmd = conn.CreateCommand())
+            {
+                readCmd.CommandText = "SELECT body_markdown FROM topology.team_dashboard_note WHERE note_id = @id";
+                readCmd.Parameters.AddWithValue("id", NoteId);
+                originalBody = (string?)await readCmd.ExecuteScalarAsync();
+            }
+
+            var adminContext = new Dictionary<string, string> { [DispatchAuthContext.AuthenticatedRolesKey] = "admin" };
+
+            // STEP 1: dryRun preview -- proves the preview half writes no logs.diff row at all.
+            var dryRunRequest = new EndpointRequestDto(
+                "TeamDashboardScenario", "admin", "team_dashboard", "update",
+                IdOrHubId: null,
+                Payload: System.Text.Json.JsonSerializer.SerializeToElement(new
+                {
+                    target_ref = $"manifest:{AdminManifestId}:team_dashboard:update",
+                    bodyMarkdown = marker,
+                    dryRun = true,
+                }),
+                Context: adminContext, TriggerKind: "client", Role: "admin");
+            var dryRunResponse = await dispatcher.DispatchAsync(dryRunRequest);
+            Assert.True(dryRunResponse.Success, string.Join(";", dryRunResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+            Assert.Equal(
+                0, await CountLogsDiffRowsAsync(cs, "topology.team_dashboard_note", NoteId.ToString(), "update", t0));
+
+            // STEP 2: confirmed write -- the SAME action, real mutation, exactly one logs.diff row.
+            var confirmedRequest = new EndpointRequestDto(
+                "TeamDashboardScenario", "admin", "team_dashboard", "update",
+                IdOrHubId: null,
+                Payload: System.Text.Json.JsonSerializer.SerializeToElement(new
+                {
+                    target_ref = $"manifest:{AdminManifestId}:team_dashboard:update",
+                    bodyMarkdown = marker,
+                    confirmed = true,
+                }),
+                Context: adminContext, TriggerKind: "client", Role: "admin");
+            var confirmedResponse = await dispatcher.DispatchAsync(confirmedRequest);
+            Assert.True(confirmedResponse.Success, string.Join(";", confirmedResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+            Assert.Equal(
+                1, await CountLogsDiffRowsAsync(cs, "topology.team_dashboard_note", NoteId.ToString(), "update", t0));
+
+            // STEP 3: read the SAME evidence back through the canonical physical_record:list_history
+            // action (AdminRuntime.ExecuteDataAsync layer=physical_record action=list_history), not a
+            // raw SQL SELECT standing in as the sole read proof. Dispatched directly against a real
+            // AdminRuntime instance (grep-confirmed: no hubs.topology_manifests row anywhere in
+            // db/seed_empty.sql declares a dispatcher_mapping for layer=physical_record
+            // action=list_history -- this action has never been manifest-wired for ANY domain, a
+            // pre-existing, generic gap that predates and is outside team-dashboard's own scope, not
+            // something to newly wire here) rather than through ManifestDispatcher's axes-based
+            // manifest resolution, which would otherwise MANIFEST_NOT_FOUND on this exact axes
+            // combination for every domain, not only team-dashboard.
+            var historyRuntime = BuildRealAdminRuntimeWithLogsRepository(cs);
+            var (historyData, historyError) = await historyRuntime.ExecuteDataAsync(new OperationVector(
+                "admin", "physical_record", "list_history", null, "admin",
+                System.Text.Json.JsonSerializer.SerializeToElement(new
+                {
+                    tableId = "topology.team_dashboard_note",
+                    recordId = NoteId.ToString(),
+                }),
+                null, AuthenticatedRole: "admin"));
+            Assert.Null(historyError);
+            Assert.NotNull(historyData);
+            var history = historyData!.Value.GetProperty("history");
+            var matchingEntry = Enumerable.Range(0, history.GetArrayLength())
+                .Select(i => history[i])
+                .Where(e => e.GetProperty("operation_kind").GetString() == "update")
+                .Where(e => e.GetProperty("after_state_or_diff_json").GetString()!.Contains(marker))
+                .ToList();
+            Assert.Single(matchingEntry);
+        }
+        finally
+        {
+            if (originalBody is not null)
+            {
+                await using var restoreCmd = conn.CreateCommand();
+                restoreCmd.CommandText = "UPDATE topology.team_dashboard_note SET body_markdown = @body WHERE note_id = @id";
+                restoreCmd.Parameters.AddWithValue("body", originalBody);
+                restoreCmd.Parameters.AddWithValue("id", NoteId);
+                await restoreCmd.ExecuteNonQueryAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Builds a real AdminRuntime wired only to the minimum repositories physical_record:list_history
+    /// needs, against a real live-DB SqlAttentionLogsRepository -- physical_record:list_history has
+    /// no manifest dispatcher_mapping anywhere in db/seed_empty.sql (for any domain, not just
+    /// team-dashboard), so it is unreachable through ManifestDispatcher's axes-based manifest
+    /// resolution; this is the same "dispatch the AdminRuntime action directly" pattern
+    /// PhysicalRecordHistoryRuntimeTests.cs already uses at the unit level, extended here with a
+    /// real Postgres-backed logs repository instead of a stub.
+    /// </summary>
+    private static AdminRuntime BuildRealAdminRuntimeWithLogsRepository(string connectionString)
+    {
+        var ctxRepo = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, connectionString);
+        var topoRepo = new NpgsqlTopologyRepository(NullLogger<NpgsqlTopologyRepository>.Instance, connectionString);
+        var uiRepo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, connectionString);
+        var topoVector = new TopologyVectorRuntime(NullLogger<TopologyVectorRuntime>.Instance, ctxRepo);
+        var registrar = new RegistrarValidationService(NullLogger<RegistrarValidationService>.Instance, topoRepo, topoVector);
+        var pkg = new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, uiRepo);
+        return new AdminRuntime(
+            NullLogger<AdminRuntime>.Instance,
+            ctxRepo,
+            registrar,
+            pkg,
+            uiRepo,
+            sqlAttentionLogsRepository: new NpgsqlSqlAttentionLogsRepository(
+                NullLogger<NpgsqlSqlAttentionLogsRepository>.Instance, connectionString));
+    }
+
+    /// <summary>
+    /// Counts real logs.diff rows for the given physical_table_name/record_id/operation_kind observed
+    /// since a baseline timestamp -- mirrors AdminEnumHubRelationUiProjectionLiveDbTests.cs's own
+    /// CountLogsDiffRowsAsync (a separate copy since xunit test classes don't share private helpers;
+    /// same query shape, same generic logs.diff table, not a team-dashboard-specific read).
+    /// </summary>
+    private static async Task<int> CountLogsDiffRowsAsync(
+        string connectionString, string physicalTableName, string recordId, string operationKind, DateTimeOffset since)
+    {
+        await using var conn = new NpgsqlConnection(connectionString);
+        await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT COUNT(*)::int FROM logs.diff
+            WHERE source_set_id = 'admin_master_roster'
+              AND physical_table_name = @t
+              AND record_id = @r
+              AND operation_kind = @op
+              AND observed_at >= @since";
+        cmd.Parameters.AddWithValue("t", physicalTableName);
+        cmd.Parameters.AddWithValue("r", recordId);
+        cmd.Parameters.AddWithValue("op", operationKind);
+        cmd.Parameters.AddWithValue("since", since);
+        return (int)(await cmd.ExecuteScalarAsync() ?? 0);
     }
 
     [Fact]

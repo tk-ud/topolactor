@@ -1,0 +1,15 @@
+{
+  "schemaId": "topolactor.translator_input.v1",
+  "mode": "generate_react_schema",
+  "targetSurface": "team_dashboard.normal.projection",
+  "sourceYamlRefs": [
+    "docs/design/admin-normal-surface-projection-seed-ssot.yaml#surface_axes.normal.surfaces.dashboard.team_dashboard_canonical_shared_contract"
+  ],
+  "inputText": "[projection key=team_dashboard_normal_projection label=\"Team Dashboard (Normal)\" sourceYamlRefs=admin-normal-surface-projection-seed-ssot.yaml#surface_axes.normal.surfaces.dashboard.team_dashboard_canonical_shared_contract]\n[category key=team_dashboard_normal label=\"Team Dashboard\" sourceYamlRefs=admin-normal-surface-projection-seed-ssot.yaml#surface_axes.normal.surfaces.dashboard.team_dashboard_canonical_shared_contract]\n[section key=team_dashboard_normal_viewer_section label=\"Team dashboard note\" sectionKind=team_dashboard_normal_readonly_projection sourceYamlRefs=admin-normal-surface-projection-seed-ssot.yaml#surface_axes.normal.surfaces.dashboard.team_dashboard_canonical_shared_contract.seed_contract]\n[field key=team_dashboard_normal_viewer label=\"Rendered preview\" control=data_display/md_viewer required=false knownGapRefs=team_dashboard_emission_data_prop_binding_not_yet_translator_expressible sourceYamlRefs=ui-builder-preset-ecosystem-ssot.yaml#physical_details_inline_editor_md_generator_preset.layout_tree.tab3_markdown]\n[/section]\n[/category]\n[/projection]\n",
+  "seedEvidence": {
+    "screenUuidNamespace": "manifest.manifest_id",
+    "screenUuid": "00000000-0000-0000-0000-0000000dd020",
+    "manifestKey": "team_dashboard.normal.projection",
+    "bundle": "admin-surface-topology-seed-conversion"
+  }
+}

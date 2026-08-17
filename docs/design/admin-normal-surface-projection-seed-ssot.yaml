@@ -756,9 +756,27 @@ admin_normal_surface_projection_seed_ssot:
             component + form_input/textarea_template propBindings.value carrier, md_viewer.projection
             bare-markdown mode) — not a new Markdown component, not a new editor, not a new runtime
             lane. The preset itself stays an unapplied UIBuilder draft (activeTopologyWrite: false,
-            unchanged); this surface's own seed rows are hand-authored active tensor/wiring content
-            derived from that SAME proven node composition, now bound to a real physical table
-            instead of the preset's table-agnostic placeholder.
+            unchanged — the preset row is a reusable authoring template, not itself a runtime
+            screen). UPDATED (2026-08-17, UIBuilder-lineage closure round): this surface's own
+            package/layout/wiring/tensor rows are no longer hand-authored active content -- they are
+            generated through the REAL react_schema_topology_seed_translator.py two-stage intake
+            (generate-react-schema -> generate-topology-seed), the same preview/validate/apply
+            boundary manifest 092 / ae200's own declared_seed_surface_catalog entries use, from
+            .agent/tests/fixtures/react-schema-topology-seed-translator/team-dashboard-admin.
+            input.json (stage 1) and team-dashboard-admin.topology-seed.input.json (stage 2), gated
+            "pass" with zero validationErrors — declared as team_dashboard.admin.projection in
+            react-schema-topology-seed-translator-ssot.yaml declared_seed_surface_catalog.
+            known_declared_surfaces, with its own tracked known_gaps
+            (team_dashboard_emission_data_prop_binding_not_yet_translator_expressible and
+            team_dashboard_tensor_componentkey_not_emitted_by_translator) for the two narrow,
+            explicitly-scoped points the translator's current grammar does not yet emit
+            (emission.data.* propBindings, and componentKey/componentId on action/modal leaves —
+            the same category of omission ae200/092's own real production tensors independently
+            exhibit for non-propBindings-carrying leaves) — resolved via a documented
+            post-generation patch onto the translator's own output, not by hand-writing the tensor
+            from scratch. db/seed_empty.sql's dd015 tensor row IS that (translator-output +
+            documented-patch) content, not an independent hand-authored artifact merely referencing
+            this preset's composition.
           capability_requirements:
             read: required
             mutation: [update_body_markdown]
@@ -790,7 +808,19 @@ admin_normal_surface_projection_seed_ssot:
                 responsibility: editable raw Markdown source, initial value bound from emission.data.bodyMarkdown
               - node_key: team_dashboard_admin_save_button
                 component_key: button.primitive
-                responsibility: dispatch team_dashboard:update with the Textarea's current tracked value
+                responsibility: >-
+                  dryRun preview of team_dashboard:update with the Textarea's current tracked value,
+                  then opens team_dashboard_admin_save_confirm_modal — never a direct write (updated
+                  2026-08-17, mutation_confirmation_contract closure round)
+              - node_key: team_dashboard_admin_save_confirm_modal
+                component_key: modal.template
+                responsibility: explicit-confirm dialog pairing the preview button per validate_admin_runtime_preview_action_pairing
+              - node_key: team_dashboard_admin_save_confirm_button
+                component_key: button.primitive
+                responsibility: dispatch the SAME team_dashboard:update target_ref with confirmed=true — the real write
+              - node_key: team_dashboard_admin_save_cancel_button
+                component_key: button.primitive
+                responsibility: closes the confirm modal without dispatching; no persisted state or diff row is produced
             prop_bindings:
               - node_key: team_dashboard_admin_viewer
                 props: [markdown]
@@ -799,12 +829,32 @@ admin_normal_surface_projection_seed_ssot:
                 props: [value]
                 source_ref: emission.data.bodyMarkdown (propBindings.value, form_input/textarea_template generic carrier)
             event_bindings:
-              - event_key: save_click
+              - event_key: save_dryrun_click
                 source_node: team_dashboard_admin_save_button
                 event_kind: click
                 target_ref: team_dashboard:update
-                payload_from: {bodyMarkdown: "node:team_dashboard_admin_body.value"}
-            mutation_confirmation_contract: [write, diff_log_not_applicable_single_row_note]
+                payload_from: {bodyMarkdown: "node:team_dashboard_admin_body.value", dryRun: "literal:true"}
+                secondary_disclosure: {actionType: openModal, targetNodeId: team_dashboard_admin_save_confirm_modal}
+              - event_key: save_confirm_click
+                source_node: team_dashboard_admin_save_confirm_button
+                event_kind: click
+                target_ref: team_dashboard:update
+                payload_from: {bodyMarkdown: "node:team_dashboard_admin_body.value", confirmed: "literal:true"}
+              - event_key: save_cancel_click
+                source_node: team_dashboard_admin_save_cancel_button
+                event_kind: click
+                target_ref: ui-local:team_dashboard_admin_save_confirm_modal.close
+            mutation_confirmation_contract: [dryrun_preview, explicit_confirm, write, diff_log]
+            diff_log_mechanism: >-
+              backend/runtime/AdminMasterRosterAudit.cs AppendAsync -> logs.diff
+              (source_set_id=admin_master_roster, physical_table_name=topology.team_dashboard_note)
+              — the SAME generic, cross-domain diff/audit-trail helper enum_dictionary/
+              credential_management/external_api_credential/external_instance_credential/auth_users
+              already share, never a team-dashboard-specific diff writer. Read back through the
+              canonical physical_record:list_history action, proven live by
+              backend/tests/Topolactor.Integration.Tests/
+              TeamDashboardHubRelationUiProjectionLiveDbTests.cs
+              DispatchAsync_TeamDashboardUpdate_WritesLogsDiffEvidence_ReadableViaCanonicalPhysicalRecordHistory.
             loading_empty_error_projection: [loading_team_dashboard, empty_team_dashboard_note, team_dashboard_error_fail_close]
           hub_relation_navigation_binding_ref: >-
             Reachable directly at /admin/team-dashboard (frontend/routes/admin/team-dashboard/index.tsx,
@@ -874,11 +924,21 @@ admin_normal_surface_projection_seed_ssot:
           runtime/admin data, never duplicated here as a fixed "wired"/"unconnected" SSOT ledger.
         current_target_readiness:
           dashboard_team_markdown: >-
-            blocked — same as docs/design/admin-console-workflow-ssot.yaml
-            subbundle_target_readiness.team_dashboard: no per-screen ui_projection manifest exists yet
-            for the team markdown dashboard surface. 2026-07-18: the Bundle-level owner production
-            pause was lifted; this readiness gap is no longer pause-gated, it remains blocked solely
-            because the target manifest itself has not been produced yet.
+            UPDATED (2026-08-17, UIBuilder-lineage closure round): no longer blocked on target-
+            manifest readiness — team_dashboard.admin.projection (dd010) and
+            team_dashboard.normal.projection (dd020) are both real, seeded, translator-produced
+            ui_projection manifests (see surface_axes.admin.surfaces.team_dashboard.
+            reusable_component_composition_ref above and docs/design/admin-console-workflow-
+            ssot.yaml subbundle_target_readiness.team_dashboard for the full closure record). What
+            remains open is a DIFFERENT item, this contract's own literal hub_navigation_only
+            authoring (an admin-authored hubs.hub_relations row FROM some existing manifest INTO
+            dd010/dd020) — no eligible real, Normal-reachable source manifest exists to author such
+            a relation FROM (same finding as team_dashboard_canonical_shared_contract.
+            hub_relation_navigation_binding_ref below), and the Owner redirected the underlying
+            round-trip-navigability intent to the ProjectionShell common Home link instead of a
+            fabricated source. See runtime-orchestration-ssot.yaml
+            admin_route_retirement_matrix.routes /admin/team-dashboard entry
+            (status=superseded_by_owner_directed_alternate) for the full record.
           self_account_capability: >-
             blocked — no ui_projection manifest exists yet for this capability at all (see
             surface_axes.normal.surfaces.self_account_capability.seed_contract.status). Additionally,

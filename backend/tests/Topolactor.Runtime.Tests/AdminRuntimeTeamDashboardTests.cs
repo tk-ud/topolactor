@@ -90,7 +90,7 @@ public class AdminRuntimeTeamDashboardTests
     {
         var repo = new FakeTeamDashboardRepository();
         var runtime = BuildAdminRuntime(repo);
-        var payload = JsonSerializer.SerializeToElement(new { bodyMarkdown = "# Edited" });
+        var payload = JsonSerializer.SerializeToElement(new { bodyMarkdown = "# Edited", confirmed = true });
 
         var (data, error) = await runtime.ExecuteDataAsync(
             new OperationVector("admin", "team_dashboard", "update", null, "admin", payload, null, AuthenticatedRole: "admin"),
@@ -101,6 +101,45 @@ public class AdminRuntimeTeamDashboardTests
         Assert.Equal("# Edited", data!.Value.GetProperty("bodyMarkdown").GetString());
         Assert.Equal(1, repo.UpdateCallCount);
         Assert.Equal("# Edited", repo.BodyMarkdown);
+    }
+
+    [Fact]
+    public async Task ExecuteDataAsync_TeamDashboardUpdate_WithDryRun_ReturnsPreviewWithoutWriting()
+    {
+        var repo = new FakeTeamDashboardRepository();
+        var runtime = BuildAdminRuntime(repo);
+        var payload = JsonSerializer.SerializeToElement(new { bodyMarkdown = "# Previewed", dryRun = true });
+
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "team_dashboard", "update", null, "admin", payload, null, AuthenticatedRole: "admin"),
+            default);
+
+        Assert.Null(error);
+        Assert.NotNull(data);
+        Assert.True(data!.Value.GetProperty("ok").GetBoolean());
+        Assert.True(data.Value.GetProperty("dryRun").GetBoolean());
+        Assert.True(data.Value.GetProperty("valid").GetBoolean());
+        Assert.Equal("# Previewed", data.Value.GetProperty("preview").GetProperty("bodyMarkdown").GetString());
+        Assert.Equal(0, repo.UpdateCallCount);
+        Assert.Equal("# Original", repo.BodyMarkdown);
+    }
+
+    [Fact]
+    public async Task ExecuteDataAsync_TeamDashboardUpdate_WithoutConfirmedOrDryRun_FailsCloseWithNotConfirmed()
+    {
+        var repo = new FakeTeamDashboardRepository();
+        var runtime = BuildAdminRuntime(repo);
+        var payload = JsonSerializer.SerializeToElement(new { bodyMarkdown = "# Not confirmed" });
+
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "team_dashboard", "update", null, "admin", payload, null, AuthenticatedRole: "admin"),
+            default);
+
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("TEAM_DASHBOARD_WRITE_NOT_CONFIRMED", error!.Code);
+        Assert.Equal(0, repo.UpdateCallCount);
+        Assert.Equal("# Original", repo.BodyMarkdown);
     }
 
     [Fact]

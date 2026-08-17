@@ -150,11 +150,35 @@ runtime_orchestration_ssot:
         - route: /admin/team-dashboard
           retirement_kind: hub_navigation_only
           replacement: same_url_plus_hub_entry
-          status: pending
+          status: superseded_by_owner_directed_alternate
           precondition: >-
-            requires a real per-screen ui_projection manifest for the team markdown dashboard
-            surface (same prerequisite as /admin/enums above). The route itself is not retired;
-            only hub-reachability is added once that manifest exists. Not retired by this change.
+            STALE (pre-team-dashboard-seed-conversion round): "requires a real per-screen
+            ui_projection manifest for the team markdown dashboard surface, which does not exist
+            yet" is no longer true — team_dashboard.admin.projection (dd010) and
+            team_dashboard.normal.projection (dd020) are both real, seeded, live-dispatchable
+            ui_projection manifests (see admin-normal-surface-projection-seed-ssot.yaml
+            surface_axes.admin.surfaces.team_dashboard / surface_axes.normal.surfaces.dashboard).
+            CURRENT: an exhaustive audit (admin-normal-surface-projection-seed-ssot.yaml
+            design_blocking.target_surface_manifest_readiness's own team-dashboard closure record)
+            found no existing, real, Normal-reachable production topology_manifest besides
+            team-dashboard's own two manifests to author a genuine hub_navigation:create relation
+            FROM — fabricating a synthetic/demo source manifest solely to close this literal
+            retirement_kind was explicitly rejected, the same "no fake hub_relations source"
+            discipline the /admin-own-outbound-relation note elsewhere in this Bundle already
+            establishes. Presented with this finding, the Owner redirected the underlying intent
+            (an end user must always be able to navigate back to the dashboard from anywhere) to a
+            route/manifest-agnostic fix instead of literal hub_navigation authoring:
+            frontend/islands/ProjectionShell.tsx now renders a fixed data-projection-home-link
+            ("ホーム" → /dashboard) in its own nav bar unconditionally on every mount, independent
+            of any manifest's own hub_relations/navigationSequence state. This is not a
+            hub_navigation_only retirement in the literal sense this matrix defines above (no
+            hubs.hub_relations row was authored for dd010/dd020), so status is not "done"; it is
+            not "pending" either, since the reachability problem this retirement_kind exists to
+            solve is already closed by a different, Owner-approved mechanism — hence
+            status=superseded_by_owner_directed_alternate. Left open for a future genuine
+            hub_navigation:create authoring round if/when a real Normal-reachable source manifest
+            is introduced elsewhere in the system; not blocking, not required for team-dashboard's
+            own Implemented status.
         - route: /admin/scheduler
           retirement_kind: hub_navigation_only
           replacement: same_url_plus_hub_entry

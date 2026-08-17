@@ -143,7 +143,27 @@ admin_console_workflow_ssot:
         pause was lifted (.agent/tasks/todo.md); this readiness gap is no longer pause-gated, it
         remains blocked solely because the target manifest itself has not been produced yet.
       team_dashboard: >-
-        blocked — same as enum_dictionary above, for the team markdown dashboard surface.
+        not blocked — team_dashboard.admin.projection (dd010) and team_dashboard.normal.projection
+        (dd020) are both real, seeded ui_projection manifests (admin-normal-surface-projection-
+        seed-ssot.yaml surface_axes.admin.surfaces.team_dashboard /
+        surface_axes.normal.surfaces.dashboard), their package/layout/wiring/tensor rows generated
+        through the real react_schema_topology_seed_translator.py intake -> preview/validate/apply
+        boundary (.agent/tests/fixtures/react-schema-topology-seed-translator/team-dashboard-
+        admin*.json / team-dashboard-normal*.json, declared_seed_surface_catalog entries
+        team_dashboard.admin.projection / team_dashboard.normal.projection in
+        react-schema-topology-seed-translator-ssot.yaml), not a hand-authored tensor. Canonical
+        physical-row mutation (team_dashboard:update) runs the SAME
+        AdminMasterRosterAudit.AppendAsync generic diff-log helper credential-management/enum_
+        dictionary/external_api_credential/external_instance_credential/auth_users already share,
+        behind the same dryRun-preview -> explicit-confirm -> write mutation_confirmation_contract
+        idiom enum_dictionary:create_group established, writing real logs.diff evidence readable
+        back through physical_record:list_history (backend/tests/Topolactor.Integration.Tests/
+        TeamDashboardHubRelationUiProjectionLiveDbTests.cs
+        DispatchAsync_TeamDashboardUpdate_WritesLogsDiffEvidence_ReadableViaCanonicalPhysicalRecordHistory).
+        The one remaining open item is navigation_binding's literal hub_navigation_only retirement
+        (see runtime-orchestration-ssot.yaml admin_route_retirement_matrix.routes /admin/team-
+        dashboard entry) — resolved via the Owner-directed ProjectionShell common Home link
+        instead of a fabricated hub_relations source, not a target-manifest-readiness blocker.
       scheduler_settings: >-
         blocked — same as enum_dictionary above, for scheduler_jobs.
     prohibited:

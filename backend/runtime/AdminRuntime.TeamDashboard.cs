@@ -58,6 +58,15 @@ public partial class AdminRuntime
         }), null);
     }
 
+    // team_dashboard:update mutation_confirmation_contract: preview (payload.dryRun=true,
+    // non-mutating) -> explicit_confirm (frontend UI) -> write (payload.dryRun absent/false AND
+    // payload.confirmed=true) -> diff_log (AdminMasterRosterAudit.AppendAsync). Mirrors the SAME
+    // idiom AdminRuntimeMasterRoster.cs's enum_dictionary:create_group/update_group establish (that
+    // file's own doc comment cites team_markdown's saved-view-update contract as its own source) --
+    // every validation gate below runs identically regardless of dryRun; the write step re-runs the
+    // identical checks, dryRun is never trusted as prior proof. Cancel is the frontend simply never
+    // sending payload.confirmed=true; that path never reaches the repository, so no persisted state
+    // or diff row is produced.
     private async Task<(JsonElement? data, ValidationError? error)> DataTeamDashboardUpdateAsync(
         OperationVector vector, CancellationToken ct)
     {
@@ -68,11 +77,35 @@ public partial class AdminRuntime
         if (!payload.TryGetProperty("bodyMarkdown", out var bodyEl) || bodyEl.ValueKind != JsonValueKind.String)
             return (null, new ValidationError("BODY_MARKDOWN_REQUIRED", "payload.bodyMarkdown must be a string."));
 
+        var bodyMarkdown = bodyEl.GetString() ?? "";
         string? title = payload.TryGetProperty("title", out var titleEl) && titleEl.ValueKind == JsonValueKind.String
             ? titleEl.GetString()
             : null;
 
-        var note = await _teamDashboardRepository!.UpdateNoteAsync(bodyEl.GetString() ?? "", title, ct);
+        if (IsTruthyPayloadFlag(vector.Payload, "dryRun"))
+        {
+            return (JsonSerializer.SerializeToElement(new
+            {
+                ok = true,
+                dryRun = true,
+                valid = true,
+                preview = new { bodyMarkdown, title },
+            }), null);
+        }
+        if (!IsTruthyPayloadFlag(vector.Payload, "confirmed"))
+            return (null, new ValidationError("TEAM_DASHBOARD_WRITE_NOT_CONFIRMED",
+                "Write requires payload.confirmed=true after an explicit user confirmation step."));
+
+        var before = await _teamDashboardRepository!.GetNoteAsync(ct);
+        var note = await _teamDashboardRepository!.UpdateNoteAsync(bodyMarkdown, title, ct);
+        await AdminMasterRosterAudit.AppendAsync(_sqlAttentionLogsRepository, ResolveAuditActor(vector),
+            "topology.team_dashboard_note", note.NoteId.ToString(), "update",
+            new { bodyMarkdown = before.BodyMarkdown, title = before.Title },
+            new { bodyMarkdown = note.BodyMarkdown, title = note.Title },
+            [
+                new AuditChangedField("body_markdown", before.BodyMarkdown, note.BodyMarkdown),
+                new AuditChangedField("title", before.Title, note.Title),
+            ], ct);
         return (JsonSerializer.SerializeToElement(new
         {
             noteId = note.NoteId,
