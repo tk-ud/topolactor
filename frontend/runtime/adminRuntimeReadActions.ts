@@ -13,6 +13,7 @@ export const ADMIN_RUNTIME_READ_ACTIONS: ReadonlySet<string> = new Set([
   "auth_users:list",
   "auth_users:search",
   "auth_users:get",
+  "scheduler_jobs:list_settings",
 ]);
 
 // A layout node's own componentKind identifies it as Field-family authoring content

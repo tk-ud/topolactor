@@ -285,6 +285,25 @@ admin_master_roster_management_ssot:
       - auth_users:create
       - auth_users:update
       - auth_users:delete
+    # scheduler-settings subBundle (admin-surface-topology-seed-conversion, 2026-08-17): the
+    # scheduler.settings.projection seed manifest's search/filter Fields (scheduler_search +
+    # the three filter selects, db/seed_empty.sql 5c1 family) dispatch scheduler_jobs:list_settings
+    # through admin_runtime_dispatch_override_wiring, so that resource:action needs the same
+    # explicit read classification enum_dictionary:list_groups already carries. Classification
+    # authority only -- this block does not grant, widen, or re-own scheduler job authority
+    # (docs/design/scheduler-job-manifest-ssot.yaml remains that authority) and does not move any
+    # scheduler action onto this SSOT's own roster surfaces. All four writes are listed explicitly
+    # so a Field can never be wired to one: enable/disable belong to the scheduler-settings surface
+    # (docs/design/admin-normal-surface-projection-seed-ssot.yaml
+    # surface_axes.admin.surfaces.scheduler), create/edit to /admin/contents' generic authoring
+    # pipeline.
+    scheduler_jobs_read:
+      - scheduler_jobs:list_settings
+    scheduler_jobs_write:
+      - scheduler_jobs:enable
+      - scheduler_jobs:disable
+      - scheduler_jobs:create
+      - scheduler_jobs:edit
 
   fail_close:
     reuse_enum_error_codes_from: enum-dictionary-ssot.yaml

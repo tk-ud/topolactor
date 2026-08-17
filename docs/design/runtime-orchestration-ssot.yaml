@@ -182,14 +182,32 @@ runtime_orchestration_ssot:
         - route: /admin/scheduler
           retirement_kind: hub_navigation_only
           replacement: same_url_plus_hub_entry
-          status: pending
+          status: done
           precondition: >-
-            same as /admin/team-dashboard above: requires a real per-screen ui_projection manifest
-            for scheduler_jobs, which does not exist yet. Ratified into the canonical registry
-            above (route file and dispatcher_mapping already existed but the registry entry was
-            absent) without waiting on that prerequisite, since ratifying an already-shipped
-            route's registry entry is independent of adding hub navigation to it. Not retired by
-            this change.
+            STALE (pre-scheduler-settings-seed-conversion round): "requires a real per-screen
+            ui_projection manifest for scheduler_jobs, which does not exist yet" is no longer true —
+            scheduler.settings.projection (manifest 00000000-0000-0000-0000-00000005c100) is now a
+            real, seeded, live-dispatchable ui_projection manifest (see admin-normal-surface-
+            projection-seed-ssot.yaml surface_axes.admin.surfaces.scheduler). CURRENT (2026-08-17
+            scheduler-settings seed-conversion round, scheduler-settings 3分割設計の確定,
+            Owner-confirmed 2026-07-22 authority): retirement_kind stays literally
+            hub_navigation_only as defined above — NOT thin_projection_wrapper — because the route
+            body is not being replaced: frontend/routes/admin/scheduler.tsx keeps mounting the
+            existing (scope-reduced, not deleted) frontend/islands/SchedulerJobSettingsPanel.tsx.
+            The target manifest's reachability via an admin-authored hubs.hub_relations outbound
+            navigation entry (through the existing /admin/manifests surface) is proven live against
+            real PostgreSQL — hub_navigation:create real authoring dispatch plus the full resolution
+            chain reaching this manifest's own Emission — by backend/tests/Topolactor.Integration.
+            Tests/SchedulerSettingsHubRelationUiProjectionLiveDbTests.cs
+            DispatchAsync_SchedulerSettingsManifest_HubNavigationCreate_RealAuthoringPath_
+            ThenResolutionChainReflectsIt, the same convention admin-enum/credential-management/
+            team-dashboard use (no static hubs.hub_relations seed row is ever shipped; live
+            connection state is runtime/admin data per admin-console-workflow-ssot.yaml
+            connection_state_authority, not a fixed SSOT ledger). Ratified into the canonical
+            registry above (route file and dispatcher_mapping already existed but the registry
+            entry was absent) independent of this retirement item. Not retired by this change: the
+            route itself, its URL, and SchedulerJobSettingsPanel.tsx are all unchanged — only the
+            hub-navigation reachability addition this retirement_kind describes is now proven.
 
   trigger_contract:
     kind_enum:

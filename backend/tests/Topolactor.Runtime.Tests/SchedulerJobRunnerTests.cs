@@ -144,8 +144,13 @@ public class SchedulerJobRunnerTests
             return Task.CompletedTask;
         }
 
-        public Task<IReadOnlyList<SchedulerJobRecord>> LoadSettingsProjectionAsync(CancellationToken ct = default) =>
+        public Task<IReadOnlyList<SchedulerJobRecord>> LoadSettingsProjectionAsync(
+            string? search = null, string? triggerKind = null, string? schedulePolicyKind = null,
+            bool? active = null, CancellationToken ct = default) =>
             Task.FromResult(_jobs);
+
+        public Task<SchedulerJobRecord?> LoadSettingsProjectionByIdAsync(Guid schedulerJobId, CancellationToken ct = default) =>
+            Task.FromResult(_jobs.FirstOrDefault(j => j.SchedulerJobId == schedulerJobId));
 
         public Task<Guid> CreateJobAsync(SchedulerJobDraft draft, CancellationToken ct = default) =>
             Task.FromResult(Guid.NewGuid());

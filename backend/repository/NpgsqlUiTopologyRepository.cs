@@ -1160,6 +1160,7 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         "auth_users:list",
         "auth_users:search",
         "auth_users:get",
+        "scheduler_jobs:list_settings",
     };
 
     /// <summary>

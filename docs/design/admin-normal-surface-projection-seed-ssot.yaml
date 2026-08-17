@@ -1531,7 +1531,35 @@ admin_normal_surface_projection_seed_ssot:
             every mount instead -- see frontend/islands/ProjectionShell.tsx and frontend/tests/
             projectionShellHubNavigationRenderProof.test.ts. This closes team-dashboard's remaining
             open navigation item without a hub_relations edge.
-        scheduler-settings: unresolved_before_seed
+        scheduler-settings:
+          target_manifest: resolved
+          evidence_ref: >-
+            manifest 00000000-0000-0000-0000-00000005c100 (scheduler.settings.projection) built
+            2026-08-17, real ui_projection tensor per surface_axes.admin.surfaces.scheduler.
+            seed_contract. 2026-07-22 Owner-confirmed design (.agent/tasks/todo.md
+            "scheduler-settings 3分割設計の確定"): this manifest is a seed-conversion projection
+            artifact only -- it does NOT become frontend/routes/admin/scheduler.tsx's own route
+            body. That route keeps mounting the existing (scope-reduced, not deleted)
+            frontend/islands/SchedulerJobSettingsPanel.tsx, which dispatches the SAME
+            scheduler_jobs:list_settings/enable/disable actions this manifest's own wiring targets,
+            directly through the axes-routed dispatcher_mapping rows (role=admin, target=admin),
+            never through this manifest's target_ref. Reachability for this manifest itself is
+            hub_navigation_only (docs/design/runtime-orchestration-ssot.yaml
+            admin_route_retirement_matrix /admin/scheduler entry), matching every other resolved
+            entry in this table.
+          navigation_binding_authoring_and_verification: resolved
+          navigation_binding_evidence_ref: >-
+            backend/tests/Topolactor.Integration.Tests/SchedulerSettingsHubRelationUiProjectionLiveDbTests.cs
+            DispatchAsync_SchedulerSettingsManifest_HubNavigationCreate_RealAuthoringPath_ThenResolutionChainReflectsIt
+            -- single live-DB test combining the hub_navigation:create real authoring dispatch path
+            (never a raw SQL insert) with the full resolution_chain against manifest 5c100's own
+            real hub/seed rows, meeting navigation_binding_resolution_criterion above (the same
+            combined-proof pattern admin-enum/team-dashboard/credential-management established).
+            This closes the per-id design_blocking gate for scheduler-settings; the same test file
+            additionally proves (against real PostgreSQL) manifest_key-based resolution, default_
+            screen_read real data, and the enable/disable mutation_confirmation_contract (dryRun ->
+            unconfirmed fail-close -> non-admin fail-close -> confirmed write + logs.diff), none of
+            which imply or require frontend/routes/admin/scheduler.tsx to consume this manifest.
     - id: external_instance_projection_columns
       blocking_condition: External instance credential category depends on instance-port substrate authority; if a concrete existing physical table/column set is not present for required instance settings, the seed task must stop and reference the instance-port SSOT instead of inventing fields.
       required_resolution_before_seed: Cross-check instance-port physical schema and approved candidate source at seed implementation time.
