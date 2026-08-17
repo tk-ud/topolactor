@@ -177,8 +177,8 @@ runtime_orchestration_ssot:
             solve is already closed by a different, Owner-approved mechanism — hence
             status=superseded_by_owner_directed_alternate. Left open for a future genuine
             hub_navigation:create authoring round if/when a real Normal-reachable source manifest
-            is introduced elsewhere in the system; not blocking, not required for team-dashboard's
-            own Implemented status.
+            is introduced elsewhere in the system; not a blocking precondition for the rest of
+            team-dashboard's own completion state.
         - route: /admin/scheduler
           retirement_kind: hub_navigation_only
           replacement: same_url_plus_hub_entry
