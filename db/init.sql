@@ -42,6 +42,9 @@
 \echo '[init.sql] applying team_markdown_tables.sql'
 \i /db/team_markdown_tables.sql
 
+\echo '[init.sql] applying team_dashboard_tables.sql'
+\i /db/team_dashboard_tables.sql
+
 \echo '[init.sql] applying manifest_tables.sql'
 \i /db/manifest_tables.sql
 

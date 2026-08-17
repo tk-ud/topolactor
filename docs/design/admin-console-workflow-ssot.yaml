@@ -1327,6 +1327,11 @@ admin_console_workflow_ssot:
                 data_display/list: [rows, items]
                 data_display/tree: [nodes, items]
                 data_display/json: [data]
+                # Scalar "markdown" target, not an array -- team-dashboard subBundle closure round
+                # (.agent/tasks/todo.md). Lets md_viewer.projection's bare-markdown mode bind its
+                # displayed markdown from an existing read action's emission.data, first used by a
+                # REAL (non-draft) tensor here.
+                data_display/md_viewer: [markdown]
                 display/card_list: [items]
                 disclosure/accordion: [items]
                 form_input/select: [options]

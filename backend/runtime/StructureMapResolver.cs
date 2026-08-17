@@ -44,6 +44,11 @@ public class StructureMapResolver
             ["data_display/list"]               = new HashSet<string>(StringComparer.Ordinal) { "rows", "items" },
             ["data_display/tree"]               = new HashSet<string>(StringComparer.Ordinal) { "nodes", "items" },
             ["data_display/json"]               = new HashSet<string>(StringComparer.Ordinal) { "data" },
+            // Scalar, not an array -- team-dashboard subBundle closure round (.agent/tasks/todo.md).
+            // Lets md_viewer.projection's bare-markdown mode bind its displayed markdown from an
+            // existing read action's emission.data, the same scalar-value idiom form_input/
+            // search_input and form_input/textarea_template already use for their own "value" prop.
+            ["data_display/md_viewer"]          = new HashSet<string>(StringComparer.Ordinal) { "markdown" },
             ["display/card_list"]               = new HashSet<string>(StringComparer.Ordinal) { "items" },
             ["disclosure/accordion"]            = new HashSet<string>(StringComparer.Ordinal) { "items" },
             ["form_input/select"]               = new HashSet<string>(StringComparer.Ordinal) { "options" },

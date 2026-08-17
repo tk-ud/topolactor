@@ -10,8 +10,12 @@ import * as $admin_index from "./routes/admin/index.tsx";
 import * as $admin_manifests from "./routes/admin/manifests.tsx";
 import * as $admin_scheduler from "./routes/admin/scheduler.tsx";
 import * as $admin_team_dashboard_index from "./routes/admin/team-dashboard/index.tsx";
+import * as $admin_team_markdown_index from "./routes/admin/team-markdown/index.tsx";
 import * as $admin_ui_builder from "./routes/admin/ui-builder.tsx";
 import * as $admin_users from "./routes/admin/users.tsx";
+import * as $api_admin_auth_users_userId_credential_revoke from "./routes/api/admin/auth/users/[userId]/credential/revoke.ts";
+import * as $api_admin_auth_users_userId_sessions_index from "./routes/api/admin/auth/users/[userId]/sessions/index.ts";
+import * as $api_admin_auth_users_userId_sessions_revoke from "./routes/api/admin/auth/users/[userId]/sessions/revoke.ts";
 import * as $api_auth_login_manifest from "./routes/api/auth/login-manifest.ts";
 import * as $api_auth_login from "./routes/api/auth/login.ts";
 import * as $api_auth_logout from "./routes/api/auth/logout.ts";
@@ -27,6 +31,7 @@ import * as $api_sse from "./routes/api/sse.ts";
 import * as $api_super_auth_login from "./routes/api/super_auth/login.ts";
 import * as $api_super_auth_refresh from "./routes/api/super_auth/refresh.ts";
 import * as $auth from "./routes/auth.tsx";
+import * as $dashboard_index from "./routes/dashboard/index.tsx";
 import * as $index from "./routes/index.tsx";
 import * as $runtime_status from "./routes/runtime-status.tsx";
 import * as $super_auth from "./routes/super_auth.tsx";
@@ -49,6 +54,7 @@ import * as $RegistryVectorValidator from "./islands/RegistryVectorValidator.tsx
 import * as $SchedulerJobSettingsPanel from "./islands/SchedulerJobSettingsPanel.tsx";
 import * as $SeedAdmin from "./islands/SeedAdmin.tsx";
 import * as $SuperAuthPanel from "./islands/SuperAuthPanel.tsx";
+import * as $TeamDashboardViewer from "./islands/TeamDashboardViewer.tsx";
 import * as $TeamMarkdownDashboard from "./islands/TeamMarkdownDashboard.tsx";
 import * as $UiBuilderAdmin from "./islands/UiBuilderAdmin.tsx";
 import type { Manifest } from "$fresh/server.ts";
@@ -63,8 +69,15 @@ const manifest = {
     "./routes/admin/manifests.tsx": $admin_manifests,
     "./routes/admin/scheduler.tsx": $admin_scheduler,
     "./routes/admin/team-dashboard/index.tsx": $admin_team_dashboard_index,
+    "./routes/admin/team-markdown/index.tsx": $admin_team_markdown_index,
     "./routes/admin/ui-builder.tsx": $admin_ui_builder,
     "./routes/admin/users.tsx": $admin_users,
+    "./routes/api/admin/auth/users/[userId]/credential/revoke.ts":
+      $api_admin_auth_users_userId_credential_revoke,
+    "./routes/api/admin/auth/users/[userId]/sessions/index.ts":
+      $api_admin_auth_users_userId_sessions_index,
+    "./routes/api/admin/auth/users/[userId]/sessions/revoke.ts":
+      $api_admin_auth_users_userId_sessions_revoke,
     "./routes/api/auth/login-manifest.ts": $api_auth_login_manifest,
     "./routes/api/auth/login.ts": $api_auth_login,
     "./routes/api/auth/logout.ts": $api_auth_logout,
@@ -80,6 +93,7 @@ const manifest = {
     "./routes/api/super_auth/login.ts": $api_super_auth_login,
     "./routes/api/super_auth/refresh.ts": $api_super_auth_refresh,
     "./routes/auth.tsx": $auth,
+    "./routes/dashboard/index.tsx": $dashboard_index,
     "./routes/index.tsx": $index,
     "./routes/runtime-status.tsx": $runtime_status,
     "./routes/super_auth.tsx": $super_auth,
@@ -104,6 +118,7 @@ const manifest = {
     "./islands/SchedulerJobSettingsPanel.tsx": $SchedulerJobSettingsPanel,
     "./islands/SeedAdmin.tsx": $SeedAdmin,
     "./islands/SuperAuthPanel.tsx": $SuperAuthPanel,
+    "./islands/TeamDashboardViewer.tsx": $TeamDashboardViewer,
     "./islands/TeamMarkdownDashboard.tsx": $TeamMarkdownDashboard,
     "./islands/UiBuilderAdmin.tsx": $UiBuilderAdmin,
   },

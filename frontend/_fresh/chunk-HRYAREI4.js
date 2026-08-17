@@ -1,0 +1,1 @@
+function t(n,e){return[n,e?.classname,e?.className,e?.tailwind].filter(Boolean).join(" ")||void 0}function o(n,e){return e?.style?`${n};${e.style}`:n}function i(n,e){return n===!0||e?.state==="loading"}export{t as a,o as b,i as c};

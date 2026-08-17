@@ -28,6 +28,7 @@ public class PropBindingContractSyncTests
             ["data_display/list"]                = new HashSet<string> { "rows", "items" },
             ["data_display/tree"]                = new HashSet<string> { "nodes", "items" },
             ["data_display/json"]                = new HashSet<string> { "data" },
+            ["data_display/md_viewer"]           = new HashSet<string> { "markdown" },
             ["display/card_list"]                = new HashSet<string> { "items" },
             ["disclosure/accordion"]             = new HashSet<string> { "items" },
             ["form_input/select"]                = new HashSet<string> { "options" },

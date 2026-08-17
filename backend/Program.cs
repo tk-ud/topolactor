@@ -89,6 +89,10 @@ builder.Services.AddSingleton<TeamMarkdownRepository>(sp =>
     new NpgsqlTeamMarkdownRepository(
         sp.GetRequiredService<ILogger<NpgsqlTeamMarkdownRepository>>(),
         connectionString));
+builder.Services.AddSingleton<TeamDashboardRepository>(sp =>
+    new NpgsqlTeamDashboardRepository(
+        sp.GetRequiredService<ILogger<NpgsqlTeamDashboardRepository>>(),
+        connectionString));
 builder.Services.AddSingleton<IExternalPortPolicyRepository>(sp =>
     new NpgsqlExternalPortPolicyRepository(
         sp.GetRequiredService<ILogger<NpgsqlExternalPortPolicyRepository>>(),
@@ -282,6 +286,7 @@ builder.Services.AddSingleton<AdminRuntime>(sp =>
         sp.GetRequiredService<AbstractFunctionExecutor>(),
         sp.GetRequiredService<MockPresetRepository>(),
         sp.GetRequiredService<TeamMarkdownRepository>(),
+        sp.GetRequiredService<TeamDashboardRepository>(),
         sp.GetRequiredService<ISchedulerJobManifestRepository>(),
         sp.GetRequiredService<IBackendErrorEvidenceAppender>(),
         sp.GetRequiredService<AggregateTriggerRepository>(),
@@ -974,6 +979,27 @@ app.MapGet("/team-markdown/saved-views/{savedViewId:guid}", async (
     if (detail is null)
         return Results.Json(new { success = false, errors = new[] { new ValidationError("SAVED_VIEW_NOT_FOUND", $"Saved view {savedViewId} not found") } }, statusCode: 404);
     return Results.Json(new { success = true, savedView = detail });
+});
+
+// ─── Team Dashboard viewer read endpoint (/team-dashboard/note) — any authenticated JWT ────────
+// Same rationale as the /team-markdown/* endpoints immediately above: the admin_runtime dispatch
+// route (team_dashboard:get/update via /dispatch) infers required_role=admin uniformly from its
+// manifest's runtime_destination for every action, read or write; that gate must stay intact for
+// team_dashboard:update, so Normal-role read access is served from this separate boundary instead
+// of by weakening the dispatch-side gate. A future seed-driven Normal viewer component would read
+// from here (see docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.normal.
+// surfaces.dashboard.team_dashboard_canonical_shared_contract.hub_relation_navigation_binding_ref)
+// -- the admin edit surface (surface_axes.admin.surfaces.team_dashboard) still goes through the
+// existing admin_runtime dispatch actions (team_dashboard:get/update) unchanged.
+app.MapGet("/team-dashboard/note", async (
+    HttpContext ctx, TeamDashboardRepository repo, JwtGuard jwtGuard, AuthRepository authRepository, CancellationToken ct) =>
+{
+    var token = ExtractBearerToken(ctx);
+    var authErrors = await jwtGuard.ValidateActiveSessionAsync(token, authRepository, ct);
+    if (authErrors.Count > 0)
+        return Results.Json(new { success = false, errors = authErrors }, statusCode: 401);
+    var note = await repo.GetNoteAsync(ct);
+    return Results.Json(new { success = true, note });
 });
 
 // GET /hub-navigation/relations — read-only navigation link-list fallback for authenticated

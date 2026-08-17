@@ -60,7 +60,17 @@ VALUES
     ('00000000-0000-0000-0001-00000000001b', 'confirmed_update_button.primitive', 'inline_edit/confirmed_update_button', 'frontend/components/ConfirmedUpdateButton.tsx', 'active'),
     ('00000000-0000-0000-0001-00000000001c', 'audit_diff_drawer.primitive', 'inline_edit/audit_diff_drawer', 'frontend/components/AuditDiffDrawer.tsx', 'active'),
     ('00000000-0000-0000-0001-00000000001d', 'aggregation_preview_table.primitive', 'calc_topology/aggregation_preview_table', 'frontend/components/AggregationPreviewTable.tsx', 'active'),
-    ('00000000-0000-0000-0001-00000000001e', 'hub_statistics_panel.primitive', 'calc_topology/hub_statistics_panel', 'frontend/components/HubStatisticsPanel.tsx', 'active')
+    ('00000000-0000-0000-0001-00000000001e', 'hub_statistics_panel.primitive', 'calc_topology/hub_statistics_panel', 'frontend/components/HubStatisticsPanel.tsx', 'active'),
+    -- team-dashboard subBundle (admin-surface-topology-seed-conversion): promotes two more
+    -- already-coded catalog.ts components to active ui_component_registry rows, the same
+    -- registration/promotion action table.primitive's own comment above describes.
+    -- textarea.template + md_viewer.projection were already proven end-to-end as a DRAFT preset
+    -- composition (physical_details_inline_editor_md_generator_preset, PR #604); this is their
+    -- first use in a REAL (non-draft, active) ui_topology_tensor, which is the first thing that
+    -- actually requires componentId resolution through this table (draft/preview compile
+    -- snapshots never queried it).
+    ('00000000-0000-0000-0001-00000000001f', 'textarea.template', 'form_input/textarea_template', 'frontend/components/Textarea.tsx', 'active'),
+    ('00000000-0000-0000-0001-000000000021', 'md_viewer.projection', 'data_display/md_viewer', 'frontend/components/MdViewer.tsx', 'active')
 ON CONFLICT (component_key) DO UPDATE
     SET component_kind = EXCLUDED.component_kind,
         source_path    = EXCLUDED.source_path,
