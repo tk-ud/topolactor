@@ -11,12 +11,19 @@ import ProjectionShell from "../../../islands/ProjectionShell.tsx";
 // reads/writes the shared topology.team_dashboard_note row via team_dashboard:get/update; the SAME
 // row is read read-only at /dashboard (surface_axes.normal.surfaces.dashboard.
 // team_dashboard_canonical_shared_contract) — no duplicated data identity between the two routes.
-const TEAM_DASHBOARD_ADMIN_MANIFEST_ID = "00000000-0000-0000-0000-0000000dd010";
+//
+// Generic route→Manifest identity resolution round (2026-08-17): pins by manifest_key, not a raw
+// UUID constant — resolved backend-side via the generic manifest_key_target_ref_resolution_contract
+// (ManifestDispatcher.cs, "exactly one active row" fail-close over
+// hubs.topology_manifests.manifest_key, the same stable identity string db/seed_empty.sql already
+// registers this manifest under). See docs/design/runtime-orchestration-ssot.yaml
+// dispatcher_contract for the full contract.
+const TEAM_DASHBOARD_ADMIN_MANIFEST_KEY = "team_dashboard.admin.projection";
 
 export default function AdminTeamDashboardRoute(): JSX.Element {
   return (
     <AdminAuthGate>
-      <ProjectionShell manifestId={TEAM_DASHBOARD_ADMIN_MANIFEST_ID} />
+      <ProjectionShell manifestKey={TEAM_DASHBOARD_ADMIN_MANIFEST_KEY} />
     </AdminAuthGate>
   );
 }

@@ -2274,6 +2274,14 @@ react_schema_topology_seed_translator_ssot:
               shape PR #604 round 2 originally authored by hand and verified end to end against a
               real database -- this round's job was sourcing the STRUCTURE/wiring/interactions from a
               real translator run, not re-deriving the componentId identity mapping from scratch.
+              UPDATED (2026-08-17, UIBuilder-lineage closure round 2): the patched node set (including
+              the confirm_modal node's explicit componentKind, a real gap the live pipeline itself
+              surfaced -- layout_patch:validate resolves componentKind from the node's own JSON field
+              only, never a DB lookup, unlike emission-time LayoutNodeComponentIdEnrichment) is proven
+              to pass the REAL layout_patch:preview -> layout_patch:validate -> layout_patch:apply
+              pipeline byte-for-byte (backend/tests/Topolactor.Integration.Tests/
+              TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs) -- not merely asserted
+              structurally correct by inspection.
 
       - seed_surface_key: team_dashboard.normal.projection
         declared_by_yaml_ref: docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.normal.surfaces.dashboard.team_dashboard_canonical_shared_contract
@@ -2307,18 +2315,25 @@ react_schema_topology_seed_translator_ssot:
               attribute's node-only scope).
           - gap: team_dashboard_normal_tensor_empty_for_pure_display_field
             classification: translator_scope_boundary
-            status: resolved_via_reuse_of_prior_round_hand_verified_tensor
+            status: resolved_via_real_uibuilder_apply_pipeline_verification
             note: >-
               adoptionCandidates.tensorAdoptionCandidates is the empty array [] for this surface's
               real generation run -- a Section containing a single display-only Field with no Action/
               dispatch element gives the tensor-consolidation pass nothing to build a node list
               around (confirmed against the real run, not assumed). The react_schema/layout structure
               itself (Projection/Category/Section/Field, targetSurface resolution, componentKind
-              membership) is confirmed valid by the SAME zero-validationError generation run. The
-              single team_dashboard_normal_viewer tensor node is therefore the SAME hand-verified
-              node PR #604 round 2 already proved end to end against a real database, carried forward
-              unchanged rather than re-authored, since the translator's own tensor stage does not yet
-              reach a pure single-Field-no-action projection.
+              membership) is confirmed valid by the SAME zero-validationError generation run. UPDATED
+              (2026-08-17, UIBuilder-lineage closure round 2): the single team_dashboard_normal_viewer
+              tensor node is no longer carried forward on hand-verification alone -- it is proven to
+              pass the REAL, live, DB-writing production layout_patch:preview ->
+              layout_patch:validate -> layout_patch:apply pipeline byte-for-byte
+              (backend/tests/Topolactor.Integration.Tests/
+              TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs, surface="normal"), the SAME
+              dispatch actions frontend/islands/UiBuilderAdmin.tsx's real Apply button calls, against
+              a disposable scaffold. Still not itself a translator-emitted candidate (the translator's
+              own tensor-consolidation gap above remains unresolved for this specific node shape), but
+              no longer merely "hand-verified" -- machine-verified against the real authoring
+              authority pipeline instead.
 
       - seed_surface_key: ui_component_registry.preset_catalog_bootstrap.v1
         declared_by_yaml_ref: docs/design/component-catalog-classification-ssot.yaml catalog_vocabulary_contract

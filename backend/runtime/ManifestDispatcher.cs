@@ -181,10 +181,69 @@ public class ManifestDispatcher
             }
             else if (TryGetRawTargetRef(request, out var rawTargetRef))
             {
-                // target_ref present in payload — must parse as "manifest:{uuid}:{wiring_key}".
-                // Malformed target_ref returns TARGET_REF_INVALID: silent axes-fallback risks
-                // routing to an unintended manifest when the admin-configured ref is broken.
-                if (!TryParseManifestTargetRef(rawTargetRef!, out var targetRefManifestId))
+                // target_ref present in payload — must parse as "manifest:{uuid}:{wiring_key}" OR
+                // the generic key-based shape "manifest_key:{manifest_key}:{wiring_key}"
+                // (manifest_key_target_ref_resolution_contract, docs/design/runtime-orchestration-
+                // ssot.yaml dispatcher_contract) — a route/entry point may identify its target
+                // manifest by hubs.topology_manifests.manifest_key, the same stable, already-
+                // existing, human-readable identity every manifest in the system already carries,
+                // instead of a raw UUID constant. Resolution uses the SAME "exactly one active row"
+                // discipline as ResolveCanonicalDefaultEntryManifestIdAsync (fail-close on zero or
+                // multiple matches, never first-match/oldest/MIN), then flows into the IDENTICAL
+                // LoadByIdAsync/active-check/layer-action-authorization pipeline below as the
+                // UUID-based path -- this is purely an additional way to ARRIVE at manifestId, never
+                // a parallel authorization surface. Malformed target_ref returns TARGET_REF_INVALID:
+                // silent axes-fallback risks routing to an unintended manifest when the
+                // admin-configured ref is broken.
+                Guid targetRefManifestId;
+                if (rawTargetRef!.StartsWith("manifest_key:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var keyParts = rawTargetRef.Split(':', 3);
+                    var manifestKey = keyParts.Length >= 2 ? keyParts[1].Trim() : "";
+                    if (manifestKey.Length == 0)
+                    {
+                        return new EndpointResponseDto(
+                            Success: false,
+                            Emission: null,
+                            Errors: [new ValidationError(
+                                "TARGET_REF_INVALID",
+                                $"target_ref '{rawTargetRef}' is not a valid manifest_key reference. Expected format: manifest_key:<manifest_key>:<wiring_key>.")]);
+                    }
+
+                    Guid? resolvedByKey;
+                    try
+                    {
+                        resolvedByKey = _hubNavigationResolver is null
+                            ? null
+                            : await _hubNavigationResolver.ResolveActiveManifestIdByKeyAsync(manifestKey, ct);
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        _logger.LogWarning(ex,
+                            "ManifestDispatcher: manifest_key target_ref '{TargetRef}' is ambiguous.",
+                            rawTargetRef);
+                        return new EndpointResponseDto(
+                            Success: false,
+                            Emission: null,
+                            Errors: [new ValidationError("MANIFEST_KEY_AMBIGUOUS", ex.Message)]);
+                    }
+
+                    if (resolvedByKey is null)
+                    {
+                        _logger.LogWarning(
+                            "ManifestDispatcher: no active manifest found for manifest_key='{ManifestKey}' (target_ref='{TargetRef}').",
+                            manifestKey, rawTargetRef);
+                        return new EndpointResponseDto(
+                            Success: false,
+                            Emission: null,
+                            Errors: [new ValidationError(
+                                "MANIFEST_NOT_FOUND",
+                                $"No active manifest found for manifest_key='{manifestKey}'.")]);
+                    }
+
+                    targetRefManifestId = resolvedByKey.Value;
+                }
+                else if (!TryParseManifestTargetRef(rawTargetRef!, out targetRefManifestId))
                 {
                     _logger.LogWarning(
                         "ManifestDispatcher: malformed target_ref '{TargetRef}' — expected manifest:{{uuid}}:{{key}} format.",

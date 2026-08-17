@@ -255,6 +255,72 @@ public class TeamDashboardHubRelationUiProjectionLiveDbTests
     }
 
     /// <summary>
+    /// Generic route→Manifest identity resolution closure round (2026-08-17): the SAME production
+    /// dd020 manifest, reached WITHOUT its UUID appearing anywhere in the request -- target_ref
+    /// names it only by hubs.topology_manifests.manifest_key
+    /// ("manifest_key:team_dashboard.normal.projection:projection_entry"), the exact shape
+    /// frontend/routes/dashboard/index.tsx now sends (ProjectionShell manifestKey prop →
+    /// frontend/runtime/projectionEntry.ts resolveProjectionEntryAxes) instead of a hardcoded UUID
+    /// constant. Proves the generic manifest_key_target_ref_resolution_contract
+    /// (ManifestDispatcher.cs / ContentBundleRepository.ResolveActiveManifestIdByManifestKeyAsync)
+    /// resolves against REAL production hubs.topology_manifests data end to end, reaching the exact
+    /// same Emission (same ManifestId, same viewer node, same real Data) as the UUID-based dispatch
+    /// above.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_NormalManifest_ProjectionEntry_ByManifestKey_ResolvesSameProductionManifest()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+        var payload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = "manifest_key:team_dashboard.normal.projection:projection_entry",
+        });
+        var request = new EndpointRequestDto(
+            "Search", "default", "screen_list", "Search",
+            IdOrHubId: null, Payload: payload, Context: null, TriggerKind: "client", Role: "normal");
+
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
+        var emission = response.Emission!;
+        Assert.Equal(NormalManifestId.ToString(), emission.ManifestId);
+        Assert.Contains(emission.LayoutNodes!, n => n.NodeId == "team_dashboard_normal_viewer");
+        Assert.NotNull(emission.Data);
+        Assert.Equal(NoteId.ToString(), emission.Data!.Value.GetProperty("noteId").GetString());
+    }
+
+    /// <summary>
+    /// The Admin surface's own equivalent -- manifest_key:team_dashboard.admin.projection resolves
+    /// to dd010, the SAME manifest_key/route-entry pairing frontend/routes/admin/team-dashboard/
+    /// index.tsx now sends, reaching the Admin tensor's editor nodes.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_AdminManifest_ProjectionEntry_ByManifestKey_ResolvesSameProductionManifest()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+        var payload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = "manifest_key:team_dashboard.admin.projection:projection_entry",
+        });
+        var request = new EndpointRequestDto(
+            "Search", "default", "screen_list", "Search",
+            IdOrHubId: null, Payload: payload, Context: null, TriggerKind: "client", Role: "admin");
+
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
+        var emission = response.Emission!;
+        Assert.Equal(AdminManifestId.ToString(), emission.ManifestId);
+        Assert.Contains(emission.LayoutNodes!, n => n.NodeId == "team_dashboard_admin_body");
+    }
+
+    /// <summary>
     /// Negative proof, symmetric to the positive one above: the SAME Role="normal" caller dispatching
     /// the ADMIN manifest's own structural read is still denied — the scoped-open capability_
     /// requirement entries live only on dd020's own topology, never on dd010's, so opening Normal

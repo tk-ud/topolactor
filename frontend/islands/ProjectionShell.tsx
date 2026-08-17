@@ -100,12 +100,20 @@ export type ProjectionShellProps = {
    * default, never an override of a real user navigation.
    */
   manifestId?: string;
+  /**
+   * Generic route→Manifest identity resolution (2026-08-17): lets a same-URL thin route wrapper
+   * pin its default entry by hubs.topology_manifests.manifest_key — the same stable,
+   * already-existing, human-readable identity every manifest in the system already carries —
+   * instead of a raw UUID constant. Same default-only-fill-in behavior as `manifestId` (an
+   * explicit URL selection always wins); ignored when `manifestId` is also given.
+   */
+  manifestKey?: string;
 };
 
 const ProjectionShell: FunctionComponent<ProjectionShellProps> = (
   props,
 ) => {
-  const { manifestId } = props;
+  const { manifestId, manifestKey } = props;
   const [loading, setLoading] = useState(true);
   const [emission, setEmission] = useState<Emission | null>(null);
   const [specs, setSpecs] = useState<ComponentSpec[]>([]);
@@ -255,10 +263,16 @@ const ProjectionShell: FunctionComponent<ProjectionShellProps> = (
         setLoading(false);
         return;
       }
-      // A `manifestId` prop only ever fills in a DEFAULT entry (no explicit route/package/
-      // manifest in the URL) -- a real user navigation (?manifest=/?route=/?package=) always wins.
-      const entrySelection = manifestId && isDefaultProjectionEntry(entryParse.selection)
+      // A `manifestId`/`manifestKey` prop only ever fills in a DEFAULT entry (no explicit
+      // route/package/manifest in the URL) -- a real user navigation (?manifest=/?route=/?package=)
+      // always wins. `manifestId` (an explicit UUID) takes priority over `manifestKey` when a
+      // route somehow supplies both.
+      const entrySelection = !isDefaultProjectionEntry(entryParse.selection)
+        ? entryParse.selection
+        : manifestId
         ? { ...entryParse.selection, manifestId }
+        : manifestKey
+        ? { ...entryParse.selection, manifestKey }
         : entryParse.selection;
 
       const initialAxes: UserOperation = resolveProjectionEntryAxes(

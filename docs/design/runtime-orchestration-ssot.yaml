@@ -647,6 +647,68 @@ runtime_orchestration_ssot:
           - two_active_rows_carrying_the_marker_resolves_to_canonical_default_entry_ambiguous
           - no_row_carrying_the_marker_resolves_to_manifest_not_found
 
+    manifest_key_target_ref_resolution_contract:
+      note: >-
+        Generic route/projection-entry identity resolution (2026-08-17, cross-cutting closure
+        round): lets a frontend entry point identify its target manifest by
+        hubs.topology_manifests.manifest_key -- the same stable, already-existing,
+        human-readable identity string every manifest in the system already carries -- instead of
+        a raw manifest_id UUID constant embedded in route source. Distinct from
+        canonical_default_entry_contract above (which resolves the SINGLE, explicitly-marked
+        site-root fallback for the bare/no-selection axes combination): this contract is a
+        general-purpose, unlimited-cardinality resolver any route/entry point may invoke by
+        naming its own manifest_key, not scoped to one singleton relation marker.
+      target_ref_shape: >-
+        payload.target_ref = "manifest_key:<manifest_key>:<wiring_key>" -- a sibling grammar to
+        the pre-existing "manifest:<uuid>:<wiring_key>" shape (ManifestDispatcher.cs
+        TryParseManifestTargetRef), recognized alongside it in the SAME target_ref dispatch
+        branch. Resolution to a manifest_id happens FIRST (this contract's own scope); every
+        downstream step (LoadByIdAsync, active-status check, admin_runtime layer/action
+        authorization, capability_requirement validation) is the IDENTICAL, unmodified pipeline
+        the UUID-based shape already uses -- this contract only ever changes HOW a manifest_id is
+        arrived at, never what happens once one is resolved.
+      owner: hubs.topology_manifests.manifest_key
+      resolution_rule: >-
+        Exactly one ACTIVE hubs.topology_manifests row may carry a given manifest_key at a time
+        (the same no_implicit_join_nullable_fallback_or_oldest_manifest_fallback discipline
+        db-schema.yaml already requires for hub_relations target resolution, applied here to
+        manifest_key lookup instead -- ContentBundleRepository.
+        ResolveActiveManifestIdByManifestKeyAsync, "SELECT ... WHERE status='active' AND
+        manifest_key=@key LIMIT 2"). manifest_key itself carries no UNIQUE DB constraint (deferred
+        deprecated/draft rows may freely reuse a key), so this resolver filters on status='active'
+        rather than relying on a schema-level guarantee.
+      failure_semantics:
+        missing: >-
+          Zero active rows share the manifest_key -> MANIFEST_NOT_FOUND, identical in shape to the
+          pre-existing UUID-not-found error -- never a guessed manifest.
+        ambiguous: >-
+          More than one active row shares the manifest_key -> MANIFEST_KEY_AMBIGUOUS, an explicit
+          configuration-error response -- never a silent first-match/oldest/MIN pick.
+        malformed: >-
+          Empty manifest_key segment ("manifest_key::wiring_key") -> TARGET_REF_INVALID, the same
+          code the UUID shape already returns for its own malformed cases.
+      prohibited:
+        - first_match_oldest_or_min_fallback_when_multiple_active_rows_share_a_key
+        - inventing_a_new_per_route_identity_vocabulary_distinct_from_manifest_key
+        - a_dedicated_per_route_or_per_surface_resolver_bypassing_this_shared_generic_method
+        - treating_manifest_key_resolution_as_a_separate_authorization_surface_from_the_uuid_path
+      test_proof_contract:
+        note: >-
+          A completion proof for this contract must dispatch a REAL manifest_key-shaped
+          target_ref through ManifestDispatcher.DispatchAsync against canonical (non-demo) seed
+          data and observe Emission.ManifestId resolving to the SAME manifest the equivalent
+          UUID-shaped target_ref would reach -- not merely that the resolver method returns the
+          expected UUID in isolation.
+        negative_cases:
+          - manifest_key_with_zero_active_rows_resolves_to_manifest_not_found
+          - manifest_key_shared_by_two_active_rows_resolves_to_manifest_key_ambiguous
+          - empty_manifest_key_segment_resolves_to_target_ref_invalid
+        production_consumers: >-
+          frontend/routes/dashboard/index.tsx (team_dashboard.normal.projection) and
+          frontend/routes/admin/team-dashboard/index.tsx (team_dashboard.admin.projection) --
+          ProjectionShell manifestKey prop, replacing the prior hardcoded manifestId UUID
+          constant on both routes.
+
     layout_schema_structural_render_contract:
       note: >-
         Minimal design addendum defining render-completion semantics for

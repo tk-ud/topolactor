@@ -102,6 +102,36 @@ Deno.test("projectionEntry: route + manifest combine (target axis + target_ref)"
   );
 });
 
+// ── manifest_key selection (generic route→Manifest identity resolution) ─────
+
+Deno.test("projectionEntry: manifestKey selection resolves to a manifest_key-shaped payload.target_ref", () => {
+  const axes = resolveProjectionEntryAxes({
+    manifestKey: "team_dashboard.normal.projection",
+  });
+  assertEquals(
+    axes.payload?.target_ref,
+    "manifest_key:team_dashboard.normal.projection:projection_entry",
+  );
+});
+
+Deno.test("projectionEntry: manifestId takes priority over manifestKey when both are somehow present", () => {
+  const axes = resolveProjectionEntryAxes({
+    manifestId: MANIFEST_ID,
+    manifestKey: "team_dashboard.normal.projection",
+  });
+  assertEquals(
+    axes.payload?.target_ref,
+    `manifest:${MANIFEST_ID}:projection_entry`,
+  );
+});
+
+Deno.test("projectionEntry: manifestKey alone is not a default entry", () => {
+  assertEquals(
+    isDefaultProjectionEntry({ manifestKey: "team_dashboard.admin.projection" }),
+    false,
+  );
+});
+
 Deno.test("projectionEntry: no selection keeps the default entry axes (fallback only, not arbitrary-topology proof)", () => {
   const axes = resolveProjectionEntryAxes({});
   assertEquals(axes.target, "default");
@@ -199,6 +229,20 @@ Deno.test("projection entry surface: SSE refresh merges identity into the entry 
   assert(
     src.includes("...(storedAxes.payload ?? {})"),
     "SSE refresh must merge identity fields into the stored entry payload instead of replacing it",
+  );
+});
+
+Deno.test("projection entry surface: ProjectionShell accepts a manifestKey prop as a default-entry fill-in, mirroring manifestId", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/ProjectionShell.tsx", import.meta.url),
+  );
+  assert(
+    src.includes("manifestKey?: string"),
+    "ProjectionShellProps must declare an optional manifestKey prop",
+  );
+  assert(
+    src.includes("manifestKey") && src.includes("entrySelection"),
+    "ProjectionShell must merge manifestKey into the default-entry selection the same way manifestId is merged",
   );
 });
 

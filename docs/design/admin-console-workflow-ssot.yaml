@@ -147,23 +147,31 @@ admin_console_workflow_ssot:
         (dd020) are both real, seeded ui_projection manifests (admin-normal-surface-projection-
         seed-ssot.yaml surface_axes.admin.surfaces.team_dashboard /
         surface_axes.normal.surfaces.dashboard), their package/layout/wiring/tensor rows generated
-        through the real react_schema_topology_seed_translator.py intake -> preview/validate/apply
-        boundary (.agent/tests/fixtures/react-schema-topology-seed-translator/team-dashboard-
-        admin*.json / team-dashboard-normal*.json, declared_seed_surface_catalog entries
-        team_dashboard.admin.projection / team_dashboard.normal.projection in
-        react-schema-topology-seed-translator-ssot.yaml), not a hand-authored tensor. Canonical
-        physical-row mutation (team_dashboard:update) runs the SAME
-        AdminMasterRosterAudit.AppendAsync generic diff-log helper credential-management/enum_
-        dictionary/external_api_credential/external_instance_credential/auth_users already share,
-        behind the same dryRun-preview -> explicit-confirm -> write mutation_confirmation_contract
-        idiom enum_dictionary:create_group established, writing real logs.diff evidence readable
-        back through physical_record:list_history (backend/tests/Topolactor.Integration.Tests/
+        through the real react_schema_topology_seed_translator.py intake (an offline draft/candidate
+        generator, never itself UIBuilder preview/validate/apply authority) and additionally
+        verified (2026-08-17, UIBuilder-lineage closure round 2) against the REAL, live, DB-writing
+        production layout_patch:preview -> layout_patch:validate -> layout_patch:apply pipeline
+        (backend/tests/Topolactor.Integration.Tests/
+        TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs — the exact dispatch actions
+        frontend/islands/UiBuilderAdmin.tsx's real Apply button calls, proven end to end against a
+        disposable scaffold, never db/seed_empty.sql's own production dd0xx rows) — not a
+        hand-authored tensor merely resembling generated output. Canonical physical-row mutation
+        (team_dashboard:update) runs the SAME AdminMasterRosterAudit.AppendAsync generic diff-log
+        helper credential-management/enum_dictionary/external_api_credential/
+        external_instance_credential/auth_users already share, behind the same dryRun-preview ->
+        explicit-confirm -> write mutation_confirmation_contract idiom enum_dictionary:create_group
+        established, writing real logs.diff evidence readable back through
+        physical_record:list_history (backend/tests/Topolactor.Integration.Tests/
         TeamDashboardHubRelationUiProjectionLiveDbTests.cs
         DispatchAsync_TeamDashboardUpdate_WritesLogsDiffEvidence_ReadableViaCanonicalPhysicalRecordHistory).
-        The one remaining open item is navigation_binding's literal hub_navigation_only retirement
-        (see runtime-orchestration-ssot.yaml admin_route_retirement_matrix.routes /admin/team-
-        dashboard entry) — resolved via the Owner-directed ProjectionShell common Home link
-        instead of a fabricated hub_relations source, not a target-manifest-readiness blocker.
+        /admin/team-dashboard and /dashboard resolve their target manifest by manifest_key (2026-08-17,
+        generic route→Manifest identity resolution round), not a hardcoded manifest_id UUID
+        constant — see runtime-orchestration-ssot.yaml dispatcher_contract.
+        manifest_key_target_ref_resolution_contract. The one remaining open item is
+        navigation_binding's literal hub_navigation_only retirement (see runtime-orchestration-
+        ssot.yaml admin_route_retirement_matrix.routes /admin/team-dashboard entry) — resolved via
+        the Owner-directed ProjectionShell common Home link instead of a fabricated hub_relations
+        source, not a target-manifest-readiness blocker.
       scheduler_settings: >-
         blocked — same as enum_dictionary above, for scheduler_jobs.
     prohibited:

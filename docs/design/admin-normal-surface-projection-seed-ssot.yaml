@@ -858,19 +858,27 @@ admin_normal_surface_projection_seed_ssot:
             loading_empty_error_projection: [loading_team_dashboard, empty_team_dashboard_note, team_dashboard_error_fail_close]
           hub_relation_navigation_binding_ref: >-
             Reachable directly at /admin/team-dashboard (frontend/routes/admin/team-dashboard/index.tsx,
-            a thin ProjectionShell wrapper pinned to this surface's own manifest id, the SAME pattern
-            /admin/enums uses for admin.enum.management.projection) — a route mount, not a hub_relations
-            cross-navigation link, matching how every other admin/normal route is reached today. Real
-            hub_relations cross-navigation FROM another existing manifest INTO this surface (or vice
-            versa) remains a separate, owner-decided future addition (same acknowledged-open shape as
-            self_account_capability's own navigation gap below) — not required for this surface's own
-            manifest/tensor/wiring to be considered built and dispatchable. 2026-08-17 addition
-            (Owner-directed, not hub_relations-based): frontend/islands/ProjectionShell.tsx renders a
-            fixed "ホーム" link (data-projection-home-link, href=/dashboard) in its own nav bar on
-            EVERY mount, including this admin route — a generic, manifest-identity-agnostic navigation
-            affordance, not a per-manifest hubs.hub_relations edge, so it does not close (or attempt
-            to close) the hub_relations cross-navigation item above; it only guarantees the Normal
-            surface below is reachable from anywhere ProjectionShell renders, per
+            a thin ProjectionShell wrapper) — a route mount, not a hub_relations cross-navigation
+            link, matching how every other admin/normal route is reached today. UPDATED
+            (2026-08-17, generic route→Manifest identity resolution round): the route pins by
+            manifest_key ("team_dashboard.admin.projection", via ProjectionShell's manifestKey
+            prop), not a raw manifest_id UUID constant — resolved backend-side through the generic
+            manifest_key_target_ref_resolution_contract (docs/design/runtime-orchestration-ssot.yaml
+            dispatcher_contract), the same "exactly one active row" fail-close discipline
+            canonical_default_entry resolution already uses. /admin/enums (admin.enum.management.
+            projection) still pins by raw UUID — this round did not touch other already-Implemented
+            subBundles' routes, per the audit's own instruction to close the generic mechanism
+            without an unrelated repo-wide route migration. Real hub_relations cross-navigation
+            FROM another existing manifest INTO this surface (or vice versa) remains a separate,
+            owner-decided future addition (same acknowledged-open shape as self_account_capability's
+            own navigation gap below) — not required for this surface's own manifest/tensor/wiring
+            to be considered built and dispatchable. 2026-08-17 addition (Owner-directed, not
+            hub_relations-based): frontend/islands/ProjectionShell.tsx renders a fixed "ホーム" link
+            (data-projection-home-link, href=/dashboard) in its own nav bar on EVERY mount,
+            including this admin route — a generic, manifest-identity-agnostic navigation affordance,
+            not a per-manifest hubs.hub_relations edge, so it does not close (or attempt to close)
+            the hub_relations cross-navigation item above; it only guarantees the Normal surface
+            below is reachable from anywhere ProjectionShell renders, per
             team_dashboard_canonical_shared_contract.hub_relation_navigation_binding_ref.
     normal:
       axis_kind: projection_surface_axis
@@ -1046,9 +1054,17 @@ admin_normal_surface_projection_seed_ssot:
               loading_empty_error_projection: [loading_team_dashboard, empty_team_dashboard_note, team_dashboard_error_fail_close]
             hub_relation_navigation_binding_ref: >-
               Reachable directly at a normal-facing route (frontend/routes/dashboard/index.tsx, a thin
-              ProjectionShell wrapper pinned to this axis's own manifest id, no AdminAuthGate) — the
-              same route-mount pattern surface_axes.admin.surfaces.team_dashboard uses for its own
-              admin route. hubs.hub_relations cross-navigation into this surface from an existing
+              ProjectionShell wrapper, no AdminAuthGate) — the same route-mount pattern
+              surface_axes.admin.surfaces.team_dashboard uses for its own admin route. UPDATED
+              (2026-08-17, generic route→Manifest identity resolution round): the route pins by
+              manifest_key ("team_dashboard.normal.projection", via ProjectionShell's manifestKey
+              prop), not a raw manifest_id UUID constant — resolved backend-side through the
+              generic manifest_key_target_ref_resolution_contract (docs/design/runtime-
+              orchestration-ssot.yaml dispatcher_contract), proven live against production
+              hubs.topology_manifests data (backend/tests/Topolactor.Integration.Tests/
+              TeamDashboardHubRelationUiProjectionLiveDbTests.cs
+              DispatchAsync_NormalManifest_ProjectionEntry_ByManifestKey_ResolvesSameProductionManifest).
+              hubs.hub_relations cross-navigation into this surface from an existing
               production manifest genuinely reachable by a Normal role is not authored (audited
               2026-08-17: surface_axes.normal.surfaces has exactly two members — dashboard [this axis
               itself] and self_account_capability [no frontend component exists at all]; the site's
