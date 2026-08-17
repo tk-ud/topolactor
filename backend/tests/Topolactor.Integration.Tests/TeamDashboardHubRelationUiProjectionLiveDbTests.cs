@@ -172,22 +172,27 @@ public class TeamDashboardHubRelationUiProjectionLiveDbTests
     }
 
     /// <summary>
-    /// Proves the STRUCTURAL claim (normal manifest's own tensor never contains the editor/save
-    /// nodes at all, not merely hidden) — see
-    /// surface_axes.normal.surfaces.dashboard.team_dashboard_canonical_shared_contract.
-    /// capability_boundary. Dispatched with Role="admin": ManifestDispatcher.ResolveRequiredRole
-    /// infers required_role=admin for ANY manifest with runtime_mapping.runtime_destination=
-    /// admin_runtime, with no per-action or explicit-open override available today — so a genuinely
-    /// role-open ("normal"/anonymous) dispatch through ManifestDispatcher is not yet possible for
-    /// ANY seed-driven screen in this codebase (team_markdown's own Normal viewer works around this
-    /// the same way every other attempt has: a plain REST endpoint that bypasses ManifestDispatcher
-    /// entirely, see GET /team-dashboard/note in backend/Program.cs). This is an acknowledged,
-    /// explicit, Owner-decision-pending open item (a new runtime destination or a per-action
-    /// capability override), not something this test can prove closed — it isolates and proves only
-    /// the structural (layout-node) half of the claim, which does not depend on that gap.
+    /// Composed production-path proof (Normal ManifestDispatcher reachability round, 2026-08-17):
+    /// dispatched with Role="normal" — the SAME resolution/dispatch mechanism the real /dashboard
+    /// route uses (frontend/routes/dashboard/index.tsx ProjectionShell manifestId=dd020 →
+    /// target_ref=manifest:{id}:projection_entry, Layer=screen_list/Action=Search — the exact axes
+    /// frontend/runtime/projectionEntry.ts resolveProjectionEntryAxes sends). Previously this test
+    /// dispatched as Role="admin" because ManifestDispatcher.ResolveRequiredRole inferred
+    /// required_role=admin for ANY manifest with runtime_mapping.runtime_destination=admin_runtime,
+    /// with no per-action override — that gap is now closed by the layer/action-scoped
+    /// capability_requirement mechanism (docs/design/auth-db-session-credential-ssot.yaml
+    /// manifest_capability_requirement.layer_action_scoped_override): dd020 declares scoped-open
+    /// entries for (screen_list, Search) and (team_dashboard, get), so a genuinely non-admin "normal"
+    /// role now reaches this manifest's structural read successfully — proving BOTH the STRUCTURAL
+    /// claim (normal manifest's own tensor never contains the editor/save nodes at all, not merely
+    /// hidden — surface_axes.normal.surfaces.dashboard.team_dashboard_canonical_shared_contract.
+    /// capability_boundary) and, via Emission.Data, that the default_screen_read_override (docs/
+    /// design/runtime-orchestration-ssot.yaml ui_projection_render_reachability_contract) actually
+    /// invokes team_dashboard:get for real on this same structural dispatch — the manifest is a
+    /// production display-lane authority, not merely a seed/proof artifact.
     /// </summary>
     [Fact]
-    public async Task DispatchAsync_NormalManifest_LayoutNodes_ContainOnlyReadOnlyViewer_NoEditorOrSaveNodes()
+    public async Task DispatchAsync_NormalManifest_ProjectionEntry_AsNormalRole_ReturnsReadOnlyViewerWithRealData()
     {
         var cs = GetConnectionString();
         if (cs is null) return;
@@ -199,11 +204,12 @@ public class TeamDashboardHubRelationUiProjectionLiveDbTests
         });
         var request = new EndpointRequestDto(
             "Search", "default", "screen_list", "Search",
-            IdOrHubId: null, Payload: payload, Context: null, TriggerKind: "client", Role: "admin");
+            IdOrHubId: null, Payload: payload, Context: null, TriggerKind: "client", Role: "normal");
 
         var response = await dispatcher.DispatchAsync(request);
 
         Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
+        Assert.DoesNotContain(response.Errors, e => e.Code == "AUTH_CAPABILITY_DENIED");
         var emission = response.Emission!;
         Assert.Equal(NormalManifestId.ToString(), emission.ManifestId);
         Assert.NotNull(emission.LayoutNodes);
@@ -220,6 +226,43 @@ public class TeamDashboardHubRelationUiProjectionLiveDbTests
             .Where(n => n.NodeKind == "catalog_component" && n.ComponentId is null)
             .ToList();
         Assert.Empty(unresolvedLeaves);
+
+        // default_screen_read_override: the SAME structural dispatch also carries real Data (the
+        // md_viewer node's propBindings.markdown source, "emission.data.bodyMarkdown", resolves from
+        // exactly this) — not merely an empty-Data structural success.
+        Assert.NotNull(emission.Data);
+        Assert.Equal(NoteId.ToString(), emission.Data!.Value.GetProperty("noteId").GetString());
+        Assert.False(string.IsNullOrEmpty(emission.Data!.Value.GetProperty("bodyMarkdown").GetString()));
+    }
+
+    /// <summary>
+    /// Negative proof, symmetric to the positive one above: the SAME Role="normal" caller dispatching
+    /// the ADMIN manifest's own structural read is still denied — the scoped-open capability_
+    /// requirement entries live only on dd020's own topology, never on dd010's, so opening Normal
+    /// read did not implicitly widen the Admin edit surface. Admin mutation (team_dashboard:update)
+    /// fail-closing for non-admin is separately proven by
+    /// DispatchAsync_TeamDashboardUpdate_WithoutAdminAuthenticatedRole_FailsCloseWithAuthCapabilityDenied
+    /// below; this test covers the Admin manifest's own READ reachability.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_AdminManifest_ProjectionEntry_AsNormalRole_StillFailsClosedWithAuthCapabilityDenied()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+        var payload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = $"manifest:{AdminManifestId}:projection_entry",
+        });
+        var request = new EndpointRequestDto(
+            "Search", "default", "screen_list", "Search",
+            IdOrHubId: null, Payload: payload, Context: null, TriggerKind: "client", Role: "normal");
+
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "AUTH_CAPABILITY_DENIED");
     }
 
     /// <summary>
@@ -268,23 +311,27 @@ public class TeamDashboardHubRelationUiProjectionLiveDbTests
             var updateResponse = await dispatcher.DispatchAsync(updateRequest);
             Assert.True(updateResponse.Success, string.Join(";", updateResponse.Errors.Select(e => e.Code + ":" + e.Message)));
 
-            // Read back through the SAME team_dashboard:get action the normal manifest's own wiring
-            // registry declares (db/seed_empty.sql team_dashboard.normal.projection.wiring
-            // wiring_schema_json.actions) — proving read-after-write consistency through the real
-            // dispatch path (never a raw SQL read standing in for it). Both manifests' wiring
-            // registries name the SAME action against the SAME single-row physical table by
-            // construction (TeamDashboardManifests_AreRegisteredInTopologyManifestsAndPhysicalTable
-            // Bindings proves both bind to topology.team_dashboard_note); dispatched here via the
-            // admin manifest's own axes since a genuinely role-open Normal dispatch is not yet
-            // possible (see DispatchAsync_NormalManifest_LayoutNodes_ContainOnlyReadOnlyViewer_
-            // NoEditorOrSaveNodes's own comment for the acknowledged gap) — this test's purpose is
-            // the DATA-sharing claim (one physical row, read-after-write), orthogonal to that gap.
+            // Read back through the Normal manifest's OWN production structural dispatch, as a
+            // genuinely non-admin "normal" role — the SAME target_ref/axes shape the real /dashboard
+            // route sends (frontend/routes/dashboard/index.tsx ProjectionShell manifestId=dd020) —
+            // proving read-after-write consistency through the ACTUAL canonical Normal reachability
+            // path (never a raw SQL read, and never the admin manifest's own axes standing in for
+            // it). Both manifests' wiring registries name the SAME team_dashboard:get action against
+            // the SAME single-row physical table by construction
+            // (TeamDashboardManifests_AreRegisteredInTopologyManifestsAndPhysicalTableBindings proves
+            // both bind to topology.team_dashboard_note); this test additionally proves the SAME row
+            // identity is what a Normal reader actually observes after an Admin write.
+            var readPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{NormalManifestId}:projection_entry",
+            });
             var readRequest = new EndpointRequestDto(
-                "TeamDashboardScenario", "admin", "team_dashboard", "get",
-                IdOrHubId: null, Payload: null, Context: null, TriggerKind: "client", Role: "admin");
+                "Search", "default", "screen_list", "Search",
+                IdOrHubId: null, Payload: readPayload, Context: null, TriggerKind: "client", Role: "normal");
             var readResponse = await dispatcher.DispatchAsync(readRequest);
             Assert.True(readResponse.Success, string.Join(";", readResponse.Errors.Select(e => e.Code + ":" + e.Message)));
             Assert.Equal(marker, readResponse.Emission!.Data?.GetProperty("bodyMarkdown").GetString());
+            Assert.Equal(NoteId.ToString(), readResponse.Emission!.Data?.GetProperty("noteId").GetString());
         }
         finally
         {

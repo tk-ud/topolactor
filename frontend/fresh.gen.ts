@@ -54,7 +54,6 @@ import * as $RegistryVectorValidator from "./islands/RegistryVectorValidator.tsx
 import * as $SchedulerJobSettingsPanel from "./islands/SchedulerJobSettingsPanel.tsx";
 import * as $SeedAdmin from "./islands/SeedAdmin.tsx";
 import * as $SuperAuthPanel from "./islands/SuperAuthPanel.tsx";
-import * as $TeamDashboardViewer from "./islands/TeamDashboardViewer.tsx";
 import * as $TeamMarkdownDashboard from "./islands/TeamMarkdownDashboard.tsx";
 import * as $UiBuilderAdmin from "./islands/UiBuilderAdmin.tsx";
 import type { Manifest } from "$fresh/server.ts";
@@ -118,7 +117,6 @@ const manifest = {
     "./islands/SchedulerJobSettingsPanel.tsx": $SchedulerJobSettingsPanel,
     "./islands/SeedAdmin.tsx": $SeedAdmin,
     "./islands/SuperAuthPanel.tsx": $SuperAuthPanel,
-    "./islands/TeamDashboardViewer.tsx": $TeamDashboardViewer,
     "./islands/TeamMarkdownDashboard.tsx": $TeamMarkdownDashboard,
     "./islands/UiBuilderAdmin.tsx": $UiBuilderAdmin,
   },

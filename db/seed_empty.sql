@@ -5229,7 +5229,7 @@ WITH upserted_manifest AS (
         ARRAY[
             '{"type":"hub_grouping","manifestKey":"team_dashboard.admin.projection","bundle":"admin-surface-topology-seed-conversion"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
-            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"team_dashboard","action":"get"}'::jsonb,
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"team_dashboard","action":"get","default_screen_read":true}'::jsonb,
             '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"team_dashboard","action":"update"}'::jsonb,
             '{"type":"ui_projection","packageIds":["00000000-0000-0000-0000-0000000dd016"],"layoutId":"00000000-0000-0000-0000-0000000dd013","wiringId":"00000000-0000-0000-0000-0000000dd014","tensorId":"00000000-0000-0000-0000-0000000dd015"}'::jsonb
         ]::jsonb[],
@@ -5308,7 +5308,9 @@ WITH upserted_manifest AS (
         ARRAY[
             '{"type":"hub_grouping","manifestKey":"team_dashboard.normal.projection","bundle":"admin-surface-topology-seed-conversion"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
-            '{"type":"dispatcher_mapping","role":"normal","target":"admin","layer":"team_dashboard","action":"get"}'::jsonb,
+            '{"type":"dispatcher_mapping","role":"normal","target":"admin","layer":"team_dashboard","action":"get","default_screen_read":true}'::jsonb,
+            '{"type":"capability_requirement","layer":"screen_list","action":"Search"}'::jsonb,
+            '{"type":"capability_requirement","layer":"team_dashboard","action":"get"}'::jsonb,
             '{"type":"ui_projection","packageIds":["00000000-0000-0000-0000-0000000dd026"],"layoutId":"00000000-0000-0000-0000-0000000dd023","wiringId":"00000000-0000-0000-0000-0000000dd024","tensorId":"00000000-0000-0000-0000-0000000dd025"}'::jsonb
         ]::jsonb[],
         'active'

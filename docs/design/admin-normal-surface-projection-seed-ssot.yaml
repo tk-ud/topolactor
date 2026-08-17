@@ -769,9 +769,17 @@ admin_normal_surface_projection_seed_ssot:
             DispatchAuthContext stamp) — the SAME idiom
             backend/runtime/AdminRuntime.TeamMarkdown.cs ExecuteTeamMarkdownAsync already established
             for team_markdown mutation actions (TeamMarkdownMutationActions role check), reused
-            verbatim for a second domain rather than re-invented. team_dashboard:get carries no role
-            requirement — open to any authenticated caller reaching admin_runtime, matching
-            team_markdown's own read/mutation split.
+            verbatim for a second domain rather than re-invented. This manifest (dd010) declares no
+            layer/action-scoped capability_requirement entries of its own (docs/design/
+            auth-db-session-credential-ssot.yaml manifest_capability_requirement.
+            layer_action_scoped_override) — team_dashboard:get on THIS manifest therefore stays
+            admin-gated too, via the same runtime_mapping.runtime_destination=admin_runtime inference
+            as team_dashboard:update, keeping the whole Admin surface uniformly admin-only end to end
+            (both its structural projection_entry render and its real read/mutation actions). Normal
+            role read of the SAME underlying data is served entirely by the separate normal-axis
+            manifest (dd020, surface_axes.normal.surfaces.dashboard.
+            team_dashboard_canonical_shared_contract), which independently declares its OWN
+            scoped-open entries — this manifest is never widened to serve that purpose.
           seed_contract:
             component_tree:
               - node_key: team_dashboard_admin_viewer
@@ -919,20 +927,46 @@ admin_normal_surface_projection_seed_ssot:
             projection_fields: [body_markdown, title, updated_at]
             forbidden_authority: [mutation_write, topology_promotion, schema_generation, markdown_as_runtime_ssot]
             capability_boundary: >-
-              No capability_requirement.required_role is attached to this axis's own read action or
-              manifest — read is open normal projection, matching this surface's own pre-existing
-              "no admin capability requirement" rule below. The Admin-only edit capability lives
-              entirely in the SEPARATE surface_axes.admin.surfaces.team_dashboard entry (its own
-              tensor/layout with the Textarea+Save nodes and its own team_dashboard:update role
-              gate) — this axis's own seed_contract never includes those nodes at all, so a Normal
-              session has no edit control to reach in the rendered DOM, not merely a hidden/disabled
-              one. This is the existing generic admin-axis/normal-axis seed_contract composition
-              mechanism this SSOT already uses for every other surface pair (e.g.
-              surface_axes.admin.surfaces.enum vs this same normal axis), not a new hardcoded
-              component/route branch invented for this surface. Backend/runtime capability boundary
-              is independently maintained regardless: team_dashboard:update itself requires
-              AuthenticatedRole=="admin" (surface_axes.admin.surfaces.team_dashboard.
-              canonical_role_gate_binding) even if it were somehow dispatched directly.
+              No admin required_role is enforced on this axis's own read action or manifest — read is
+              open to any authenticated role, matching this surface's own pre-existing "no admin
+              capability requirement" rule below. Runtime mechanism (2026-08-17, canonical
+              ManifestDispatcher reachability round): this manifest's runtime_mapping.
+              runtime_destination=admin_runtime would otherwise infer required_role=admin uniformly for
+              every action on the manifest (docs/design/auth-db-session-credential-ssot.yaml
+              manifest_capability_requirement) — this axis's own topology (db/seed_empty.sql dd020)
+              declares layer/action-SCOPED capability_requirement entries (layer_action_scoped_override,
+              same SSOT section) with no required_role for exactly the two (layer, action) pairs this
+              axis's own production dispatch reaches — (screen_list, Search), the structural entry
+              ProjectionShell's default projection_entry dispatch sends, and (team_dashboard, get), the
+              real read action — so those two are explicitly open while the admin_runtime inference
+              remains fully intact and unaffected for every OTHER manifest/action, including this same
+              manifest's sibling Admin surface (dd010, which declares no scoped-open entries and stays
+              admin-gated for both its get and update actions). No required_role=none sentinel is
+              introduced; the field is simply omitted on each scoped entry, preserving the pre-existing
+              "omitted = no requirement" semantics. The Admin-only edit capability lives entirely in the
+              SEPARATE surface_axes.admin.surfaces.team_dashboard entry (its own tensor/layout with the
+              Textarea+Save nodes and its own team_dashboard:update role gate) — this axis's own
+              seed_contract never includes those nodes at all, so a Normal session has no edit control
+              to reach in the rendered DOM, not merely a hidden/disabled one. This is the existing
+              generic admin-axis/normal-axis seed_contract composition mechanism this SSOT already uses
+              for every other surface pair (e.g. surface_axes.admin.surfaces.enum vs this same normal
+              axis), not a new hardcoded component/route branch invented for this surface.
+              Backend/runtime capability boundary is independently maintained regardless:
+              team_dashboard:update itself requires AuthenticatedRole=="admin"
+              (surface_axes.admin.surfaces.team_dashboard.canonical_role_gate_binding) even if it were
+              somehow dispatched directly.
+            data_population_on_initial_render: >-
+              This axis's own md_viewer.projection node sources its markdown prop from
+              emission.data.bodyMarkdown (seed_contract.prop_bindings below), but the structural
+              projection_entry dispatch alone never populates Emission.Data — screen_data_shape/
+              ScreenDataShapeQueryRuntime is a topology_transform_runtime-only mechanism admin_runtime
+              manifests never reach, and this axis has no user-interactive trigger (search/filter/
+              select) that would otherwise populate it. This axis's dispatcher_mapping team_dashboard:get
+              entry declares default_screen_read=true (docs/design/runtime-orchestration-ssot.yaml
+              ui_projection_render_reachability_contract.default_screen_read_override), so the SAME
+              structural dispatch that renders LayoutNodes also carries real Data on first render, not
+              merely after a user-triggered dispatch — this axis is a real production display-lane
+              authority, not merely a seed/proof artifact.
             seed_contract:
               component_tree:
                 - node_key: team_dashboard_normal_viewer
