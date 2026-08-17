@@ -456,22 +456,6 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
       "runtime_reachability: existing_route_composition — mounted at /admin/users (unchanged route; unified single surface, not split into a standalone route/panel per admin-console-workflow-ssot.yaml). Owns auth_users:* account CRUD (role/approve/status/suspension via auth_users:update roleName field) plus session/credential revoke via the thin /admin/auth/users/{userId}/* HTTP boundary (bypasses /dispatch — see backend/Program.cs). Never exposes a UI to view or set another account's password value.",
   },
   {
-    componentKey: "scheduler_job_settings.admin_operation",
-    componentKind: "admin_operation/scheduler_settings",
-    sourcePath: "frontend/islands/SchedulerJobSettingsPanel.tsx",
-    componentFamily: "composite",
-    semanticRole: "admin_operation",
-    visualRole: "panel",
-    lifecycleStatus: "registered",
-    capabilityTags: ["admin_only", "displays_backend_result", "field_binding", "emits_event"],
-    runtimeConnected: false,
-    runtimeReachability: "existing_route_composition",
-    routeCompositionFile: "frontend/routes/admin/scheduler.tsx",
-    registrationRequired: false,
-    notes:
-      "runtime_reachability: existing_route_composition — mounted at /admin/scheduler (unchanged route). Now wires scheduler_jobs:edit (previously backend/dispatcher-complete but with no UI control — closes the gap tracked as gap-04 in .agent/tasks/todo.md) alongside existing create/disable actions.",
-  },
-  {
     componentKey: "hub_navigation_admin.admin_operation",
     componentKind: "admin_operation/hub_navigation",
     sourcePath: "frontend/islands/HubNavigationAdmin.tsx",

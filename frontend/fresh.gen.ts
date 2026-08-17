@@ -51,7 +51,6 @@ import * as $OperationPanel from "./islands/OperationPanel.tsx";
 import * as $PresetUploaderDrawer from "./islands/PresetUploaderDrawer.tsx";
 import * as $ProjectionShell from "./islands/ProjectionShell.tsx";
 import * as $RegistryVectorValidator from "./islands/RegistryVectorValidator.tsx";
-import * as $SchedulerJobSettingsPanel from "./islands/SchedulerJobSettingsPanel.tsx";
 import * as $SeedAdmin from "./islands/SeedAdmin.tsx";
 import * as $SuperAuthPanel from "./islands/SuperAuthPanel.tsx";
 import * as $TeamMarkdownDashboard from "./islands/TeamMarkdownDashboard.tsx";
@@ -114,7 +113,6 @@ const manifest = {
     "./islands/PresetUploaderDrawer.tsx": $PresetUploaderDrawer,
     "./islands/ProjectionShell.tsx": $ProjectionShell,
     "./islands/RegistryVectorValidator.tsx": $RegistryVectorValidator,
-    "./islands/SchedulerJobSettingsPanel.tsx": $SchedulerJobSettingsPanel,
     "./islands/SeedAdmin.tsx": $SeedAdmin,
     "./islands/SuperAuthPanel.tsx": $SuperAuthPanel,
     "./islands/TeamMarkdownDashboard.tsx": $TeamMarkdownDashboard,

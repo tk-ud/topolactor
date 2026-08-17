@@ -173,7 +173,19 @@ admin_console_workflow_ssot:
         the Owner-directed ProjectionShell common Home link instead of a fabricated hub_relations
         source, not a target-manifest-readiness blocker.
       scheduler_settings: >-
-        blocked — same as enum_dictionary above, for scheduler_jobs.
+        not blocked — scheduler.settings.projection (manifest 5c100) is a real, seeded
+        ui_projection manifest (docs/design/admin-normal-surface-projection-seed-ssot.yaml
+        surface_axes.admin.surfaces.scheduler), its package/layout/wiring/tensor rows generated
+        through the real react_schema_topology_seed_translator.py intake and adopted directly
+        (2026-08-17, scheduler-settings subBundle). /admin/scheduler resolves this manifest by
+        manifest_key ("scheduler.settings.projection"), not a hardcoded manifest_id UUID
+        constant, via the generic manifest_key_target_ref_resolution_contract (runtime-
+        orchestration-ssot.yaml dispatcher_contract) team-dashboard's own closure round
+        established. Navigation-binding authoring/resolution is proven live-DB
+        (backend/tests/Topolactor.Integration.Tests/
+        SchedulerSettingsHubRelationUiProjectionLiveDbTests.cs), the same combined-proof pattern
+        credential-management/admin-enum/team-dashboard each established — no seeded
+        hubs.hub_relations row ships for this manifest either, consistent with all three.
     prohibited:
       - global_hub_scan_for_target_selection
       - first_match_oldest_or_MIN_fallback_target_selection

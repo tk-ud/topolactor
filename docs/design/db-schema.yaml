@@ -93,6 +93,7 @@ db_schema:
     - abstract_function_manifest
     - auth_identity_session
     - enum_dictionary
+    - scheduler_job_manifest
 
   tables:
 
@@ -124,6 +125,75 @@ db_schema:
       category: abstract_function_manifest
       source_file: db/topology_tables.sql
       role: table, column, join, output, and policy authority surface for fail-close checks
+
+    # -------------------------------------------------------------------------
+    # scheduler_job_manifest — data-defined scheduler job manifest substrate.
+    # Design authority: docs/design/scheduler-job-manifest-ssot.yaml (logical_entities /
+    # authority_rules). Physical DDL lived in db/topology_tables.sql without a db-schema.yaml
+    # entry until the scheduler-settings subBundle (admin-surface-topology-seed-conversion)
+    # audit found the gap and closed it here (same class of drift the team-dashboard round
+    # closed for topology.team_dashboard_note).
+    # -------------------------------------------------------------------------
+    scheduler_jobs:
+      category: scheduler_job_manifest
+      source_file: db/topology_tables.sql
+      role: scheduler_job_manifest_header_and_authority_scope — data-defined schedule/input/output/credential-reference/authority-scope record a cron/background driver reads; never a payload-derived table
+      key_columns:
+        - name: scheduler_job_id
+          type: uuid
+          role: pk
+        - name: job_key
+          type: text
+          role: unique_human_readable_job_key
+        - name: trigger_kind
+          type: text
+          role: runtime_orchestration_trigger_kind_cron_hook_or_client
+        - name: schedule_policy_kind
+          type: text
+          role: cron_expression_interval_seconds_due_column_or_manual_only
+        - name: active
+          type: boolean
+          role: enables_due_selection_when_true — the ONLY column scheduler_jobs:enable/disable write
+        - name: credential_requirement_ref
+          type: text
+          role: reference_only_no_plaintext — bound by credential-management's consumer_reference_binding surface, not this table's own admin surface
+        - name: external_port_ref
+          type: text
+          role: reference_only_no_plaintext — same binding surface as credential_requirement_ref
+        - name: input_table_ref
+          type: text
+          role: manifest_or_registry_bound_input_table_reference — authored via /admin/contents, never payload-derived
+        - name: output_table_ref
+          type: text
+          role: manifest_or_registry_bound_output_table_reference — authored via /admin/contents, never payload-derived
+      authority_rules:
+        - trigger_kind_must_be_one_of_runtime_orchestration_trigger_kind_enum_cron_hook_client
+        - table_column_authority_comes_from_seed_admin_manifest_registry_or_authority_binding
+        - credential_plaintext_is_never_a_field
+        - status_values_are_manifest_defined_not_runtime_default_or_payload_derived
+      admin_surface_ref: docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.scheduler (list/search/filter/enable/disable projection only; create/edit/step-chain route through /admin/contents' generic physical_table_and_page_binding pipeline over this table and scheduler_job_steps below)
+    scheduler_job_steps:
+      category: scheduler_job_manifest
+      source_file: db/topology_tables.sql
+      role: ordered_abstract_function_step_chain_for_scheduler_job — FK to scheduler_jobs, resolved through AbstractFunctionExecutor, never a C# function-name array
+      authority_rules:
+        - abstract_function_key_resolves_to_AbstractFunctionExecutor_step_chain
+        - processing_function_arrays_or_csharp_switch_growth_are_not_canonical
+    scheduler_job_runs:
+      category: scheduler_job_manifest
+      source_file: db/topology_tables.sql
+      role: run_ledger_and_input_lease_status_for_each_job_execution — sanitized status/result_context only
+      authority_rules:
+        - run_log_must_not_store_secret_payload_token_response_or_plaintext_credential
+        - completed_failed_status_must_match_manifest_defined_input_status_values
+    scheduler_job_run_steps:
+      category: scheduler_job_manifest
+      source_file: db/topology_tables.sql
+      role: optional_per_step_ledger_for_debuggable_ordered_execution
+    scheduler_external_event_evidence:
+      category: scheduler_job_manifest
+      source_file: db/topology_tables.sql
+      role: scheduler_dispatch_evidence_for_external_event_driven_job_scheduler_bundle_consumers
 
     context_transition_stats:
       schema: public

@@ -3241,6 +3241,23 @@ VALUES
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
         ]::jsonb[],
         'active'
+    ),
+    -- scheduler-settings subBundle (admin-surface-topology-seed-conversion): the symmetric
+    -- counterpart of f3's disable, required by docs/design/admin-normal-surface-projection-seed-
+    -- ssot.yaml surface_axes.admin.surfaces.scheduler.new_operation_note (set_scheduler_job_active_
+    -- true mirroring disable's set_scheduler_job_active_false). Same axes shape as f0-f3 so the
+    -- action is reachable on the ordinary axes route too, not only through the
+    -- scheduler.settings.projection manifest's own target_ref dispatch below. Handler:
+    -- AdminRuntime.SchedulerSettings.cs DataEnableSchedulerJobAsync -- the SAME SetJobActiveAsync
+    -- authority disable already used, never a new authority.
+    (
+        '00000000-0000-0000-0000-0000000000f4',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"scheduler_jobs","action":"enable"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
     )
 ON CONFLICT (manifest_id) DO NOTHING;
 
@@ -5376,3 +5393,245 @@ SELECT pt.physical_table_id, '00000000-0000-0000-0000-0000000dd020'::uuid, true,
 FROM topology.physical_tables pt WHERE pt.table_ref = 'topology.team_dashboard_note'
 ON CONFLICT (physical_table_id, topology_manifest_id) DO UPDATE
     SET active = EXCLUDED.active, binding_evidence_json = EXCLUDED.binding_evidence_json, updated_at = now();
+
+
+-- =============================================================================
+-- scheduler-settings subBundle (admin-surface-topology-seed-conversion)
+-- SSOT: docs/design/admin-normal-surface-projection-seed-ssot.yaml
+--   surface_axes.admin.surfaces.scheduler
+-- Data authority: docs/design/scheduler-job-manifest-ssot.yaml
+--   (authoring_surface.admin_surface_split_2026_07_22)
+--
+-- SCOPE, verbatim from the owning SSOT's scope_boundary: this manifest owns list /
+-- search (job_key) / filter (trigger_kind, schedule_policy_kind, active) / explicit
+-- enable / explicit disable of ALREADY-CONFIGURED scheduler jobs, and nothing else.
+-- create / edit / step_chain_authoring stay on /admin/contents' existing generic
+-- physical_table_and_page_binding pipeline over topology.scheduler_jobs /
+-- topology.scheduler_job_steps (their scheduler_jobs:create/edit dispatch rows f1/f2
+-- above are untouched and still reachable); credential_requirement_ref /
+-- external_port_ref binding stays on the credential-management surface's
+-- consumer_reference_binding (manifest 092). Neither is expressed here.
+--
+-- Authored via .agent/tools/react-schema-topology-seed-translator, NOT hand-written:
+--   .agent/tests/fixtures/react-schema-topology-seed-translator/
+--     scheduler-settings-admin.input.json          (generate-react-schema,  gateStatus=pass)
+--     scheduler-settings-admin.topology-seed.input.json (generate-topology-seed, gateStatus=pass,
+--                                                        validationErrors=[])
+-- The components_layout_design.layout_schema_json records[], ui_wiring_registry
+-- .wiring_schema_json and ui_topology_tensor.layout_patch_json below ARE that second
+-- run's adoptionCandidates content; post-generation edits are limited to identity
+-- plumbing (the layout/wiring/tensor/package UUIDs the generator emits as
+-- "<...>" placeholders), never structural content -- the same discipline ae200 and
+-- dd010 followed. Translator output is intake/draft evidence only, never adoption
+-- authority (react-schema-topology-seed-translator-ssot.yaml
+-- topology_ui_seed_contract.active_topology_rule); these rows are the seed's own
+-- structural authority.
+--
+-- component_tree (seed_contract.component_tree) -> already-registered componentKeys,
+-- no new component registered or promoted in this subBundle
+-- (db/ui_component_registry_preset_catalog_bootstrap.sql):
+--   scheduler_search                          -> search_input.alias
+--   scheduler_filter_trigger_kind             -> select.template
+--   scheduler_filter_schedule_policy_kind     -> select.template
+--   scheduler_filter_active                   -> select.template
+--   scheduler_job_list                        -> table.primitive (resolved from the layout
+--                                                schema tree's own Table record, same as ae200's
+--                                                enum_table node)
+--   scheduler_enable_button / _confirm_button / _cancel_button  -> button.primitive
+--   scheduler_disable_button / _confirm_button / _cancel_button -> button.primitive
+--   scheduler_enable_confirm_modal / scheduler_disable_confirm_modal -> modal.template
+--
+-- THREE filter selects, not one: select.template carries exactly ONE scalar string
+-- value (frontend/components/Select.tsx SelectProps.value, runtimeComponentFactory.ts
+-- selectFactory), so the SSOT's three declared filter axes cannot share a single node.
+-- Each select's options come from its own emission.data.*Options array returned by
+-- scheduler_jobs:list_settings itself (never derived from the possibly-narrowed result
+-- rows), the same rowsToOptions propBindings shape ae200's enum_group_filter uses.
+--
+-- TWO toggle buttons, not one: the SSOT's component_tree names a single
+-- scheduler_toggle_button whose responsibility is "explicit enable or disable
+-- confirmation for one scheduler job row", but no seed-driven manifest in this repo can
+-- express row-state-conditional action visibility -- neither the layout/tensor schema
+-- (LayoutSchemaTensorComposer.cs, NpgsqlUiTopologyRepository.ValidateRuntimeInteractions)
+-- nor the render substrate (frontend/runtime/renderEmission.ts) has a visible-when
+-- primitive, and the retired hardcoded island's `job.active === true` branch was not a
+-- seed-driven pattern. Rather than invent a conditional-visibility mechanism inside this
+-- subBundle, both directions are emitted and the BACKEND decides: the selected row's real
+-- current active value is re-read server-side and the wrong-direction request fails closed
+-- (SCHEDULER_JOB_ALREADY_ACTIVE / SCHEDULER_JOB_ALREADY_INACTIVE,
+-- backend/runtime/AdminRuntime.SchedulerSettings.cs). Recorded as an open, documented gap in
+-- react-schema-topology-seed-translator-ssot.yaml declared_seed_surface_catalog
+-- (scheduler.settings.projection.known_gaps), not as a solved problem.
+--
+-- mutation_confirmation_contract [explicit_confirm, write, diff_log]: each toggle button
+-- first dispatches a NON-mutating dryRun preview (payload.dryRun=literal:true) against the
+-- SAME target manifest/payloadFrom the eventual write uses, then its confirm modal's own
+-- confirm button re-resolves the SAME payloadFrom fresh (schedulerJobId re-read from
+-- scheduler_job_list's own tracked selected-row value at confirm-click time, never a
+-- captured/stale selection) and dispatches payload.confirmed=literal:true. Cancel only
+-- closes the modal and sends nothing. Backend halves live in
+-- AdminRuntime.SchedulerSettings.cs (dryRun -> validate only; confirmed -> SetJobActiveAsync
+-- + AdminMasterRosterAudit.AppendAsync into logs.diff; neither flag -> fail closed).
+--
+-- default_screen_read (docs/design/runtime-orchestration-ssot.yaml
+-- ui_projection_render_reachability_contract.default_screen_read_override, adopted by
+-- dd010/dd020): declared on THIS manifest's own scheduler_jobs:list_settings mapping so the
+-- table renders real rows on first mount, not only after a user search/filter interaction.
+--
+-- dispatcher_mapping target="manifest" (not "admin"): the axes-routed scheduler_jobs rows
+-- f0-f4 above already own (role=admin, target=admin, scheduler_jobs, *). Declaring the same
+-- axes here would make axes resolution MANIFEST_AMBIGUOUS -- ae200 uses target="manifest"
+-- for exactly this reason. target is wildcarded on target_ref dispatch paths
+-- (ManifestDispatcher.cs), so these three mappings remain the real authorization authority
+-- for this manifest's own dispatches.
+-- =============================================================================
+
+-- Hub owning the scheduler.settings.projection topology_manifest. Never itself a
+-- hub_relations source/target -- required FK owner only (same as ae201/dd011). This
+-- subBundle deliberately seeds NO hubs.hub_relations row: navigation_binding_authoring_and_
+-- verification is proven by authoring the relation for real, at test time, through the
+-- hub_navigation:create dispatch action (backend/tests/Topolactor.Integration.Tests/
+-- SchedulerSettingsHubRelationUiProjectionLiveDbTests.cs), exactly as admin-enum /
+-- team-dashboard / credential-management prove it -- none of them ships a seeded relation row
+-- either.
+INSERT INTO hubs.hub (hub_id, relation)
+VALUES ('00000000-0000-0000-0000-00000005c101', '{"description":"scheduler_settings","system":true}'::jsonb)
+ON CONFLICT (hub_id) DO NOTHING;
+
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-00000005c100',
+    NULL,
+    ARRAY[
+        '{"type":"hub_grouping","manifestKey":"scheduler.settings.projection","bundle":"admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
+        '{"type":"dispatcher_mapping","role":"admin","target":"manifest","layer":"scheduler_jobs","action":"list_settings","default_screen_read":true}'::jsonb,
+        '{"type":"dispatcher_mapping","role":"admin","target":"manifest","layer":"scheduler_jobs","action":"enable"}'::jsonb,
+        '{"type":"dispatcher_mapping","role":"admin","target":"manifest","layer":"scheduler_jobs","action":"disable"}'::jsonb,
+        '{"type":"ui_projection","packageIds":["00000000-0000-0000-0000-00000005c103"],"layoutId":"00000000-0000-0000-0000-00000005c104","wiringId":"00000000-0000-0000-0000-00000005c105","tensorId":"00000000-0000-0000-0000-00000005c106"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO UPDATE
+    SET topology = EXCLUDED.topology,
+        status   = EXCLUDED.status;
+
+-- hubs.topology_manifests projection: manifest_key is the stable identity
+-- frontend/routes/admin/scheduler.tsx pins by (ProjectionShell manifestKey=...), resolved
+-- backend-side by the generic manifest_key_target_ref_resolution_contract's "exactly one
+-- active row" rule -- never a hardcoded UUID in the frontend.
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+SELECT m.manifest_id, '00000000-0000-0000-0000-00000005c101'::uuid,
+       'scheduler.settings.projection', m.status, to_jsonb(m.topology)
+FROM manifest m WHERE m.manifest_id = '00000000-0000-0000-0000-00000005c100'
+ON CONFLICT (topology_manifest_id) DO UPDATE
+    SET hub_id         = EXCLUDED.hub_id,
+        manifest_key   = EXCLUDED.manifest_key,
+        status         = EXCLUDED.status,
+        topology_jsonb = EXCLUDED.topology_jsonb,
+        updated_at     = now();
+
+-- Tensor-facing package row (ui_topology_tensor.package_id FK).
+INSERT INTO topology.ui_component_package (package_id, package_key, package_kind, package_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-00000005c102',
+    'scheduler.settings.projection.component_group_bundle',
+    'fixed_form_projection',
+    '{"seedKey":"scheduler.settings.projection","surface":"scheduler.settings.projection","categoryKeys":["scheduler"]}'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET package_schema_json = EXCLUDED.package_schema_json,
+        status = EXCLUDED.status;
+
+-- Manifest-facing package authority (manifest.topology[ui_projection].packageIds points
+-- here, not at ui_component_package above -- same split as 092/ad200/ae202-ae203). No
+-- component+design pairs were authored via UI Component Builder for this surface, so layout
+-- is honestly empty.
+INSERT INTO topology.components_package_design (package_id, name, layout, state)
+VALUES (
+    '00000000-0000-0000-0000-00000005c103',
+    'scheduler.settings.projection.package',
+    '[]'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET layout = EXCLUDED.layout,
+        state = EXCLUDED.state;
+
+-- Structural authority tree (translator records[], adopted directly):
+-- Category scheduler > Section scheduler_job_roster > Field scheduler_search /
+-- Field scheduler_filter_trigger_kind / Field scheduler_filter_schedule_policy_kind /
+-- Field scheduler_filter_active / Table scheduler_job_list /
+-- Action scheduler_enable_button + Modal scheduler_enable_confirm_modal
+--   (Action scheduler_enable_confirm_button + Action scheduler_enable_cancel_button) /
+-- Action scheduler_disable_button + Modal scheduler_disable_confirm_modal
+--   (Action scheduler_disable_confirm_button + Action scheduler_disable_cancel_button).
+INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind, layout_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-00000005c104',
+    'scheduler.settings.projection.layout',
+    'fixed_form_projection',
+    $${"records":[{"type":"topology_ui_seed_record","seedKey":"scheduler.settings.projection","parentKey":"scheduler_settings_projection","record":{"recordType":"topology_ui_category","key":"scheduler","label":"Scheduler","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.scheduler"],"sourceReactPath":"$.root.children[0]","knownGapRefs":[],"categoryKey":"scheduler","sectionKeys":["scheduler_job_roster"]}},{"type":"topology_ui_seed_record","seedKey":"scheduler.settings.projection","parentKey":"scheduler","record":{"recordType":"topology_ui_section","key":"scheduler_job_roster","label":"Configured scheduler jobs","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.scheduler.seed_contract"],"sourceReactPath":"$.root.children[0].children[0]","knownGapRefs":[],"sectionKey":"scheduler_job_roster","sectionKind":"scheduler_job_list_search_filter_toggle_projection","childKeys":["scheduler_search","scheduler_filter_trigger_kind","scheduler_filter_schedule_policy_kind","scheduler_filter_active","scheduler_job_list","scheduler_enable_button","scheduler_enable_confirm_modal","scheduler_disable_button","scheduler_disable_confirm_modal"]}},{"type":"topology_ui_seed_record","seedKey":"scheduler.settings.projection","parentKey":"scheduler_job_roster","record":{"recordType":"topology_ui_field","key":"scheduler_search","label":"Job key search","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.scheduler.seed_contract.component_tree"],"sourceReactPath":"$.root.children[0].children[0].children[0]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","fieldKey":"scheduler_search","control":"form_input/search_input","required":false,"validationRefs":[],"valueFrom":"","optionsSource":"","optionsLabelPath":"","optionsValuePath":"","eventBinding":{"trigger":"change","wiringLane":"admin_runtime_dispatch_override_wiring","targetRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:list_settings","authority":"draft_or_projection_only","payloadFrom":{"search":"node:scheduler_search.value","triggerKind":"node:scheduler_filter_trigger_kind.value","schedulePolicyKind":"node:scheduler_filter_schedule_policy_kind.value","active":"node:scheduler_filter_active.value"}},"debounceMs":300,"adminRuntimeDispatchOverride":{"trigger":"change","targetRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:list_settings","payloadFrom":{"search":"node:scheduler_search.value","triggerKind":"node:scheduler_filter_trigger_kind.value","schedulePolicyKind":"node:scheduler_filter_schedule_policy_kind.value","active":"node:scheduler_filter_active.value"},"sourceActionKey":"scheduler_search"}}},{"type":"topology_ui_seed_record","seedKey":"scheduler.settings.projection","parentKey":"scheduler_job_roster","record":{"recordType":"topology_ui_field","key":"scheduler_filter_trigger_kind","label":"Trigger kind filter","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.scheduler.seed_contract.component_tree"],"sourceReactPath":"$.root.children[0].children[0].children[1]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","fieldKey":"scheduler_filter_trigger_kind","control":"form_input/select","required":false,"validationRefs":[],"valueFrom":"","optionsSource":"emission.data.triggerKindOptions","optionsLabelPath":"label","optionsValuePath":"value","eventBinding":{"trigger":"change","wiringLane":"admin_runtime_dispatch_override_wiring","targetRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:list_settings","authority":"draft_or_projection_only","payloadFrom":{"search":"node:scheduler_search.value","triggerKind":"node:scheduler_filter_trigger_kind.value","schedulePolicyKind":"node:scheduler_filter_schedule_policy_kind.value","active":"node:scheduler_filter_active.value"}},"adminRuntimeDispatchOverride":{"trigger":"change","targetRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:list_settings","payloadFrom":{"search":"node:scheduler_search.value","triggerKind":"node:scheduler_filter_trigger_kind.value","schedulePolicyKind":"node:scheduler_filter_schedule_policy_kind.value","active":"node:scheduler_filter_active.value"},"sourceActionKey":"scheduler_filter_trigger_kind"}}},{"type":"topology_ui_seed_record","seedKey":"scheduler.settings.projection","parentKey":"scheduler_job_roster","record":{"recordType":"topology_ui_field","key":"scheduler_filter_schedule_policy_kind","label":"Schedule policy filter","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.scheduler.seed_contract.component_tree"],"sourceReactPath":"$.root.children[0].children[0].children[2]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","fieldKey":"scheduler_filter_schedule_policy_kind","control":"form_input/select","required":false,"validationRefs":[],"valueFrom":"","optionsSource":"emission.data.schedulePolicyKindOptions","optionsLabelPath":"label","optionsValuePath":"value","eventBinding":{"trigger":"change","wiringLane":"admin_runtime_dispatch_override_wiring","targetRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:list_settings","authority":"draft_or_projection_only","payloadFrom":{"search":"node:scheduler_search.value","triggerKind":"node:scheduler_filter_trigger_kind.value","schedulePolicyKind":"node:scheduler_filter_schedule_policy_kind.value","active":"node:scheduler_filter_active.value"}},"adminRuntimeDispatchOverride":{"trigger":"change","targetRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:list_settings","payloadFrom":{"search":"node:scheduler_search.value","triggerKind":"node:scheduler_filter_trigger_kind.value","schedulePolicyKind":"node:scheduler_filter_schedule_policy_kind.value","active":"node:scheduler_filter_active.value"},"sourceActionKey":"scheduler_filter_schedule_policy_kind"}}},{"type":"topology_ui_seed_record","seedKey":"scheduler.settings.projection","parentKey":"scheduler_job_roster","record":{"recordType":"topology_ui_field","key":"scheduler_filter_active","label":"Active filter","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.scheduler.seed_contract.component_tree"],"sourceReactPath":"$.root.children[0].children[0].children[3]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","fieldKey":"scheduler_filter_active","control":"form_input/select","required":false,"validationRefs":[],"valueFrom":"","optionsSource":"emission.data.activeOptions","optionsLabelPath":"label","optionsValuePath":"value","eventBinding":{"trigger":"change","wiringLane":"admin_runtime_dispatch_override_wiring","targetRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:list_settings","authority":"draft_or_projection_only","payloadFrom":{"search":"node:scheduler_search.value","triggerKind":"node:scheduler_filter_trigger_kind.value","schedulePolicyKind":"node:scheduler_filter_schedule_policy_kind.value","active":"node:scheduler_filter_active.value"}},"adminRuntimeDispatchOverride":{"trigger":"change","targetRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:list_settings","payloadFrom":{"search":"node:scheduler_search.value","triggerKind":"node:scheduler_filter_trigger_kind.value","schedulePolicyKind":"node:scheduler_filter_schedule_policy_kind.value","active":"node:scheduler_filter_active.value"},"sourceActionKey":"scheduler_filter_active"}}},{"type":"topology_ui_seed_record","seedKey":"scheduler.settings.projection","parentKey":"scheduler_job_roster","record":{"recordType":"topology_ui_table","key":"scheduler_job_list","label":"Scheduler job roster","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.scheduler.seed_contract.component_tree","scheduler-job-manifest-ssot.yaml#logical_entities"],"sourceReactPath":"$.root.children[0].children[0].children[4]","knownGapRefs":[],"tableKey":"scheduler_job_list","source":"topology.scheduler_jobs","display":"table","displayColumns":[{"key":"jobKey","header":"Job key"},{"key":"triggerKind","header":"Trigger kind"},{"key":"schedulePolicyKind","header":"Schedule policy"},{"key":"cronExpression","header":"Cron expression"},{"key":"scheduleIntervalSeconds","header":"Interval seconds"},{"key":"timezone","header":"Timezone"},{"key":"manualRunAllowed","header":"Manual run allowed"},{"key":"active","header":"Active"},{"key":"updatedAt","header":"Updated at"}],"rowsSource":"emission.data.schedulerJobs","columnKeys":[]}},{"type":"topology_ui_seed_record","seedKey":"scheduler.settings.projection","parentKey":"scheduler_job_roster","record":{"recordType":"topology_ui_action","key":"scheduler_enable_button","label":"Enable selected job","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.scheduler.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[5]","knownGapRefs":[],"authorityMarker":"preview_only","actionKey":"scheduler_enable_button","actionRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:enable","eventBinding":{"trigger":"click","wiringLane":"admin_runtime_dispatch_override_wiring","targetRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:enable","authority":"preview_only","payloadFrom":{"schedulerJobId":"node:scheduler_job_list.value.schedulerJobId","dryRun":"literal:true"}},"runtimeInteractions":[{"trigger":"click","actionType":"openModal","targetNodeId":"scheduler_enable_confirm_modal","statePath":"open","sourceActionKey":"scheduler_enable_button"}],"adminRuntimeDispatchOverride":{"trigger":"click","targetRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:enable","payloadFrom":{"schedulerJobId":"node:scheduler_job_list.value.schedulerJobId","dryRun":"literal:true"},"sourceActionKey":"scheduler_enable_button"}}},{"type":"topology_ui_seed_record","seedKey":"scheduler.settings.projection","parentKey":"scheduler_job_roster","record":{"recordType":"topology_ui_modal","key":"scheduler_enable_confirm_modal","label":"Enable selected job confirmation dialog","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.scheduler.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[6]","knownGapRefs":[],"modalKey":"scheduler_enable_confirm_modal","componentKind":"disclosure/modal","title":"Enable selected job","body":"Enable the selected scheduler job. Its configured trigger/schedule policy starts applying again; the job body itself is not modified.","runtimeInteractions":[{"trigger":"toggle","actionType":"closeModal","targetNodeId":"scheduler_enable_confirm_modal","statePath":"open","sourceActionKey":"scheduler_enable_confirm_modal"}],"childKeys":["scheduler_enable_confirm_button","scheduler_enable_cancel_button"]}},{"type":"topology_ui_seed_record","seedKey":"scheduler.settings.projection","parentKey":"scheduler_enable_confirm_modal","record":{"recordType":"topology_ui_action","key":"scheduler_enable_confirm_button","label":"Enable","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.scheduler.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[6].children[0]","knownGapRefs":[],"authorityMarker":"draft_apply_not_execution_authority","actionKey":"scheduler_enable_confirm_button","actionRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:enable","eventBinding":{"trigger":"click","wiringLane":"admin_runtime_dispatch_override_wiring","targetRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:enable","authority":"draft_apply_not_execution_authority","payloadFrom":{"schedulerJobId":"node:scheduler_job_list.value.schedulerJobId","confirmed":"literal:true"}},"runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"scheduler_enable_confirm_modal","statePath":"open","sourceActionKey":"scheduler_enable_confirm_button"}],"adminRuntimeDispatchOverride":{"trigger":"click","targetRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:enable","payloadFrom":{"schedulerJobId":"node:scheduler_job_list.value.schedulerJobId","confirmed":"literal:true"},"sourceActionKey":"scheduler_enable_confirm_button"}}},{"type":"topology_ui_seed_record","seedKey":"scheduler.settings.projection","parentKey":"scheduler_enable_confirm_modal","record":{"recordType":"topology_ui_action","key":"scheduler_enable_cancel_button","label":"Cancel","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.scheduler.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[6].children[1]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","actionKey":"scheduler_enable_cancel_button","actionRef":"ui-local:scheduler_enable_confirm_modal.close","eventBinding":{"trigger":"click","wiringLane":"disclosure_state_wiring","targetRef":"ui-local:scheduler_enable_confirm_modal.open","authority":"draft_or_projection_only","disclosureActionType":"closeModal","disclosureTargetNodeId":"scheduler_enable_confirm_modal","disclosureStatePath":"open"},"runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"scheduler_enable_confirm_modal","statePath":"open","sourceActionKey":"scheduler_enable_cancel_button"}]}},{"type":"topology_ui_seed_record","seedKey":"scheduler.settings.projection","parentKey":"scheduler_job_roster","record":{"recordType":"topology_ui_action","key":"scheduler_disable_button","label":"Disable selected job","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.scheduler.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[7]","knownGapRefs":[],"authorityMarker":"preview_only","actionKey":"scheduler_disable_button","actionRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:disable","eventBinding":{"trigger":"click","wiringLane":"admin_runtime_dispatch_override_wiring","targetRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:disable","authority":"preview_only","payloadFrom":{"schedulerJobId":"node:scheduler_job_list.value.schedulerJobId","dryRun":"literal:true"}},"runtimeInteractions":[{"trigger":"click","actionType":"openModal","targetNodeId":"scheduler_disable_confirm_modal","statePath":"open","sourceActionKey":"scheduler_disable_button"}],"adminRuntimeDispatchOverride":{"trigger":"click","targetRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:disable","payloadFrom":{"schedulerJobId":"node:scheduler_job_list.value.schedulerJobId","dryRun":"literal:true"},"sourceActionKey":"scheduler_disable_button"}}},{"type":"topology_ui_seed_record","seedKey":"scheduler.settings.projection","parentKey":"scheduler_job_roster","record":{"recordType":"topology_ui_modal","key":"scheduler_disable_confirm_modal","label":"Disable selected job confirmation dialog","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.scheduler.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[8]","knownGapRefs":[],"modalKey":"scheduler_disable_confirm_modal","componentKind":"disclosure/modal","title":"Disable selected job","body":"Disable the selected scheduler job. It stops being picked up by the scheduler; the job body itself is not modified.","runtimeInteractions":[{"trigger":"toggle","actionType":"closeModal","targetNodeId":"scheduler_disable_confirm_modal","statePath":"open","sourceActionKey":"scheduler_disable_confirm_modal"}],"childKeys":["scheduler_disable_confirm_button","scheduler_disable_cancel_button"]}},{"type":"topology_ui_seed_record","seedKey":"scheduler.settings.projection","parentKey":"scheduler_disable_confirm_modal","record":{"recordType":"topology_ui_action","key":"scheduler_disable_confirm_button","label":"Disable","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.scheduler.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[8].children[0]","knownGapRefs":[],"authorityMarker":"draft_apply_not_execution_authority","actionKey":"scheduler_disable_confirm_button","actionRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:disable","eventBinding":{"trigger":"click","wiringLane":"admin_runtime_dispatch_override_wiring","targetRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:disable","authority":"draft_apply_not_execution_authority","payloadFrom":{"schedulerJobId":"node:scheduler_job_list.value.schedulerJobId","confirmed":"literal:true"}},"runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"scheduler_disable_confirm_modal","statePath":"open","sourceActionKey":"scheduler_disable_confirm_button"}],"adminRuntimeDispatchOverride":{"trigger":"click","targetRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:disable","payloadFrom":{"schedulerJobId":"node:scheduler_job_list.value.schedulerJobId","confirmed":"literal:true"},"sourceActionKey":"scheduler_disable_confirm_button"}}},{"type":"topology_ui_seed_record","seedKey":"scheduler.settings.projection","parentKey":"scheduler_disable_confirm_modal","record":{"recordType":"topology_ui_action","key":"scheduler_disable_cancel_button","label":"Cancel","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.scheduler.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[8].children[1]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","actionKey":"scheduler_disable_cancel_button","actionRef":"ui-local:scheduler_disable_confirm_modal.close","eventBinding":{"trigger":"click","wiringLane":"disclosure_state_wiring","targetRef":"ui-local:scheduler_disable_confirm_modal.open","authority":"draft_or_projection_only","disclosureActionType":"closeModal","disclosureTargetNodeId":"scheduler_disable_confirm_modal","disclosureStatePath":"open"},"runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"scheduler_disable_confirm_modal","statePath":"open","sourceActionKey":"scheduler_disable_cancel_button"}]}}]}$$::jsonb,
+    'active'
+)
+ON CONFLICT (layout_id) DO UPDATE
+    SET layout_schema_json = EXCLUDED.layout_schema_json,
+        status = EXCLUDED.status;
+
+-- Layout-wide dispatch spec. wiring_kind='admin_runtime' + target_ref='manifest:<id>:<layer>:
+-- <action>' is what frontend/runtime/renderEmission.ts mapWiringKindToLayer/
+-- mapWiringKindToAction (parseAdminRuntimeLayerAction) reads to build this layout's own
+-- uniform read dispatch; the per-node enable/disable overrides live on the tensor nodes
+-- themselves (dispatchTargetRefByTrigger), exactly as ae200 does.
+INSERT INTO topology.ui_wiring_registry (wiring_id, wiring_key, wiring_kind, target_surface, target_ref, wiring_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-00000005c105',
+    'scheduler.settings.projection.wiring',
+    'admin_runtime',
+    'manifest',
+    'manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:list_settings',
+    $${"actions":[{"wiringKey":"scheduler.settings.projection.scheduler_enable_button.wiring","wiringKind":"admin_runtime_dispatch_override_wiring","targetSurface":"manifest","wiringSchemaJson":{"eventBinding":{"trigger":"click","wiringLane":"admin_runtime_dispatch_override_wiring","targetRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:enable","authority":"preview_only","payloadFrom":{"schedulerJobId":"node:scheduler_job_list.value.schedulerJobId","dryRun":"literal:true"}},"sourceActionKey":"scheduler_enable_button","authorityMarker":"preview_only"},"sourceRecordKey":"scheduler_enable_button"},{"wiringKey":"scheduler.settings.projection.scheduler_enable_confirm_button.wiring","wiringKind":"admin_runtime_dispatch_override_wiring","targetSurface":"manifest","wiringSchemaJson":{"eventBinding":{"trigger":"click","wiringLane":"admin_runtime_dispatch_override_wiring","targetRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:enable","authority":"draft_apply_not_execution_authority","payloadFrom":{"schedulerJobId":"node:scheduler_job_list.value.schedulerJobId","confirmed":"literal:true"}},"sourceActionKey":"scheduler_enable_confirm_button","authorityMarker":"draft_apply_not_execution_authority"},"sourceRecordKey":"scheduler_enable_confirm_button"},{"wiringKey":"scheduler.settings.projection.scheduler_enable_cancel_button.wiring","wiringKind":"disclosure_state_wiring","targetSurface":"manifest","wiringSchemaJson":{"eventBinding":{"trigger":"click","wiringLane":"disclosure_state_wiring","targetRef":"ui-local:scheduler_enable_confirm_modal.open","authority":"draft_or_projection_only","disclosureActionType":"closeModal","disclosureTargetNodeId":"scheduler_enable_confirm_modal","disclosureStatePath":"open"},"sourceActionKey":"scheduler_enable_cancel_button","authorityMarker":"draft_or_projection_only"},"sourceRecordKey":"scheduler_enable_cancel_button"},{"wiringKey":"scheduler.settings.projection.scheduler_disable_button.wiring","wiringKind":"admin_runtime_dispatch_override_wiring","targetSurface":"manifest","wiringSchemaJson":{"eventBinding":{"trigger":"click","wiringLane":"admin_runtime_dispatch_override_wiring","targetRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:disable","authority":"preview_only","payloadFrom":{"schedulerJobId":"node:scheduler_job_list.value.schedulerJobId","dryRun":"literal:true"}},"sourceActionKey":"scheduler_disable_button","authorityMarker":"preview_only"},"sourceRecordKey":"scheduler_disable_button"},{"wiringKey":"scheduler.settings.projection.scheduler_disable_confirm_button.wiring","wiringKind":"admin_runtime_dispatch_override_wiring","targetSurface":"manifest","wiringSchemaJson":{"eventBinding":{"trigger":"click","wiringLane":"admin_runtime_dispatch_override_wiring","targetRef":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:disable","authority":"draft_apply_not_execution_authority","payloadFrom":{"schedulerJobId":"node:scheduler_job_list.value.schedulerJobId","confirmed":"literal:true"}},"sourceActionKey":"scheduler_disable_confirm_button","authorityMarker":"draft_apply_not_execution_authority"},"sourceRecordKey":"scheduler_disable_confirm_button"},{"wiringKey":"scheduler.settings.projection.scheduler_disable_cancel_button.wiring","wiringKind":"disclosure_state_wiring","targetSurface":"manifest","wiringSchemaJson":{"eventBinding":{"trigger":"click","wiringLane":"disclosure_state_wiring","targetRef":"ui-local:scheduler_disable_confirm_modal.open","authority":"draft_or_projection_only","disclosureActionType":"closeModal","disclosureTargetNodeId":"scheduler_disable_confirm_modal","disclosureStatePath":"open"},"sourceActionKey":"scheduler_disable_cancel_button","authorityMarker":"draft_or_projection_only"},"sourceRecordKey":"scheduler_disable_cancel_button"}]}$$::jsonb,
+    'active'
+)
+ON CONFLICT (wiring_id) DO UPDATE
+    SET wiring_kind = EXCLUDED.wiring_kind,
+        target_surface = EXCLUDED.target_surface,
+        target_ref = EXCLUDED.target_ref,
+        wiring_schema_json = EXCLUDED.wiring_schema_json,
+        status = EXCLUDED.status;
+
+INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
+VALUES (
+    '00000000-0000-0000-0000-00000005c106',
+    'admin/scheduler#default',
+    '00000000-0000-0000-0000-00000005c102',
+    '00000000-0000-0000-0000-00000005c104',
+    '00000000-0000-0000-0000-00000005c105',
+    'default',
+    0,
+    $${"nodes":[{"nodeId":"scheduler_search","nodeKind":"catalog_component","runtimeInteractions":[],"componentKey":"search_input.alias","dispatchTargetRefByTrigger":{"change":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:list_settings"},"dispatchPayloadFromByTrigger":{"change":{"search":"node:scheduler_search.value","triggerKind":"node:scheduler_filter_trigger_kind.value","schedulePolicyKind":"node:scheduler_filter_schedule_policy_kind.value","active":"node:scheduler_filter_active.value"}},"debounceMs":300},{"nodeId":"scheduler_filter_trigger_kind","nodeKind":"catalog_component","runtimeInteractions":[],"componentKey":"select.template","dispatchTargetRefByTrigger":{"change":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:list_settings"},"dispatchPayloadFromByTrigger":{"change":{"search":"node:scheduler_search.value","triggerKind":"node:scheduler_filter_trigger_kind.value","schedulePolicyKind":"node:scheduler_filter_schedule_policy_kind.value","active":"node:scheduler_filter_active.value"}},"propBindings":{"options":{"source":"emission.data.triggerKindOptions","transform":"rowsToOptions","labelPath":"label","valuePath":"value"}}},{"nodeId":"scheduler_filter_schedule_policy_kind","nodeKind":"catalog_component","runtimeInteractions":[],"componentKey":"select.template","dispatchTargetRefByTrigger":{"change":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:list_settings"},"dispatchPayloadFromByTrigger":{"change":{"search":"node:scheduler_search.value","triggerKind":"node:scheduler_filter_trigger_kind.value","schedulePolicyKind":"node:scheduler_filter_schedule_policy_kind.value","active":"node:scheduler_filter_active.value"}},"propBindings":{"options":{"source":"emission.data.schedulePolicyKindOptions","transform":"rowsToOptions","labelPath":"label","valuePath":"value"}}},{"nodeId":"scheduler_filter_active","nodeKind":"catalog_component","runtimeInteractions":[],"componentKey":"select.template","dispatchTargetRefByTrigger":{"change":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:list_settings"},"dispatchPayloadFromByTrigger":{"change":{"search":"node:scheduler_search.value","triggerKind":"node:scheduler_filter_trigger_kind.value","schedulePolicyKind":"node:scheduler_filter_schedule_policy_kind.value","active":"node:scheduler_filter_active.value"}},"propBindings":{"options":{"source":"emission.data.activeOptions","transform":"rowsToOptions","labelPath":"label","valuePath":"value"}}},{"nodeId":"scheduler_job_list","nodeKind":"catalog_component","runtimeInteractions":[],"propsJson":"{\"table\": null, \"columns\": [{\"key\": \"jobKey\", \"header\": \"Job key\"}, {\"key\": \"triggerKind\", \"header\": \"Trigger kind\"}, {\"key\": \"schedulePolicyKind\", \"header\": \"Schedule policy\"}, {\"key\": \"cronExpression\", \"header\": \"Cron expression\"}, {\"key\": \"scheduleIntervalSeconds\", \"header\": \"Interval seconds\"}, {\"key\": \"timezone\", \"header\": \"Timezone\"}, {\"key\": \"manualRunAllowed\", \"header\": \"Manual run allowed\"}, {\"key\": \"active\", \"header\": \"Active\"}, {\"key\": \"updatedAt\", \"header\": \"Updated at\"}]}","propBindings":{"rows":{"source":"emission.data.schedulerJobs"}}},{"nodeId":"scheduler_enable_button","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"openModal","targetNodeId":"scheduler_enable_confirm_modal","statePath":"open","sourceActionKey":"scheduler_enable_button"}],"componentKey":"button.primitive","dispatchTargetRefByTrigger":{"click":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:enable"},"dispatchPayloadFromByTrigger":{"click":{"schedulerJobId":"node:scheduler_job_list.value.schedulerJobId","dryRun":"literal:true"}},"propsJson":"{\"label\": \"Enable selected job\"}"},{"nodeId":"scheduler_enable_confirm_modal","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"toggle","actionType":"closeModal","targetNodeId":"scheduler_enable_confirm_modal","statePath":"open","sourceActionKey":"scheduler_enable_confirm_modal"}],"componentKey":"modal.template","componentKind":"disclosure/modal","propsJson":"{\"data\": {\"open\": false, \"title\": \"Enable selected job\", \"body\": \"Enable the selected scheduler job. Its configured trigger/schedule policy starts applying again; the job body itself is not modified.\"}}"},{"nodeId":"scheduler_enable_confirm_button","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"scheduler_enable_confirm_modal","statePath":"open","sourceActionKey":"scheduler_enable_confirm_button"}],"componentKey":"button.primitive","dispatchTargetRefByTrigger":{"click":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:enable"},"dispatchPayloadFromByTrigger":{"click":{"schedulerJobId":"node:scheduler_job_list.value.schedulerJobId","confirmed":"literal:true"}},"propsJson":"{\"label\": \"Enable\"}"},{"nodeId":"scheduler_enable_cancel_button","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"scheduler_enable_confirm_modal","statePath":"open","sourceActionKey":"scheduler_enable_cancel_button"}],"componentKey":"button.primitive","propsJson":"{\"label\": \"Cancel\"}"},{"nodeId":"scheduler_disable_button","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"openModal","targetNodeId":"scheduler_disable_confirm_modal","statePath":"open","sourceActionKey":"scheduler_disable_button"}],"componentKey":"button.primitive","dispatchTargetRefByTrigger":{"click":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:disable"},"dispatchPayloadFromByTrigger":{"click":{"schedulerJobId":"node:scheduler_job_list.value.schedulerJobId","dryRun":"literal:true"}},"propsJson":"{\"label\": \"Disable selected job\"}"},{"nodeId":"scheduler_disable_confirm_modal","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"toggle","actionType":"closeModal","targetNodeId":"scheduler_disable_confirm_modal","statePath":"open","sourceActionKey":"scheduler_disable_confirm_modal"}],"componentKey":"modal.template","componentKind":"disclosure/modal","propsJson":"{\"data\": {\"open\": false, \"title\": \"Disable selected job\", \"body\": \"Disable the selected scheduler job. It stops being picked up by the scheduler; the job body itself is not modified.\"}}"},{"nodeId":"scheduler_disable_confirm_button","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"scheduler_disable_confirm_modal","statePath":"open","sourceActionKey":"scheduler_disable_confirm_button"}],"componentKey":"button.primitive","dispatchTargetRefByTrigger":{"click":"manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:disable"},"dispatchPayloadFromByTrigger":{"click":{"schedulerJobId":"node:scheduler_job_list.value.schedulerJobId","confirmed":"literal:true"}},"propsJson":"{\"label\": \"Disable\"}"},{"nodeId":"scheduler_disable_cancel_button","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"closeModal","targetNodeId":"scheduler_disable_confirm_modal","statePath":"open","sourceActionKey":"scheduler_disable_cancel_button"}],"componentKey":"button.primitive","propsJson":"{\"label\": \"Cancel\"}"}]}$$::jsonb
+)
+ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
+    SET layout_patch_json = EXCLUDED.layout_patch_json;
+
+-- Physical data authority binding: this projection reads topology.scheduler_jobs (and only
+-- that table) through scheduler_jobs:list_settings, and writes exactly one of its columns
+-- (active) through scheduler_jobs:enable/disable. Registering the table here is also what the
+-- SSOT's own routes_to.create_edit_step_chain_authoring depends on (/admin/contents'
+-- physical_table_and_page_binding pipeline over the same table) -- it does not grant this
+-- projection any authoring capability of its own.
+INSERT INTO topology.physical_tables (table_ref, schema_name, category, active)
+VALUES ('topology.scheduler_jobs', 'topology', 'scheduler_job_manifest_substrate', true)
+ON CONFLICT (table_ref) DO UPDATE
+    SET schema_name = EXCLUDED.schema_name,
+        category    = EXCLUDED.category,
+        active      = EXCLUDED.active;
+
+INSERT INTO topology.physical_table_manifest_bindings (physical_table_id, topology_manifest_id, active, binding_evidence_json)
+SELECT pt.physical_table_id, '00000000-0000-0000-0000-00000005c100'::uuid, true,
+       '{"note":"scheduler.settings.projection reads topology.scheduler_jobs via scheduler_jobs:list_settings and toggles only its active column via scheduler_jobs:enable/disable; job body/step chain authoring stays on /admin/contents"}'::jsonb
+FROM topology.physical_tables pt WHERE pt.table_ref = 'topology.scheduler_jobs'
+ON CONFLICT (physical_table_id, topology_manifest_id) DO UPDATE
+    SET active = EXCLUDED.active, binding_evidence_json = EXCLUDED.binding_evidence_json, updated_at = now();
+

@@ -1160,6 +1160,11 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         "auth_users:list",
         "auth_users:search",
         "auth_users:get",
+        // scheduler-settings subBundle (2026-08-17): scheduler.settings.projection's seeded
+        // search/filter Fields dispatch this read action (admin-master-roster-management-ssot.yaml
+        // admin_runtime_actions.scheduler_jobs_read). scheduler_jobs:enable/disable/create/edit are
+        // scheduler_jobs_write and remain rejected for Field-owned dispatch by construction.
+        "scheduler_jobs:list_settings",
     };
 
     /// <summary>

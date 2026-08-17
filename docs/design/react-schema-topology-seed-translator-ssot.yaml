@@ -2407,6 +2407,79 @@ react_schema_topology_seed_translator_ssot:
         wiring_lane_refs: []
         known_gaps: []
 
+      - seed_surface_key: scheduler.settings.projection
+        declared_by_yaml_ref: docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.scheduler
+        seed_role: scheduler_settings_list_search_filter_toggle_projection_manifest_seed
+        record_subjects: [manifest_projection, scheduler_job_settings_projection]
+        exchange_units: [category, section, field, table, action, modal]
+        authority_boundary: >-
+          list_search_filter_read_plus_enable_disable_only;
+          preview_dryrun_then_explicit_confirm_write_diff_log for both mutations.
+          create/edit/step_chain_authoring and credential_or_external_port_binding are explicitly
+          OUT of this surface's scope (they stay with /admin/contents' generic
+          physical_table_and_page_binding pipeline and with the credential-management
+          consumer_reference_binding surface respectively) and are absent from this seed.
+        generation_evidence_ref: >-
+          .agent/tests/fixtures/react-schema-topology-seed-translator/scheduler-settings-admin.input.json
+          (generate-react-schema) -> scheduler-settings-admin.topology-seed.input.json
+          (generate-topology-seed, inputText is the FIRST stage's own reactSchemaCandidate output
+          verbatim) -- both runs report gateStatus=pass with zero validationErrors, the same
+          two-fixture generation evidence shape admin.enum.management.projection and
+          team_dashboard.admin.projection already use. The resulting records[] /
+          tensorAdoptionCandidates / wiringAdoptionCandidates content is db/seed_empty.sql's
+          5c104 / 5c106 / 5c105 rows (post-generation edits limited to identity plumbing:
+          layout/wiring/tensor/package UUIDs and the physical table_ref the generator leaves
+          unresolved -- never structural content).
+        component_catalog_refs:
+          catalog_ref: ui_catalog_boundary_contract.frontend_component_catalog
+          componentKinds:
+            - form_input/search_input (search_input.alias)
+            - form_input/select (select.template)
+            - table (table.primitive)
+            - action/button (button.primitive)
+            - disclosure/modal (modal.template)
+        style_catalog_refs:
+          catalog_ref: ui_catalog_boundary_contract.style_catalog
+          refs: []
+        html_tag_catalog_refs:
+          catalog_ref: ui_catalog_boundary_contract.html_tag_catalog
+          refs: []
+        wiring_lane_refs:
+          - lane: admin_runtime_dispatch_override_wiring
+            catalog_ref: wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring
+            targetRefs:
+              - "manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:list_settings"
+              - "manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:enable"
+              - "manifest:00000000-0000-0000-0000-00000005c100:scheduler_jobs:disable"
+          - lane: disclosure_state_wiring
+            catalog_ref: wiring_lane_contract.lanes.disclosure_state_wiring
+            targetRefs:
+              - "ui-local:scheduler_enable_confirm_modal.open"
+              - "ui-local:scheduler_disable_confirm_modal.open"
+        known_gaps:
+          - gap: row_conditional_action_visibility_not_expressible
+            classification: substrate_capability_gap_not_translator_gap
+            status: open_documented_not_worked_around
+            note: >-
+              The owning SSOT's seed_contract.component_tree declares ONE scheduler_toggle_button
+              node whose responsibility is "explicit enable or disable confirmation for one
+              scheduler job row". No seed-driven manifest in this repository expresses
+              row-state-conditional action visibility today: neither the layout/tensor schema
+              (backend/repository/LayoutSchemaTensorComposer.cs, NpgsqlUiTopologyRepository.cs
+              ValidateRuntimeInteractions) nor the render substrate
+              (frontend/runtime/renderEmission.ts, runtimeComponentFactory.ts) carries a
+              visible-when/hidden-when primitive, and the retired hardcoded island
+              (frontend/islands/SchedulerJobSettingsPanel.tsx, `job.active === true` client-side
+              branch) was not a seed-driven pattern. Rather than invent a new conditional-visibility
+              mechanism inside this subBundle, this seed emits BOTH toggle actions
+              (scheduler_enable_button / scheduler_disable_button, each with its own dryRun-preview
+              -> confirm-modal -> confirmed-write triple) and lets the backend decide: the selected
+              row's real current `active` value is re-read server-side and the wrong-direction
+              request fails closed with SCHEDULER_JOB_ALREADY_ACTIVE /
+              SCHEDULER_JOB_ALREADY_INACTIVE (AdminRuntime.SchedulerSettings.cs) instead of writing
+              a no-op. Fail-closed and honest, but the UI shows one button more than the SSOT's
+              single-node component_tree literally describes.
+
   # ===========================================================================
   # 12. validation_rules
   # ===========================================================================

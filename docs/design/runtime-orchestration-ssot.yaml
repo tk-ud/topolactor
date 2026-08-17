@@ -180,16 +180,25 @@ runtime_orchestration_ssot:
             is introduced elsewhere in the system; not a blocking precondition for the rest of
             team-dashboard's own completion state.
         - route: /admin/scheduler
-          retirement_kind: hub_navigation_only
-          replacement: same_url_plus_hub_entry
-          status: pending
+          retirement_kind: thin_projection_wrapper
+          replacement: same_url_seed_backed
+          status: done
           precondition: >-
-            same as /admin/team-dashboard above: requires a real per-screen ui_projection manifest
-            for scheduler_jobs, which does not exist yet. Ratified into the canonical registry
-            above (route file and dispatcher_mapping already existed but the registry entry was
-            absent) without waiting on that prerequisite, since ratifying an already-shipped
-            route's registry entry is independent of adding hub navigation to it. Not retired by
-            this change.
+            DONE (scheduler-settings subBundle closure, 2026-08-17): the manifest existence
+            blocker is resolved -- scheduler.settings.projection (manifest 5c100,
+            db/seed_empty.sql 5c1 family) is a real, seeded ui_projection manifest per
+            docs/design/admin-normal-surface-projection-seed-ssot.yaml
+            surface_axes.admin.surfaces.scheduler. Reclassified from hub_navigation_only to
+            thin_projection_wrapper (matching /admin/enums' own entry above): the actual change
+            here is that this SAME URL's hardcoded island (SchedulerJobSettingsPanel.tsx, now
+            deleted) was replaced by a thin ProjectionShell wrapper resolved by manifest_key
+            ("scheduler.settings.projection", never a hardcoded UUID -- see
+            dispatcher_contract.manifest_key_target_ref_resolution_contract below), not merely
+            given an additional hub_relations navigation entry while keeping its old hardcoded
+            content. The retired island's create/edit/step-chain authoring is NOT reproduced on
+            this surface -- it routes to /admin/contents' existing generic
+            physical_table_and_page_binding pipeline over topology.scheduler_jobs /
+            topology.scheduler_job_steps, per surface_axes.admin.surfaces.scheduler.scope_boundary.
 
   trigger_contract:
     kind_enum:
@@ -588,9 +597,10 @@ runtime_orchestration_ssot:
         Applies to every hubs.topology_manifests row per db-schema.yaml
         hub_relations.minimum_cardinality_completion_invariant.applies_to -- not limited to
         admin-surface-topology-seed-conversion's five subBundles, though those remain the existing
-        concrete proof precedent (admin-dashboard/admin-enum/credential-management already resolved
-        per navigation_binding_resolution_criterion; team-dashboard/scheduler-settings remain
-        unresolved_before_seed).
+        concrete proof precedent (all five subBundles -- admin-dashboard/admin-enum/
+        credential-management/team-dashboard/scheduler-settings -- resolved per
+        navigation_binding_resolution_criterion as of the scheduler-settings subBundle closure,
+        2026-08-17).
 
     canonical_default_entry_contract:
       note: >-

@@ -128,6 +128,11 @@ const SCHEDULER_JOBS_AXES: string[] = [
   "scheduler_jobs:create",
   "scheduler_jobs:edit",
   "scheduler_jobs:disable",
+  // scheduler-settings subBundle: the symmetric enable counterpart required by
+  // admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.scheduler
+  // .new_operation_note, seeded as manifest ...0000000000f4 (axes route) and additionally on the
+  // scheduler.settings.projection manifest's own target="manifest" mappings.
+  "scheduler_jobs:enable",
 ];
 
 /** `"layer:action" =>` (or `"sub:action" =>` inside the nested team_markdown switch). */

@@ -38,10 +38,16 @@ Deno.test("admin credential/session revoke endpoints resolve target account only
 
 // ─── component catalog coverage for new/updated surfaces ───────────────────────
 
+// scheduler_job_settings.admin_operation was removed from this list with its catalog entry and
+// island (scheduler-settings subBundle, admin-surface-topology-seed-conversion): /admin/scheduler is
+// now a thin ProjectionShell wrapper over the seeded scheduler.settings.projection manifest, so there
+// is no composite admin_operation island left to catalog -- the same retirement AdminEnumsRoster's
+// own entry already went through. The route's own seed-driven behavior is proven by
+// frontend/tests/schedulerJobManifestProjection.test.ts and
+// backend/tests/Topolactor.Integration.Tests/SchedulerSettingsHubRelationUiProjectionLiveDbTests.cs.
 const EXPECTED_NEW_OR_UPDATED_ENTRIES: Array<{ componentKey: string; sourcePath: string }> = [
   { componentKey: "saved_view_adjustment_authoring.authoring", sourcePath: "frontend/components/SavedViewAdjustmentAuthoringPanel.tsx" },
   { componentKey: "credential_management.admin_operation", sourcePath: "frontend/islands/AdminUsersRoster.tsx" },
-  { componentKey: "scheduler_job_settings.admin_operation", sourcePath: "frontend/islands/SchedulerJobSettingsPanel.tsx" },
   { componentKey: "hub_navigation_admin.admin_operation", sourcePath: "frontend/islands/HubNavigationAdmin.tsx" },
 ];
 

@@ -1531,7 +1531,35 @@ admin_normal_surface_projection_seed_ssot:
             every mount instead -- see frontend/islands/ProjectionShell.tsx and frontend/tests/
             projectionShellHubNavigationRenderProof.test.ts. This closes team-dashboard's remaining
             open navigation item without a hub_relations edge.
-        scheduler-settings: unresolved_before_seed
+        scheduler-settings:
+          target_manifest: resolved
+          evidence_ref: >-
+            manifest 00000000-0000-0000-0000-00000005c100 (scheduler.settings.projection), built
+            2026-08-17, real ui_projection tensor per surface_axes.admin.surfaces.scheduler
+            seed_contract (search_input.alias / select.template / table.primitive /
+            button.primitive component composition, authored via
+            .agent/tools/react-schema-topology-seed-translator and adopted directly, never
+            hand-authored). Reads/writes topology.scheduler_jobs via the SAME
+            scheduler_jobs:list_settings/enable/disable dispatch actions AdminRuntime already
+            owned for list_settings/disable (enable added as the required symmetric counterpart
+            per this entry's own new_operation_note).
+          navigation_binding_authoring_and_verification: resolved
+          navigation_binding_evidence_ref: >-
+            backend/tests/Topolactor.Integration.Tests/SchedulerSettingsHubRelationUiProjectionLiveDbTests.cs
+            DispatchAsync_HubNavigationCreate_AuthorsRelationTargetingSchedulerManifest_ResolutionChainReachesScalarEmission
+            -- single live-DB test combining the hub_navigation:create real authoring dispatch path
+            (never a raw SQL insert) with the full resolution_chain against manifest 5c100's own
+            real hub/seed rows, meeting navigation_binding_resolution_criterion above, the same
+            combined-proof pattern AdminEnumHubRelationUiProjectionLiveDbTests.cs /
+            CredentialManagementHubRelationUiProjectionLiveDbTests.cs /
+            TeamDashboardHubRelationUiProjectionLiveDbTests.cs established. No hubs.hub_relations
+            row is shipped in db/seed_empty.sql for this manifest -- consistent with all three
+            precedents, none of which ships one either; the criterion is satisfied by authoring
+            and resolving the relation for real at test time. frontend/routes/admin/scheduler.tsx
+            resolves this manifest by manifest_key ("scheduler.settings.projection"), not a
+            hardcoded manifest_id UUID constant, via the same generic
+            manifest_key_target_ref_resolution_contract team-dashboard's own closure round
+            established (docs/design/runtime-orchestration-ssot.yaml dispatcher_contract).
     - id: external_instance_projection_columns
       blocking_condition: External instance credential category depends on instance-port substrate authority; if a concrete existing physical table/column set is not present for required instance settings, the seed task must stop and reference the instance-port SSOT instead of inventing fields.
       required_resolution_before_seed: Cross-check instance-port physical schema and approved candidate source at seed implementation time.

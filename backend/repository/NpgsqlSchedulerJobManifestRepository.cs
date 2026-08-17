@@ -44,6 +44,14 @@ public sealed record SchedulerJobRecord(
 
     public string Timezone { get; init; } = "UTC";
 
+    /// <summary>
+    /// topology.scheduler_jobs.updated_at. Part of the scheduler-settings surface's own declared
+    /// existing_schema_fields_allowed_for_projection set (docs/design/admin-normal-surface-
+    /// projection-seed-ssot.yaml surface_axes.admin.surfaces.scheduler) — read only, never authored
+    /// through this surface (SetJobActiveAsync/CreateJobAsync/UpdateJobAsync set it to now()).
+    /// </summary>
+    public DateTimeOffset? UpdatedAt { get; init; }
+
     /// <summary>True when this job leases rows from a manifest-authorized input table.</summary>
     public bool HasInputSource =>
         !string.IsNullOrWhiteSpace(InputTableRef)
@@ -122,7 +130,28 @@ public interface ISchedulerJobManifestRepository
     /// <summary>Persist a manifest-authorized output upsert from a step result binding.</summary>
     Task UpsertAuthorizedOutputAsync(SchedulerJobRecord job, SchedulerStepResultBinding binding, IReadOnlyDictionary<string, object?> values, CancellationToken ct = default);
 
-    Task<IReadOnlyList<SchedulerJobRecord>> LoadSettingsProjectionAsync(CancellationToken ct = default);
+    /// <summary>
+    /// scheduler-settings surface read (docs/design/admin-normal-surface-projection-seed-ssot.yaml
+    /// surface_axes.admin.surfaces.scheduler capability_requirements.search/filter). search is an
+    /// OPTIONAL case-insensitive substring match on job_key ONLY (the SSOT's single declared search
+    /// target field); triggerKind/schedulePolicyKind/active are the SSOT's three declared filter
+    /// target fields, each an OPTIONAL exact match, AND-combined with each other and with search.
+    /// All absent/null returns the canonical full list — the exact pre-existing behavior every
+    /// prior caller relied on. Applied as parameterized WHERE predicates only (never SQL string
+    /// concatenation of a caller-supplied value), the same idiom the rest of this file uses.
+    /// </summary>
+    Task<IReadOnlyList<SchedulerJobRecord>> LoadSettingsProjectionAsync(
+        string? search = null, string? triggerKind = null, string? schedulePolicyKind = null,
+        bool? active = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Targeted single-job read over the SAME projection columns LoadSettingsProjectionAsync
+    /// returns. Used by the enable/disable mutation_confirmation_contract to resolve the job's
+    /// CURRENT active state for (a) the dryRun preview's already-in-target-state fail-close and
+    /// (b) the confirmed write's before/after diff_log envelope. Returns null when no such job.
+    /// </summary>
+    Task<SchedulerJobRecord?> LoadSettingsProjectionByIdAsync(
+        Guid schedulerJobId, CancellationToken ct = default);
 
     // ── admin.contents authoring surface ──────────────────────────────────────
     Task<Guid> CreateJobAsync(SchedulerJobDraft draft, CancellationToken ct = default);
@@ -461,16 +490,51 @@ public sealed class NpgsqlSchedulerJobManifestRepository : ISchedulerJobManifest
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
-    public async Task<IReadOnlyList<SchedulerJobRecord>> LoadSettingsProjectionAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<SchedulerJobRecord>> LoadSettingsProjectionAsync(
+        string? search = null, string? triggerKind = null, string? schedulePolicyKind = null,
+        bool? active = null, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
 
         var result = new List<SchedulerJobRecord>();
         await using var cmd = conn.CreateCommand();
+
+        // Every predicate below is a fixed SQL fragment with a bound parameter — the caller-supplied
+        // search/filter VALUES never reach the statement text, so no payload-derived SQL authority
+        // exists on this path (the same discipline RequireTable/RequireColumn enforce for the
+        // manifest-authored table/column paths elsewhere in this file).
+        var predicates = new List<string>();
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            predicates.Add("j.job_key ILIKE @search");
+            cmd.Parameters.AddWithValue("search", $"%{search.Trim()}%");
+        }
+        if (!string.IsNullOrWhiteSpace(triggerKind))
+        {
+            predicates.Add("j.trigger_kind = @triggerKind");
+            cmd.Parameters.AddWithValue("triggerKind", triggerKind);
+        }
+        if (!string.IsNullOrWhiteSpace(schedulePolicyKind))
+        {
+            predicates.Add("j.schedule_policy_kind = @schedulePolicyKind");
+            cmd.Parameters.AddWithValue("schedulePolicyKind", schedulePolicyKind);
+        }
+        if (active is not null)
+        {
+            predicates.Add("j.active = @active");
+            cmd.Parameters.AddWithValue("active", active.Value);
+        }
+
+        var whereClause = predicates.Count == 0
+            ? string.Empty
+            : "\n            WHERE " + string.Join(" AND ", predicates);
+
         cmd.CommandText = SelectColumns + """
 
             FROM topology.scheduler_jobs j
+            """ + whereClause + """
+
             ORDER BY j.job_key ASC
             """;
 
@@ -479,6 +543,24 @@ public sealed class NpgsqlSchedulerJobManifestRepository : ISchedulerJobManifest
             result.Add(MapRecord(reader));
 
         return result;
+    }
+
+    public async Task<SchedulerJobRecord?> LoadSettingsProjectionByIdAsync(
+        Guid schedulerJobId, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = SelectColumns + """
+
+            FROM topology.scheduler_jobs j
+            WHERE j.scheduler_job_id = @id
+            """;
+        cmd.Parameters.AddWithValue("id", schedulerJobId);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        return await reader.ReadAsync(ct) ? MapRecord(reader) : null;
     }
 
     public async Task<Guid> CreateJobAsync(SchedulerJobDraft draft, CancellationToken ct = default)
@@ -796,7 +878,8 @@ public sealed class NpgsqlSchedulerJobManifestRepository : ISchedulerJobManifest
                    j.input_status_skipped_value, j.input_status_retry_wait_value,
                    j.output_table_ref, j.timezone,
                    j.max_batch_size, j.lease_seconds, j.retry_policy, j.authority_scope,
-                   j.credential_requirement_ref, j.external_port_ref, j.projection_policy
+                   j.credential_requirement_ref, j.external_port_ref, j.projection_policy,
+                   j.updated_at
             """;
 
     private static SchedulerJobRecord MapRecord(NpgsqlDataReader reader)
@@ -841,6 +924,9 @@ public sealed class NpgsqlSchedulerJobManifestRepository : ISchedulerJobManifest
             Timezone = Str("timezone") ?? "UTC",
             RetryMaxAttempts = maxAttempts,
             RetryBackoffSeconds = backoffSeconds,
+            UpdatedAt = reader.IsDBNull(reader.GetOrdinal("updated_at"))
+                ? null
+                : reader.GetFieldValue<DateTimeOffset>(reader.GetOrdinal("updated_at")),
         };
     }
 

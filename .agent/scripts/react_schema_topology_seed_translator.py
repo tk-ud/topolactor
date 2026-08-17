@@ -1543,6 +1543,11 @@ ADMIN_RUNTIME_READ_ACTIONS = frozenset({
     "auth_users:list",
     "auth_users:search",
     "auth_users:get",
+    # scheduler-settings subBundle (2026-08-17): scheduler.settings.projection's seeded
+    # search/filter Fields dispatch this read action -- see the SSOT's own scheduler_jobs_read
+    # group. scheduler_jobs:enable/disable/create/edit are in scheduler_jobs_write and stay
+    # rejected for Field-owned dispatch by construction.
+    "scheduler_jobs:list_settings",
 })
 
 #: manifest:<manifestId>:<layer>:<action> -- the SAME shape lane_target_ref_patterns already
@@ -2396,13 +2401,26 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
             # a Field carrying this override still dispatches through the layout's OWN uniform
             # admin_runtime wiring (wiringId=ae205), this override only supplies a per-trigger
             # payload addition, same as Action/Step's override does for THEIR own uniform target.
-            tensor_nodes.append({
+            override_tensor_node = {
                 "nodeId": this_resolved_key,
                 "nodeKind": "catalog_component",
                 "runtimeInteractions": [],
                 "adminRuntimeDispatchOverride": record["adminRuntimeDispatchOverride"],
                 "componentKey": COMPONENT_KIND_TO_COMPONENT_KEY.get(record.get("control")),
-            })
+            }
+            # debounceMs (scheduler-settings subBundle, 2026-08-17): carried through from this SAME
+            # record's own already-authored, already-validated debounceMs
+            # (validate_field_admin_runtime_dispatch_wiring REQUIRES a positive integer for a
+            # form_input/search_input dispatching through this lane). The tensor node is where the
+            # runtime actually reads it (frontend/runtime/renderEmission.ts debounce policy, and
+            # backend/repository/NpgsqlUiTopologyRepository.cs validates it at layout_patch save
+            # time), so dropping it here silently produced an uncontrolled per-keystroke dispatch --
+            # exactly what the authoring-time rule exists to prevent. Generic for any Field kind
+            # that authors one; db/seed_empty.sql's own ae200 enum_search node already carries this
+            # same key, so this closes a generation gap rather than adding a new seed shape.
+            if record.get("debounceMs") is not None:
+                override_tensor_node["debounceMs"] = record["debounceMs"]
+            tensor_nodes.append(override_tensor_node)
 
         if record_type in ("topology_ui_action", "topology_ui_workflow_step"):
             event_binding = record.get("eventBinding") or {}
@@ -2533,6 +2551,7 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                     "propBindings": None,
                     "componentKey": None,
                     "componentKind": None,
+                    "debounceMs": None,
                 }
                 order.append(nid)
                 override_source_action_keys_by_node[nid] = []
@@ -2565,6 +2584,8 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                 merged[nid]["componentKey"] = node["componentKey"]
             if node.get("componentKind") is not None and merged[nid]["componentKind"] is None:
                 merged[nid]["componentKind"] = node["componentKind"]
+            if node.get("debounceMs") is not None and merged[nid]["debounceMs"] is None:
+                merged[nid]["debounceMs"] = node["debounceMs"]
 
         def _clean_tensor_node(n):
             out = {"nodeId": n["nodeId"], "nodeKind": n["nodeKind"], "runtimeInteractions": n["runtimeInteractions"]}
@@ -2593,6 +2614,8 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                 out["propsJson"] = n["propsJson"]
             if n["propBindings"] is not None:
                 out["propBindings"] = n["propBindings"]
+            if n.get("debounceMs") is not None:
+                out["debounceMs"] = n["debounceMs"]
             return out
 
         tensor_candidates.append({

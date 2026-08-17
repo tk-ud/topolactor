@@ -373,9 +373,10 @@ public partial class AdminRuntime
             "mock_preset:compile"                       => await DataMockPresetCompileAsync(vector, ct),
             "mock_preset:bind"                          => await DataMockPresetBindAsync(vector, ct),
             "mock_preset:save_mappings"                 => await DataMockPresetSaveMappingsAsync(vector, ct),
-            "scheduler_jobs:list_settings"              => await DataListSchedulerJobsSettingsAsync(ct),
+            "scheduler_jobs:list_settings"              => await DataListSchedulerJobsSettingsAsync(vector, ct),
             "scheduler_jobs:create"                     => await DataCreateSchedulerJobAsync(vector, ct),
             "scheduler_jobs:edit"                       => await DataEditSchedulerJobAsync(vector, ct),
+            "scheduler_jobs:enable"                     => await DataEnableSchedulerJobAsync(vector, ct),
             "scheduler_jobs:disable"                    => await DataDisableSchedulerJobAsync(vector, ct),
             var a when a.StartsWith("team_markdown:", StringComparison.OrdinalIgnoreCase)
                                                         => await ExecuteTeamMarkdownAsync(vector with { Action = a["team_markdown:".Length..] }, ct),

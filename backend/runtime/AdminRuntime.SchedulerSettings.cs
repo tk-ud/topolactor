@@ -5,32 +5,91 @@ using Topolactor.Schema;
 namespace Topolactor.Runtime;
 
 // ---------------------------------------------------------------------------
-// AdminRuntime — Scheduler Job Settings Projection (read-only).
+// AdminRuntime — Scheduler Job Settings surface (list / search / filter / enable / disable).
 //
-// Entry: AdminRuntime.ExecuteDataAsync layer=scheduler_jobs action=list_settings
+// Entry: AdminRuntime.ExecuteDataAsync layer=scheduler_jobs
+//        actions: list_settings | enable | disable  (create/edit below are the /admin/contents
+//        generic authoring pipeline's own actions, NOT part of this surface)
 //
-// Returns the full scheduler job manifest from DB (all jobs, including inactive).
+// SSOT: docs/design/admin-normal-surface-projection-seed-ssot.yaml
+//   surface_axes.admin.surfaces.scheduler  (scope_boundary / existing_schema_fields_allowed_for_
+//   projection / forbidden_projection_fields / capability_requirements / seed_contract)
+// Data authority: docs/design/scheduler-job-manifest-ssot.yaml
+// Seed-backed surface: manifest_key scheduler.settings.projection (db/seed_empty.sql 5c1 family).
+//
 // Boundary invariants:
-//   - read-only projection: no create/update/delete through this surface
-//   - credential_requirement_ref and external_port_ref are returned as reference keys only
-//     (no credential plaintext, no decrypted payload)
-//   - payload-derived table/column/output authority must NOT appear in the projection
+//   - list_settings projects ONLY existing_schema_fields_allowed_for_projection. The SSOT's
+//     forbidden_projection_fields (credential_requirement_ref / external_port_ref /
+//     authority_scope / input_* / output_table_ref / retry_policy / projection_policy) are NOT
+//     projected here: they belong to /admin/contents authoring or to the credential-management
+//     consumer_reference_binding surface, not to this list/search/filter/toggle-only projection.
+//     (Not secret material — but max_batch_size/lease_seconds are likewise outside the allowed
+//     set, so they are not projected either.)
+//   - search is job_key-only; filter is trigger_kind / schedule_policy_kind / active only.
+//   - enable/disable are the ONLY mutations: no create/edit/step-chain authoring, no credential
+//     or external-port binding, reachable through this surface.
+//   - enable/disable follow mutation_confirmation_contract [explicit_confirm, write, diff_log].
 // ---------------------------------------------------------------------------
 
 public partial class AdminRuntime
 {
     private readonly ISchedulerJobManifestRepository? _schedulerJobManifestRepository;
 
+    /// <summary>
+    /// scheduler_jobs:list_settings. OPTIONAL payload search/filter fields on this SAME existing
+    /// read action — no new action and no scheduler-specific runtime lane, the same idiom
+    /// enum_dictionary:list_groups established for its own search/filter fields
+    /// (AdminRuntime.cs DataEnumDictionaryListGroupsAsync). Absent payload (every pre-existing
+    /// call site) is not an error: full list, exactly as before.
+    ///
+    /// Payload fields are FLAT (payload.search / payload.triggerKind / payload.schedulePolicyKind /
+    /// payload.active), matching both list_groups' own flat search/filter fields and the only shape
+    /// a seeded payloadFrom descriptor can produce (frontend/runtime/payloadFromResolver.ts maps
+    /// flat payload keys to node/literal sources — there is no nested-key form).
+    /// </summary>
     private async Task<(JsonElement? data, ValidationError? error)>
-        DataListSchedulerJobsSettingsAsync(CancellationToken ct)
+        DataListSchedulerJobsSettingsAsync(OperationVector vector, CancellationToken ct)
     {
         if (_schedulerJobManifestRepository is null)
             return (null, new ValidationError(
                 "SCHEDULER_JOB_MANIFEST_NOT_CONFIGURED",
                 "ISchedulerJobManifestRepository is not registered"));
 
-        var jobs = await _schedulerJobManifestRepository.LoadSettingsProjectionAsync(ct);
+        string? search = null;
+        string? triggerKindFilter = null;
+        string? schedulePolicyKindFilter = null;
+        bool? activeFilter = null;
 
+        if (vector.Payload.HasValue && vector.Payload.Value.ValueKind != JsonValueKind.Null)
+        {
+            // fail-close: a bare string/number/array/boolean payload is a malformed request, never
+            // silently treated as "no search"/"no filter" (list_groups' own round-37 fail-close).
+            if (vector.Payload.Value.ValueKind != JsonValueKind.Object)
+                return (null, new ValidationError(
+                    "SCHEDULER_LIST_SETTINGS_PAYLOAD_NOT_OBJECT",
+                    "payload must be a JSON object when present."));
+
+            var payload = vector.Payload.Value;
+            search = OptionalFilterString(payload, "search");
+            triggerKindFilter = OptionalFilterString(payload, "triggerKind");
+            schedulePolicyKindFilter = OptionalFilterString(payload, "schedulePolicyKind");
+
+            if (triggerKindFilter is not null && !ValidTriggerKinds.Contains(triggerKindFilter))
+                return (null, new ValidationError("SCHEDULER_JOB_TRIGGER_KIND_INVALID",
+                    "payload.triggerKind must be cron|hook|client when present."));
+            if (schedulePolicyKindFilter is not null && !ValidSchedulePolicyKinds.Contains(schedulePolicyKindFilter))
+                return (null, new ValidationError("SCHEDULER_JOB_SCHEDULE_POLICY_KIND_INVALID",
+                    "payload.schedulePolicyKind must be cron|interval_seconds|manual_only when present."));
+
+            var (activeValue, activeError) = OptionalFilterBool(payload, "active");
+            if (activeError is not null) return (null, activeError);
+            activeFilter = activeValue;
+        }
+
+        var jobs = await _schedulerJobManifestRepository.LoadSettingsProjectionAsync(
+            search, triggerKindFilter, schedulePolicyKindFilter, activeFilter, ct);
+
+        // existing_schema_fields_allowed_for_projection, and nothing else.
         var projection = jobs.Select(static j => new
         {
             schedulerJobId          = j.SchedulerJobId,
@@ -39,16 +98,76 @@ public partial class AdminRuntime
             schedulePolicyKind      = j.SchedulePolicyKind,
             cronExpression          = j.CronExpression,
             scheduleIntervalSeconds = j.ScheduleIntervalSeconds,
+            timezone                = j.Timezone,
             manualRunAllowed        = j.ManualRunAllowed,
             active                  = j.Active,
-            maxBatchSize            = j.MaxBatchSize,
-            leaseSeconds            = j.LeaseSeconds,
-            authorityScope          = j.AuthorityScope,
-            credentialRequirementRef = j.CredentialRequirementRef,
-            externalPortRef         = j.ExternalPortRef,
+            updatedAt               = j.UpdatedAt,
         }).ToList();
 
-        return (JsonSerializer.SerializeToElement(new { ok = true, schedulerJobs = projection }), null);
+        // Filter select option domains for the three declared filter axes. These are the fields'
+        // own fixed vocabularies (ValidTriggerKinds / ValidSchedulePolicyKinds / active boolean) —
+        // never derived from the (possibly search/filter-narrowed) result rows above, so a filter
+        // choice can never shrink the option list that produced it (the same options-self-shrinking
+        // gap list_groups' groupOptions closes by reading the full unfiltered roster).
+        var triggerKindOptions = ValidTriggerKinds.Select(static k => new { value = k, label = k }).ToList();
+        var schedulePolicyKindOptions = ValidSchedulePolicyKinds.Select(static k => new { value = k, label = k }).ToList();
+        var activeOptions = new[]
+        {
+            new { value = "true", label = "active" },
+            new { value = "false", label = "inactive" },
+        };
+
+        return (JsonSerializer.SerializeToElement(new
+        {
+            ok = true,
+            schedulerJobs = projection,
+            triggerKindOptions,
+            schedulePolicyKindOptions,
+            activeOptions,
+        }), null);
+    }
+
+    /// <summary>
+    /// An optional string search/filter field. An absent, null, or empty/whitespace value means
+    /// "no filter on this axis" (an empty select/search input is the seeded surface's own real
+    /// "all" state, not a request to match the empty string). A non-string value fails closed.
+    /// </summary>
+    private static string? OptionalFilterString(JsonElement payload, string name)
+    {
+        if (!payload.TryGetProperty(name, out var el)) return null;
+        if (el.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined) return null;
+        if (el.ValueKind != JsonValueKind.String) return null;
+        var value = el.GetString();
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    /// <summary>
+    /// payload.active as an optional tri-state filter. Accepts a real JSON boolean AND the
+    /// "true"/"false" strings a seeded &lt;select&gt; node necessarily produces (its tracked node
+    /// value is always a string); empty string / absent / null means "no active filter". Any other
+    /// value fails closed rather than being coerced.
+    /// </summary>
+    private static (bool? value, ValidationError? error) OptionalFilterBool(JsonElement payload, string name)
+    {
+        if (!payload.TryGetProperty(name, out var el)) return (null, null);
+        switch (el.ValueKind)
+        {
+            case JsonValueKind.Null or JsonValueKind.Undefined:
+                return (null, null);
+            case JsonValueKind.True:
+                return (true, null);
+            case JsonValueKind.False:
+                return (false, null);
+            case JsonValueKind.String:
+                var raw = el.GetString();
+                if (string.IsNullOrWhiteSpace(raw)) return (null, null);
+                if (bool.TryParse(raw.Trim(), out var parsed)) return (parsed, null);
+                return (null, new ValidationError("SCHEDULER_LIST_SETTINGS_ACTIVE_FILTER_INVALID",
+                    $"payload.{name} must be true/false when present."));
+            default:
+                return (null, new ValidationError("SCHEDULER_LIST_SETTINGS_ACTIVE_FILTER_INVALID",
+                    $"payload.{name} must be a boolean or the string \"true\"/\"false\" when present."));
+        }
     }
 
     // ── admin.contents authoring surface ──────────────────────────────────────
@@ -103,20 +222,107 @@ public partial class AdminRuntime
         return (JsonSerializer.SerializeToElement(new { ok = true, schedulerJobId, jobKey = draft!.JobKey }), null);
     }
 
+    // ── scheduler-settings surface: explicit enable / disable ─────────────────
+    // scheduler_jobs:enable is the symmetric counterpart the SSOT's new_operation_note declares
+    // required for this surface (set_scheduler_job_active_true mirroring disable's
+    // set_scheduler_job_active_false) — the SAME SetJobActiveAsync authority AdminRuntime already
+    // owned for disable, never a new authority.
+    //
+    // Both follow mutation_confirmation_contract [explicit_confirm, write, diff_log], mirroring
+    // AdminRuntime.TeamDashboard.cs DataTeamDashboardUpdateAsync's single-row structure exactly:
+    //   payload.dryRun=true               -> validate only; no write, no diff_log
+    //   neither dryRun nor confirmed       -> fail closed (…_NOT_CONFIRMED); no write
+    //   payload.confirmed=true             -> write via SetJobActiveAsync, then diff_log
+    // Every validation gate runs identically on both paths — the write path re-runs them itself and
+    // never trusts a prior dryRun as proof. Cancel is the frontend simply never sending
+    // confirmed=true, a path that never reaches the repository at all.
+
+    private Task<(JsonElement? data, ValidationError? error)>
+        DataEnableSchedulerJobAsync(OperationVector vector, CancellationToken ct) =>
+        SetSchedulerJobActiveWithConfirmationAsync(vector, targetActive: true, ct);
+
+    private Task<(JsonElement? data, ValidationError? error)>
+        DataDisableSchedulerJobAsync(OperationVector vector, CancellationToken ct) =>
+        SetSchedulerJobActiveWithConfirmationAsync(vector, targetActive: false, ct);
+
     private async Task<(JsonElement? data, ValidationError? error)>
-        DataDisableSchedulerJobAsync(OperationVector vector, CancellationToken ct)
+        SetSchedulerJobActiveWithConfirmationAsync(OperationVector vector, bool targetActive, CancellationToken ct)
     {
+        var operation = targetActive ? "enable" : "disable";
+
+        // Role gate: an explicit, non-spoofable in-method check on the JWT-verified
+        // DispatchAuthContext stamp (never a client-supplied context field), the same idiom
+        // AdminRuntime.TeamDashboard.cs / AdminRuntime.TeamMarkdown.cs already established for
+        // their own mutations. The manifest-level capability_requirement gate
+        // (ManifestDispatcher.ValidateCapabilityRequirement, inferred from
+        // runtime_mapping.runtime_destination=admin_runtime) still runs first on every dispatch
+        // path; this is defense in depth for the two mutations this surface owns, not a substitute.
+        if (!string.Equals(vector.AuthenticatedRole, "admin", StringComparison.Ordinal))
+            return (null, new ValidationError("AUTH_CAPABILITY_DENIED",
+                $"scheduler_jobs:{operation} requires admin role."));
+
         if (_schedulerJobManifestRepository is null)
             return (null, SchedulerRepoNotConfigured());
         if (vector.Payload is null || vector.Payload.Value.ValueKind != JsonValueKind.Object ||
             !vector.Payload.Value.TryGetProperty("schedulerJobId", out var idEl) ||
+            idEl.ValueKind != JsonValueKind.String ||
             !Guid.TryParse(idEl.GetString(), out var schedulerJobId))
             return (null, new ValidationError("MALFORMED_PAYLOAD", "payload.schedulerJobId is required."));
 
-        var disabled = await _schedulerJobManifestRepository.SetJobActiveAsync(schedulerJobId, false, ct);
-        if (!disabled)
+        // Current state is read for BOTH paths: the dryRun preview reports/validates the transition
+        // and the confirmed write needs the real `before` value for the diff_log envelope.
+        var current = await _schedulerJobManifestRepository.LoadSettingsProjectionByIdAsync(schedulerJobId, ct);
+        if (current is null)
             return (null, new ValidationError("SCHEDULER_JOB_NOT_FOUND", "Scheduler job not found."));
-        return (JsonSerializer.SerializeToElement(new { ok = true, schedulerJobId, active = false }), null);
+
+        if (current.Active == targetActive)
+            return (null, new ValidationError(
+                targetActive ? "SCHEDULER_JOB_ALREADY_ACTIVE" : "SCHEDULER_JOB_ALREADY_INACTIVE",
+                targetActive
+                    ? $"Scheduler job '{current.JobKey}' is already active; nothing to enable."
+                    : $"Scheduler job '{current.JobKey}' is already inactive; nothing to disable."));
+
+        if (IsTruthyPayloadFlag(vector.Payload, "dryRun"))
+        {
+            return (JsonSerializer.SerializeToElement(new
+            {
+                ok = true,
+                dryRun = true,
+                valid = true,
+                schedulerJobId,
+                preview = new
+                {
+                    operation,
+                    jobKey = current.JobKey,
+                    activeBefore = current.Active,
+                    activeAfter = targetActive,
+                },
+            }), null);
+        }
+
+        if (!IsTruthyPayloadFlag(vector.Payload, "confirmed"))
+            return (null, new ValidationError(
+                targetActive ? "SCHEDULER_JOB_ENABLE_NOT_CONFIRMED" : "SCHEDULER_JOB_DISABLE_NOT_CONFIRMED",
+                $"scheduler_jobs:{operation} requires payload.confirmed=true after an explicit user confirmation step."));
+
+        var written = await _schedulerJobManifestRepository.SetJobActiveAsync(schedulerJobId, targetActive, ct);
+        if (!written)
+            return (null, new ValidationError("SCHEDULER_JOB_NOT_FOUND", "Scheduler job not found."));
+
+        await AdminMasterRosterAudit.AppendAsync(
+            _sqlAttentionLogsRepository, ResolveAuditActor(vector),
+            "topology.scheduler_jobs", schedulerJobId.ToString(), "update",
+            new { active = current.Active },
+            new { active = targetActive },
+            [new AuditChangedField("active", current.Active, targetActive)], ct);
+
+        return (JsonSerializer.SerializeToElement(new
+        {
+            ok = true,
+            schedulerJobId,
+            jobKey = current.JobKey,
+            active = targetActive,
+        }), null);
     }
 
     private static ValidationError SchedulerRepoNotConfigured() =>

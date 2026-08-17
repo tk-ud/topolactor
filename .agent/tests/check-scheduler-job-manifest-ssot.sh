@@ -105,7 +105,20 @@ check_file "backend/scheduler/SchedulerJobRunner.cs"
 check_file "backend/repository/NpgsqlSchedulerJobManifestRepository.cs"
 check_file "backend/runtime/SchedulerJobPrimitiveAdapters.cs"
 check_file "backend/runtime/AdminRuntime.SchedulerSettings.cs"
-check_file "frontend/islands/SchedulerJobSettingsPanel.tsx"
+
+# scheduler-settings subBundle (admin-surface-topology-seed-conversion, 2026-08-17): the
+# hardcoded frontend/islands/SchedulerJobSettingsPanel.tsx was retired in favor of a thin
+# ProjectionShell wrapper pinned to the seeded scheduler.settings.projection manifest by
+# manifest_key -- the same route retirement pattern admin-enum (AdminEnumsRoster.tsx) and
+# team-dashboard already established. This check now verifies the thin wrapper's own shape
+# instead of the deleted island's file existence.
+if [ -f "$REPO_ROOT/frontend/islands/SchedulerJobSettingsPanel.tsx" ]; then
+  fail "frontend/islands/SchedulerJobSettingsPanel.tsx must be removed (retired to a thin ProjectionShell wrapper)"
+else
+  pass "frontend/islands/SchedulerJobSettingsPanel.tsx removed (retired)"
+fi
+check_term "frontend/routes/admin/scheduler.tsx" "ProjectionShell"
+check_term "frontend/routes/admin/scheduler.tsx" "scheduler.settings.projection"
 
 # on_error SSOT vocabulary present; legacy non-SSOT skip_step removed.
 check_term "backend/scheduler/SchedulerJobRunner.cs" "fail_run"

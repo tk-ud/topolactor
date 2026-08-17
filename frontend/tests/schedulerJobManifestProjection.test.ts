@@ -1,343 +1,251 @@
-import { assertEquals, assertRejects } from "https://deno.land/std@0.208.0/assert/mod.ts";
-import {
-  createSchedulerJob,
-  disableSchedulerJob,
-  editSchedulerJob,
-  fetchSchedulerJobManifests,
-  type SchedulerJobManifestItem,
-} from "../api/adminApi.ts";
+// frontend/tests/schedulerJobManifestProjection.test.ts
+//
+// Scheduler job settings projection — route entry-path production proof.
+//
+// REWRITTEN for the scheduler-settings subBundle (admin-surface-topology-seed-conversion,
+// 2026-08-17). The previous content tested frontend/api/adminApi.ts's fetchSchedulerJobManifests /
+// createSchedulerJob / editSchedulerJob / disableSchedulerJob helpers and the type surface of
+// SchedulerJobManifestItem. All of those were removed with their only consumer,
+// frontend/islands/SchedulerJobSettingsPanel.tsx: /admin/scheduler is now a thin ProjectionShell
+// wrapper over the seeded scheduler.settings.projection manifest, so there is no hand-written
+// per-action helper left to test, and the projection's field set is now bounded server-side by the
+// owning SSOT's existing_schema_fields_allowed_for_projection / forbidden_projection_fields
+// (asserted for real in backend/tests/Topolactor.Runtime.Tests/
+// AdminRuntimeSchedulerSettingsMutationConfirmationTests.cs and, against real DB rows, in
+// backend/tests/Topolactor.Integration.Tests/SchedulerSettingsHubRelationUiProjectionLiveDbTests.cs).
+//
+// What this file proves instead, mirroring frontend/tests/adminEnumsRouteEntry.test.ts's own shape:
+//   1. mounting the REAL route module (frontend/routes/admin/scheduler.tsx, the module Fresh serves
+//      at /admin/scheduler) with a default URL dispatches the scheduler.settings.projection manifest
+//      by MANIFEST KEY -- never a hardcoded manifest UUID, the explicitly-closed anti-pattern.
+//   2. an explicit ?manifest= URL selection still wins over the route-supplied default (real user
+//      navigation always wins).
+//   3. the route module's own source no longer imports the retired island, and the island file and
+//      its removed adminApi helper surface are gone from disk/source (static regression guard against
+//      reintroducing production reachability for the retired hardcoded surface).
+//
+// SSOT: docs/design/admin-normal-surface-projection-seed-ssot.yaml
+//   surface_axes.admin.surfaces.scheduler; docs/design/runtime-orchestration-ssot.yaml
+//   frontend_routes.admin_route_retirement_matrix (/admin/scheduler: thin_projection_wrapper) and
+//   dispatcher_contract.manifest_key_target_ref_resolution_contract.
 
-function makeFetch(
-  status: number,
-  body: unknown,
-  capture?: (u: string | URL | Request, i?: RequestInit) => void,
-): typeof globalThis.fetch {
-  return (input: string | URL | Request, init?: RequestInit) => {
-    capture?.(input, init);
-    return Promise.resolve(
-      new Response(JSON.stringify(body), {
-        status,
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
+import {
+  assert,
+  assertEquals,
+} from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { h, options, render } from "preact";
+import { flushUpdates, setupDom } from "./test-dom-setup.ts";
+import { ensureRuntimeComponentRegistryInitialized } from "../runtime/runtimeComponentRegistry.ts";
+import { __testOnly as schedulerTestOnly } from "../runtime/frontendScheduler.ts";
+import { SESSION_TOKEN_KEY } from "../lib/demoSession.ts";
+import AdminSchedulerRoute from "../routes/admin/scheduler.tsx";
+
+// deno-lint-ignore no-explicit-any
+(options as any).requestAnimationFrame = (cb: () => void): number => {
+  setTimeout(cb, 0);
+  return 0;
+};
+
+const SCHEDULER_SETTINGS_MANIFEST_KEY = "scheduler.settings.projection";
+const OTHER_MANIFEST_ID = "00000000-0000-0000-0000-000000000abc";
+
+function fakeJwt(): string {
+  const header = btoa(JSON.stringify({ alg: "none" }));
+  const payload = btoa(JSON.stringify({ realm: "user" }));
+  return `${header}.${payload}.sig`;
+}
+
+/** happy-dom's Window does not implement EventSource; ProjectionShell calls receiver.connect()
+ * unconditionally after a successful initial dispatch. */
+class FakeEventSource {
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSED = 2;
+  readyState = FakeEventSource.OPEN;
+  onmessage: ((e: MessageEvent) => void) | null = null;
+  onerror: ((e: Event) => void) | null = null;
+  constructor(public url: string) {}
+  addEventListener() {}
+  close() {
+    this.readyState = FakeEventSource.CLOSED;
+  }
+}
+
+/** Captures every /api/dispatch request body; answers auth session/refresh probes with success so
+ * AdminAuthGate's own session check resolves "present" and actually mounts ProjectionShell. */
+function buildRouteEntryScenario() {
+  const capturedDispatchBodies: Record<string, unknown>[] = [];
+  const mockFetch = ((url: string, init?: RequestInit) => {
+    const path = url.toString();
+    if (path.startsWith("/api/auth/session") || path === "/api/auth/refresh") {
+      return Promise.resolve(
+        new Response(JSON.stringify({ success: true }), { status: 200 }),
+      );
+    }
+    if (path === "/api/dispatch") {
+      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      capturedDispatchBodies.push(body);
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            success: true,
+            errors: [],
+            emission: {
+              manifestId: "00000000-0000-0000-0000-00000005c100",
+              layoutId: "layout-route-entry-scenario",
+              projectionDefinition: {
+                constructorKey: "admin-scheduler-route-entry-test",
+                packageIds: [],
+                outputKind: "ui_projection",
+              },
+              layoutNodes: [],
+            },
+          }),
+          { status: 200 },
+        ),
+      );
+    }
+    return Promise.resolve(new Response(JSON.stringify({ success: true }), { status: 200 }));
+  }) as typeof fetch;
+  return { fetch: mockFetch, capturedDispatchBodies };
+}
+
+async function mountAdminSchedulerRoute(
+  url: string,
+): Promise<{ dispatchBodies: Record<string, unknown>[]; cleanup: () => void }> {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+
+  const { container, cleanup: domCleanup } = setupDom(url);
+  sessionStorage.setItem(SESSION_TOKEN_KEY, fakeJwt());
+  const originalEventSource = (globalThis as unknown as { EventSource?: unknown }).EventSource;
+  (globalThis as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
+  const originalFetch = globalThis.fetch;
+  const scenario = buildRouteEntryScenario();
+  globalThis.fetch = scenario.fetch;
+
+  render(h(AdminSchedulerRoute, {}), container);
+  for (let i = 0; i < 60 && scenario.capturedDispatchBodies.length === 0; i++) {
+    await flushUpdates();
+  }
+
+  return {
+    dispatchBodies: scenario.capturedDispatchBodies,
+    cleanup: () => {
+      globalThis.fetch = originalFetch;
+      (globalThis as unknown as { EventSource: unknown }).EventSource = originalEventSource;
+      render(null, container);
+      domCleanup();
+    },
   };
 }
 
-// ─── DB projection reading ────────────────────────────────────────────────────
-
-Deno.test("fetchSchedulerJobManifests: reads scheduler_jobs layer from dispatch and returns list", async () => {
-  const original = globalThis.fetch;
-  let reqBody: Record<string, unknown> = {};
-
-  const jobs: SchedulerJobManifestItem[] = [
-    {
-      schedulerJobId: "00000000-0000-0000-0000-00000000sj01",
-      jobKey: "demo_schedule",
-      triggerKind: "cron",
-      schedulePolicyKind: "manual_only",
-      cronExpression: null,
-      scheduleIntervalSeconds: null,
-      manualRunAllowed: true,
-      active: true,
-      maxBatchSize: 1,
-      leaseSeconds: 60,
-      authorityScope: "demo_scheduler_job",
-      credentialRequirementRef: null,
-      externalPortRef: null,
-    },
-  ];
-
-  globalThis.fetch = makeFetch(
-    200,
-    { success: true, emission: { data: { ok: true, schedulerJobs: jobs } } },
-    (_u, i) => { reqBody = JSON.parse(String(i?.body ?? "{}")); },
-  );
-
-  try {
-    const result = await fetchSchedulerJobManifests();
-    assertEquals(result?.length, 1);
-    assertEquals(result?.[0].jobKey, "demo_schedule");
-    assertEquals(result?.[0].schedulerJobId, "00000000-0000-0000-0000-00000000sj01");
-    assertEquals(reqBody.layer, "scheduler_jobs", "must use layer=scheduler_jobs");
-    assertEquals(reqBody.action, "list_settings", "must use action=list_settings");
-  } finally {
-    globalThis.fetch = original;
-  }
-});
-
-// ─── No secret exposure ───────────────────────────────────────────────────────
-
-Deno.test("fetchSchedulerJobManifests: projection must not contain credential plaintext or token body", async () => {
-  const original = globalThis.fetch;
-
-  const jobWithSensitiveAttempt = {
-    schedulerJobId: "00000000-0000-0000-0000-00000000sj01",
-    jobKey: "demo_schedule",
-    triggerKind: "cron",
-    schedulePolicyKind: "manual_only",
-    cronExpression: null,
-    scheduleIntervalSeconds: null,
-    manualRunAllowed: true,
-    active: true,
-    maxBatchSize: 1,
-    leaseSeconds: 60,
-    authorityScope: "demo_scheduler_job",
-    credentialRequirementRef: "vault_ref_key_only",
-    externalPortRef: "ext_port_ref_key_only",
-  };
-
-  globalThis.fetch = makeFetch(200, {
-    success: true,
-    emission: { data: { ok: true, schedulerJobs: [jobWithSensitiveAttempt] } },
-  });
-
-  try {
-    const result = await fetchSchedulerJobManifests();
-    const job = result?.[0];
-    // Type surface must NOT expose credential plaintext or token body fields
-    // credentialRequirementRef is a reference key only (no "credential_payload", "decrypted_payload", etc.)
-    const jobStr = JSON.stringify(job);
-    assertEquals(jobStr.includes("credential_payload"), false, "no credential_payload in projection");
-    assertEquals(jobStr.includes("decrypted_payload"), false, "no decrypted_payload in projection");
-    assertEquals(jobStr.includes("token_body"), false, "no token_body in projection");
-    assertEquals(jobStr.includes("plaintext"), false, "no plaintext field in projection");
-    // credentialRequirementRef is allowed as reference key
-    assertEquals(job?.credentialRequirementRef, "vault_ref_key_only");
-  } finally {
-    globalThis.fetch = original;
-  }
-});
-
-// ─── dispatch body contract ───────────────────────────────────────────────────
-
-Deno.test("fetchSchedulerJobManifests: dispatch body must include triggerKind='client' and must not contain role", async () => {
-  const original = globalThis.fetch;
-  let reqBody: Record<string, unknown> = {};
-
-  globalThis.fetch = makeFetch(
-    200,
-    { success: true, emission: { data: { ok: true, schedulerJobs: [] } } },
-    (_u, i) => { reqBody = JSON.parse(String(i?.body ?? "{}")); },
-  );
-
-  try {
-    await fetchSchedulerJobManifests();
-    assertEquals(reqBody.triggerKind, "client", "admin dispatch must include triggerKind='client'");
-    assertEquals("role" in reqBody, false, "role must NOT be in frontend dispatch body; JWT claim is authoritative");
-  } finally {
-    globalThis.fetch = original;
-  }
-});
-
-// ─── 501 not configured → null (not throw) ───────────────────────────────────
-
-Deno.test("fetchSchedulerJobManifests: dispatch 501 not configured -> null", async () => {
-  const original = globalThis.fetch;
-  globalThis.fetch = makeFetch(501, {
-    success: false,
-    errors: [{ code: "DISPATCH_BACKEND_NOT_CONFIGURED", message: "not configured" }],
-  });
-
-  try {
-    const result = await fetchSchedulerJobManifests();
-    assertEquals(result, null, "501 DISPATCH_BACKEND_NOT_CONFIGURED must return null, not throw");
-  } finally {
-    globalThis.fetch = original;
-  }
-});
-
-// ─── error → throw ───────────────────────────────────────────────────────────
-
-Deno.test("fetchSchedulerJobManifests: dispatch error (non-501) must throw", async () => {
-  const original = globalThis.fetch;
-  globalThis.fetch = makeFetch(422, {
-    success: false,
-    errors: [{ code: "SCHEDULER_JOB_MANIFEST_NOT_CONFIGURED", message: "not registered" }],
-  });
-
-  try {
-    await assertRejects(
-      () => fetchSchedulerJobManifests(),
-      Error,
-      "not registered",
+Deno.test(
+  "AdminSchedulerRoute (real /admin/scheduler route mount): a default URL dispatches the scheduler.settings.projection manifest BY MANIFEST KEY, never a hardcoded manifest UUID",
+  async () => {
+    const { dispatchBodies, cleanup } = await mountAdminSchedulerRoute(
+      "http://localhost/admin/scheduler",
     );
-  } finally {
-    globalThis.fetch = original;
-  }
-});
+    try {
+      assert(dispatchBodies.length > 0, "expected at least one /api/dispatch call");
+      const payload = dispatchBodies[0].payload as Record<string, unknown>;
+      assertEquals(typeof payload.target_ref, "string");
+      assertEquals(
+        payload.target_ref,
+        `manifest_key:${SCHEDULER_SETTINGS_MANIFEST_KEY}:projection_entry`,
+        "the route must pin its manifest by manifest_key, resolved backend-side by the generic manifest_key_target_ref_resolution_contract",
+      );
+      assert(
+        !/^manifest:[0-9a-f-]{36}:/.test(payload.target_ref as string),
+        "a raw manifest UUID target_ref is the explicitly-closed anti-pattern for this route",
+      );
+    } finally {
+      cleanup();
+    }
+  },
+);
 
-// ─── authoring: create / edit / disable dispatch contract ────────────────────
-
-Deno.test("createSchedulerJob: dispatches scheduler_jobs:create with manifest draft (no role)", async () => {
-  const original = globalThis.fetch;
-  let reqBody: Record<string, unknown> = {};
-  globalThis.fetch = makeFetch(
-    200,
-    { success: true, emission: { data: { ok: true, schedulerJobId: "id-1", jobKey: "weather_24h" } } },
-    (_u, i) => { reqBody = JSON.parse(String(i?.body ?? "{}")); },
-  );
-  try {
-    const result = await createSchedulerJob({
-      jobKey: "weather_24h",
-      triggerKind: "cron",
-      schedulePolicyKind: "cron",
-      cronExpression: "0 * * * *",
-      authorityScope: "weather_job",
-      active: true,
-    });
-    assertEquals(result.ok, true);
-    assertEquals(reqBody.layer, "scheduler_jobs");
-    assertEquals(reqBody.action, "create");
-    assertEquals(reqBody.triggerKind, "client", "admin dispatch must include triggerKind='client'");
-    assertEquals("role" in reqBody, false, "role must NOT be in frontend dispatch body");
-    const payload = reqBody.payload as Record<string, unknown>;
-    assertEquals(payload.jobKey, "weather_24h");
-    // No secret material is ever sent by the authoring surface.
-    const bodyStr = JSON.stringify(reqBody);
-    assertEquals(bodyStr.includes("api_key"), false);
-    assertEquals(bodyStr.includes("access_token"), false);
-    assertEquals(bodyStr.includes("client_secret"), false);
-  } finally {
-    globalThis.fetch = original;
-  }
-});
-
-Deno.test("createSchedulerJob: full manifest carries input source, output binding, policies, and steps[]", async () => {
-  const original = globalThis.fetch;
-  let reqBody: Record<string, unknown> = {};
-  globalThis.fetch = makeFetch(
-    200,
-    { success: true, emission: { data: { ok: true, schedulerJobId: "id-1", jobKey: "weather_24h" } } },
-    (_u, i) => { reqBody = JSON.parse(String(i?.body ?? "{}")); },
-  );
-  try {
-    await createSchedulerJob({
-      jobKey: "weather_24h",
-      triggerKind: "cron",
-      schedulePolicyKind: "interval_seconds",
-      scheduleIntervalSeconds: 3600,
-      authorityScope: "weather_job",
-      active: true,
-      inputTableRef: "weather.region_inputs",
-      inputStatusColumn: "status",
-      inputStatusPendingValue: "pending",
-      inputStatusProcessingValue: "processing",
-      inputStatusCompletedValue: "completed",
-      inputStatusFailedValue: "failed",
-      outputTableRef: "weather.observations",
-      retryPolicy: { max_attempts: 3, backoff_seconds: 60 },
-      projectionPolicy: { allowed_result_keys: ["observation"] },
-      steps: [
-        {
-          stepOrder: 1,
-          abstractFunctionKey: "weather.fetch",
-          onError: "retry",
-          resultContextKey: "observation",
-          inputBinding: { region: { source: "input", path: "region" } },
-          resultBinding: { kind: "output_upsert", result_context_key: "observation", conflict_columns: ["region"], column_map: { region: "observation" } },
-        },
-      ],
-    });
-    const payload = reqBody.payload as Record<string, unknown>;
-    assertEquals(payload.inputTableRef, "weather.region_inputs");
-    assertEquals(payload.outputTableRef, "weather.observations");
-    assertEquals(Array.isArray(payload.steps), true);
-    const steps = payload.steps as Record<string, unknown>[];
-    assertEquals(steps.length, 1);
-    assertEquals(steps[0].abstractFunctionKey, "weather.fetch");
-    assertEquals(steps[0].onError, "retry");
-    // No secret material anywhere in the manifest authoring body.
-    const bodyStr = JSON.stringify(reqBody);
-    assertEquals(bodyStr.includes("api_key"), false);
-    assertEquals(bodyStr.includes("client_secret"), false);
-  } finally {
-    globalThis.fetch = original;
-  }
-});
-
-Deno.test("editSchedulerJob: dispatches scheduler_jobs:edit with schedulerJobId", async () => {
-  const original = globalThis.fetch;
-  let reqBody: Record<string, unknown> = {};
-  globalThis.fetch = makeFetch(
-    200,
-    { success: true, emission: { data: { ok: true, schedulerJobId: "id-1", jobKey: "weather_24h" } } },
-    (_u, i) => { reqBody = JSON.parse(String(i?.body ?? "{}")); },
-  );
-  try {
-    await editSchedulerJob("id-1", {
-      jobKey: "weather_24h",
-      triggerKind: "cron",
-      schedulePolicyKind: "interval_seconds",
-      scheduleIntervalSeconds: 3600,
-      authorityScope: "weather_job",
-    });
-    assertEquals(reqBody.action, "edit");
-    const payload = reqBody.payload as Record<string, unknown>;
-    assertEquals(payload.schedulerJobId, "id-1");
-  } finally {
-    globalThis.fetch = original;
-  }
-});
-
-Deno.test("disableSchedulerJob: dispatches scheduler_jobs:disable with schedulerJobId", async () => {
-  const original = globalThis.fetch;
-  let reqBody: Record<string, unknown> = {};
-  globalThis.fetch = makeFetch(
-    200,
-    { success: true, emission: { data: { ok: true, schedulerJobId: "id-1", active: false } } },
-    (_u, i) => { reqBody = JSON.parse(String(i?.body ?? "{}")); },
-  );
-  try {
-    const result = await disableSchedulerJob("id-1");
-    assertEquals(result.ok, true);
-    assertEquals(result.active, false);
-    assertEquals(reqBody.action, "disable");
-    const payload = reqBody.payload as Record<string, unknown>;
-    assertEquals(payload.schedulerJobId, "id-1");
-  } finally {
-    globalThis.fetch = original;
-  }
-});
-
-// ─── no frontend SQL / credential / runtime judgment ─────────────────────────
-
-Deno.test("fetchSchedulerJobManifests: frontend must not make SQL or credential decisions", () => {
-  // This test audits the type surface of SchedulerJobManifestItem.
-  // The frontend receives manifest data as a read-only projection.
-  // None of the returned fields are used to make SQL, credential, or runtime decisions
-  // in the frontend — that is exclusively a backend responsibility.
-  //
-  // Invariants verified by type inspection:
-  //   - No "sql", "query", "table_ref", "column_ref", "input_table", "output_table" in the type
-  //   - credentialRequirementRef and externalPortRef are reference keys (strings), not configs
-  //   - The island renders them for display only
-  //
-  // This is an audit/contract test, not a runtime test.
-  const item: SchedulerJobManifestItem = {
-    schedulerJobId: "id",
-    jobKey: "demo_schedule",
-    triggerKind: "cron",
-    schedulePolicyKind: "manual_only",
-    cronExpression: null,
-    scheduleIntervalSeconds: null,
-    manualRunAllowed: true,
-    active: true,
-    maxBatchSize: 1,
-    leaseSeconds: 60,
-    authorityScope: "demo_scheduler_job",
-    credentialRequirementRef: null,
-    externalPortRef: null,
-  };
-
-  const keys = Object.keys(item);
-  const forbiddenKeys = ["sql", "query", "table_ref", "column_ref", "input_table", "output_table",
-    "credential_payload", "decrypted_payload", "token_body", "api_key", "access_token", "refresh_token",
-    "client_secret", "decrypted_credential_payload"];
-  for (const forbidden of forbiddenKeys) {
-    assertEquals(
-      keys.some((k) => k.toLowerCase().includes(forbidden.toLowerCase())),
-      false,
-      `SchedulerJobManifestItem must not expose '${forbidden}'`,
+Deno.test(
+  "AdminSchedulerRoute (real /admin/scheduler route mount): an explicit ?manifest= query param overrides the route's manifestKey prop default",
+  async () => {
+    const { dispatchBodies, cleanup } = await mountAdminSchedulerRoute(
+      `http://localhost/admin/scheduler?manifest=${OTHER_MANIFEST_ID}`,
     );
-  }
-});
+    try {
+      assert(dispatchBodies.length > 0, "expected at least one /api/dispatch call");
+      const payload = dispatchBodies[0].payload as Record<string, unknown>;
+      assertEquals(typeof payload.target_ref, "string");
+      assert(
+        (payload.target_ref as string).startsWith(`manifest:${OTHER_MANIFEST_ID}:`),
+        `expected explicit ?manifest= to win over the manifestKey prop default, got ${payload.target_ref}`,
+      );
+      assert(
+        !(payload.target_ref as string).includes(SCHEDULER_SETTINGS_MANIFEST_KEY),
+        "the manifest_key default must not be used once an explicit ?manifest= is present",
+      );
+    } finally {
+      cleanup();
+    }
+  },
+);
+
+Deno.test(
+  "frontend/routes/admin/scheduler.tsx no longer imports the retired SchedulerJobSettingsPanel island, and the island file itself is gone",
+  async () => {
+    const source = await Deno.readTextFile("frontend/routes/admin/scheduler.tsx");
+    assert(
+      !/^import .*SchedulerJobSettingsPanel/m.test(source),
+      "routes/admin/scheduler.tsx must not import the retired/deleted SchedulerJobSettingsPanel island",
+    );
+    assert(source.includes("ProjectionShell"), "routes/admin/scheduler.tsx must mount ProjectionShell");
+    assert(
+      source.includes(`"${SCHEDULER_SETTINGS_MANIFEST_KEY}"`),
+      "routes/admin/scheduler.tsx must pin the surface by manifest_key",
+    );
+    const islandStat = await Deno.stat("frontend/islands/SchedulerJobSettingsPanel.tsx").catch(() => null);
+    assertEquals(islandStat, null, "frontend/islands/SchedulerJobSettingsPanel.tsx must not exist on disk");
+  },
+);
+
+Deno.test(
+  "frontend/api/adminApi.ts no longer exports the retired per-action scheduler helpers (their only consumer was the deleted island)",
+  async () => {
+    const source = await Deno.readTextFile("frontend/api/adminApi.ts");
+    for (const removed of [
+      "export async function fetchSchedulerJobManifests",
+      "export async function createSchedulerJob",
+      "export async function editSchedulerJob",
+      "export async function disableSchedulerJob",
+      "export type SchedulerJobManifestItem",
+      "export type SchedulerJobDraftInput",
+    ]) {
+      assert(
+        !source.includes(removed),
+        `adminApi.ts must no longer declare '${removed}' -- scheduler settings dispatch goes through the generic projection runtime`,
+      );
+    }
+  },
+);
+
+Deno.test(
+  "the scheduler settings surface must not expose create/edit/step-chain or credential binding dispatch from its own route module",
+  async () => {
+    // scope_boundary.out_of_scope: create / edit / step_chain_authoring /
+    // credential_or_external_port_binding. The route is a thin wrapper, so the only way any of these
+    // could reappear here is a hand-written dispatch or island import being added back.
+    const source = await Deno.readTextFile("frontend/routes/admin/scheduler.tsx");
+    for (const forbidden of [
+      "scheduler_jobs:create",
+      "scheduler_jobs:edit",
+      "credential_management:",
+      "abstractFunctionKey",
+      "credentialRequirementRef",
+      "externalPortRef",
+    ]) {
+      assert(
+        !source.includes(`${forbidden}"`) && !source.includes(`${forbidden}'`),
+        `routes/admin/scheduler.tsx must not carry out-of-scope '${forbidden}' dispatch/authoring content`,
+      );
+    }
+  },
+);

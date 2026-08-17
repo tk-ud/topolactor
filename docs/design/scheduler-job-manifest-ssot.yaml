@@ -105,27 +105,25 @@ scheduler_job_manifest_ssot:
 
   admin_hub_relation_navigation:
     ref: docs/design/admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract
-    status: blocked_pending_seed_catalog
+    status: resolved
     canonical_route_registry_status: ratified
     note: >-
-      admin-surface-topology-seed-conversion Bundle. /admin/scheduler is now ratified into
-      docs/design/runtime-orchestration-ssot.yaml frontend_routes.admin (it was previously
-      implemented and fully dispatcher-mapped — list_settings/create/edit/disable all four — but
-      absent from that registry). scheduler_jobs has no target manifest an admin hub relation could
-      resolve to yet: hub relation resolution requires a real per-screen ui_projection manifest for
-      scheduler_jobs, which does not exist yet — only per-action dispatcher_mapping manifests
-      exist today. Authoring the relation itself is not the blocker — that mechanism already exists
-      via /admin/manifests (docs/design/admin-console-workflow-ssot.yaml
-      admin_hub_relation_navigation_contract) — the blocker is purely the absence of a target.
-      2026-07-22 correction: the prior wording here ("edit action has full backend/dispatcher wiring
-      but is not yet exposed as a UI control ... see frontend/content/adminGuides.ts ADMIN_ROUTE_CARDS
-      caution text") was stale — that caution text no longer exists in adminGuides.ts and the edit UI
-      gap it referenced was closed in the role-based-surface-separation work (2026-07-14, see
-      .agent/tasks/todo.md). It is superseded, not reinstated, by admin_surface_split_2026_07_22
-      above: create/edit now route through /admin/contents rather than
-      frontend/routes/admin/scheduler.tsx, so the target manifest this note describes is for the
-      narrower list/search/filter/toggle surface_axes.admin.surfaces.scheduler projection only — see
-      that entry's scope_boundary for what is and is not covered.
+      admin-surface-topology-seed-conversion Bundle, scheduler-settings subBundle closure
+      (2026-08-17). The target-manifest blocker this entry previously described is resolved:
+      scheduler.settings.projection (manifest 00000000-0000-0000-0000-00000005c100,
+      db/seed_empty.sql 5c1 family) is a real per-screen ui_projection manifest for the narrower
+      list/search/filter/toggle surface_axes.admin.surfaces.scheduler projection (create/edit
+      remain /admin/contents' own scope, unaffected by this entry). Hub relation authoring and
+      resolution against this manifest are proven live-DB via
+      backend/tests/Topolactor.Integration.Tests/SchedulerSettingsHubRelationUiProjectionLiveDbTests.cs,
+      the same combined-proof pattern (real hub_navigation:create dispatch, never a raw SQL
+      insert, full resolution_chain to a scalar Emission) admin-enum/credential-management/
+      team-dashboard each established — no hubs.hub_relations row is shipped in seed data for
+      this manifest either, consistent with all three precedents.
+      frontend/routes/admin/scheduler.tsx resolves this manifest by manifest_key
+      ("scheduler.settings.projection"), not a hardcoded manifest_id UUID constant, via the
+      generic manifest_key_target_ref_resolution_contract (docs/design/runtime-orchestration-
+      ssot.yaml dispatcher_contract) team-dashboard's own closure round established.
 
   scheduler_substrate:
     role: generic_runtime_time_axis_queue_for_job_manifests
