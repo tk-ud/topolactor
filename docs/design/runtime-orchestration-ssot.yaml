@@ -104,6 +104,7 @@ runtime_orchestration_ssot:
       - /admin/contents
       - /admin/ui-builder
       - /admin/team-dashboard
+      - /admin/team-markdown
       - /admin/enums
       - /admin/users
       - /admin/scheduler
