@@ -893,42 +893,47 @@ const ProjectionShell: FunctionComponent<ProjectionShellProps> = (
         specs={specs}
         layoutId={emission?.layoutId}
       />
-      {hubNavigationLinks.length > 0 && (
-        <nav
-          data-projection-hub-navigation
-          class="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-3 text-xs"
+      <nav
+        data-projection-hub-navigation
+        class="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-3 text-xs"
+      >
+        <a
+          href="/dashboard"
+          class="link font-semibold"
+          data-projection-home-link
         >
-          {hubNavigationLinks.map((link) =>
-            link.resolvable
-              ? (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  class="link"
-                  data-hub-navigation-resolvable
-                >
-                  {link.label}
-                </a>
-              )
-              : (
-                <span
-                  key={`unresolvable-${link.sequencePosition}-${link.label}`}
-                  class="text-gray-400"
-                  title="複数または未登録の画面設定のため直接移動できません"
-                  data-hub-navigation-unresolvable
-                >
-                  {link.label}
-                </span>
-              )
-          )}
-          {emission?.manifestId && (
-            <details class="ml-auto text-gray-400">
-              <summary class="cursor-pointer">技術情報</summary>
-              <code class="font-mono">{emission.manifestId}</code>
-            </details>
-          )}
-        </nav>
-      )}
+          ホーム
+        </a>
+        {hubNavigationLinks.map((link) =>
+          link.resolvable
+            ? (
+              <a
+                key={link.href}
+                href={link.href}
+                class="link"
+                data-hub-navigation-resolvable
+              >
+                {link.label}
+              </a>
+            )
+            : (
+              <span
+                key={`unresolvable-${link.sequencePosition}-${link.label}`}
+                class="text-gray-400"
+                title="複数または未登録の画面設定のため直接移動できません"
+                data-hub-navigation-unresolvable
+              >
+                {link.label}
+              </span>
+            )
+        )}
+        {emission?.manifestId && (
+          <details class="ml-auto text-gray-400">
+            <summary class="cursor-pointer">技術情報</summary>
+            <code class="font-mono">{emission.manifestId}</code>
+          </details>
+        )}
+      </nav>
       {recommendProjection && (
         <RecommendNavigationIsland
           spec={recommendProjection}

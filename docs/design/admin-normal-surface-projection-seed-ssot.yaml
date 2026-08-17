@@ -814,7 +814,14 @@ admin_normal_surface_projection_seed_ssot:
             hub_relations cross-navigation FROM another existing manifest INTO this surface (or vice
             versa) remains a separate, owner-decided future addition (same acknowledged-open shape as
             self_account_capability's own navigation gap below) — not required for this surface's own
-            manifest/tensor/wiring to be considered built and dispatchable.
+            manifest/tensor/wiring to be considered built and dispatchable. 2026-08-17 addition
+            (Owner-directed, not hub_relations-based): frontend/islands/ProjectionShell.tsx renders a
+            fixed "ホーム" link (data-projection-home-link, href=/dashboard) in its own nav bar on
+            EVERY mount, including this admin route — a generic, manifest-identity-agnostic navigation
+            affordance, not a per-manifest hubs.hub_relations edge, so it does not close (or attempt
+            to close) the hub_relations cross-navigation item above; it only guarantees the Normal
+            surface below is reachable from anywhere ProjectionShell renders, per
+            team_dashboard_canonical_shared_contract.hub_relation_navigation_binding_ref.
     normal:
       axis_kind: projection_surface_axis
       not_role_or_rbac: true
@@ -981,11 +988,25 @@ admin_normal_surface_projection_seed_ssot:
               Reachable directly at a normal-facing route (frontend/routes/dashboard/index.tsx, a thin
               ProjectionShell wrapper pinned to this axis's own manifest id, no AdminAuthGate) — the
               same route-mount pattern surface_axes.admin.surfaces.team_dashboard uses for its own
-              admin route. Real hub_relations cross-navigation into this surface from an existing
-              Normal-reachable entry point is not yet wired (no Normal-axis entry-point manifest
-              exists in production today — the same acknowledged, pre-existing gap
-              self_account_capability already has); this is an explicit, owner-decision-pending
-              open item, not a silently-dropped requirement.
+              admin route. hubs.hub_relations cross-navigation into this surface from an existing
+              production manifest genuinely reachable by a Normal role is not authored (audited
+              2026-08-17: surface_axes.normal.surfaces has exactly two members — dashboard [this axis
+              itself] and self_account_capability [no frontend component exists at all]; the site's
+              own canonical_default_entry, manifest 092/credential-management, is admin_runtime with
+              no scoped-open capability_requirement and was confirmed live against PostgreSQL to
+              return AUTH_CAPABILITY_DENIED for role=normal — so no OTHER manifest a Normal session
+              can actually dispatch exists today to author a relation FROM). Reachability "from
+              anywhere" is instead closed generically, Owner-directed 2026-08-17: frontend/islands/
+              ProjectionShell.tsx renders a fixed "ホーム" link (data-projection-home-link, href=
+              /dashboard) in its own nav bar on every mount (see frontend/tests/
+              projectionShellHubNavigationRenderProof.test.ts), independent of any specific manifest's
+              own hub_relations state — this is a generic ProjectionShell affordance, not a
+              per-manifest authored edge, and not team-dashboard-specific (it renders identically on
+              every ProjectionShell-backed route). A real hubs.hub_relations-authored cross-navigation
+              edge into this surface remains possible once ANY other manifest becomes genuinely
+              Normal-reachable (the same acknowledged, pre-existing gap self_account_capability
+              already has) but is no longer required for this surface to be reachable from anywhere in
+              the running application.
           retired_team_markdown_backed_contract_historical_record:
             note: >-
               Everything below this point (data_authority_ref through the end of this dashboard:
@@ -1425,12 +1446,18 @@ admin_normal_surface_projection_seed_ssot:
             insert) with the full resolution_chain against manifest dd010's own real hub/seed rows,
             meeting navigation_binding_resolution_criterion above, the same combined-proof pattern
             AdminEnumHubRelationUiProjectionLiveDbTests.cs / CredentialManagementHubRelationUi
-            ProjectionLiveDbTests.cs established. Real end-user cross-navigation INTO this surface
-            from an existing Normal-reachable entry point remains a separate, owner-decision-pending
-            open item (see team_dashboard_canonical_shared_contract.hub_relation_navigation_binding_ref)
-            -- this design_blocking id's own closure criterion does not require that; both routes
-            (/admin/team-dashboard, /dashboard) reach their own manifest directly via a pinned
-            ProjectionShell mount, the same pattern every other admin/normal route already uses.
+            ProjectionLiveDbTests.cs established. This design_blocking id's own closure criterion
+            never required a hubs.hub_relations-authored edge from a real production Normal-reachable
+            entry point; both routes (/admin/team-dashboard, /dashboard) reach their own manifest
+            directly via a pinned ProjectionShell mount, the same pattern every other admin/normal
+            route already uses. 2026-08-17 audit found and closed the SEPARATE "real end-user
+            cross-navigation from anywhere" item Owner-directed: no other manifest in production is
+            genuinely Normal-reachable to author a relation FROM (see
+            team_dashboard_canonical_shared_contract.hub_relation_navigation_binding_ref for the full
+            audit), so ProjectionShell itself now renders a fixed "ホーム" link (href=/dashboard) on
+            every mount instead -- see frontend/islands/ProjectionShell.tsx and frontend/tests/
+            projectionShellHubNavigationRenderProof.test.ts. This closes team-dashboard's remaining
+            open navigation item without a hub_relations edge.
         scheduler-settings: unresolved_before_seed
     - id: external_instance_projection_columns
       blocking_condition: External instance credential category depends on instance-port substrate authority; if a concrete existing physical table/column set is not present for required instance settings, the seed task must stop and reference the instance-port SSOT instead of inventing fields.
