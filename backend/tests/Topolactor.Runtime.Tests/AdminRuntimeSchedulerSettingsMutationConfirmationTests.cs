@@ -384,6 +384,210 @@ public class AdminRuntimeSchedulerSettingsMutationConfirmationTests
     }
 
     [Fact]
+    public async Task ListSettings_InvalidSchedulePolicyKindFilter_FailsClosed()
+    {
+        var (runtime, _, _) = CreateRuntime();
+
+        var (data, error) = await runtime.ExecuteDataAsync(
+            Vector("list_settings", new { schedulePolicyKind = "not_a_real_policy" }), default);
+
+        Assert.Null(data);
+        Assert.Equal("SCHEDULER_JOB_SCHEDULE_POLICY_KIND_INVALID", error!.Code);
+    }
+
+    // ── list_settings: wrong JSON type on a string-typed filter axis fails closed. A PRESENT
+    // non-string value must never silently collapse to "no filter on this axis" the way an
+    // absent/null/empty value legitimately does — otherwise a caller whose filter request was
+    // malformed would silently receive the full unfiltered list instead of a rejection (the exact
+    // gap OptionalFilterString's own doc comment claimed was already closed but was not: it
+    // returned null, not an error, for every non-string ValueKind). Covers all three string-typed
+    // axes (search / triggerKind / schedulePolicyKind) against number/bool/array/object. ─────────
+
+    [Theory]
+    [InlineData("search")]
+    [InlineData("triggerKind")]
+    [InlineData("schedulePolicyKind")]
+    public async Task ListSettings_StringFilterWrongJsonType_Number_FailsClosed(string field)
+    {
+        var (runtime, _, _) = CreateRuntime([Job(Guid.NewGuid(), "weather_24h", active: true)]);
+
+        var payload = JsonSerializer.SerializeToElement(new Dictionary<string, object> { [field] = 123 });
+        var vector = new OperationVector("admin", "scheduler_jobs", "list_settings", null, "admin", payload, null);
+        var (data, error) = await runtime.ExecuteDataAsync(vector, default);
+
+        Assert.Null(data);
+        Assert.Equal("SCHEDULER_LIST_SETTINGS_FIELD_NOT_STRING", error!.Code);
+    }
+
+    [Theory]
+    [InlineData("search")]
+    [InlineData("triggerKind")]
+    [InlineData("schedulePolicyKind")]
+    public async Task ListSettings_StringFilterWrongJsonType_Bool_FailsClosed(string field)
+    {
+        var (runtime, _, _) = CreateRuntime([Job(Guid.NewGuid(), "weather_24h", active: true)]);
+
+        var payload = JsonSerializer.SerializeToElement(new Dictionary<string, object> { [field] = true });
+        var vector = new OperationVector("admin", "scheduler_jobs", "list_settings", null, "admin", payload, null);
+        var (data, error) = await runtime.ExecuteDataAsync(vector, default);
+
+        Assert.Null(data);
+        Assert.Equal("SCHEDULER_LIST_SETTINGS_FIELD_NOT_STRING", error!.Code);
+    }
+
+    [Theory]
+    [InlineData("search")]
+    [InlineData("triggerKind")]
+    [InlineData("schedulePolicyKind")]
+    public async Task ListSettings_StringFilterWrongJsonType_Array_FailsClosed(string field)
+    {
+        var (runtime, _, _) = CreateRuntime([Job(Guid.NewGuid(), "weather_24h", active: true)]);
+
+        var payload = JsonSerializer.SerializeToElement(new Dictionary<string, object> { [field] = new[] { "a", "b" } });
+        var vector = new OperationVector("admin", "scheduler_jobs", "list_settings", null, "admin", payload, null);
+        var (data, error) = await runtime.ExecuteDataAsync(vector, default);
+
+        Assert.Null(data);
+        Assert.Equal("SCHEDULER_LIST_SETTINGS_FIELD_NOT_STRING", error!.Code);
+    }
+
+    [Theory]
+    [InlineData("search")]
+    [InlineData("triggerKind")]
+    [InlineData("schedulePolicyKind")]
+    public async Task ListSettings_StringFilterWrongJsonType_Object_FailsClosed(string field)
+    {
+        var (runtime, _, _) = CreateRuntime([Job(Guid.NewGuid(), "weather_24h", active: true)]);
+
+        var payload = JsonSerializer.SerializeToElement(
+            new Dictionary<string, object> { [field] = new Dictionary<string, object> { ["nested"] = 1 } });
+        var vector = new OperationVector("admin", "scheduler_jobs", "list_settings", null, "admin", payload, null);
+        var (data, error) = await runtime.ExecuteDataAsync(vector, default);
+
+        Assert.Null(data);
+        Assert.Equal("SCHEDULER_LIST_SETTINGS_FIELD_NOT_STRING", error!.Code);
+    }
+
+    // ── list_settings: active's tri-state boolean axis — its own boundary matrix (previously
+    // untested even though the production code already fails closed correctly here) ─────────────
+
+    [Theory]
+    [InlineData("true", true)]
+    [InlineData("True", true)]
+    [InlineData("false", false)]
+    [InlineData("False", false)]
+    public async Task ListSettings_ActiveStringBoolean_AcceptsCaseInsensitiveTrueFalse(string stringValue, bool expectedActive)
+    {
+        var (runtime, _, _) = CreateRuntime([
+            Job(Guid.NewGuid(), "active_job", active: true),
+            Job(Guid.NewGuid(), "inactive_job", active: false),
+        ]);
+
+        var (data, error) = await runtime.ExecuteDataAsync(
+            Vector("list_settings", new { active = stringValue }), default);
+
+        Assert.Null(error);
+        var jobs = data!.Value.GetProperty("schedulerJobs");
+        Assert.Equal(1, jobs.GetArrayLength());
+        Assert.Equal(expectedActive, jobs[0].GetProperty("active").GetBoolean());
+    }
+
+    [Fact]
+    public async Task ListSettings_ActiveInvalidStringVocabulary_FailsClosed()
+    {
+        var (runtime, _, _) = CreateRuntime();
+
+        var (data, error) = await runtime.ExecuteDataAsync(
+            Vector("list_settings", new { active = "yes" }), default);
+
+        Assert.Null(data);
+        Assert.Equal("SCHEDULER_LIST_SETTINGS_ACTIVE_FILTER_INVALID", error!.Code);
+    }
+
+    [Fact]
+    public async Task ListSettings_ActiveWrongJsonType_Number_FailsClosed()
+    {
+        var (runtime, _, _) = CreateRuntime([Job(Guid.NewGuid(), "weather_24h", active: true)]);
+
+        var payload = JsonSerializer.SerializeToElement(new Dictionary<string, object> { ["active"] = 123 });
+        var vector = new OperationVector("admin", "scheduler_jobs", "list_settings", null, "admin", payload, null);
+        var (data, error) = await runtime.ExecuteDataAsync(vector, default);
+
+        Assert.Null(data);
+        Assert.Equal("SCHEDULER_LIST_SETTINGS_ACTIVE_FILTER_INVALID", error!.Code);
+    }
+
+    [Fact]
+    public async Task ListSettings_ActiveWrongJsonType_Array_FailsClosed()
+    {
+        var (runtime, _, _) = CreateRuntime([Job(Guid.NewGuid(), "weather_24h", active: true)]);
+
+        var payload = JsonSerializer.SerializeToElement(new Dictionary<string, object> { ["active"] = new[] { true } });
+        var vector = new OperationVector("admin", "scheduler_jobs", "list_settings", null, "admin", payload, null);
+        var (data, error) = await runtime.ExecuteDataAsync(vector, default);
+
+        Assert.Null(data);
+        Assert.Equal("SCHEDULER_LIST_SETTINGS_ACTIVE_FILTER_INVALID", error!.Code);
+    }
+
+    [Fact]
+    public async Task ListSettings_ActiveWrongJsonType_Object_FailsClosed()
+    {
+        var (runtime, _, _) = CreateRuntime([Job(Guid.NewGuid(), "weather_24h", active: true)]);
+
+        var payload = JsonSerializer.SerializeToElement(
+            new Dictionary<string, object> { ["active"] = new Dictionary<string, object> { ["nested"] = true } });
+        var vector = new OperationVector("admin", "scheduler_jobs", "list_settings", null, "admin", payload, null);
+        var (data, error) = await runtime.ExecuteDataAsync(vector, default);
+
+        Assert.Null(data);
+        Assert.Equal("SCHEDULER_LIST_SETTINGS_ACTIVE_FILTER_INVALID", error!.Code);
+    }
+
+    // ── list_settings: absent / null / empty-or-whitespace all legitimately mean "no filter on
+    // this axis" (distinct from the wrong-JSON-type fail-close above) — proven across all four
+    // axes so the null/empty-is-ok and wrong-type-is-not-ok boundary is unambiguous. ─────────────
+
+    [Theory]
+    [InlineData("search")]
+    [InlineData("triggerKind")]
+    [InlineData("schedulePolicyKind")]
+    public async Task ListSettings_EmptyOrWhitespaceStringFilter_TreatedAsNoFilter(string field)
+    {
+        var (runtime, _, _) = CreateRuntime([
+            Job(Guid.NewGuid(), "job_a", active: true),
+            Job(Guid.NewGuid(), "job_b", active: false),
+        ]);
+
+        var payload = JsonSerializer.SerializeToElement(new Dictionary<string, object> { [field] = "   " });
+        var vector = new OperationVector("admin", "scheduler_jobs", "list_settings", null, "admin", payload, null);
+        var (data, error) = await runtime.ExecuteDataAsync(vector, default);
+
+        Assert.Null(error);
+        Assert.Equal(2, data!.Value.GetProperty("schedulerJobs").GetArrayLength());
+    }
+
+    [Theory]
+    [InlineData("search")]
+    [InlineData("triggerKind")]
+    [InlineData("schedulePolicyKind")]
+    [InlineData("active")]
+    public async Task ListSettings_ExplicitNullFilter_TreatedAsNoFilter(string field)
+    {
+        var (runtime, _, _) = CreateRuntime([
+            Job(Guid.NewGuid(), "job_a", active: true),
+            Job(Guid.NewGuid(), "job_b", active: false),
+        ]);
+
+        var payload = JsonSerializer.SerializeToElement(new Dictionary<string, object?> { [field] = null });
+        var vector = new OperationVector("admin", "scheduler_jobs", "list_settings", null, "admin", payload, null);
+        var (data, error) = await runtime.ExecuteDataAsync(vector, default);
+
+        Assert.Null(error);
+        Assert.Equal(2, data!.Value.GetProperty("schedulerJobs").GetArrayLength());
+    }
+
+    [Fact]
     public async Task ListSettings_NonObjectPayload_FailsClosed()
     {
         var (runtime, _, _) = CreateRuntime();

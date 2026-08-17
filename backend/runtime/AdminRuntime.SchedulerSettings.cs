@@ -68,9 +68,18 @@ public partial class AdminRuntime
                     "payload must be a JSON object when present."));
 
             var payload = vector.Payload.Value;
-            search = OptionalFilterString(payload, "search");
-            triggerKindFilter = OptionalFilterString(payload, "triggerKind");
-            schedulePolicyKindFilter = OptionalFilterString(payload, "schedulePolicyKind");
+
+            var (searchValue, searchError) = OptionalFilterString(payload, "search");
+            if (searchError is not null) return (null, searchError);
+            search = searchValue;
+
+            var (triggerKindValue, triggerKindTypeError) = OptionalFilterString(payload, "triggerKind");
+            if (triggerKindTypeError is not null) return (null, triggerKindTypeError);
+            triggerKindFilter = triggerKindValue;
+
+            var (schedulePolicyKindValue, schedulePolicyKindTypeError) = OptionalFilterString(payload, "schedulePolicyKind");
+            if (schedulePolicyKindTypeError is not null) return (null, schedulePolicyKindTypeError);
+            schedulePolicyKindFilter = schedulePolicyKindValue;
 
             if (triggerKindFilter is not null && !ValidTriggerKinds.Contains(triggerKindFilter))
                 return (null, new ValidationError("SCHEDULER_JOB_TRIGGER_KIND_INVALID",
@@ -128,15 +137,24 @@ public partial class AdminRuntime
     /// <summary>
     /// An optional string search/filter field. An absent, null, or empty/whitespace value means
     /// "no filter on this axis" (an empty select/search input is the seeded surface's own real
-    /// "all" state, not a request to match the empty string). A non-string value fails closed.
+    /// "all" state, not a request to match the empty string). A PRESENT non-string value (number/
+    /// bool/array/object) fails closed with an explicit error — it must never silently collapse to
+    /// "no filter on this axis" the way an absent/null/empty value legitimately does, or a caller
+    /// whose filter request was malformed would silently receive the full unfiltered list instead
+    /// of a rejection. Mirrors OptionalFilterBool's own (value, error) fail-close shape below and
+    /// enum_dictionary:list_groups' round-37 "malformed payload field type is a genuine client
+    /// defect, never treated as no search/filter" precedent (AdminRuntime.cs
+    /// DataEnumDictionaryListGroupsAsync).
     /// </summary>
-    private static string? OptionalFilterString(JsonElement payload, string name)
+    private static (string? value, ValidationError? error) OptionalFilterString(JsonElement payload, string name)
     {
-        if (!payload.TryGetProperty(name, out var el)) return null;
-        if (el.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined) return null;
-        if (el.ValueKind != JsonValueKind.String) return null;
+        if (!payload.TryGetProperty(name, out var el)) return (null, null);
+        if (el.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined) return (null, null);
+        if (el.ValueKind != JsonValueKind.String)
+            return (null, new ValidationError("SCHEDULER_LIST_SETTINGS_FIELD_NOT_STRING",
+                $"payload.{name} must be a string when present."));
         var value = el.GetString();
-        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        return (string.IsNullOrWhiteSpace(value) ? null : value.Trim(), null);
     }
 
     /// <summary>
