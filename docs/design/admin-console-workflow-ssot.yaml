@@ -173,7 +173,23 @@ admin_console_workflow_ssot:
         the Owner-directed ProjectionShell common Home link instead of a fabricated hub_relations
         source, not a target-manifest-readiness blocker.
       scheduler_settings: >-
-        blocked — same as enum_dictionary above, for scheduler_jobs.
+        not blocked — scheduler.settings.projection (manifest 00000000-0000-0000-0000-00000005c100)
+        is a real, seeded ui_projection manifest (admin-normal-surface-projection-seed-ssot.yaml
+        surface_axes.admin.surfaces.scheduler), its package/layout/wiring/tensor rows generated
+        through the react_schema_topology_seed_translator.py intake (.agent/tests/fixtures/
+        react-schema-topology-seed-translator/scheduler-settings-admin*.json) and adopted verbatim
+        into db/seed_empty.sql (identity-plumbing UUID edits only). 2026-07-22 Owner-confirmed
+        design (.agent/tasks/todo.md "scheduler-settings 3分割設計の確定"): this manifest proves the
+        Manifest/hub/package/layout/wiring/tensor and mutation_confirmation_contract chain is real
+        and dispatchable, but it is NOT frontend/routes/admin/scheduler.tsx's own route body —
+        that route keeps mounting the existing, scope-reduced (not deleted) frontend/islands/
+        SchedulerJobSettingsPanel.tsx, dispatching the same scheduler_jobs:list_settings/enable/
+        disable actions directly via the axes-routed dispatcher_mapping rows, never through this
+        manifest's target_ref. navigation_binding's literal hub_navigation_only retirement (see
+        runtime-orchestration-ssot.yaml admin_route_retirement_matrix.routes /admin/scheduler
+        entry) is proven live-DB at test time only (backend/tests/Topolactor.Integration.Tests/
+        SchedulerSettingsHubRelationUiProjectionLiveDbTests.cs), the same convention every other
+        subBundle here follows — no seeded hubs.hub_relations row.
     prohibited:
       - global_hub_scan_for_target_selection
       - first_match_oldest_or_MIN_fallback_target_selection

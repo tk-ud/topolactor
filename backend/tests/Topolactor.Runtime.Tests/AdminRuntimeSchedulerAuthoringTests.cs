@@ -47,8 +47,31 @@ public class AdminRuntimeSchedulerAuthoringTests
         { Updated.Add((id, draft)); return Task.FromResult(true); }
         public Task<bool> SetJobActiveAsync(Guid id, bool active, CancellationToken ct = default)
         { ActiveSet.Add((id, active)); return Task.FromResult(true); }
-        public Task<IReadOnlyList<SchedulerJobRecord>> LoadSettingsProjectionAsync(CancellationToken ct = default) =>
-            Task.FromResult(ProjectionJobs);
+
+        /// <summary>Recorded (search, triggerKind, schedulePolicyKind, active) arguments of every
+        /// LoadSettingsProjectionAsync call — the scheduler-settings surface's declared search/filter
+        /// axes are asserted against these in AdminRuntimeSchedulerSettingsMutationConfirmationTests.</summary>
+        public List<(string? Search, string? TriggerKind, string? SchedulePolicyKind, bool? Active)> ProjectionQueries { get; } = new();
+
+        public Task<IReadOnlyList<SchedulerJobRecord>> LoadSettingsProjectionAsync(
+            string? search = null, string? triggerKind = null, string? schedulePolicyKind = null,
+            bool? active = null, CancellationToken ct = default)
+        {
+            ProjectionQueries.Add((search, triggerKind, schedulePolicyKind, active));
+            IEnumerable<SchedulerJobRecord> rows = ProjectionJobs;
+            if (!string.IsNullOrWhiteSpace(search))
+                rows = rows.Where(j => j.JobKey.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(triggerKind))
+                rows = rows.Where(j => j.TriggerKind == triggerKind);
+            if (!string.IsNullOrWhiteSpace(schedulePolicyKind))
+                rows = rows.Where(j => j.SchedulePolicyKind == schedulePolicyKind);
+            if (active is not null)
+                rows = rows.Where(j => j.Active == active.Value);
+            return Task.FromResult<IReadOnlyList<SchedulerJobRecord>>(rows.ToList());
+        }
+
+        public Task<SchedulerJobRecord?> LoadSettingsProjectionByIdAsync(Guid schedulerJobId, CancellationToken ct = default) =>
+            Task.FromResult(ProjectionJobs.FirstOrDefault(j => j.SchedulerJobId == schedulerJobId));
 
         public Task<IReadOnlyList<SchedulerJobRecord>> LoadActiveJobsAsync(CancellationToken ct = default) => Task.FromResult(ProjectionJobs);
         public Task<IReadOnlyList<SchedulerJobStepRecord>> LoadStepsAsync(Guid id, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<SchedulerJobStepRecord>>(Array.Empty<SchedulerJobStepRecord>());
@@ -319,13 +342,25 @@ public class AdminRuntimeSchedulerAuthoringTests
         Assert.Equal(id, repo.Updated[0].Id);
     }
 
+    // scheduler-settings subBundle: disable is no longer a bare one-shot write. It now carries the
+    // surface's mutation_confirmation_contract [explicit_confirm, write, diff_log] and the admin
+    // role gate (AdminRuntime.SchedulerSettings.cs). The full enable/disable matrix — dryRun preview,
+    // not-confirmed fail-close, already-in-target-state fail-close, diff_log envelope, role denial —
+    // lives in AdminRuntimeSchedulerSettingsMutationConfirmationTests.cs; this case stays here as the
+    // authoring-file-local proof that the confirmed write still reaches SetJobActiveAsync(false).
     [Fact]
-    public async Task Disable_ValidPayload_SetsInactive()
+    public async Task Disable_ConfirmedPayload_SetsInactive()
     {
-        var repo = new StubSchedulerRepo();
-        var runtime = CreateRuntime(repo);
         var id = Guid.NewGuid();
-        var (data, error) = await runtime.ExecuteDataAsync(Vector("disable", new { schedulerJobId = id.ToString() }), default);
+        var job = new SchedulerJobRecord(
+            id, "weather_24h", "cron", "cron", "0 * * * *", null, true, true,
+            null, null, null, null, null, null,
+            10, 300, "weather_job", null, null, new Dictionary<string, object?>(StringComparer.Ordinal));
+        var repo = new StubSchedulerRepo { ProjectionJobs = new[] { job } };
+        var runtime = CreateRuntime(repo);
+        var (data, error) = await runtime.ExecuteDataAsync(
+            Vector("disable", new { schedulerJobId = id.ToString(), confirmed = true }) with { AuthenticatedRole = "admin" },
+            default);
 
         Assert.Null(error);
         Assert.True(data!.Value.GetProperty("ok").GetBoolean());
@@ -342,8 +377,15 @@ public class AdminRuntimeSchedulerAuthoringTests
         Assert.Equal("SCHEDULER_JOB_MANIFEST_NOT_CONFIGURED", error!.Code);
     }
 
+    // scheduler-settings subBundle: list_settings' projection is now bounded by the owning surface's
+    // existing_schema_fields_allowed_for_projection / forbidden_projection_fields sets
+    // (docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces
+    // .scheduler), so credentialRequirementRef / externalPortRef / authorityScope are now ABSENT
+    // rather than projected as reference keys — they belong to /admin/contents authoring and to the
+    // credential-management consumer_reference_binding surface. Secret material was never present
+    // and still is not (that assertion is unchanged).
     [Fact]
-    public async Task ListSettings_Projection_NoSecretMaterialLeaked()
+    public async Task ListSettings_Projection_ForbiddenFieldsAbsentAndNoSecretMaterialLeaked()
     {
         var projPolicy = new Dictionary<string, object?>(StringComparer.Ordinal);
         var job = new SchedulerJobRecord(
@@ -358,9 +400,13 @@ public class AdminRuntimeSchedulerAuthoringTests
 
         Assert.Null(error);
         var raw = data!.Value.GetRawText();
-        // References are shown; secret material is never present.
-        Assert.Contains("weather_credential_requirement", raw);
-        Assert.Contains("weather_access_port", raw);
+        // forbidden_projection_fields: neither the field names nor their values are projected.
+        Assert.DoesNotContain("weather_credential_requirement", raw);
+        Assert.DoesNotContain("weather_access_port", raw);
+        Assert.DoesNotContain("credentialRequirementRef", raw);
+        Assert.DoesNotContain("externalPortRef", raw);
+        Assert.DoesNotContain("authorityScope", raw);
+        // Secret material is never present.
         Assert.DoesNotContain("api_key", raw);
         Assert.DoesNotContain("access_token", raw);
         Assert.DoesNotContain("client_secret", raw);
