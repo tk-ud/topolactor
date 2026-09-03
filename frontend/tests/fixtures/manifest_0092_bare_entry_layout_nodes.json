@@ -6,7 +6,11 @@
     "x": 0,
     "y": 0,
     "recordType": "topology_ui_category",
-    "label": "Users"
+    "label": "Users",
+    "visibilityBinding": {
+      "source": "ui-local:credential_category_filter.selectedCategory",
+      "matchValue": "users"
+    }
   },
   {
     "nodeId": "user_auth_section",
@@ -41,7 +45,11 @@
     "x": 0,
     "y": 0,
     "recordType": "topology_ui_category",
-    "label": "External API credential"
+    "label": "External API credential",
+    "visibilityBinding": {
+      "source": "ui-local:credential_category_filter.selectedCategory",
+      "matchValue": "external_api_credential"
+    }
   },
   {
     "nodeId": "external_section",
@@ -76,7 +84,11 @@
     "x": 0,
     "y": 0,
     "recordType": "topology_ui_category",
-    "label": "Instance settings"
+    "label": "Instance settings",
+    "visibilityBinding": {
+      "source": "ui-local:credential_category_filter.selectedCategory",
+      "matchValue": "instance_settings"
+    }
   },
   {
     "nodeId": "instance_settings_section",
@@ -1363,6 +1375,18 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
+    "stateJson": "{\u0022selectedCategory\u0022:\u0022external_api_credential\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "change",
+        "targetRef": "ui-local:credential_category_filter.selectedCategory",
+        "actionType": "setState",
+        "payloadFrom": {
+          "value": "event.value"
+        },
+        "sourceActionKey": "credential_category_filter"
+      }
+    ],
     "label": "Category (users / external_api_credential / external_instance_credential)"
   },
   {
