@@ -13,6 +13,7 @@
 | `test-orchestration-review` | Seed conversion後の proof / test orchestration review | not_started | 1 | proof surface carry-over | `docs/design/pipeline-continuity-ssot.yaml` |
 | `frontend-canonical-surface-structure-label-boundary` | Seed conversion後の frontend canonical surface label boundary | not_started | 1 | frontend canonical UI structure/wiring surfaces | canonical surface UI structure/wiring SSOTs, `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml` |
 | `admin-console-workflow-step-wording-boundary` | Seed conversion後の admin console workflow wording boundary | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
+| `structural-subtree-conditional-visibility-implementation` | credential-management manifest 092 category-collapse実装 (generic visibilityBinding contract の実装/seed適用) | not_started | 1 | credential-management category-collapse audit | `docs/design/runtime-orchestration-ssot.yaml` |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
 
@@ -346,3 +347,53 @@ implementation_change で、SSOTに従って helper schema / seed artifact を�
 - [ ] file export / transfer / email / audit approval の結果 projection が成功・失敗・保留として追え、失敗時に再試行すべきか設定を直すべきか判断できる。
 - [ ] `/admin/team-dashboard` / MdViewer で、saved view / rendered Markdown / source / binding / completed_preset_seed summary の関係を誤認せず、Markdown body を runtime SSOT と見なさない。
 - [ ] refresh / clone / rebind の可否、seed invalid の explicit error、md_viewer read projection boundary が画面上で自然に読め、mutation authority と混同しない。
+
+---
+
+## Bundle `structural-subtree-conditional-visibility-implementation`
+
+**Status:** `not_started`
+**Primary SSOT:** `docs/design/runtime-orchestration-ssot.yaml` `ui_projection_render_reachability_contract.structural_subtree_conditional_visibility_contract`
+**Position:** design_change (本 design_change で追加された generic contract) の後段 implementation_change。credential-management manifest 092 の category-collapse blocking finding に対する実装。
+
+### 問題点
+
+manifest 092 (`auth.external.credential_management.projection`) の `credential_category_filter` は SSOT 上「filter users external_api_credential external_instance_credential」責務を持つが、`LayoutSchemaTensorComposer.Compose()` は schema record を無条件・常設で LayoutNode へ合成するため、非選択カテゴリの CRUD/action/confirm 構造が同一 structural tree へ常設展開されていた。適用 SSOT にこの category collapse を data-defined に表現する契約が無かったため、この design_change で `structural_subtree_conditional_visibility_contract` を新設した。実装はまだ行われていない。
+
+### 目的
+
+`structural_subtree_conditional_visibility_contract` を実際に実装し、manifest 092 で category collapse を成立させる。
+
+### 改善方針
+
+- backend: `LayoutNodeRecord` に `VisibilityBindingJson` carrier を追加し、`LayoutSchemaTensorComposer` の schema-composed / tensor-only 両経路で `NodeLocalData` と同じパターンで通過させる（Compose() 自体は state を評価しない — static のまま）。
+- frontend: `renderEmission.ts` が `visibilityBinding` を `ComponentSpec` へ verbatim で運び、`LayoutProjectionTree.tsx` の `ProjectionTreeNode` が同一の projection-local state store (`RuntimeGuardedStateStore`) を参照して mount/unmount を汎用的に判定する（componentKind/nodeId/manifest UUID 固有分岐を作らない）。
+- `credential_category_filter` (select.template) の onChange を既存の UI状態更新 (`setState`/`setActiveKey` 系) lane 経由で `ui-local:<nodeId>.<stateKey>` へ書き込むよう wiring し、manifest 092 の既存 `default_category` metadata をこの state の `initialValue` として正規に宣言し直す。
+- source fixture (`.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.*`) と React-like Schema 側で `visibilityBinding` を authoring し、translator (`generate-react-schema` → `generate-topology-seed`) で regenerate する。`db/seed_empty.sql` を直接手修正した独自派生物にしない。
+- test/proof: `structural_subtree_conditional_visibility_contract.test_proof_contract` の positive/negative cases を実装し、既存の secret deny / live-DB dispatch proof を回帰させないことを証明する。
+
+### 対応資料
+
+- `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/react-schema-topology-seed-translator-ssot.yaml`
+- `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`
+- `docs/design/admin-normal-surface-projection-seed-ssot.yaml`
+
+### 対象ファイル名
+
+- `backend/repository/LayoutSchemaTensorComposer.cs`
+- `backend/repository/NpgsqlTopologyRepository.cs`
+- `frontend/runtime/renderEmission.ts`
+- `frontend/components/LayoutProjectionTree.tsx`
+- `db/seed_empty.sql` (manifest 092 / layout `00000000-0000-0000-0000-0000000cd002`)
+- `.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.input.json`
+- `.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.topology-seed.input.json`
+
+### 受入条件
+
+- [ ] 初期表示で非選択categoryの操作群が同時常設表示されない(DOM上に存在しない)。
+- [ ] category変更後に対象categoryの必要なfield/actionが到達可能になる。
+- [ ] 別categoryの操作群が非表示(unmount)になる。
+- [ ] category切替後も既存dispatch binding/payloadFromが維持される。
+- [ ] zero error render / secret deny /既存live-DB dispatch・projection proofが回帰しない。
+- [ ] credentials以外の再利用consumerで同一generic機構が動くことを証明する。

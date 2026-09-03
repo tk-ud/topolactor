@@ -370,6 +370,18 @@ admin_normal_surface_projection_seed_ssot:
               - node_key: credential_category_filter
                 component_key: select.template
                 responsibility: filter users external_api_credential external_instance_credential
+                conditional_visibility_note: >-
+                  design_change (category-collapse audit) addition: "filter" here means this
+                  node's selection actually gates which of the three categories' structural
+                  subtrees (their own field/action/confirm nodes) mount, not merely which rows a
+                  result list shows. The mechanism (visibilityBinding, state store, mount/unmount
+                  semantics, fail-close behavior) is owned entirely by docs/design/runtime-
+                  orchestration-ssot.yaml ui_projection_render_reachability_contract.
+                  structural_subtree_conditional_visibility_contract -- this surface is that
+                  contract's FIRST CONSUMER/evidence, never its authority owner, and this
+                  component_key: select.template declaration is unchanged and non-exclusive: a
+                  future consumer of the same generic contract may drive an equivalent selection
+                  from a different presentation component without this SSOT needing to change.
               - node_key: credential_result_list
                 component_key: table.primitive
                 responsibility: list allowed metadata fields only

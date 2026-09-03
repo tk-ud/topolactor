@@ -604,6 +604,7 @@ react_schema_topology_seed_translator_ssot:
       - raw_html_tag_emission
       - topology_ui_seed_record_missing_common_or_type_required_field
       - componentKind_absent_from_ui_catalog_boundary_contract_frontend_component_catalog
+      - visibilityBinding_present_with_source_not_matching_ui_local_nodeId_stateKey_shape_or_missing_matchValue
 
   # ===========================================================================
   # 5. topology_ui_seed_contract
@@ -632,8 +633,10 @@ react_schema_topology_seed_translator_ssot:
         required: [surface, categories]
       topology_ui_category:
         required: [categoryKey, sections]
+        optional: [visibilityBinding]
       topology_ui_section:
         required: [sectionKey, sectionKind, children]
+        optional: [visibilityBinding]
       topology_ui_form:
         required: [formKey, target, mode, fields, actions, authorityMarker]
       topology_ui_field:
@@ -691,6 +694,23 @@ react_schema_topology_seed_translator_ssot:
       apply / admin-approve boundary described in authority_mapping before anything it describes
       can execute. This holds even after a record is advanced into a RuntimeComponentSpec
       candidate under projection_render_exchange_contract.
+    conditional_visibility_binding_ref: >-
+      design_change (credential-management manifest 092 category-collapse audit) addition:
+      topology_ui_category and topology_ui_section records' optional visibilityBinding field
+      (above) is a SEED EMISSION SHAPE declaration only -- {source: "ui-local:<nodeId>.<stateKey>",
+      matchValue: <scalar>}, authored the same way any other record field is authored in the
+      React-like Schema source, carried verbatim through layoutAdoptionCandidates into
+      components_layout_design.layout_schema_json.records[] (schema-composed) or directly onto a
+      layout_patch_json.nodes[] entry (tensor-only), never evaluated by this translator or by
+      LayoutSchemaTensorComposer.Compose. The RUNTIME PROJECTION/RENDER meaning of this field --
+      structural mount/unmount, static-topology authority boundary, state store identity,
+      fail-close behavior for an undeclared/malformed binding, and the prohibition on promoting it
+      to dispatch/backend authority -- is fully owned by docs/design/runtime-orchestration-
+      ssot.yaml ui_projection_render_reachability_contract.structural_subtree_conditional_
+      visibility_contract, mirroring how layout_schema_structural_render_contract already owns the
+      runtime classification of every other record type this SSOT emits
+      (authority_boundary_with_translator_ssot above). This SSOT does not restate that contract's
+      body and does not itself define what visibilityBinding DOES at render time.
 
   # ===========================================================================
   # 5a. storage_adoption_contract
@@ -2542,6 +2562,7 @@ react_schema_topology_seed_translator_ssot:
       - every_emitted_seed_record_is_recursively_checked_against_its_record_type_required_fields
       - no_emitted_seed_record_carries_a_null_or_empty_required_field
       - emitted_action_and_step_records_carry_a_lane_conforming_eventBinding
+      - emitted_category_or_section_visibilityBinding_source_matches_ui_local_nodeId_stateKey_shape_and_carries_a_non_empty_matchValue
 
     storage_adoption_validation: >-
       see storage_adoption_contract.validation_rules; enforced by

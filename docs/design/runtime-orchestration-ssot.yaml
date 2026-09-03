@@ -1001,6 +1001,257 @@ runtime_orchestration_ssot:
           - a_catalog_component_leaf_whose_authored_runtimeInteractions_resolve_to_zero_event_bindings_is_RUNTIME_INTERACTION_UNATTRIBUTABLE_not_a_silent_pass_through_to_the_factory
           - a_record_missing_label_or_sourceReactPath_or_sourceYamlRefs_or_knownGapRefs_is_LAYOUT_SCHEMA_RECORDS_INVALID_not_silently_accepted_with_a_fallback_value
 
+    structural_subtree_conditional_visibility_contract:
+      note: >-
+        design_change (credential-management manifest 092 category-collapse audit) closing a
+        real gap layout_schema_structural_render_contract above never addressed: that contract
+        defines only WHETHER a schema record composes (structural_node / catalog_component /
+        unresolved_gap) and whether composition is error-free -- it has no concept of a
+        structural subtree being conditionally mounted based on a projection-local selection
+        (e.g. a category/tab select choosing which of several sibling Category/Section subtrees
+        is the current one). Before this contract, every composed LayoutNode is unconditionally,
+        permanently rendered -- the credential-management manifest 092 audit found this is
+        exactly why users / external_api_credential / external_instance_credential's CRUD/action/
+        confirm structures all render simultaneously regardless of credential_category_filter's
+        selection. This contract is additive: it does not change layout_schema_structural_render_
+        contract's composition rules, and adopting it changes NOTHING about any existing
+        manifest's rendered output until a record/node actually authors a visibilityBinding (see
+        default_visible_when_unbound below) -- credential-management is this contract's FIRST
+        CONSUMER, never its authority owner; ownership of this contract lives here and in the
+        cross-referenced translator/wiring SSOTs below, never in
+        docs/design/admin-normal-surface-projection-seed-ssot.yaml.
+      static_topology_authority_boundary: >-
+        The composed LayoutNode tree (topology.components_layout_design.layout_schema_json.
+        records[] via LayoutSchemaTensorComposer.Compose, and topology.ui_topology_tensor.
+        layout_patch_json.nodes[] via NpgsqlTopologyRepository.LoadLayoutNodesAsync) remains
+        static, DB-authoritative, and composed with zero regard to any frontend-submitted
+        selection or runtime-local state -- this is unchanged and non-negotiable. Compose() and
+        LoadLayoutNodesAsync MUST NOT accept or consult a request-scoped selection/category/
+        activeKey parameter to dynamically include, exclude, or reorder LayoutNodeRecords; a
+        visibilityBinding (defined below) rides along a composed node exactly like its sibling
+        RuntimeInteractionsJson/PropsJson/StateJson/PropBindingsJson carriers -- copied through
+        verbatim, never evaluated, never used as an inclusion/exclusion predicate, backend-side.
+        Conditional visibility is exclusively a frontend/runtime-side concern, evaluated only
+        after the complete, unconditional LayoutNode[]/ComponentSpec[] already exists. This is
+        the direct answer to the credential-management audit's blocking finding: the static tree
+        stays whole; only its DOM mount decision becomes conditional, one layer downstream of
+        backend composition.
+      state_owner: >-
+        No new state store is introduced. The read side of this contract consumes the SAME
+        projection-local runtime state store docs/design/admin-uibuilder-ui-structure-wiring-
+        ssot.yaml lane_storage_boundary.lanes.local_ui_state_lane already defines (
+        RuntimeGuardedStateStore / frontend/runtime/uiEventEffectRunner.ts createRuntimeLocalStateStore),
+        the same store UI監視割当 (ui_watch_binding) declares slots into and UI状態更新
+        (ui_state_update; action_types including setActiveKey/setState/openModal family) already
+        writes through via the single guarded write path (mutation_authority_unification). This
+        contract adds a NEW READ CONSUMER of that existing store -- structural mount/unmount --
+        alongside its existing prop-injection consumer (state_update_projection_rerender_contract:
+        "UI状態更新 reflects into rendered runtimeSpec props"); it does not add a second consumer
+        with independent semantics, and it does not promote UI-local state to any new authority
+        (see authority_non_promotion below).
+      write_read_separation: >-
+        Write side is completely unchanged and this contract defines no new write vocabulary: any
+        existing or future presentation component (select.template's onChange, tabs.template's
+        onSelect, or a not-yet-existing accordion/segmented-control primitive) drives a UI状態更新
+        (setActiveKey / setState / localStateMutation) against a predeclared UI監視割当 slot,
+        exactly the existing internal_instance_wiring / disclosure_state_wiring lane mechanics
+        (docs/design/react-schema-topology-seed-translator-ssot.yaml wiring_lane_contract.lanes).
+        Read side is the ONLY new thing this contract defines: a structural_node (or, additively,
+        a catalog_component leaf) MAY declare a visibilityBinding naming the SAME
+        "ui-local:<nodeId>.<stateKey>" target already established as this store's addressing
+        shape, plus a comparison value; a single generic, componentKind-agnostic frontend
+        evaluator decides whether that node (and its whole subtree) mounts. The evaluator cares
+        only about the resolved store value, never which presentation component produced the
+        write -- see presentation_component_independence below.
+      visibility_binding_shape:
+        field: visibilityBinding
+        carrier: >-
+          A single object, not an array (one condition per node; see composability below for how
+          nested conditions combine). Present only on nodes that need conditional mounting --
+          absent is the default and remains the overwhelmingly common case (see
+          default_visible_when_unbound).
+        fields:
+          source:
+            shape: 'ui-local:<nodeId>.<stateKey>'
+            rule: >-
+              Identical targetRef_shape to internal_instance_wiring / disclosure_state_wiring
+              (react-schema-topology-seed-translator-ssot.yaml wiring_lane_contract.lanes) --
+              no new addressing grammar invented. <nodeId> is the DRIVING node whose UI監視割当
+              declared this slot (e.g. the select/tabs node), never the visibility-bound node
+              itself.
+          matchValue:
+            type: string_or_boolean_or_number_matching_the_sources_declared_valueType
+            rule: >-
+              Strict-equality comparison against the source slot's live resolved value. Kept to a
+              single scalar equality (no in:[...] set-membership, no negation, no boolean
+              expression grammar) deliberately -- this is the minimal vocabulary the credential-
+              management category-collapse use case needs (N mutually-exclusive subtrees, each
+              gated by its own single-value visibilityBinding against the SAME source); a richer
+              condition grammar is explicitly out of scope for this design_change and must be
+              proposed as its own follow-up design_change if a real consumer needs it (see
+              prohibited below).
+        record_carrier_schema_composed: >-
+          On components_layout_design.layout_schema_json.records[] entries, topology_ui_category
+          and topology_ui_section records (the structural_node_record_types this contract's
+          sibling layout_schema_structural_render_contract already defines) MAY carry
+          visibilityBinding as an additional record field, validated by
+          LayoutSchemaTensorComposer.ParseRecords with the SAME fail-close posture
+          record_common_required_fields already uses: a present-but-malformed visibilityBinding
+          (source not matching the ui-local:<nodeId>.<stateKey> shape, missing matchValue, or a
+          matchValue whose type cannot possibly equal any value the addressed valueType can hold)
+          is LAYOUT_SCHEMA_RECORDS_INVALID for the WHOLE records[] array -- never silently dropped,
+          never silently treated as "no binding" (see invalid_binding_fail_close below). A
+          catalog_component leaf (topology_ui_field / topology_ui_action / topology_ui_table /
+          topology_ui_workflow_step) MAY additionally carry visibilityBinding for a finer-grained
+          condition nested inside an already-visible structural ancestor (see
+          child_visibility_inheritance) -- this is additive to, never a replacement for, a
+          structural ancestor's own binding.
+        record_carrier_tensor_only: >-
+          On topology.ui_topology_tensor.layout_patch_json.nodes[] entries authored without a
+          records[] tree (most UI-Builder-authored layouts), the SAME field may appear directly
+          on a node entry -- LayoutNodeRecord gains a new optional carrier, VisibilityBindingJson,
+          alongside its existing PropsJson/StateJson/PropBindingsJson/DispatchPayloadFromByTriggerJson/
+          DispatchTargetRefByTriggerJson siblings, merged via the SAME NodeLocalData /
+          BuildNodeLocalDataByNodeId pattern LayoutSchemaTensorComposer already uses so a schema-
+          composed leaf's visibilityBinding (defined on its schema record) and a tensor-only
+          node's visibilityBinding (defined directly on the tensor node) converge onto the
+          identical LayoutNodeRecord.VisibilityBindingJson field, consumed identically by the
+          frontend regardless of which authoring mode produced it -- exactly the same convergence
+          node_id_collision_handling/tensor_runtime_interactions_merge already achieve for
+          runtimeInteractions across the two authoring modes.
+      render_side_evaluation: >-
+        frontend/runtime/renderEmission.ts carries visibilityBinding onto ComponentSpec verbatim,
+        unevaluated (evaluating it once at ComponentSpec-build time would freeze a value that must
+        react to live store changes over the projection's lifetime -- exactly why
+        applyLocalStateOverrides already defers "open" resolution to render time rather than
+        baking it into a static default). The actual mount/unmount decision is made by
+        frontend/components/LayoutProjectionTree.tsx's ProjectionTreeNode, reading the SAME
+        projection-local state store already threaded through the mount surface
+        (component_runtime_state_effect_boundary.required_receive_surfaces "current state
+        values") -- generically, for ANY node carrying a visibilityBinding, keyed by nothing but
+        the binding's own source/matchValue, never by nodeId, componentKind, manifest UUID, or any
+        credential-management-specific literal added to LayoutProjectionTree/renderEmission/
+        ProjectionShell.
+      unmount_not_css: >-
+        A node evaluated invisible is not rendered into the tree AT ALL -- no wrapping element
+        with CSS display:none/visibility:hidden/[hidden], no aria-hidden-only suppression. This
+        mirrors the existing modalFactory/Modal.tsx precedent (Modal returns null entirely when
+        closed, taking its whole subtree -- footer included -- out of the DOM with it). CSS-only
+        hiding never satisfies this contract at any layer; a production render that keeps a
+        non-active category's DOM nodes present (even visually hidden) has not adopted this
+        contract, regardless of what visibilityBinding metadata it carries.
+      child_visibility_inheritance: >-
+        An invisible node's entire descendant subtree unmounts with it -- a descendant never
+        needs its own visibilityBinding merely to inherit its ancestor's non-visibility. A
+        descendant MAY declare its OWN additional visibilityBinding for a finer-grained condition
+        nested inside an already-visible ancestor; multiple bindings on a single root-to-leaf path
+        compose as a logical AND (every one must resolve true for the leaf to mount), never an OR
+        and never a later binding silently overriding an earlier one.
+      operation_reachability: >-
+        Because an invisible subtree never mounts, its Field/Action leaves' eventBinding never
+        attaches to a real DOM element and can never emit a trigger -- dispatch reachability for a
+        non-active category's create/update/delete/revoke/confirm actions is void by construction,
+        not by a separate authorization check this contract would otherwise have to invent. This
+        is the entire mechanism behind "a hidden subtree's actions must not become operable": it
+        falls out of ordinary Preact mount/unmount semantics once composition actually stops
+        rendering the node, and needs no new runtime guard.
+      default_visible_when_unbound: >-
+        A node with no visibilityBinding is unconditionally visible, exactly as every node
+        renders today. This is the explicit backward-compatibility invariant: adopting this
+        contract changes NOTHING about any existing manifest's rendered output, because no
+        existing record/node authors visibilityBinding -- the gap this contract closes only
+        manifests once a subsequent implementation_change actually authors the field (e.g. onto
+        manifest 092's category/section records).
+      declare_before_evaluate: >-
+        The source slot MUST be predeclared (via UI監視割当 stateJson initialValue on the DRIVING
+        node -- e.g. credential_category_filter's own stateJson declaring
+        {"stateKey": "selectedCategory", "initialValue": "<default category key>"}) before ANY
+        visibility-bound sibling can be evaluated -- this is the SAME "declare before mutate"
+        invariant admin-uibuilder-ui-structure-wiring-ssot.yaml mutation_authority_unification
+        already enforces for writes, extended here to "declare before READ" for this new
+        consumer. initialValue is what grounds a manifest's default-visible category (e.g.
+        manifest 092's existing fixed_form_projection metadata default_category:
+        "external_api_credential" -- currently informal free-floating metadata with no runtime
+        consumer -- becomes this exact initialValue once a following implementation_change wires
+        it through the canonical declaration carrier, rather than remaining a decorative field).
+      invalid_binding_fail_close: >-
+        A visibilityBinding whose source resolves to an UNDECLARED slot at evaluation time, or
+        whose shape is malformed in a way ParseRecords' schema-level check cannot catch (a
+        tensor-only-authored node, parsed too late for a whole-array fail-close), is a real
+        authoring defect: it renders as an explicit error node (STRUCTURAL_VISIBILITY_BINDING_
+        SOURCE_UNDECLARED / STRUCTURAL_VISIBILITY_BINDING_INVALID), mirroring
+        CATALOG_COMPONENT_KIND_REQUIRED and RUNTIME_INTERACTION_UNATTRIBUTABLE's existing
+        fail-close posture at the same layer -- never silently treated as "no binding" (always
+        visible) and never as "binding present, condition false" (always hidden); both would
+        paper over a real authoring defect exactly as absent_vs_invalid_records already refuses
+        to do for records[] itself.
+      authority_non_promotion: >-
+        visibilityBinding's resolved boolean is a PRESENTATION decision only. It MUST NOT be
+        forwarded as dispatch payload authority, MUST NOT be persisted as canonical/business data,
+        and MUST NOT be read by backend composition (see static_topology_authority_boundary) or
+        by any server-side authority/search-filter decision -- hiding a subtree is not a security
+        or authorization boundary, and this contract creates none. Category-scoped SEARCH RESULT
+        filtering (which rows a category's search dispatch response contains) remains the
+        SEPARATE, already-existing mechanism of a dispatch payload carrying the selected category
+        server-side; this contract governs STRUCTURAL SUBTREE MOUNTING only, never row-level data
+        filtering, and the two are not required to share an implementation, only permitted to
+        share the SAME selection state as their common input.
+      presentation_component_independence: >-
+        visibilityBinding.source is only a ui-local:<nodeId>.<stateKey> reference -- it does not
+        name, and this contract does not define, which componentKind produced the write.
+        select.template's onChange, tabs.template's onSelect, or any future primitive's own event,
+        are equally legal drivers through the SAME existing UI状態更新 lane. docs/design/admin-
+        normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.credentials.
+        seed_contract's existing credential_category_filter: select.template declaration is
+        UNCHANGED by this contract and remains its FIRST CONSUMER/evidence, never its authority
+        owner or its presentation-shape mandate -- a future consumer is free to drive the exact
+        same source slot from a tabs.template node instead, with zero change to this contract.
+      relationship_to_disclosure_state_wiring: >-
+        disclosure_state_wiring (react-schema-topology-seed-translator-ssot.yaml
+        wiring_lane_contract.lanes.disclosure_state_wiring) remains the boolean open/close/toggle
+        family scoped to OVERLAY_OPENABLE_COMPONENT_KINDS (modal/drawer/dialog) -- unaffected, not
+        superseded, not merged into this contract. visibilityBinding is a general single-value-
+        equality condition over ANY ui-local:<nodeId>.<stateKey> slot, consumed by structural
+        mount/unmount rather than an "open" prop, and is not restricted to overlay component
+        kinds. The two lanes may compose on the same node without conflict (e.g. a Modal nested
+        inside a category subtree also gated by visibilityBinding) because they answer different
+        questions -- is this node in the tree at all, versus is this specific overlay currently
+        open -- never the same question asked twice.
+      prohibited:
+        - backend_composition_reading_frontend_selection_or_local_state_to_include_exclude_or_reorder_layoutnoderecords
+        - a_second_parallel_state_store_independent_of_the_existing_projection_local_runtime_state_store
+        - css_display_or_visibility_or_hidden_attribute_used_as_a_substitute_for_actual_unmount
+        - credential_management_manifest_092_or_any_specific_uuid_or_category_literal_hardcoded_into_layoutprojectiontree_renderemission_or_projectionshell
+        - a_dedicated_route_island_or_runtime_destination_introduced_for_conditional_visibility
+        - fixing_the_presentation_component_to_tabs_or_select_as_part_of_this_contract
+        - a_set_membership_or_negation_or_boolean_expression_condition_grammar_beyond_single_value_equality_without_its_own_design_change
+        - treating_an_undeclared_or_malformed_visibilityBinding_source_as_always_visible_or_always_hidden_instead_of_an_explicit_fail_close_error
+        - visibilityBinding_resolved_value_forwarded_as_dispatch_payload_authority_or_persisted_as_canonical_data
+        - adopting_this_contract_changing_any_existing_manifests_rendered_output_absent_an_authored_visibilityBinding
+      test_proof_contract:
+        note: >-
+          A completion proof for this contract (owed by the following implementation_change, not
+          this design_change) must demonstrate, for a real representative schema-composed manifest
+          (manifest 092, resolved through the same dispatch path layout_schema_structural_render_
+          contract's own test_proof_contract already uses) rendered through the full
+          renderEmission() -> LayoutProjectionTree -> runtimeComponentFactory -> real DOM chain,
+          both the existing zero-error invariant AND the new mount-conditional invariants below in
+          the SAME single representative scenario -- neither is a substitute for the other, and
+          "all LayoutNodes render with zero errors" alone (this contract's own predecessor
+          completion bar) must not be re-asserted as if it already proved category collapse.
+        positive_cases:
+          - at_initial_mount_only_the_default_categorys_subtree_is_present_in_the_DOM_the_other_categories_sections_are_absent_not_merely_visually_hidden
+          - selecting_a_different_category_through_credential_category_filter_mounts_that_categorys_previously_absent_fields_actions_and_confirm_modals
+          - the_previously_active_categorys_fields_actions_and_confirm_modals_unmount_on_the_same_selection_change
+          - dispatchTargetRefByTrigger_and_payloadFrom_bindings_on_a_categorys_actions_are_identical_before_and_after_a_round_trip_through_hide_then_show_again
+          - a_second_independent_consumer_outside_credential_management_drives_the_same_generic_evaluator_with_no_credential_specific_code_path_involved
+          - a_visibility_bound_catalog_component_leaf_nested_inside_an_already_visible_structural_ancestor_composes_as_a_logical_AND_of_both_bindings
+        negative_cases:
+          - a_non_active_categorys_action_button_is_not_present_in_the_DOM_to_click_at_all_not_merely_disabled_or_CSS_hidden
+          - an_undeclared_visibilityBinding_source_fails_close_as_an_explicit_error_node_never_silently_visible_or_hidden
+          - a_malformed_visibilityBinding_shape_on_a_schema_composed_record_is_LAYOUT_SCHEMA_RECORDS_INVALID_for_the_whole_records_array
+          - secret_projection_deny_and_existing_live_DB_dispatch_projection_proofs_for_manifest_092_regress_zero_from_this_contracts_adoption
+
   runtime_vocabulary_contract:
     authority_boundary:
       yaml_static_vocabulary:
