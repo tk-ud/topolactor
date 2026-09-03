@@ -1087,8 +1087,8 @@ runtime_orchestration_ssot:
               expression grammar) deliberately -- this is the minimal vocabulary the credential-
               management category-collapse use case needs (N mutually-exclusive subtrees, each
               gated by its own single-value visibilityBinding against the SAME source); a richer
-              condition grammar is explicitly out of scope for this design_change and must be
-              proposed as its own follow-up design_change if a real consumer needs it (see
+              condition grammar is a deliberate non-goal of this contract and must instead be
+              proposed as its own separate design_change if a real consumer needs it (see
               prohibited below).
         record_carrier_schema_composed: >-
           On components_layout_design.layout_schema_json.records[] entries, topology_ui_category
@@ -1171,9 +1171,9 @@ runtime_orchestration_ssot:
         already enforces for writes, extended here to "declare before READ" for this new
         consumer. initialValue is what grounds a manifest's default-visible category (e.g.
         manifest 092's existing fixed_form_projection metadata default_category:
-        "external_api_credential" -- currently informal free-floating metadata with no runtime
-        consumer -- becomes this exact initialValue once a following implementation_change wires
-        it through the canonical declaration carrier, rather than remaining a decorative field).
+        "external_api_credential" -- informal free-floating metadata with no runtime consumer as
+        of this contract -- becomes this exact initialValue once a following implementation_change
+        wires it through the canonical declaration carrier, replacing its decorative-only role).
       invalid_binding_fail_close: >-
         A visibilityBinding whose source resolves to an UNDECLARED slot at evaluation time, or
         whose shape is malformed in a way ParseRecords' schema-level check cannot catch (a
@@ -1215,8 +1215,8 @@ runtime_orchestration_ssot:
         mount/unmount rather than an "open" prop, and is not restricted to overlay component
         kinds. The two lanes may compose on the same node without conflict (e.g. a Modal nested
         inside a category subtree also gated by visibilityBinding) because they answer different
-        questions -- is this node in the tree at all, versus is this specific overlay currently
-        open -- never the same question asked twice.
+        questions -- is this node in the tree at all, versus whether this specific overlay's own
+        open state is true -- never the same question asked twice.
       prohibited:
         - backend_composition_reading_frontend_selection_or_local_state_to_include_exclude_or_reorder_layoutnoderecords
         - a_second_parallel_state_store_independent_of_the_existing_projection_local_runtime_state_store
