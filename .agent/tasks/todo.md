@@ -13,7 +13,7 @@
 | `test-orchestration-review` | Seed conversion後の proof / test orchestration review | not_started | 1 | proof surface carry-over | `docs/design/pipeline-continuity-ssot.yaml` |
 | `frontend-canonical-surface-structure-label-boundary` | Seed conversion後の frontend canonical surface label boundary | not_started | 1 | frontend canonical UI structure/wiring surfaces | canonical surface UI structure/wiring SSOTs, `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml` |
 | `admin-console-workflow-step-wording-boundary` | Seed conversion後の admin console workflow wording boundary | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
-| `structural-subtree-conditional-visibility-implementation` | credential-management manifest 092 category-collapse実装 (generic visibilityBinding contract の実装/seed適用) | not_started | 1 | credential-management category-collapse audit | `docs/design/runtime-orchestration-ssot.yaml` |
+| `structural-subtree-conditional-visibility-implementation` | credential-management manifest 092 category-collapse実装 (generic visibilityBinding contract の実装/seed適用) | partial | 1 | credential-management category-collapse audit | `docs/design/runtime-orchestration-ssot.yaml` |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
 
@@ -352,25 +352,30 @@ implementation_change で、SSOTに従って helper schema / seed artifact を�
 
 ## Bundle `structural-subtree-conditional-visibility-implementation`
 
-**Status:** `not_started`
+**Status:** `partial`
 **Primary SSOT:** `docs/design/runtime-orchestration-ssot.yaml` `ui_projection_render_reachability_contract.structural_subtree_conditional_visibility_contract`
 **Position:** design_change (本 design_change で追加された generic contract) の後段 implementation_change。credential-management manifest 092 の category-collapse blocking finding に対する実装。
 
-### 問題点
+### 問題点 (audit 指摘・設計修正済み)
 
-manifest 092 (`auth.external.credential_management.projection`) の `credential_category_filter` は SSOT 上「filter users external_api_credential external_instance_credential」責務を持つが、`LayoutSchemaTensorComposer.Compose()` は schema record を無条件・常設で LayoutNode へ合成するため、非選択カテゴリの CRUD/action/confirm 構造が同一 structural tree へ常設展開されていた。適用 SSOT にこの category collapse を data-defined に表現する契約が無かったため、この design_change で `structural_subtree_conditional_visibility_contract` を新設した。実装はまだ行われていない。
+manifest 092 (`auth.external.credential_management.projection`) の `credential_category_filter` は SSOT 上「filter users external_api_credential external_instance_credential」責務を持つが、`LayoutSchemaTensorComposer.Compose()` は schema record を無条件・常設で LayoutNode へ合成するため、非選択カテゴリの CRUD/action/confirm 構造が同一 structural tree へ常設展開されていた。当初の design_change には (1) visibilityBinding の authoring scope 未確定、(2) DOM mount 判定と lifecycle-interaction reachability 判定の不整合、(3) 根拠のない `valueType` field、(4) 未使用の `watchedBy`/`readableFrom` grounding、(5) todo.md の対象ファイル名不整合という5件の監査指摘があり、本ラウンドで SSOT を是正した上で実装した（`authored_record_type_scope` を Category/Section に限定、DOM mount と lifecycle reachability を同一 `resolveNodeVisibility` evaluator に統一、`valueType` 記述を削除し scalar 厳密等価のみに縮小、`watchedBy_readableFrom_grounding` を退行させ `watchedBy_readableFrom_status` で未実装を明記）。
 
 ### 目的
 
 `structural_subtree_conditional_visibility_contract` を実際に実装し、manifest 092 で category collapse を成立させる。
 
-### 改善方針
+### 実装済み内容
 
-- backend: `LayoutNodeRecord` に `VisibilityBindingJson` carrier を追加し、`LayoutSchemaTensorComposer` の schema-composed / tensor-only 両経路で `NodeLocalData` と同じパターンで通過させる（Compose() 自体は state を評価しない — static のまま）。
-- frontend: `renderEmission.ts` が `visibilityBinding` を `ComponentSpec` へ verbatim で運び、`LayoutProjectionTree.tsx` の `ProjectionTreeNode` が同一の projection-local state store (`RuntimeGuardedStateStore`) を参照して mount/unmount を汎用的に判定する（componentKind/nodeId/manifest UUID 固有分岐を作らない）。
-- `credential_category_filter` (select.template) の onChange を既存の UI状態更新 (`setState`/`setActiveKey` 系) lane 経由で `ui-local:<nodeId>.<stateKey>` へ書き込むよう wiring し、manifest 092 の既存 `default_category` metadata をこの state の `initialValue` として正規に宣言し直す。
-- source fixture (`.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.*`) と React-like Schema 側で `visibilityBinding` を authoring し、translator (`generate-react-schema` → `generate-topology-seed`) で regenerate する。`db/seed_empty.sql` を直接手修正した独自派生物にしない。
-- test/proof: `structural_subtree_conditional_visibility_contract.test_proof_contract` の positive/negative cases を実装し、既存の secret deny / live-DB dispatch proof を回帰させないことを証明する。
+- backend: `LayoutNodeRecord`/`SchemaRecordRow`/`LayoutNode` DTO に `VisibilityBindingJson`/`VisibilityBinding` carrier を追加し、`LayoutSchemaTensorComposer.ParseRecords`/`Compose()` の schema-composed 経路で authored_record_type_scope（Category/Section限定）・source shape・matchValue scalar 性を検証した上で verbatim 通過させる（Compose() 自体は state を評価しない — static のまま。`backend/tests/Topolactor.Runtime.Tests/LayoutSchemaStructuralCompositionTests.cs` に7件+1件のfixture-backed proofあり）。
+- frontend: 新設 `frontend/runtime/structuralVisibility.ts`（`buildVisibilityGraph`/`resolveNodeVisibility`）を唯一の evaluator とし、`LayoutProjectionTree.tsx`（DOM mount）と `uiEventEffectRunner.ts` の `emitLifecycle`（lifecycle-interaction reachability）の両方が同一関数を呼ぶ形で統一した。componentKind/nodeId/manifest UUID 固有分岐は無い。
+- `credential_category_filter` の onChange を既存の `payloadFrom.value = "event.<path>"` grammar 経由の動的値解決（新設 `resolveUiStateUpdateMutationValue`/`valueFrom`）で既存 UI状態更新 (localStateMutation/setState) lane へ配線し、`ui-local:credential_category_filter.selectedCategory` へ書き込む。
+- manifest 092 の3カテゴリ (`users`/`external_api_credential`/`instance_settings`) レコードに `visibilityBinding` を採用し、`db/seed_empty.sql` の cd002 (layout_schema_json) / cd004 (tensor) を実際に更新。全128レコードの構造木は変更なし（backend は非選択カテゴリを除外しない — state-blind のまま）。
+- test/proof: `frontend/tests/structuralVisibility.test.ts`（純粋ロジック9件）、`frontend/tests/uiEventEffectRunner.test.ts` 追加分（動的値解決・lifecycle可視性ゲーティング）、`frontend/tests/layoutProjectionTreeVisibilityRender.test.ts`（実 composer 出力 fixture 経由の DOM-connected proof: 初期表示・切替後 mount/unmount・hide→show round trip 3件）、backend 側 fixture-backed byte-exact proof。secret deny / 既存 live-DB dispatch・projection proof は既存テストスイート全体（backend 1760/1760、frontend 2137/2137、translator suite の 1件の既存無関係failureのみ変わらず）で回帰なしを確認。
+
+### 未完了・既知の残課題 (silently完了扱いにしない)
+
+- **source fixture 未再生成**: `.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.input.json`/`.topology-seed.input.json` は、本ラウンド以前から現行 `db/seed_empty.sql` の実内容（128レコード）と乖離した古い fixture（カテゴリキー・レコード数とも不一致）であり、過去ラウンドで translator を経由せず直接 SQL へ手で追記された経緯がある（本ラウンド由来ではない pre-existing gap）。本ラウンドでは translator 側 (`react_schema_topology_seed_translator.py`) に `visibilityBinding` の authoring/validation 対応（`KIND_SPECIFIC_CONSUMED_KEYS`, `convert_node_to_seed_record`, `validate_visibility_binding`）を完全実装し将来の正規 regenerate を可能にしたが、128レコード全体を fixture から再構築する作業は本ラウンドの scope 外と判断し行っていない。そのため `db/seed_empty.sql` の cd002/cd004 JSON への `visibilityBinding` フィールド追加・新規 tensor node 2件の追加は、translator 経由ではなく直接手修正で行った（新規追加分のみの narrow な例外— 既存 128 レコード自体は無編集）。この lineage 不整合を解消する再構築作業が残っている。
+- 上記以外の受入条件はすべて満たしている。
 
 ### 対応資料
 
@@ -383,17 +388,28 @@ manifest 092 (`auth.external.credential_management.projection`) の `credential_
 
 - `backend/repository/LayoutSchemaTensorComposer.cs`
 - `backend/repository/NpgsqlTopologyRepository.cs`
+- `backend/repository/TopologyRepository.cs`
+- `backend/schema/Contracts.cs`
+- `backend/runtime/StructureMapResolver.cs`
+- `frontend/runtime/structuralVisibility.ts`
 - `frontend/runtime/renderEmission.ts`
+- `frontend/runtime/uiEventEffectRunner.ts`
+- `frontend/runtime/runtimeComponentFactory.ts`
 - `frontend/components/LayoutProjectionTree.tsx`
-- `db/seed_empty.sql` (manifest 092 / layout `00000000-0000-0000-0000-0000000cd002`)
-- `.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.input.json`
-- `.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.topology-seed.input.json`
+- `frontend/islands/ProjectionShell.tsx`
+- `frontend/lib/uiBuilderWiringProjection.ts`
+- `frontend/api/dispatch.ts`
+- `.agent/scripts/react_schema_topology_seed_translator.py`
+- `db/seed_empty.sql` (manifest 092 / layout `00000000-0000-0000-0000-0000000cd002` / tensor `00000000-0000-0000-0000-0000000cd004`)
+- `.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.input.json` (未再生成 — 残課題)
+- `.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.topology-seed.input.json` (未再生成 — 残課題)
 
 ### 受入条件
 
-- [ ] 初期表示で非選択categoryの操作群が同時常設表示されない(DOM上に存在しない)。
-- [ ] category変更後に対象categoryの必要なfield/actionが到達可能になる。
-- [ ] 別categoryの操作群が非表示(unmount)になる。
-- [ ] category切替後も既存dispatch binding/payloadFromが維持される。
-- [ ] zero error render / secret deny /既存live-DB dispatch・projection proofが回帰しない。
-- [ ] credentials以外の再利用consumerで同一generic機構が動くことを証明する。
+- [x] 初期表示で非選択categoryの操作群が同時常設表示されない(DOM上に存在しない)。
+- [x] category変更後に対象categoryの必要なfield/actionが到達可能になる。
+- [x] 別categoryの操作群が非表示(unmount)になる。
+- [x] category切替後も既存dispatch binding/payloadFromが維持される。
+- [x] zero error render / secret deny /既存live-DB dispatch・projection proofが回帰しない。
+- [x] credentials以外の再利用consumerで同一generic機構が動くことを証明する。
+- [ ] source fixture (`credential-management-0092.input.json`/`.topology-seed.input.json`) を実際の manifest 092 seed 内容に合わせて再構築し、translator 経由で `db/seed_empty.sql` を regenerate する（現状は translator 側の実装・validationのみ完了、fixture再構築と regenerate 自体は未着手）。

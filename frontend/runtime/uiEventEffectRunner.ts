@@ -46,6 +46,11 @@ import {
   enqueueExternalPortDispatchCommand,
   enqueueInstanceOperationDispatchCommand,
 } from "./frontendScheduler.ts";
+import { buildVisibilityGraph, resolveNodeVisibility } from "./structuralVisibility.ts";
+import {
+  parsePayloadFromSource,
+  resolvePayloadFromSource,
+} from "./payloadFromResolver.ts";
 
 /**
  * Runtime local state store with change notification — the projection rerender
@@ -166,11 +171,22 @@ export type ResolvedUiStateUpdateMutation = {
   statePath: string;
   action: "set" | "toggle";
   value?: unknown;
+  /**
+   * Present only when the authored interaction declared payloadFrom.value as an
+   * "event.<path>" reference (e.g. a select's onChange writing the option the
+   * user just picked into UI-local state — the write side
+   * credential_category_filter uses, generic to any future consumer). Deferred
+   * — never resolved here, since this function may run at render-build time
+   * (renderEmission.ts), before any real event exists. Mutually exclusive with
+   * a static `value`: when present, `value` is ignored and the ACTUAL value is
+   * resolved later, at event-fire time, by resolveUiStateUpdateMutationValue.
+   */
+  valueFrom?: string;
 };
 
 /**
  * Resolve a UI状態更新 interaction (any wiringSettingCategoryOf === "ui_state_update"
- * actionType) into the normalized {targetNodeId, statePath, action, value}
+ * actionType) into the normalized {targetNodeId, statePath, action, value|valueFrom}
  * mutation shape. Shared by the event-binding builder (renderEmission.ts) and
  * the lifecycle path (executeStateUpdate below) so both derive the identical
  * target/statePath/value for the same authored interaction. Falls back to
@@ -186,6 +202,7 @@ export function resolveUiStateUpdateMutation(
     statePath?: string;
     value?: unknown;
     targetRef?: string;
+    payloadFrom?: Record<string, string>;
   },
 ): ResolvedUiStateUpdateMutation | null {
   const fromTargetRef = !w.targetNodeId?.trim() ? parseUiLocalTargetRef(w.targetRef) : undefined;
@@ -197,23 +214,73 @@ export function resolveUiStateUpdateMutation(
   if (openAction === "toggle") {
     return { targetNodeId, statePath, action: "toggle" };
   }
+  // openAction fixed-boolean actionTypes (openModal/closeModal/openDrawer/...) never take a
+  // dynamic value — only a generic setState/localStateMutation may declare payloadFrom.value.
+  const valueFrom = openAction === undefined && typeof w.payloadFrom?.value === "string" &&
+      w.payloadFrom.value.trim()
+    ? w.payloadFrom.value.trim()
+    : undefined;
+  if (valueFrom) {
+    return { targetNodeId, statePath, action: "set", valueFrom };
+  }
   const value = openAction !== undefined ? openAction : w.value;
   return { targetNodeId, statePath, action: "set", value };
+}
+
+/**
+ * Resolves a mutation's actual value at APPLY time — the finalize step
+ * resolveUiStateUpdateMutation intentionally defers. A static `value` (the
+ * overwhelming majority of authored mutations: openModal/closeModal/toggleModal/
+ * a literal setState) resolves immediately, unchanged from today. A `valueFrom`
+ * mutation resolves against the REAL triggering event's payload — only
+ * available at event-fire time, never at render-build time — via the SAME
+ * payloadFromResolver.ts event.<path> grammar dispatchExternalPort/
+ * dispatchInstanceOperation/admin_runtime payloadFrom already use, so this is
+ * not a second event-payload resolution grammar. A `valueFrom` mutation fired
+ * with no eventContext (the lifecycle path — initial_mount/route_enter/
+ * initial_display are synthetic triggers with no real user event to read a
+ * value from) fails close explicitly rather than writing `undefined`.
+ */
+export function resolveUiStateUpdateMutationValue(
+  mutation: ResolvedUiStateUpdateMutation,
+  eventContext?: { eventPayload: Record<string, unknown>; nodeValues: Record<string, unknown> },
+): { ok: true; value: unknown } | { ok: false; error: string } {
+  if (mutation.action === "toggle") return { ok: true, value: undefined };
+  if (!mutation.valueFrom) return { ok: true, value: mutation.value };
+  if (!eventContext) {
+    return {
+      ok: false,
+      error: `RUNTIME_STATE_UPDATE_VALUE_FROM_REQUIRES_EVENT: "${mutation.valueFrom}" has no triggering event to resolve against (lifecycle trigger)`,
+    };
+  }
+  const resolved = resolvePayloadFromSource(
+    parsePayloadFromSource(mutation.valueFrom),
+    eventContext.nodeValues,
+    eventContext.eventPayload,
+  );
+  if (!resolved.ok) return { ok: false, error: resolved.error };
+  return { ok: true, value: resolved.value };
 }
 
 /**
  * Apply an already-resolved UI状態更新 mutation through the guarded dispatcher.
  * This is the single write path used by both the lifecycle runner and
  * runtimeComponentFactory.emitBoundEvent — there is no separate direct-write
- * branch for the event-triggered lane.
+ * branch for the event-triggered lane. `eventContext` is required to resolve a
+ * `valueFrom` mutation (see resolveUiStateUpdateMutationValue); omitted by the
+ * lifecycle path, which has no real event, so a valueFrom mutation reached by
+ * a lifecycle trigger fails close there rather than writing `undefined`.
  */
 export function applyGuardedLocalStateMutation(
   dispatcher: RuntimeStateDispatcher,
   mutation: ResolvedUiStateUpdateMutation,
+  eventContext?: { eventPayload: Record<string, unknown>; nodeValues: Record<string, unknown> },
 ): { ok: true } | { ok: false; error: string } {
+  const valueResult = resolveUiStateUpdateMutationValue(mutation, eventContext);
+  if (!valueResult.ok) return { ok: false, error: valueResult.error };
   const next = mutation.action === "toggle"
     ? !dispatcher.get(mutation.targetNodeId, mutation.statePath)
-    : mutation.value;
+    : valueResult.value;
   return dispatcher.set(mutation.targetNodeId, mutation.statePath, next);
 }
 
@@ -420,7 +487,23 @@ export function createUiEventEffectRunner(
     }
     const executed: string[] = [];
     const errors: string[] = [];
+    // structural_subtree_conditional_visibility_contract: a hidden node's
+    // lifecycle interactions (initial_mount/route_enter/initial_display) must
+    // be as unreachable as a DOM-unmounted node's click/change interactions —
+    // built from the SAME currentNodes list LayoutProjectionTree renders from,
+    // via the SAME resolveNodeVisibility evaluator, so DOM mount and lifecycle
+    // reachability can never disagree about which nodes are active. A resolver
+    // error (undeclared/malformed source) is treated the same as invisible
+    // here — LayoutProjectionTree already surfaces that as a visible render
+    // error; this runner does not duplicate that into its own errors[].
+    const visibilityGraph = buildVisibilityGraph(currentNodes);
     for (const node of currentNodes) {
+      const visibility = resolveNodeVisibility(
+        node.nodeId,
+        visibilityGraph,
+        stateDispatcher,
+      );
+      if (!visibility.ok || !visibility.visible) continue;
       for (const [idx, w] of (node.runtimeInteractions ?? []).entries()) {
         if (w.trigger !== trigger || !isLifecycleTrigger(w.trigger)) continue;
         const fireKey = `${node.nodeId}#${idx}`;

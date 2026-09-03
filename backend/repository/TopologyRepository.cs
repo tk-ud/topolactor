@@ -328,5 +328,15 @@ public record LayoutNodeRecord(
     /// </summary>
     string? Label = null,
     /// <summary>Authored knownGapRefs for an unresolved_gap node (topology_ui_unresolved), from layout_schema_json.records[].record.knownGapRefs. Null for every other NodeKind.</summary>
-    IReadOnlyList<string>? KnownGapRefs = null
+    IReadOnlyList<string>? KnownGapRefs = null,
+    /// <summary>
+    /// SSOT: docs/design/runtime-orchestration-ssot.yaml
+    /// ui_projection_render_reachability_contract.structural_subtree_conditional_visibility_contract.
+    /// Node-local conditional-mount JSON object {"source":"ui-local:&lt;nodeId&gt;.&lt;stateKey&gt;","matchValue":&lt;scalar&gt;}
+    /// — only ever authored on a topology_ui_category/topology_ui_section record (schema-composed)
+    /// or the tensor-only equivalent. Carried verbatim; never evaluated backend-side (Compose stays
+    /// static/state-blind — see static_topology_authority_boundary). Null when not authored (the
+    /// overwhelmingly common case, and the only case for every layout that predates this contract).
+    /// </summary>
+    string? VisibilityBindingJson = null
 );

@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Topolactor.Repository;
 using Xunit;
 
@@ -45,6 +46,18 @@ public class LayoutSchemaStructuralCompositionTests
         var result = LayoutSchemaTensorComposer.ParseRecords(json);
         var valid = Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Valid>(result);
         return valid.Rows;
+    }
+
+    private static string RepoRoot([CallerFilePath] string sourceFile = "")
+    {
+        var fromSource = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(sourceFile)!, "..", "..", ".."));
+        if (File.Exists(Path.Combine(fromSource, "db", "seed_empty.sql"))) return fromSource;
+        var cwd = Directory.GetCurrentDirectory();
+        if (File.Exists(Path.Combine(cwd, "db", "seed_empty.sql"))) return cwd;
+        var dir = AppContext.BaseDirectory;
+        while (dir is not null && !File.Exists(Path.Combine(dir, "db", "seed_empty.sql")))
+            dir = Directory.GetParent(dir)?.FullName;
+        return dir ?? throw new InvalidOperationException("repo root not found");
     }
 
     [Fact]
@@ -839,10 +852,11 @@ public class LayoutSchemaStructuralCompositionTests
         IReadOnlyList<LayoutSchemaTensorComposer.SchemaRecordRow> records,
         IReadOnlyDictionary<string, string> interactionsBySourceActionKey,
         IReadOnlyDictionary<string, string> componentKeyToId,
-        IReadOnlyDictionary<string, string> componentIdToKind)
+        IReadOnlyDictionary<string, string> componentIdToKind,
+        IReadOnlyDictionary<string, LayoutSchemaTensorComposer.NodeLocalData>? nodeLocalDataByNodeId = null)
     {
         var composed = LayoutSchemaTensorComposer.Compose(
-            records, interactionsBySourceActionKey, componentKeyToId, componentIdToKind);
+            records, interactionsBySourceActionKey, componentKeyToId, componentIdToKind, nodeLocalDataByNodeId);
         var layoutNodes = composed.Select(Topolactor.Runtime.StructureMapResolver.ToLayoutNode).ToList();
         var actualJson = System.Text.Json.JsonSerializer.Serialize(layoutNodes, EmissionLayoutNodeJsonOptions);
         var expectedJson = await File.ReadAllTextAsync(FixturePath(fixtureFileName));
@@ -1281,5 +1295,279 @@ public class LayoutSchemaStructuralCompositionTests
         // override JSON.
         Assert.Equal("form_input/search_input", search.ComponentKind);
         Assert.Contains("list_groups", search.DispatchTargetRefByTriggerJson);
+    }
+
+    // -------------------------------------------------------------------------------------------
+    // structural_subtree_conditional_visibility_contract (docs/design/runtime-orchestration-
+    // ssot.yaml ui_projection_render_reachability_contract) -- visibilityBinding authoring,
+    // validation, and static-composition carrier tests.
+    // -------------------------------------------------------------------------------------------
+
+    private const string TwoCategoryVisibilityBindingRecordsJson = """
+    {
+      "records": [
+        {"type":"topology_ui_seed_record","parentKey":"implicit_virtual_root","record":{"recordType":"topology_ui_category","key":"catA","label":"Category A","sourceReactPath":"$.test.catA","sourceYamlRefs":["ref"],"knownGapRefs":[],"visibilityBinding":{"source":"ui-local:selector.selectedCategory","matchValue":"catA"}}},
+        {"type":"topology_ui_seed_record","parentKey":"catA","record":{"recordType":"topology_ui_section","key":"secA","label":"Section A","sourceReactPath":"$.test.secA","sourceYamlRefs":["ref"],"knownGapRefs":[]}},
+        {"type":"topology_ui_seed_record","parentKey":"secA","record":{"recordType":"topology_ui_field","key":"fieldA","label":"Field A","control":"form_input/select","sourceReactPath":"$.test.fieldA","sourceYamlRefs":["ref"],"knownGapRefs":[]}},
+        {"type":"topology_ui_seed_record","parentKey":"implicit_virtual_root","record":{"recordType":"topology_ui_category","key":"catB","label":"Category B","sourceReactPath":"$.test.catB","sourceYamlRefs":["ref"],"knownGapRefs":[],"visibilityBinding":{"source":"ui-local:selector.selectedCategory","matchValue":"catB"}}},
+        {"type":"topology_ui_seed_record","parentKey":"catB","record":{"recordType":"topology_ui_section","key":"secB","label":"Section B","sourceReactPath":"$.test.secB","sourceYamlRefs":["ref"],"knownGapRefs":[]}},
+        {"type":"topology_ui_seed_record","parentKey":"secB","record":{"recordType":"topology_ui_field","key":"fieldB","label":"Field B","control":"form_input/select","sourceReactPath":"$.test.fieldB","sourceYamlRefs":["ref"],"knownGapRefs":[]}}
+      ]
+    }
+    """;
+
+    [Fact]
+    public void ParseRecords_VisibilityBindingOnCategoryAndSection_IsValid_AndCarriedOntoSchemaRecordRow()
+    {
+        var rows = ParseValidRows(TwoCategoryVisibilityBindingRecordsJson);
+        var catA = Assert.Single(rows, r => r.Key == "catA");
+        Assert.NotNull(catA.VisibilityBindingJson);
+        Assert.Contains("catA", catA.VisibilityBindingJson);
+        var secA = Assert.Single(rows, r => r.Key == "secA");
+        Assert.Null(secA.VisibilityBindingJson);
+    }
+
+    [Fact]
+    public void ParseRecords_VisibilityBindingOnCatalogComponentLeaf_ReturnsInvalid_AuthoredRecordTypeScope()
+    {
+        const string json = """
+        {
+          "records": [
+            {"type":"topology_ui_seed_record","parentKey":"implicit_virtual_root","record":{"recordType":"topology_ui_category","key":"cat1","label":"Category One","sourceReactPath":"$.test.cat1","sourceYamlRefs":["ref"],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":"cat1","record":{"recordType":"topology_ui_field","key":"field1","label":"Field One","control":"form_input/select","sourceReactPath":"$.test.field1","sourceYamlRefs":["ref"],"knownGapRefs":[],"visibilityBinding":{"source":"ui-local:selector.selectedCategory","matchValue":"cat1"}}}
+          ]
+        }
+        """;
+        var result = LayoutSchemaTensorComposer.ParseRecords(json);
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(result);
+    }
+
+    [Theory]
+    [InlineData("""{"matchValue":"cat1"}""")] // missing source
+    [InlineData("""{"source":"not-a-ui-local-ref","matchValue":"cat1"}""")] // malformed source shape
+    [InlineData("""{"source":"ui-local:selector.selectedCategory"}""")] // missing matchValue
+    [InlineData("""{"source":"ui-local:selector.selectedCategory","matchValue":{"nested":"object"}}""")] // non-scalar matchValue
+    [InlineData("""{"source":"ui-local:selector.selectedCategory","matchValue":null}""")] // null matchValue
+    public void ParseRecords_MalformedVisibilityBindingShape_ReturnsInvalid_WholeArrayFailsClosed(string visibilityBindingJson)
+    {
+        const string template = """
+        {
+          "records": [
+            {"type":"topology_ui_seed_record","parentKey":"implicit_virtual_root","record":{"recordType":"topology_ui_category","key":"cat1","label":"Category One","sourceReactPath":"$.test.cat1","sourceYamlRefs":["ref"],"knownGapRefs":[],"visibilityBinding":__VISIBILITY_BINDING__}}
+          ]
+        }
+        """;
+        var json = template.Replace("__VISIBILITY_BINDING__", visibilityBindingJson);
+        var result = LayoutSchemaTensorComposer.ParseRecords(json);
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(result);
+    }
+
+    [Fact]
+    public void Compose_VisibilityBindingOnCategory_CarriedVerbatimOntoComposedLayoutNodeRecord_NeverEvaluated()
+    {
+        var records = ParseValidRows(TwoCategoryVisibilityBindingRecordsJson);
+        var componentKeyToId = new Dictionary<string, string> { ["select.template"] = "id-select" };
+        var componentIdToKind = new Dictionary<string, string> { ["id-select"] = "form_input/select" };
+
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records,
+            interactionsBySourceActionKey: new Dictionary<string, string>(),
+            componentKeyToId,
+            componentIdToKind);
+
+        var catA = Assert.Single(composed, n => n.NodeId == "catA");
+        Assert.Equal("structural_node", catA.NodeKind);
+        Assert.NotNull(catA.VisibilityBindingJson);
+        Assert.Contains("\"matchValue\":\"catA\"", catA.VisibilityBindingJson);
+
+        var catB = Assert.Single(composed, n => n.NodeId == "catB");
+        Assert.Contains("\"matchValue\":\"catB\"", catB.VisibilityBindingJson);
+
+        // static_topology_authority_boundary: composition is state-blind -- BOTH categories
+        // compose unconditionally regardless of any "current selection" (there is no such
+        // concept anywhere in this call), and neither category's descendants are excluded.
+        Assert.Contains(composed, n => n.NodeId == "fieldA");
+        Assert.Contains(composed, n => n.NodeId == "fieldB");
+
+        // Every non-category/section node never carries a visibilityBinding of its own here --
+        // authored_record_type_scope is enforced at ParseRecords, not by Compose omitting the
+        // field from ineligible nodes' own (never-authored) shape.
+        var fieldA = Assert.Single(composed, n => n.NodeId == "fieldA");
+        Assert.Null(fieldA.VisibilityBindingJson);
+    }
+
+    [Fact]
+    public void ParseRecords_NoVisibilityBindingAuthored_ComposedRecordsCarryNullVisibilityBindingJson_BackwardCompatible()
+    {
+        // default_visible_when_unbound: every pre-existing layout (none of which authors
+        // visibilityBinding) must compose identically to before this contract existed.
+        var records = ParseValidRows(CategoryRecordsJson);
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records,
+            interactionsBySourceActionKey: new Dictionary<string, string>(),
+            componentKeyToId: new Dictionary<string, string> { ["select.template"] = "id1" },
+            componentIdToKind: new Dictionary<string, string> { ["id1"] = "form_input/select" });
+
+        Assert.All(composed, n => Assert.Null(n.VisibilityBindingJson));
+    }
+
+    [Fact]
+    public void ManifestCd002RealSeedContent_ComposesWithVisibilityBindingOnAllThreeCategories_ZeroErrors()
+    {
+        // Live-seed regression proof (no DB connection needed -- this reads db/seed_empty.sql's
+        // own text, the exact same layout_schema_json.records[] content
+        // NpgsqlTopologyRepository.LoadLayoutNodesAsync resolves for manifest 092 at dispatch
+        // time) that the credential-management category-collapse seed edit is syntactically and
+        // semantically valid through the SAME ParseRecords/Compose path production uses.
+        var sqlPath = Path.Combine(RepoRoot(), "db", "seed_empty.sql");
+        var sql = File.ReadAllText(sqlPath);
+        var marker = "'00000000-0000-0000-0000-0000000cd002'";
+        var idx = sql.IndexOf(marker, StringComparison.Ordinal);
+        Assert.True(idx >= 0, "manifest 092 layout row (cd002) not found in db/seed_empty.sql");
+        var litStart = sql.IndexOf("'{\"records\":", idx, StringComparison.Ordinal);
+        Assert.True(litStart >= 0, "cd002 layout_schema_json literal not found");
+        var json = ExtractSqlJsonLiteral(sql, litStart);
+
+        var parseResult = LayoutSchemaTensorComposer.ParseRecords(json);
+        var valid = Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Valid>(parseResult);
+
+        var categories = valid.Rows.Where(r => r.RecordType == "topology_ui_category").ToList();
+        Assert.Equal(3, categories.Count);
+        var bindingsByKey = categories.ToDictionary(c => c.Key, c => c.VisibilityBindingJson);
+        Assert.All(bindingsByKey.Values, v => Assert.NotNull(v));
+        Assert.Contains("\"matchValue\":\"users\"", bindingsByKey["users"]);
+        Assert.Contains("\"matchValue\":\"external_api_credential\"", bindingsByKey["external_api_credential"]);
+        Assert.Contains("\"matchValue\":\"instance_settings\"", bindingsByKey["instance_settings"]);
+        Assert.All(bindingsByKey.Values, v => Assert.Contains("ui-local:credential_category_filter.selectedCategory", v));
+
+        // Compose() must not error on the real 128-record tree with the new field present —
+        // resolve every distinct control/display to a synthetic componentId so composition can
+        // proceed without a real DB-backed registry lookup.
+        var requiredKeys = LayoutSchemaTensorComposer.RequiredComponentKeys(valid.Rows);
+        var componentKeyToId = requiredKeys.ToDictionary(k => k, k => $"id-{k}", StringComparer.Ordinal);
+        var componentIdToKind = componentKeyToId.ToDictionary(kv => kv.Value, kv => kv.Key, StringComparer.Ordinal);
+        var composed = LayoutSchemaTensorComposer.Compose(
+            valid.Rows,
+            interactionsBySourceActionKey: new Dictionary<string, string>(),
+            componentKeyToId,
+            componentIdToKind);
+
+        Assert.Equal(valid.Rows.Count, composed.Count);
+        var filterNode = Assert.Single(composed, n => n.NodeId == "credential_category_filter");
+        Assert.Equal("catalog_component", filterNode.NodeKind);
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Checked-in LayoutNode[] fixture proof for the DOM-connected category-collapse proof in
+    // frontend/tests/layoutProjectionTreeVisibilityRender.test.ts — a small, domain-neutral
+    // (non-credential-management) two-category scenario: a top-level catalog_component "selector"
+    // leaf carrying stateJson (the SAME NodeLocalData/tensor-merge lane every other stateJson-
+    // carrying leaf already uses — see ComposeLayoutSchemaWithTensor_CatalogLeafMatchingTensorNodeId_
+    // tests above) plus two mutually-exclusive categories, each with its own visibilityBinding
+    // keyed off that leaf's declared state slot and one child Action. Composition itself never
+    // reads stateJson's value or either category's visibilityBinding — both categories and both
+    // actions compose unconditionally; only the frontend DOM layer (LayoutProjectionTree) is
+    // state-aware.
+    // ------------------------------------------------------------------------------------------
+
+    private const string TwoCategoryVisibilityBindingWithFilterAndActionsRecordsJson = """
+    {
+      "records": [
+        {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_field","key":"categoryFilter","label":"Category filter","control":"form_input/select","sourceReactPath":"$.test.categoryFilter","sourceYamlRefs":["ref"],"knownGapRefs":[]}},
+        {"type":"topology_ui_seed_record","parentKey":"implicit_virtual_root","record":{"recordType":"topology_ui_category","key":"catA","label":"Category A","sourceReactPath":"$.test.catA","sourceYamlRefs":["ref"],"knownGapRefs":[],"visibilityBinding":{"source":"ui-local:categoryFilter.selectedCategory","matchValue":"catA"}}},
+        {"type":"topology_ui_seed_record","parentKey":"catA","record":{"recordType":"topology_ui_section","key":"secA","label":"Section A","sourceReactPath":"$.test.secA","sourceYamlRefs":["ref"],"knownGapRefs":[]}},
+        {"type":"topology_ui_seed_record","parentKey":"secA","record":{"recordType":"topology_ui_action","key":"actionA","label":"Action A","sourceReactPath":"$.test.actionA","sourceYamlRefs":["ref"],"knownGapRefs":[]}},
+        {"type":"topology_ui_seed_record","parentKey":"implicit_virtual_root","record":{"recordType":"topology_ui_category","key":"catB","label":"Category B","sourceReactPath":"$.test.catB","sourceYamlRefs":["ref"],"knownGapRefs":[],"visibilityBinding":{"source":"ui-local:categoryFilter.selectedCategory","matchValue":"catB"}}},
+        {"type":"topology_ui_seed_record","parentKey":"catB","record":{"recordType":"topology_ui_section","key":"secB","label":"Section B","sourceReactPath":"$.test.secB","sourceYamlRefs":["ref"],"knownGapRefs":[]}},
+        {"type":"topology_ui_seed_record","parentKey":"secB","record":{"recordType":"topology_ui_action","key":"actionB","label":"Action B","sourceReactPath":"$.test.actionB","sourceYamlRefs":["ref"],"knownGapRefs":[]}}
+      ]
+    }
+    """;
+
+    [Fact]
+    public async Task ComposeAndMapToLayoutNode_TwoVisibilityBoundCategoriesWithFilterLeafAndActions_MatchesCheckedInFrontendFixture()
+    {
+        var records = ParseValidRows(TwoCategoryVisibilityBindingWithFilterAndActionsRecordsJson);
+        var componentKeyToId = new Dictionary<string, string>
+        {
+            ["select.template"] = "00000000-0000-0000-0001-000000000012",
+            ["button.primitive"] = "00000000-0000-0000-0001-000000000010",
+        };
+        var componentIdToKind = new Dictionary<string, string>
+        {
+            ["00000000-0000-0000-0001-000000000012"] = "form_input/select",
+            ["00000000-0000-0000-0001-000000000010"] = "action/button",
+        };
+        var nodeLocalDataByNodeId = new Dictionary<string, LayoutSchemaTensorComposer.NodeLocalData>
+        {
+            ["categoryFilter"] = new(
+                PropsJson: null,
+                StateJson: """{"selectedCategory":"catA"}""",
+                PropBindingsJson: null,
+                DispatchPayloadFromByTriggerJson: null),
+        };
+
+        // Each action carries a real, attributable click runtimeInteraction (same
+        // dispatchInstanceOperation shape scenario_attributable_interaction.json uses) — a plain
+        // unbound action/button (unlike an unbound select) fails RUNTIME_PRIMITIVE_RENDERER_
+        // MISSING_EVENT_BINDING at the runtime factory, so this is required for the leaves to
+        // actually render, not merely an incidental extra.
+        var interactionsBySourceActionKey = new Dictionary<string, string>
+        {
+            ["secA::actionA"] = """[{"trigger":"click","actionType":"dispatchInstanceOperation","instanceTargetRef":"instance-port:sample_instance_port:actionA:operation_binding_key","sourceActionKey":"actionA"}]""",
+            ["secB::actionB"] = """[{"trigger":"click","actionType":"dispatchInstanceOperation","instanceTargetRef":"instance-port:sample_instance_port:actionB:operation_binding_key","sourceActionKey":"actionB"}]""",
+        };
+
+        await AssertComposedLayoutNodesMatchFixtureAsync(
+            "scenario_structural_subtree_conditional_visibility.json",
+            records,
+            interactionsBySourceActionKey,
+            componentKeyToId,
+            componentIdToKind,
+            nodeLocalDataByNodeId);
+
+        // Composition itself stays state-blind: both categories, both actions, and the filter
+        // leaf's own stateJson all compose unconditionally, regardless of which category the
+        // (nonexistent at this layer) "current selection" would be.
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records, interactionsBySourceActionKey, componentKeyToId, componentIdToKind, nodeLocalDataByNodeId);
+        Assert.Equal(records.Count, composed.Count);
+        Assert.Contains(composed, n => n.NodeId == "actionA");
+        Assert.Contains(composed, n => n.NodeId == "actionB");
+        var filter = Assert.Single(composed, n => n.NodeId == "categoryFilter");
+        Assert.Equal("""{"selectedCategory":"catA"}""", filter.StateJson);
+    }
+
+    /// <summary>
+    /// Extracts a single-quoted (SQL-escaped, '' for embedded ') JSON object literal starting at
+    /// the opening quote's position, by brace-depth counting over the un-escaped content — mirrors
+    /// how psql itself would de-escape the literal before Postgres ever parses it as jsonb.
+    /// </summary>
+    private static string ExtractSqlJsonLiteral(string sql, int quoteStart)
+    {
+        var i = quoteStart + 1; // past opening '
+        var sb = new System.Text.StringBuilder();
+        var depth = 0;
+        var started = false;
+        while (i < sql.Length)
+        {
+            var ch = sql[i];
+            if (ch == '\'' && i + 1 < sql.Length && sql[i + 1] == '\'')
+            {
+                sb.Append('\'');
+                i += 2;
+                continue;
+            }
+            if (ch == '\'')
+            {
+                break; // real closing quote
+            }
+            if (ch == '{') { depth++; started = true; }
+            else if (ch == '}') depth--;
+            sb.Append(ch);
+            i++;
+            if (started && depth == 0) break;
+        }
+        return sb.ToString();
     }
 }

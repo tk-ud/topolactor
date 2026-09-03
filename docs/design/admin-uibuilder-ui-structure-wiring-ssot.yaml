@@ -1694,18 +1694,22 @@ admin_uibuilder_ui_structure_wiring_ssot:
             The mere presence of propsJson/stateJson is not sufficient UI監視割当 proof.
             The declaration model must be a distinct authoring category whose entries
             are declarations, separate from mutations.
-          watchedBy_readableFrom_grounding: >-
-            design_change (credential-management manifest 092 category-collapse audit) note:
-            watchedBy/readableFrom were declared in fields_examples above with no consumer
-            anywhere in the codebase until docs/design/runtime-orchestration-ssot.yaml
+          watchedBy_readableFrom_status: >-
+            existing_pr_update audit note (credential-management manifest 092 category-collapse):
+            an earlier round of this same design_change claimed watchedBy/readableFrom were
+            "grounded" by docs/design/runtime-orchestration-ssot.yaml
             ui_projection_render_reachability_contract.structural_subtree_conditional_
-            visibility_contract grounded them -- a node's visibilityBinding.source IS this
-            declared slot's readableFrom relationship (the visibility-bound node reads this
-            slot), and that contract's node_id_collision-safe reverse index of every node whose
-            visibilityBinding names this slot is this declared slot's watchedBy list. This is a
-            proof-surface/authoring-inspector concern only (which nodes declare a dependency on
-            this slot) -- it is not required by the evaluator itself, which only needs a
-            visibility-bound node's OWN binding, never the source slot's watcher list.
+            visibility_contract. That claim is retracted here: the actual implementation
+            (frontend/runtime/structuralVisibility.ts resolveNodeVisibility) needs only a
+            visibility-bound node's OWN ancestor-chain bindings to evaluate visibility -- it builds
+            no reverse index of "which nodes watch this slot," and nothing else in this codebase
+            builds or consumes one either. watchedBy/readableFrom remain exactly what they were
+            before this design_change: fields_examples entries with no production carrier, no
+            validator, and no consumer. Declaring them "grounded" by SSOT prose alone, with no
+            actual implementation behind that prose, is the SSOT-vocabulary-without-a-carrier
+            posture docs/framework-policy.yaml ssot_vocabulary_judgment_policy prohibits -- fixed by
+            retracting the claim rather than by building an unneeded reverse index just to make the
+            prose true.
         ui_state_update:
           label_ja: UI状態更新
           meaning: >-

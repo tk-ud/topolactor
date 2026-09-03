@@ -155,6 +155,8 @@ type EventBindingValue = {
     statePath: string;
     action: "set" | "toggle";
     value?: unknown;
+    /** See resolveUiStateUpdateMutationValue (uiEventEffectRunner.ts) — resolved against the real event payload at apply time. */
+    valueFrom?: string;
   };
   externalPortDispatch?: {
     portTargetRef: string;
@@ -393,6 +395,9 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
       statePath: statePath.trim(),
       action,
       value: mutation.value,
+      valueFrom: typeof mutation.valueFrom === "string" && mutation.valueFrom.trim()
+        ? mutation.valueFrom.trim()
+        : undefined,
     };
   }
   return {
@@ -731,6 +736,7 @@ function emitBoundEvent(
     const mutationResult = applyGuardedLocalStateMutation(
       spec.localStateStore,
       binding.localStateMutation,
+      { eventPayload: payload, nodeValues: spec.payloadFromNodeValues ?? {} },
     );
     if (!mutationResult.ok) {
       console.error(
@@ -942,6 +948,7 @@ function emitBoundEvent(
     const result = applyGuardedLocalStateMutation(
       spec.localStateStore,
       binding.localStateMutation,
+      { eventPayload: payload, nodeValues: spec.payloadFromNodeValues ?? {} },
     );
     if (!result.ok) return result;
   }

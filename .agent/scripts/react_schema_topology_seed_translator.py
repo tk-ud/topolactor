@@ -1696,8 +1696,8 @@ COMMON_NODE_KEYS = {"kind", "key", "label", "sourceYamlRefs", "knownGapRefs", "a
 
 KIND_SPECIFIC_CONSUMED_KEYS = {
     "Projection": set(),
-    "Category": set(),
-    "Section": {"sectionKind"},
+    "Category": {"visibilityBinding"},
+    "Section": {"sectionKind", "visibilityBinding"},
     "Form": {"target", "mode", "fields", "actions"},
     "Field": {"control", "required", "valueFrom", "eventBinding", "optionsSource", "optionsLabelPath", "optionsValuePath", "debounceMs"},
     "Table": {"source", "display", "displayColumns", "rowsSource", "_rawDisplayColumns"},
@@ -1754,10 +1754,14 @@ def convert_node_to_seed_record(node, schema_to_seed_map, target_surface, loss_e
     elif react_kind == "Category":
         record["categoryKey"] = record["key"]
         record["sections"] = [c for c in converted_children if c["recordType"] == "topology_ui_section"]
+        if node.get("visibilityBinding") is not None:
+            record["visibilityBinding"] = node["visibilityBinding"]
     elif react_kind == "Section":
         record["sectionKey"] = record["key"]
         record["sectionKind"] = node.get("sectionKind", "")
         record["children"] = converted_children
+        if node.get("visibilityBinding") is not None:
+            record["visibilityBinding"] = node["visibilityBinding"]
     elif react_kind == "Form":
         record["formKey"] = record["key"]
         record["target"] = node.get("target", "")
@@ -1953,6 +1957,52 @@ COMMON_SEED_RECORD_REQUIRED_FIELDS = ["recordType", "key", "label", "sourceYamlR
 
 SEED_RECORD_CHILD_LIST_FIELDS = ("categories", "sections", "children", "fields", "actions", "steps", "columns")
 
+# SSOT: docs/design/runtime-orchestration-ssot.yaml
+# ui_projection_render_reachability_contract.structural_subtree_conditional_visibility_contract
+# authored_record_type_scope. Mirrors backend/repository/LayoutSchemaTensorComposer.cs's
+# VisibilityBindingEligibleRecordTypes / VisibilityBindingSourceRe exactly, so a malformed
+# visibilityBinding fails close at generation time (translator) the same way it fails close at
+# read time (LayoutSchemaTensorComposer.ParseRecords) -- never a gap where only one layer checks.
+VISIBILITY_BINDING_ELIGIBLE_RECORD_TYPES = {"topology_ui_category", "topology_ui_section"}
+VISIBILITY_BINDING_SOURCE_RE = re.compile(r"^ui-local:[^.]+\.(.+)$")
+
+
+def validate_visibility_binding(record, errors):
+    """Validates an authored visibilityBinding {source, matchValue} on a single record (not
+    recursive — called once per record from validate_seed_record_tree's own recursion)."""
+    vb = record.get("visibilityBinding")
+    if vb is None:
+        return
+    record_type = record.get("recordType")
+    path = record.get("sourceReactPath", "$.root")
+    key = record.get("key")
+    if record_type not in VISIBILITY_BINDING_ELIGIBLE_RECORD_TYPES:
+        errors.append(err(
+            "SEED_RECORD_VISIBILITY_BINDING_INELIGIBLE_RECORD_TYPE", path, "blocking",
+            f"{record_type} record '{key}' authors visibilityBinding, but it is only legal on "
+            "topology_ui_category or topology_ui_section",
+        ))
+        return
+    if not isinstance(vb, dict):
+        errors.append(err(
+            "SEED_RECORD_VISIBILITY_BINDING_INVALID_SHAPE", path, "blocking",
+            f"{record_type} record '{key}' visibilityBinding must be an object",
+        ))
+        return
+    source = vb.get("source")
+    if not isinstance(source, str) or not VISIBILITY_BINDING_SOURCE_RE.match(source or ""):
+        errors.append(err(
+            "SEED_RECORD_VISIBILITY_BINDING_INVALID_SOURCE", path, "blocking",
+            f"{record_type} record '{key}' visibilityBinding.source must be a non-empty "
+            "\"ui-local:<nodeId>.<stateKey>\" string",
+        ))
+    match_value = vb.get("matchValue", "__MISSING__")
+    if match_value == "__MISSING__" or isinstance(match_value, (dict, list)) or match_value is None:
+        errors.append(err(
+            "SEED_RECORD_VISIBILITY_BINDING_INVALID_MATCH_VALUE", path, "blocking",
+            f"{record_type} record '{key}' visibilityBinding.matchValue must be present and a scalar",
+        ))
+
 
 def validate_seed_record_tree(record, record_types_def, errors):
     """topology_ui_seed_contract.record_common_required_fields plus each
@@ -1978,6 +2028,8 @@ def validate_seed_record_tree(record, record_types_def, errors):
             )
     if not record.get("sourceYamlRefs"):
         errors.append(err("SEED_RECORD_EMPTY_SOURCE_YAML_REFS", path, "blocking", f"{record_type} record '{key}' has empty sourceYamlRefs"))
+
+    validate_visibility_binding(record, errors)
 
     type_def = record_types_def.get(record_type) or {}
     for field in type_def.get("required", []):

@@ -1,0 +1,97 @@
+[
+  {
+    "nodeId": "categoryFilter",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000012",
+    "orderIndex": 0,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/select",
+    "stateJson": "{\u0022selectedCategory\u0022:\u0022catA\u0022}",
+    "label": "Category filter"
+  },
+  {
+    "nodeId": "catA",
+    "nodeKind": "structural_node",
+    "orderIndex": 1,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_category",
+    "label": "Category A",
+    "visibilityBinding": {
+      "source": "ui-local:categoryFilter.selectedCategory",
+      "matchValue": "catA"
+    }
+  },
+  {
+    "nodeId": "secA",
+    "nodeKind": "structural_node",
+    "parentNodeId": "catA",
+    "orderIndex": 2,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_section",
+    "label": "Section A"
+  },
+  {
+    "nodeId": "actionA",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "secA",
+    "orderIndex": 3,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "actionType": "dispatchInstanceOperation",
+        "instanceTargetRef": "instance-port:sample_instance_port:actionA:operation_binding_key",
+        "sourceActionKey": "actionA"
+      }
+    ],
+    "label": "Action A"
+  },
+  {
+    "nodeId": "catB",
+    "nodeKind": "structural_node",
+    "orderIndex": 4,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_category",
+    "label": "Category B",
+    "visibilityBinding": {
+      "source": "ui-local:categoryFilter.selectedCategory",
+      "matchValue": "catB"
+    }
+  },
+  {
+    "nodeId": "secB",
+    "nodeKind": "structural_node",
+    "parentNodeId": "catB",
+    "orderIndex": 5,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_section",
+    "label": "Section B"
+  },
+  {
+    "nodeId": "actionB",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "secB",
+    "orderIndex": 6,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "actionType": "dispatchInstanceOperation",
+        "instanceTargetRef": "instance-port:sample_instance_port:actionB:operation_binding_key",
+        "sourceActionKey": "actionB"
+      }
+    ],
+    "label": "Action B"
+  }
+]

@@ -151,7 +151,15 @@ public record LayoutNode(
     /// </summary>
     string? Label = null,
     /// <summary>Authored known-gap references for an unresolved_gap node. Null for every other NodeKind.</summary>
-    IReadOnlyList<string>? KnownGapRefs = null
+    IReadOnlyList<string>? KnownGapRefs = null,
+    /// <summary>
+    /// SSOT: docs/design/runtime-orchestration-ssot.yaml
+    /// ui_projection_render_reachability_contract.structural_subtree_conditional_visibility_contract.
+    /// {"source":"ui-local:&lt;nodeId&gt;.&lt;stateKey&gt;","matchValue":&lt;scalar&gt;} — only ever
+    /// present on a structural_node whose RecordType is topology_ui_category/topology_ui_section.
+    /// Forwarded verbatim by EmissionBuilder; never evaluated backend-side. Null when not authored.
+    /// </summary>
+    JsonElement? VisibilityBinding = null
 );
 
 /// <summary>

@@ -123,6 +123,12 @@ export type ComponentSpec = {
   inlineText?: string;
   /** css_dictionary token refs applied to wrapper inline style */
   cssTokenRefs?: string[];
+  /**
+   * SSOT: runtime-orchestration-ssot.yaml structural_subtree_conditional_visibility_contract.
+   * Carried verbatim from LayoutNode.visibilityBinding — never evaluated here (LayoutProjectionTree
+   * evaluates it against the live state store at render time; see structuralVisibility.ts).
+   */
+  visibilityBinding?: { source: string; matchValue: unknown } | null;
 };
 
 /**
@@ -873,6 +879,7 @@ function buildLocalUiStateEventBinding(
       : "";
     if (!trigger || !actionType) continue;
     if (wiringSettingCategoryOf({ actionType }) !== "ui_state_update") continue;
+    const payloadFromRaw = wiring.payloadFrom;
     const resolved = resolveUiStateUpdateMutation({
       actionType,
       targetNodeId: typeof wiring.targetNodeId === "string"
@@ -884,6 +891,10 @@ function buildLocalUiStateEventBinding(
       value: wiring.value,
       targetRef: typeof wiring.targetRef === "string"
         ? wiring.targetRef
+        : undefined,
+      payloadFrom: (typeof payloadFromRaw === "object" && payloadFromRaw !== null &&
+          !Array.isArray(payloadFromRaw))
+        ? payloadFromRaw as Record<string, string>
         : undefined,
     });
     if (!resolved) continue;
@@ -1270,6 +1281,7 @@ export function renderEmission(
           widthMode: node.widthMode,
           heightMode: node.heightMode,
           layoutClassRefs: node.layoutClassRefs,
+          visibilityBinding: node.visibilityBinding,
         };
 
         const design = node.componentDesign;

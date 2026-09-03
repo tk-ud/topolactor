@@ -14,11 +14,25 @@ import {
   resolveFlowNodePreviewClassName,
   FLOW_LEAF_ROLES,
 } from "../runtime/layoutClassPreviewUtils.ts";
+import type { RuntimeGuardedStateStore } from "../runtime/runtimeComponentAdapter.ts";
+import {
+  buildVisibilityGraph,
+  resolveNodeVisibility,
+  type VisibilityGraphNode,
+} from "../runtime/structuralVisibility.ts";
 
 export type LayoutProjectionTreeProps = {
   specs: ComponentSpec[];
   layoutId?: string;
   rootLayoutClassRefs?: string[];
+  /**
+   * Projection-local state store — same instance renderEmission()'s
+   * localStateStore option and the uiEventEffectRunner use. Absent (draft
+   * preview / callers that never wire one in) means every visibilityBinding on
+   * `specs` fails close as STRUCTURAL_VISIBILITY_BINDING_SOURCE_UNDECLARED
+   * rather than defaulting to visible or hidden. See structuralVisibility.ts.
+   */
+  localStateStore?: RuntimeGuardedStateStore;
 };
 
 function isContainerSpec(
@@ -52,13 +66,47 @@ function mergePresentationStyle(
 function ProjectionTreeNode({
   spec,
   childrenMap,
+  visibilityGraph,
+  localStateStore,
 }: {
   spec: ComponentSpec;
   childrenMap: Map<string | undefined, ComponentSpec[]>;
+  visibilityGraph: ReadonlyMap<string, VisibilityGraphNode>;
+  localStateStore?: RuntimeGuardedStateStore;
 }): JSX.Element | null {
+  // structural_subtree_conditional_visibility_contract: evaluated BEFORE any
+  // other branch below — an invisible node unmounts its entire subtree (never
+  // recurses into childElements at all), and a resolver error surfaces as an
+  // explicit error box rather than silently rendering or silently vanishing.
+  // Generic over every nodeKind/componentKind; no credential-management or
+  // manifest-specific literal here.
+  if (spec.nodeId) {
+    const visibility = resolveNodeVisibility(
+      spec.nodeId,
+      visibilityGraph,
+      localStateStore,
+    );
+    if (!visibility.ok) {
+      return (
+        <div
+          class="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700"
+          data-node-id={spec.nodeId}
+        >
+          {visibility.error}
+        </div>
+      );
+    }
+    if (!visibility.visible) return null;
+  }
   const children = childrenMap.get(spec.nodeId) ?? [];
   const childElements = children.map((child) => (
-    <ProjectionTreeNode key={child.nodeId ?? `${child.orderIndex}`} spec={child} childrenMap={childrenMap} />
+    <ProjectionTreeNode
+      key={child.nodeId ?? `${child.orderIndex}`}
+      spec={child}
+      childrenMap={childrenMap}
+      visibilityGraph={visibilityGraph}
+      localStateStore={localStateStore}
+    />
   ));
   const { style, className } = mergePresentationStyle(spec, children.length);
   const commonProps = {
@@ -164,10 +212,22 @@ export function LayoutProjectionTree({
   specs,
   layoutId,
   rootLayoutClassRefs = [],
+  localStateStore,
 }: LayoutProjectionTreeProps): JSX.Element {
   const childrenMap = buildChildrenMap(specs);
   const roots = childrenMap.get(undefined) ?? [];
   const rootClass = flowRootClassName(rootLayoutClassRefs);
+  const visibilityGraph = buildVisibilityGraph(
+    specs
+      .filter((s): s is ComponentSpec & { nodeId: string } =>
+        typeof s.nodeId === "string" && s.nodeId.length > 0
+      )
+      .map((s) => ({
+        nodeId: s.nodeId,
+        parentNodeId: s.parentNodeId,
+        visibilityBinding: s.visibilityBinding,
+      })),
+  );
 
   return (
     <div data-layout-id={layoutId} class="layout-projection-tree">
@@ -183,6 +243,8 @@ export function LayoutProjectionTree({
               key={root.nodeId ?? `root-${root.orderIndex}`}
               spec={root}
               childrenMap={childrenMap}
+              visibilityGraph={visibilityGraph}
+              localStateStore={localStateStore}
             />
           ))}
       </div>

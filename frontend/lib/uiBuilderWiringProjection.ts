@@ -64,6 +64,21 @@ export type WiringNode = {
   componentKind?: string;
   stateJson?: string;
   runtimeInteractions?: WiringInteraction[];
+  /**
+   * Parent node id from layout_patch_json — present so the runtime effect
+   * runner can walk the SAME ancestor chain structuralVisibility.ts's
+   * resolveNodeVisibility uses for DOM mount, keeping lifecycle interaction
+   * reachability and DOM mount on the identical visibility semantics. Absent
+   * for a root node.
+   */
+  parentNodeId?: string | null;
+  /**
+   * SSOT: runtime-orchestration-ssot.yaml
+   * structural_subtree_conditional_visibility_contract. Carried verbatim;
+   * never evaluated by this type's own definitions — see
+   * frontend/runtime/structuralVisibility.ts.
+   */
+  visibilityBinding?: { source: string; matchValue: unknown } | null;
 };
 
 /**

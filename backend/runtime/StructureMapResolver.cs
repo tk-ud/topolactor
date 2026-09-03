@@ -290,7 +290,10 @@ public class StructureMapResolver
         DebounceMs: row.DebounceMs,
         RecordType: row.RecordType,
         Label: row.Label,
-        KnownGapRefs: row.KnownGapRefs
+        KnownGapRefs: row.KnownGapRefs,
+        VisibilityBinding: row.VisibilityBindingJson != null
+            ? JsonSerializer.Deserialize<JsonElement>(row.VisibilityBindingJson)
+            : null
     );
 
     /// <summary>

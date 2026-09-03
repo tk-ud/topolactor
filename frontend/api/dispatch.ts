@@ -215,6 +215,18 @@ export type LayoutNode = {
   label?: string;
   /** Authored known-gap references for an unresolved_gap node. Absent for every other nodeKind. */
   knownGapRefs?: string[];
+  /**
+   * SSOT: docs/design/runtime-orchestration-ssot.yaml
+   * ui_projection_render_reachability_contract.structural_subtree_conditional_visibility_contract.
+   * Present only on a structural_node (Category/Section) authored with a conditional-mount
+   * condition. Carried verbatim from components_layout_design.layout_schema_json.records[] or a
+   * tensor-only node — never evaluated backend-side. `source` is a "ui-local:<nodeId>.<stateKey>"
+   * reference into the SAME projection-local state store UI状態更新/UI監視割当 already use;
+   * `matchValue` is the scalar this node (and its whole subtree) requires for that slot's live
+   * value to strict-equal before mounting. Absent means unconditionally visible (the default,
+   * unchanged for every layout that does not author this field).
+   */
+  visibilityBinding?: { source: string; matchValue: unknown } | null;
   /** Persisted component_style_design snapshot for draft-preview / pre-publish projection. */
   componentDesign?: {
     inlineText?: string;

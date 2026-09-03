@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Topolactor.Repository;
 
@@ -64,6 +65,23 @@ public static class LayoutSchemaTensorComposer
     private const string ModalRecordType = "topology_ui_modal";
     private const string ModalComponentKind = "disclosure/modal";
 
+    // SSOT: docs/design/runtime-orchestration-ssot.yaml
+    // ui_projection_render_reachability_contract.structural_subtree_conditional_visibility_contract
+    // authored_record_type_scope — visibilityBinding may be authored ONLY on these two record
+    // types (never a catalog_component leaf, never Form/Workflow/Validation). Deliberate scope
+    // restriction: the credential-management category-collapse consumer needs Category/Section-
+    // level subtree switching only; resolveNodeVisibility (frontend) already walks a leaf's full
+    // ancestor chain regardless, so a leaf's effective visibility is governed by its
+    // Category/Section ancestors without the leaf ever authoring its own binding.
+    private static readonly HashSet<string> VisibilityBindingEligibleRecordTypes =
+        new(StringComparer.Ordinal) { "topology_ui_category", "topology_ui_section" };
+
+    // Mirrors frontend/runtime/structuralVisibility.ts's UI_LOCAL_TARGET_REF_RE exactly — the
+    // SAME "ui-local:<nodeId>.<stateKey>" shape internal_instance_wiring/disclosure_state_wiring
+    // already use. Backend validates only the SHAPE (never resolves it — Compose stays static).
+    private static readonly Regex VisibilityBindingSourceRe =
+        new("^ui-local:[^.]+\\.(.+)$", RegexOptions.Compiled);
+
     // Canonical control -> ui_component_registry.component_key convention for Field leaves.
     // Reuses the existing preset catalog rows; does not invent new registry entries.
     // Round 41: widened from private to internal so NpgsqlUiTopologyRepository.
@@ -107,7 +125,15 @@ public static class LayoutSchemaTensorComposer
         string? Control,
         string? Display = null,
         IReadOnlyList<string>? KnownGapRefs = null,
-        string? ComponentKind = null);
+        string? ComponentKind = null,
+        /// <summary>
+        /// SSOT: runtime-orchestration-ssot.yaml structural_subtree_conditional_visibility_contract
+        /// authored_record_type_scope. Raw JSON text of an authored visibilityBinding object —
+        /// validated shape-wise in ParseRecords (source/matchValue present, recordType is
+        /// topology_ui_category/topology_ui_section) but never evaluated here. Null when not
+        /// authored.
+        /// </summary>
+        string? VisibilityBindingJson = null);
 
     // Full recognized recordType vocabulary (structural + catalog + unresolved-gap) — matches
     // docs/design/react-schema-topology-seed-translator-ssot.yaml
@@ -250,7 +276,37 @@ public static class LayoutSchemaTensorComposer
                     return new RecordsParseResult.Invalid(
                         $"records[{index}].record.recordType \"{UnresolvedRecordType}\" is missing a non-empty knownGapRefs array.");
 
-                rows.Add(new SchemaRecordRow(recordType!, key!, parentKey, label, control, display, knownGapRefs, componentKind));
+                // SSOT: runtime-orchestration-ssot.yaml structural_subtree_conditional_visibility_contract
+                // authored_record_type_scope + record_carrier_schema_composed. A present-but-malformed
+                // visibilityBinding (wrong record type, missing source/matchValue, or a source not
+                // matching the ui-local:<nodeId>.<stateKey> shape) fails the WHOLE records[] array
+                // closed — never silently dropped, never silently treated as "no binding".
+                string? visibilityBindingJson = null;
+                if (record.TryGetProperty("visibilityBinding", out var vb) && vb.ValueKind != JsonValueKind.Null)
+                {
+                    if (!VisibilityBindingEligibleRecordTypes.Contains(recordType!))
+                        return new RecordsParseResult.Invalid(
+                            $"records[{index}].record.visibilityBinding is authored on recordType \"{recordType}\", " +
+                            "but visibilityBinding may only be authored on topology_ui_category or topology_ui_section.");
+                    if (vb.ValueKind != JsonValueKind.Object)
+                        return new RecordsParseResult.Invalid(
+                            $"records[{index}].record.visibilityBinding is present but is not a JSON object (found {vb.ValueKind}).");
+                    if (!vb.TryGetProperty("source", out var vbSource) || vbSource.ValueKind != JsonValueKind.String ||
+                        string.IsNullOrWhiteSpace(vbSource.GetString()) ||
+                        !VisibilityBindingSourceRe.IsMatch(vbSource.GetString()!))
+                        return new RecordsParseResult.Invalid(
+                            $"records[{index}].record.visibilityBinding.source must be a non-empty \"ui-local:<nodeId>.<stateKey>\" string.");
+                    if (!vb.TryGetProperty("matchValue", out var vbMatchValue) ||
+                        vbMatchValue.ValueKind == JsonValueKind.Undefined ||
+                        vbMatchValue.ValueKind == JsonValueKind.Null ||
+                        vbMatchValue.ValueKind == JsonValueKind.Object ||
+                        vbMatchValue.ValueKind == JsonValueKind.Array)
+                        return new RecordsParseResult.Invalid(
+                            $"records[{index}].record.visibilityBinding.matchValue must be present and a scalar (string/number/boolean).");
+                    visibilityBindingJson = vb.GetRawText();
+                }
+
+                rows.Add(new SchemaRecordRow(recordType!, key!, parentKey, label, control, display, knownGapRefs, componentKind, visibilityBindingJson));
                 index++;
             }
             return new RecordsParseResult.Valid(rows);
@@ -668,7 +724,13 @@ public static class LayoutSchemaTensorComposer
                 // structural_node's does, so the frontend can build real production default
                 // props from it instead of a hardcoded placeholder caption or the bare NodeId.
                 Label: row.Label,
-                KnownGapRefs: isUnresolved ? row.KnownGapRefs : null
+                KnownGapRefs: isUnresolved ? row.KnownGapRefs : null,
+                // authored_record_type_scope: only ever non-null on a topology_ui_category/
+                // topology_ui_section row (ParseRecords already rejects it elsewhere) — carried
+                // straight from the schema record, exactly like RecordType/Label above, never
+                // through the catalog-leaf-only NodeLocalData merge (structural nodes never
+                // receive NodeLocalData).
+                VisibilityBindingJson: row.VisibilityBindingJson
             ));
         }
 
