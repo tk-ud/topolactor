@@ -28,6 +28,7 @@ import {
   parseUiLocalTargetRef,
   predeclareProjectionState,
   resolveUiStateUpdateMutation,
+  resolveUiStateUpdateMutationValue,
 } from "../runtime/uiEventEffectRunner.ts";
 import { enqueueInstanceOperationDispatchCommand } from "../runtime/frontendScheduler.ts";
 import { renderEmission } from "../runtime/renderEmission.ts";
@@ -985,4 +986,170 @@ Deno.test("createLiveNodeValueTracker: a nodeId shaped like an Object.prototype 
     Object.prototype.hasOwnProperty.call(tracker.snapshot(), "constructor"),
     true,
   );
+});
+
+// ─── structural_subtree_conditional_visibility_contract: write_side_dynamic_value
+// (payloadFrom.value = "event.<path>" for a UI状態更新 mutation — the mechanism
+// credential_category_filter's onChange uses to write the SELECTED option, not
+// a fixed literal) ──────────────────────────────────────────────────────────
+
+Deno.test("resolveUiStateUpdateMutation: payloadFrom.value='event.value' on a setState actionType resolves to a deferred valueFrom, never a static value", () => {
+  const resolved = resolveUiStateUpdateMutation({
+    actionType: "setState",
+    targetRef: "ui-local:credential_category_filter.selectedCategory",
+    payloadFrom: { value: "event.value" },
+  });
+  assertEquals(resolved, {
+    targetNodeId: "credential_category_filter",
+    statePath: "selectedCategory",
+    action: "set",
+    valueFrom: "event.value",
+  });
+});
+
+Deno.test("resolveUiStateUpdateMutation: a fixed-boolean actionType (openModal) ignores payloadFrom.value — dynamic value is only for generic setState/localStateMutation", () => {
+  const resolved = resolveUiStateUpdateMutation({
+    actionType: "openModal",
+    targetNodeId: "n-banner",
+    payloadFrom: { value: "event.value" },
+  });
+  assertEquals(resolved, { targetNodeId: "n-banner", statePath: "open", action: "set", value: true });
+});
+
+Deno.test("resolveUiStateUpdateMutationValue: resolves a valueFrom mutation against the real event payload", () => {
+  const resolved = resolveUiStateUpdateMutation({
+    actionType: "setState",
+    targetRef: "ui-local:credential_category_filter.selectedCategory",
+    payloadFrom: { value: "event.value" },
+  })!;
+  const result = resolveUiStateUpdateMutationValue(resolved, {
+    eventPayload: { value: "external_instance_credential" },
+    nodeValues: {},
+  });
+  assertEquals(result, { ok: true, value: "external_instance_credential" });
+});
+
+Deno.test("resolveUiStateUpdateMutationValue: a valueFrom mutation with NO eventContext (lifecycle trigger) fails close — never writes undefined", () => {
+  const resolved = resolveUiStateUpdateMutation({
+    actionType: "setState",
+    targetRef: "ui-local:credential_category_filter.selectedCategory",
+    payloadFrom: { value: "event.value" },
+  })!;
+  const result = resolveUiStateUpdateMutationValue(resolved);
+  assert(!result.ok);
+  assert(result.error.startsWith("RUNTIME_STATE_UPDATE_VALUE_FROM_REQUIRES_EVENT"));
+});
+
+Deno.test("resolveUiStateUpdateMutationValue: a static value (no valueFrom) resolves unchanged regardless of eventContext — 100% backward compatible", () => {
+  const resolved = resolveUiStateUpdateMutation({ actionType: "openModal", targetNodeId: "n" })!;
+  assertEquals(resolveUiStateUpdateMutationValue(resolved), { ok: true, value: true });
+  assertEquals(
+    resolveUiStateUpdateMutationValue(resolved, { eventPayload: {}, nodeValues: {} }),
+    { ok: true, value: true },
+  );
+});
+
+Deno.test("applyGuardedLocalStateMutation: a valueFrom mutation writes the event's actual value through the guarded dispatcher", () => {
+  const store = createRuntimeLocalStateStore();
+  const dispatcher = createRuntimeStateDispatcher(store);
+  dispatcher.declare("credential_category_filter", "selectedCategory", "external_api_credential");
+  const resolved = resolveUiStateUpdateMutation({
+    actionType: "setState",
+    targetRef: "ui-local:credential_category_filter.selectedCategory",
+    payloadFrom: { value: "event.value" },
+  })!;
+  const result = applyGuardedLocalStateMutation(dispatcher, resolved, {
+    eventPayload: { value: "users" },
+    nodeValues: {},
+  });
+  assert(result.ok);
+  assertEquals(dispatcher.get("credential_category_filter", "selectedCategory"), "users");
+});
+
+// ─── structural_subtree_conditional_visibility_contract: operation_reachability —
+// emitLifecycle must skip a node whose resolveNodeVisibility resolves invisible,
+// the SAME evaluator LayoutProjectionTree uses for DOM mount, so a hidden
+// subtree's initial_mount/route_enter/initial_display interactions never fire ──
+
+Deno.test("runner.emitLifecycle: a lifecycle interaction on a node nested under an invisible Category never executes — same visibility evaluator as DOM mount", () => {
+  const nodes: WiringNode[] = [
+    {
+      nodeId: "selector",
+      stateJson: JSON.stringify({ selectedCategory: "catA" }),
+    },
+    {
+      nodeId: "catA",
+      visibilityBinding: { source: "ui-local:selector.selectedCategory", matchValue: "catA" },
+    },
+    {
+      nodeId: "catB",
+      parentNodeId: undefined,
+      visibilityBinding: { source: "ui-local:selector.selectedCategory", matchValue: "catB" },
+    },
+    {
+      nodeId: "fieldInCatB",
+      parentNodeId: "catB",
+      runtimeInteractions: [
+        { trigger: "initial_mount", actionType: "setState", targetNodeId: "sentinel", statePath: "fired", value: true },
+      ],
+    },
+    { nodeId: "sentinel", stateJson: JSON.stringify({ fired: false }) },
+  ];
+  const runner = createUiEventEffectRunner({ nodes });
+  const result = runner.emitLifecycle("initial_mount");
+  assert(result.ok);
+  // catA is the active category (selectedCategory === "catA") — catB (and its
+  // descendant fieldInCatB) is NOT active, so fieldInCatB's initial_mount
+  // interaction must not execute even though the runner's own flat node list
+  // (independent of any DOM) still contains it.
+  assertEquals(result.executed, []);
+  assertEquals(runner.stateDispatcher.get("sentinel", "fired"), false);
+});
+
+Deno.test("runner.emitLifecycle: a lifecycle interaction on a node under the ACTIVE category executes normally — visibility gating is not a blanket suppression", () => {
+  const nodes: WiringNode[] = [
+    {
+      nodeId: "selector",
+      stateJson: JSON.stringify({ selectedCategory: "catA" }),
+    },
+    {
+      nodeId: "catA",
+      visibilityBinding: { source: "ui-local:selector.selectedCategory", matchValue: "catA" },
+    },
+    {
+      nodeId: "fieldInCatA",
+      parentNodeId: "catA",
+      runtimeInteractions: [
+        { trigger: "initial_mount", actionType: "setState", targetNodeId: "sentinel", statePath: "fired", value: true },
+      ],
+    },
+    { nodeId: "sentinel", stateJson: JSON.stringify({ fired: false }) },
+  ];
+  const runner = createUiEventEffectRunner({ nodes });
+  const result = runner.emitLifecycle("initial_mount");
+  assert(result.ok);
+  assertEquals(result.executed, ["fieldInCatA#0"]);
+  assertEquals(runner.stateDispatcher.get("sentinel", "fired"), true);
+});
+
+Deno.test("runner.emitLifecycle: an undeclared visibilityBinding source is treated as invisible (skip, never an error thrown) at the lifecycle layer", () => {
+  const nodes: WiringNode[] = [
+    {
+      nodeId: "catA",
+      visibilityBinding: { source: "ui-local:never_declared.selectedCategory", matchValue: "catA" },
+    },
+    {
+      nodeId: "fieldInCatA",
+      parentNodeId: "catA",
+      runtimeInteractions: [
+        { trigger: "initial_mount", actionType: "setState", targetNodeId: "sentinel", statePath: "fired", value: true },
+      ],
+    },
+    { nodeId: "sentinel", stateJson: JSON.stringify({ fired: false }) },
+  ];
+  const runner = createUiEventEffectRunner({ nodes });
+  const result = runner.emitLifecycle("initial_mount");
+  assert(result.ok);
+  assertEquals(result.executed, []);
+  assertEquals(runner.stateDispatcher.get("sentinel", "fired"), false);
 });

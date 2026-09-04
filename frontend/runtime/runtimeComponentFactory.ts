@@ -155,6 +155,8 @@ type EventBindingValue = {
     statePath: string;
     action: "set" | "toggle";
     value?: unknown;
+    /** See resolveUiStateUpdateMutationValue (uiEventEffectRunner.ts) — resolved against the real event payload at apply time. */
+    valueFrom?: string;
   };
   externalPortDispatch?: {
     portTargetRef: string;
@@ -393,6 +395,9 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
       statePath: statePath.trim(),
       action,
       value: mutation.value,
+      valueFrom: typeof mutation.valueFrom === "string" && mutation.valueFrom.trim()
+        ? mutation.valueFrom.trim()
+        : undefined,
     };
   }
   return {
@@ -731,6 +736,7 @@ function emitBoundEvent(
     const mutationResult = applyGuardedLocalStateMutation(
       spec.localStateStore,
       binding.localStateMutation,
+      { eventPayload: payload, nodeValues: spec.payloadFromNodeValues ?? {} },
     );
     if (!mutationResult.ok) {
       console.error(
@@ -942,6 +948,7 @@ function emitBoundEvent(
     const result = applyGuardedLocalStateMutation(
       spec.localStateStore,
       binding.localStateMutation,
+      { eventPayload: payload, nodeValues: spec.payloadFromNodeValues ?? {} },
     );
     if (!result.ok) return result;
   }
@@ -3231,7 +3238,17 @@ function tabsFactory(spec: RuntimeComponentSpec): RenderResult {
       design: spec.design ?? {},
       onSelect: spec.eventBinding.select
         ? (key: string) => {
-          const r = emitBoundEvent(spec, "select", { key });
+          // `value` mirrors `key` generically (structural-subtree-conditional-visibility-
+          // implementation round, tabs-presentation closure): emitBoundEvent's Lane 3 node-value-
+          // tracking and payloadFromResolver.ts's "event.value" grammar both key off a `value`
+          // field specifically -- the SAME convention every other controlled_value component's
+          // change/input trigger already emits (see tabs.template's capabilityTags). Emitting
+          // `value` here (never renaming `key`, never dropping it -- some callers may still read
+          // `key` directly) is what lets a Tabs-driven UI状態更新 payloadFrom.value =
+          // "event.<path>" mutation and a Tabs-driven node:<nodeId>.value admin_runtime dispatch
+          // payloadFrom resolve identically to a select/input-driven one, generically, with zero
+          // Tabs-specific (let alone credential-management-specific) branch anywhere in this file.
+          const r = emitBoundEvent(spec, "select", { key, value: key });
           if (!r.ok) throw new Error(r.error);
         }
         : () => {},

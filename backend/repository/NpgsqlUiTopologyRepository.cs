@@ -707,6 +707,20 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             if (string.IsNullOrWhiteSpace(nodeId))
                 return "LAYOUT_PATCH_NODE_ID_REQUIRED";
 
+            // structural_subtree_conditional_visibility_contract's authored_record_type_scope
+            // (docs/design/runtime-orchestration-ssot.yaml) restricts visibilityBinding authoring
+            // to topology_ui_category/topology_ui_section records -- a recordType that exists ONLY
+            // on the components_layout_design.layout_schema_json.records[] structural authority
+            // tree (LayoutSchemaTensorComposer.ParseRecords owns that gate). A raw layout_patch_json
+            // node authored here is always either catalog_component or structural_html -- never a
+            // schema-composed Category/Section -- so visibilityBinding can never be eligible on
+            // this surface at all, any shape included. Fails the whole patch closed explicitly
+            // (never silently dropped/omitted) regardless of whether the authored value is a
+            // well-formed {source,matchValue} object or a malformed non-object -- both are equally
+            // out of scope for this authoring path, so neither is treated as "no binding".
+            if (node.TryGetProperty("visibilityBinding", out _))
+                return $"LAYOUT_PATCH_VISIBILITY_BINDING_NOT_ALLOWED:{nodeId}";
+
             var nodeKind = node.TryGetProperty("nodeKind", out var kindEl) &&
                 kindEl.ValueKind == JsonValueKind.String
                 ? kindEl.GetString()

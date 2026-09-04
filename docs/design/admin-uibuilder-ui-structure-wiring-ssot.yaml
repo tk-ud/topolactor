@@ -149,6 +149,25 @@ admin_uibuilder_ui_structure_wiring_ssot:
         runtime_path: applyGuardedLocalStateMutation via the shared guarded dispatcher; no backend/external dispatch
         idempotency_applicability: not_applicable
         idempotency_note: local state mutation never calls dispatchExternalPort/dispatchInstanceOperation, so it carries no idempotency_key by design, not by omission.
+      structural_visibility_binding_boundary_note:
+        status: not_a_seventh_lane
+        rule: >-
+          design_change (credential-management manifest 092 category-collapse audit) addition:
+          visibilityBinding (docs/design/runtime-orchestration-ssot.yaml
+          ui_projection_render_reachability_contract.structural_subtree_conditional_
+          visibility_contract) is deliberately NOT registered as a seventh wiringLane /
+          setting_category_taxonomy entry here. It carries no eventBinding, no trigger, no
+          payloadFrom -- it is a passive, per-node declarative READ of the SAME
+          local_ui_state_lane store this lane already defines, structurally identical in kind
+          to propsJson/stateJson (a node-local carrier evaluated at render time, not a
+          lane-classified interaction). Folding it into ui_event_settings.setting_category_
+          taxonomy would misclassify a composition-time render attribute as an authored
+          interaction, which is exactly the taxonomy-collapsing terminology_drift this SSOT's
+          own setting_category_taxonomy.note already prohibits (never mix a declaration/read
+          concern into the interaction-lane vocabulary). visibilityBinding's WRITE side reuses
+          local_ui_state_lane's existing ui_watch_binding/ui_state_update mechanics verbatim and
+          adds no new lane there either -- see structural_subtree_conditional_visibility_contract
+          write_read_separation for the full boundary.
     known_gaps:
       - gap: admin_runtime_layer_action_dispatch_lane_not_yet_defined
         classification: missing_lane_ssot_gap
@@ -1675,6 +1694,22 @@ admin_uibuilder_ui_structure_wiring_ssot:
             The mere presence of propsJson/stateJson is not sufficient UI監視割当 proof.
             The declaration model must be a distinct authoring category whose entries
             are declarations, separate from mutations.
+          watchedBy_readableFrom_status: >-
+            existing_pr_update audit note (credential-management manifest 092 category-collapse):
+            an earlier round of this same design_change claimed watchedBy/readableFrom were
+            "grounded" by docs/design/runtime-orchestration-ssot.yaml
+            ui_projection_render_reachability_contract.structural_subtree_conditional_
+            visibility_contract. That claim is retracted here: the actual implementation
+            (frontend/runtime/structuralVisibility.ts resolveNodeVisibility) needs only a
+            visibility-bound node's OWN ancestor-chain bindings to evaluate visibility -- it builds
+            no reverse index of "which nodes watch this slot," and nothing else in this codebase
+            builds or consumes one either. watchedBy/readableFrom remain exactly what they were
+            before this design_change: fields_examples entries with no production carrier, no
+            validator, and no consumer. Declaring them "grounded" by SSOT prose alone, with no
+            actual implementation behind that prose, is the SSOT-vocabulary-without-a-carrier
+            posture docs/framework-policy.yaml ssot_vocabulary_judgment_policy prohibits -- fixed by
+            retracting the claim rather than by building an unneeded reverse index just to make the
+            prose true.
         ui_state_update:
           label_ja: UI状態更新
           meaning: >-

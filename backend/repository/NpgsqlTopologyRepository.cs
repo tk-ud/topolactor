@@ -619,6 +619,13 @@ public class NpgsqlTopologyRepository : TopologyRepository
                     dispatchTargetRefByTriggerJson = dtrbt.GetRawText();
                 int? debounceMs = node.TryGetProperty("debounceMs", out var dbms) && dbms.ValueKind == JsonValueKind.Number
                     ? dbms.GetInt32() : null;
+                // visibilityBinding is never extracted here: NpgsqlUiTopologyRepository.
+                // ValidateLayoutPatchNodes fails a layout_patch_json save closed if any raw node
+                // authors it at all (authored_record_type_scope makes it structurally ineligible on
+                // this tensor-only surface — see that check's own doc comment), so a node reaching
+                // this READ path can never legitimately carry one. LayoutNodeRecord.
+                // VisibilityBindingJson defaults to null here; only LayoutSchemaTensorComposer.
+                // Compose()'s schema-composed path (layout_schema_json.records[]) ever sets it.
 
                 result.Add(new LayoutNodeRecord(
                     NodeId: nodeId!,

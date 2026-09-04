@@ -6,7 +6,11 @@
     "x": 0,
     "y": 0,
     "recordType": "topology_ui_category",
-    "label": "Users"
+    "label": "\u30E6\u30FC\u30B6\u30FC",
+    "visibilityBinding": {
+      "source": "ui-local:credential_category_filter.selectedCategory",
+      "matchValue": "users"
+    }
   },
   {
     "nodeId": "user_auth_section",
@@ -16,7 +20,7 @@
     "x": 0,
     "y": 0,
     "recordType": "topology_ui_section",
-    "label": "User auth boundary"
+    "label": "\u30E6\u30FC\u30B6\u30FC\u8A8D\u8A3C\u5883\u754C"
   },
   {
     "nodeId": "user_auth_section::approval_status",
@@ -32,32 +36,39 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Approval status"
+    "label": "\u627F\u8A8D\u30B9\u30C6\u30FC\u30BF\u30B9"
   },
   {
-    "nodeId": "external_api_credential",
+    "nodeId": "credentials_users_account_section",
     "nodeKind": "structural_node",
+    "parentNodeId": "users",
     "orderIndex": 3,
     "x": 0,
     "y": 0,
-    "recordType": "topology_ui_category",
-    "label": "External API credential"
+    "recordType": "topology_ui_section",
+    "label": "\u30E6\u30FC\u30B6\u30FC\u30A2\u30AB\u30A6\u30F3\u30C8\u30E9\u30A4\u30D5\u30B5\u30A4\u30AF\u30EB(\u4F5C\u6210 / \u66F4\u65B0 / \u524A\u9664 / \u5931\u52B9)"
   },
   {
-    "nodeId": "external_section",
-    "nodeKind": "structural_node",
-    "parentNodeId": "external_api_credential",
+    "nodeId": "credentials_users_username_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "credentials_users_account_section",
     "orderIndex": 4,
     "x": 0,
     "y": 0,
-    "recordType": "topology_ui_section",
-    "label": "External port credential context"
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u30E6\u30FC\u30B6\u30FC\u540D"
   },
   {
-    "nodeId": "credential_reference_key",
+    "nodeId": "credentials_users_password_input",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "external_section",
+    "parentNodeId": "credentials_users_account_section",
     "orderIndex": 5,
     "x": 0,
     "y": 0,
@@ -67,42 +78,61 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Credential reference key"
+    "label": "\u521D\u671F\u30D1\u30B9\u30EF\u30FC\u30C9(\u4F5C\u6210\u6642\u306E\u307F\u3002\u7BA1\u7406\u8005\u306B\u3088\u308B\u30D1\u30B9\u30EF\u30FC\u30C9\u7F6E\u63DB/\u30ED\u30FC\u30C6\u30FC\u30B7\u30E7\u30F3\u306F\u63D0\u4F9B\u3057\u306A\u3044)"
   },
   {
-    "nodeId": "instance_settings",
-    "nodeKind": "structural_node",
+    "nodeId": "credentials_users_approve_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000012",
+    "parentNodeId": "credentials_users_account_section",
     "orderIndex": 6,
     "x": 0,
     "y": 0,
-    "recordType": "topology_ui_category",
-    "label": "Instance settings"
+    "componentKind": "form_input/select",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u627F\u8A8D"
   },
   {
-    "nodeId": "instance_settings_section",
-    "nodeKind": "structural_node",
-    "parentNodeId": "instance_settings",
+    "nodeId": "credentials_users_status_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "credentials_users_account_section",
     "orderIndex": 7,
     "x": 0,
     "y": 0,
-    "recordType": "topology_ui_section",
-    "label": "Instance settings"
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u30B9\u30C6\u30FC\u30BF\u30B9"
   },
   {
-    "nodeId": "instance_settings_import_form",
-    "nodeKind": "structural_node",
-    "parentNodeId": "instance_settings_section",
+    "nodeId": "credentials_users_role_name_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000012",
+    "parentNodeId": "credentials_users_account_section",
     "orderIndex": 8,
     "x": 0,
     "y": 0,
-    "recordType": "topology_ui_form",
-    "label": "Instance settings JSON import"
+    "componentKind": "form_input/select",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u30ED\u30FC\u30EB(admin / user)"
   },
   {
-    "nodeId": "template_file",
+    "nodeId": "credentials_users_state_note_input",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "instance_settings_import_form",
+    "parentNodeId": "credentials_users_account_section",
     "orderIndex": 9,
     "x": 0,
     "y": 0,
@@ -112,77 +142,61 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Template file"
+    "label": "\u72B6\u614B\u30E1\u30E2"
   },
   {
-    "nodeId": "json_template_download",
+    "nodeId": "credentials_users_suspended_from_input",
     "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "instance_settings_import_form",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "credentials_users_account_section",
     "orderIndex": 10,
     "x": 0,
     "y": 0,
-    "componentKind": "action/button",
+    "componentKind": "form_input/form_field",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "runtimeInteractions": [
-      {
-        "trigger": "click",
-        "targetRef": "ui-local:instance_settings_import_form.template_download_trigger",
-        "actionType": "localStateMutation",
-        "payloadFrom": {
-          "category_key": "literal:instance_settings"
-        },
-        "sourceActionKey": "json_template_download"
-      }
-    ],
-    "label": "Download JSON template"
+    "label": "\u505C\u6B62\u958B\u59CB\u65E5\u6642"
   },
   {
-    "nodeId": "json_import",
+    "nodeId": "credentials_users_suspended_until_input",
     "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "instance_settings_import_form",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "credentials_users_account_section",
     "orderIndex": 11,
     "x": 0,
     "y": 0,
-    "componentKind": "action/button",
+    "componentKind": "form_input/form_field",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "runtimeInteractions": [
-      {
-        "trigger": "click",
-        "targetRef": "ui-local:instance_settings_import_form.template_import_trigger",
-        "actionType": "localStateMutation",
-        "payloadFrom": {
-          "template_file": "node:template_file.value"
-        },
-        "sourceActionKey": "json_import"
-      }
-    ],
-    "label": "Import JSON template"
+    "label": "\u505C\u6B62\u7D42\u4E86\u65E5\u6642"
   },
   {
-    "nodeId": "instance_address_form",
-    "nodeKind": "structural_node",
-    "parentNodeId": "instance_settings_section",
+    "nodeId": "credentials_users_active_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000012",
+    "parentNodeId": "credentials_users_account_section",
     "orderIndex": 12,
     "x": 0,
     "y": 0,
-    "recordType": "topology_ui_form",
-    "label": "Instance address"
+    "componentKind": "form_input/select",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u6709\u52B9"
   },
   {
-    "nodeId": "instance_authority_key",
+    "nodeId": "credentials_users_user_id_input",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "instance_address_form",
+    "parentNodeId": "credentials_users_account_section",
     "orderIndex": 13,
     "x": 0,
     "y": 0,
@@ -192,13 +206,13 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Instance authority key"
+    "label": "\u30E6\u30FC\u30B6\u30FCID(\u66F4\u65B0 / \u524A\u9664 / \u5931\u52B9\u306B\u5FC5\u9808)"
   },
   {
-    "nodeId": "instance_display_name",
+    "nodeId": "credentials_users_session_id_input",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "instance_address_form",
+    "parentNodeId": "credentials_users_account_section",
     "orderIndex": 14,
     "x": 0,
     "y": 0,
@@ -208,94 +222,14 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Instance display name"
+    "label": "\u30BB\u30C3\u30B7\u30E7\u30F3ID(\u7A7A\u6B04\u3067\u5168\u30BB\u30C3\u30B7\u30E7\u30F3\u5931\u52B9)"
   },
   {
-    "nodeId": "port_kind",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000012",
-    "parentNodeId": "instance_address_form",
-    "orderIndex": 15,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/select",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Port kind"
-  },
-  {
-    "nodeId": "provider_kind",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "instance_address_form",
-    "orderIndex": 16,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/form_field",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Provider kind"
-  },
-  {
-    "nodeId": "required_by_bundle",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "instance_address_form",
-    "orderIndex": 17,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/form_field",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Required by bundle"
-  },
-  {
-    "nodeId": "address_ref",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "instance_address_form",
-    "orderIndex": 18,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/form_field",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Address reference"
-  },
-  {
-    "nodeId": "connection_policy_key",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "instance_address_form",
-    "orderIndex": 19,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/form_field",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Connection policy key"
-  },
-  {
-    "nodeId": "validate",
+    "nodeId": "credentials_users_create_button",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "instance_address_form",
-    "orderIndex": 20,
+    "parentNodeId": "credentials_users_account_section",
+    "orderIndex": 15,
     "x": 0,
     "y": 0,
     "componentKind": "action/button",
@@ -304,147 +238,454 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u30e6\\u30fc\\u30b6\\u30fc\\u30a2\\u30ab\\u30a6\\u30f3\\u30c8\\u3092\\u4f5c\\u6210(\\u521d\\u671f\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u8fbc\\u307f)\u0022}",
     "runtimeInteractions": [
       {
         "trigger": "click",
-        "actionType": "dispatchInstanceOperation",
-        "payloadFrom": {
-          "operation_binding_key": "node:operation_binding_key.value",
-          "instance_authority_key": "node:instance_authority_key.value"
-        },
-        "sourceActionKey": "validate",
-        "instanceTargetRef": "instance-port:db_instance_port:instance_authority_key:operation_binding_key"
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "credentials_users_create_confirm_modal",
+        "sourceActionKey": "credentials_users_create_button"
       }
     ],
-    "label": "Validate"
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "dryRun": "literal:true",
+        "status": "node:credentials_users_status_input.value",
+        "approve": "node:credentials_users_approve_input.value",
+        "password": "node:credentials_users_password_input.value",
+        "roleName": "node:credentials_users_role_name_input.value",
+        "username": "node:credentials_users_username_input.value",
+        "stateNote": "node:credentials_users_state_note_input.value",
+        "suspendedFrom": "node:credentials_users_suspended_from_input.value",
+        "suspendedUntil": "node:credentials_users_suspended_until_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ad004:auth_users:create"
+    },
+    "label": "\u30E6\u30FC\u30B6\u30FC\u30A2\u30AB\u30A6\u30F3\u30C8\u3092\u4F5C\u6210(\u521D\u671F\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u8FBC\u307F)"
   },
   {
-    "nodeId": "instance_operation_binding_form",
-    "nodeKind": "structural_node",
-    "parentNodeId": "instance_settings_section",
+    "nodeId": "credentials_users_create_confirm_modal",
+    "nodeKind": "catalog_component",
+    "componentId": "credentials_users_create_confirm_modal",
+    "parentNodeId": "credentials_users_account_section",
+    "orderIndex": 16,
+    "x": 0,
+    "y": 0,
+    "componentKind": "disclosure/modal",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u30e6\\u30fc\\u30b6\\u30fc\\u30a2\\u30ab\\u30a6\\u30f3\\u30c8\\u3092\\u4f5c\\u6210\u0022, \u0022body\u0022: \u0022\\u6307\\u5b9a\\u3057\\u305f\\u30e6\\u30fc\\u30b6\\u30fc\\u540d\\u30fb\\u521d\\u671f\\u30d1\\u30b9\\u30ef\\u30fc\\u30c9\\u30fb\\u30ed\\u30fc\\u30eb\\u7b49\\u3067\\u30a2\\u30ab\\u30a6\\u30f3\\u30c8\\u3068\\u521d\\u671f\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u3092\\u4f5c\\u6210\\u3057\\u307e\\u3059\\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_create_confirm_modal",
+        "sourceActionKey": "credentials_users_create_confirm_modal"
+      }
+    ],
+    "label": "\u30E6\u30FC\u30B6\u30FC\u30A2\u30AB\u30A6\u30F3\u30C8\u4F5C\u6210\u306E\u78BA\u8A8D"
+  },
+  {
+    "nodeId": "credentials_users_create_confirm_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "credentials_users_create_confirm_modal",
+    "orderIndex": 17,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u4f5c\\u6210\\u3092\\u78ba\\u5b9a\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_create_confirm_modal",
+        "sourceActionKey": "credentials_users_create_confirm_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "status": "node:credentials_users_status_input.value",
+        "approve": "node:credentials_users_approve_input.value",
+        "password": "node:credentials_users_password_input.value",
+        "roleName": "node:credentials_users_role_name_input.value",
+        "username": "node:credentials_users_username_input.value",
+        "confirmed": "literal:true",
+        "stateNote": "node:credentials_users_state_note_input.value",
+        "suspendedFrom": "node:credentials_users_suspended_from_input.value",
+        "suspendedUntil": "node:credentials_users_suspended_until_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ad004:auth_users:create"
+    },
+    "label": "\u4F5C\u6210\u3092\u78BA\u5B9A"
+  },
+  {
+    "nodeId": "credentials_users_create_cancel_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "credentials_users_create_confirm_modal",
+    "orderIndex": 18,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_create_confirm_modal",
+        "sourceActionKey": "credentials_users_create_cancel_button"
+      }
+    ],
+    "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
+  },
+  {
+    "nodeId": "credentials_users_update_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "credentials_users_account_section",
+    "orderIndex": 19,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u30e6\\u30fc\\u30b6\\u30fc\\u30a2\\u30ab\\u30a6\\u30f3\\u30c8\\u306e\\u30e1\\u30bf\\u30c7\\u30fc\\u30bf\\u3092\\u66f4\\u65b0\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "credentials_users_update_confirm_modal",
+        "sourceActionKey": "credentials_users_update_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "active": "node:credentials_users_active_input.value",
+        "dryRun": "literal:true",
+        "status": "node:credentials_users_status_input.value",
+        "userId": "node:credentials_users_user_id_input.value",
+        "approve": "node:credentials_users_approve_input.value",
+        "roleName": "node:credentials_users_role_name_input.value",
+        "username": "node:credentials_users_username_input.value",
+        "stateNote": "node:credentials_users_state_note_input.value",
+        "suspendedFrom": "node:credentials_users_suspended_from_input.value",
+        "suspendedUntil": "node:credentials_users_suspended_until_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ad005:auth_users:update"
+    },
+    "label": "\u30E6\u30FC\u30B6\u30FC\u30A2\u30AB\u30A6\u30F3\u30C8\u306E\u30E1\u30BF\u30C7\u30FC\u30BF\u3092\u66F4\u65B0"
+  },
+  {
+    "nodeId": "credentials_users_update_confirm_modal",
+    "nodeKind": "catalog_component",
+    "componentId": "credentials_users_update_confirm_modal",
+    "parentNodeId": "credentials_users_account_section",
+    "orderIndex": 20,
+    "x": 0,
+    "y": 0,
+    "componentKind": "disclosure/modal",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u30e6\\u30fc\\u30b6\\u30fc\\u30a2\\u30ab\\u30a6\\u30f3\\u30c8\\u3092\\u66f4\\u65b0\u0022, \u0022body\u0022: \u0022\\u6307\\u5b9a\\u3057\\u305f\\u30e6\\u30fc\\u30b6\\u30fcID\\u306e\\u30a2\\u30ab\\u30a6\\u30f3\\u30c8\\u30e1\\u30bf\\u30c7\\u30fc\\u30bf(\\u30b9\\u30c6\\u30fc\\u30bf\\u30b9\\u30fb\\u30ed\\u30fc\\u30eb\\u30fb\\u72b6\\u614b\\u30e1\\u30e2\\u7b49)\\u3092\\u66f4\\u65b0\\u3057\\u307e\\u3059\\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_update_confirm_modal",
+        "sourceActionKey": "credentials_users_update_confirm_modal"
+      }
+    ],
+    "label": "\u30E6\u30FC\u30B6\u30FC\u30A2\u30AB\u30A6\u30F3\u30C8\u66F4\u65B0\u306E\u78BA\u8A8D"
+  },
+  {
+    "nodeId": "credentials_users_update_confirm_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "credentials_users_update_confirm_modal",
     "orderIndex": 21,
     "x": 0,
     "y": 0,
-    "recordType": "topology_ui_form",
-    "label": "Instance operation binding"
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u66f4\\u65b0\\u3092\\u78ba\\u5b9a\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_update_confirm_modal",
+        "sourceActionKey": "credentials_users_update_confirm_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "active": "node:credentials_users_active_input.value",
+        "status": "node:credentials_users_status_input.value",
+        "userId": "node:credentials_users_user_id_input.value",
+        "approve": "node:credentials_users_approve_input.value",
+        "roleName": "node:credentials_users_role_name_input.value",
+        "username": "node:credentials_users_username_input.value",
+        "confirmed": "literal:true",
+        "stateNote": "node:credentials_users_state_note_input.value",
+        "suspendedFrom": "node:credentials_users_suspended_from_input.value",
+        "suspendedUntil": "node:credentials_users_suspended_until_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ad005:auth_users:update"
+    },
+    "label": "\u66F4\u65B0\u3092\u78BA\u5B9A"
   },
   {
-    "nodeId": "operation_binding_key",
+    "nodeId": "credentials_users_update_cancel_button",
     "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "instance_operation_binding_form",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "credentials_users_update_confirm_modal",
     "orderIndex": 22,
     "x": 0,
     "y": 0,
-    "componentKind": "form_input/form_field",
+    "componentKind": "action/button",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Operation binding key"
+    "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_update_confirm_modal",
+        "sourceActionKey": "credentials_users_update_cancel_button"
+      }
+    ],
+    "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
   },
   {
-    "nodeId": "display_label",
+    "nodeId": "credentials_users_delete_button",
     "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "instance_operation_binding_form",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "credentials_users_account_section",
     "orderIndex": 23,
     "x": 0,
     "y": 0,
-    "componentKind": "form_input/form_field",
+    "componentKind": "action/button",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Display label"
+    "propsJson": "{\u0022label\u0022: \u0022\\u30a2\\u30ab\\u30a6\\u30f3\\u30c8\\u3092\\u524a\\u9664(\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u8fbc\\u307f)\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "credentials_users_delete_confirm_modal",
+        "sourceActionKey": "credentials_users_delete_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "dryRun": "literal:true",
+        "userId": "node:credentials_users_user_id_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ad006:auth_users:delete"
+    },
+    "label": "\u30A2\u30AB\u30A6\u30F3\u30C8\u3092\u524A\u9664(\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u8FBC\u307F)"
   },
   {
-    "nodeId": "operation_protocol",
+    "nodeId": "credentials_users_delete_confirm_modal",
     "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "instance_operation_binding_form",
+    "componentId": "credentials_users_delete_confirm_modal",
+    "parentNodeId": "credentials_users_account_section",
     "orderIndex": 24,
     "x": 0,
     "y": 0,
-    "componentKind": "form_input/form_field",
+    "componentKind": "disclosure/modal",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Operation protocol"
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u30a2\\u30ab\\u30a6\\u30f3\\u30c8\\u3092\\u524a\\u9664\u0022, \u0022body\u0022: \u0022\\u6307\\u5b9a\\u3057\\u305f\\u30e6\\u30fc\\u30b6\\u30fcID\\u306e\\u30a2\\u30ab\\u30a6\\u30f3\\u30c8\\u3068\\u7d10\\u3065\\u304f\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u3092\\u524a\\u9664\\u3057\\u307e\\u3059\\u3002\\u3053\\u306e\\u64cd\\u4f5c\\u306f\\u53d6\\u308a\\u6d88\\u305b\\u307e\\u305b\\u3093\\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_delete_confirm_modal",
+        "sourceActionKey": "credentials_users_delete_confirm_modal"
+      }
+    ],
+    "label": "\u30A2\u30AB\u30A6\u30F3\u30C8\u524A\u9664\u306E\u78BA\u8A8D"
   },
   {
-    "nodeId": "input_schema_key",
+    "nodeId": "credentials_users_delete_confirm_button",
     "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "instance_operation_binding_form",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "credentials_users_delete_confirm_modal",
     "orderIndex": 25,
     "x": 0,
     "y": 0,
-    "componentKind": "form_input/form_field",
+    "componentKind": "action/button",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Input schema key"
+    "propsJson": "{\u0022label\u0022: \u0022\\u524a\\u9664\\u3092\\u78ba\\u5b9a\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_delete_confirm_modal",
+        "sourceActionKey": "credentials_users_delete_confirm_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "userId": "node:credentials_users_user_id_input.value",
+        "confirmed": "literal:true"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ad006:auth_users:delete"
+    },
+    "label": "\u524A\u9664\u3092\u78BA\u5B9A"
   },
   {
-    "nodeId": "output_shape_key",
+    "nodeId": "credentials_users_delete_cancel_button",
     "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "instance_operation_binding_form",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "credentials_users_delete_confirm_modal",
     "orderIndex": 26,
     "x": 0,
     "y": 0,
-    "componentKind": "form_input/form_field",
+    "componentKind": "action/button",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Output shape key"
+    "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_delete_confirm_modal",
+        "sourceActionKey": "credentials_users_delete_cancel_button"
+      }
+    ],
+    "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
   },
   {
-    "nodeId": "sanitize_policy_key",
+    "nodeId": "credentials_users_revoke_credential_button",
     "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "instance_operation_binding_form",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "credentials_users_account_section",
     "orderIndex": 27,
     "x": 0,
     "y": 0,
-    "componentKind": "form_input/form_field",
+    "componentKind": "action/button",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Sanitize policy key"
+    "propsJson": "{\u0022label\u0022: \u0022\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u3092\\u5931\\u52b9(\\u78ba\\u8a8d\\u3092\\u958b\\u304f)\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "credentials_users_revoke_credential_confirm_modal",
+        "sourceActionKey": "credentials_users_revoke_credential_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "dryRun": "literal:true",
+        "userId": "node:credentials_users_user_id_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ad007:auth_users:revoke_credential"
+    },
+    "label": "\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u3092\u5931\u52B9(\u78BA\u8A8D\u3092\u958B\u304F)"
   },
   {
-    "nodeId": "callable",
+    "nodeId": "credentials_users_revoke_credential_confirm_modal",
     "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000012",
-    "parentNodeId": "instance_operation_binding_form",
+    "componentId": "credentials_users_revoke_credential_confirm_modal",
+    "parentNodeId": "credentials_users_account_section",
     "orderIndex": 28,
     "x": 0,
     "y": 0,
-    "componentKind": "form_input/select",
+    "componentKind": "disclosure/modal",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Callable"
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u3092\\u5931\\u52b9\u0022, \u0022body\u0022: \u0022\\u6307\\u5b9a\\u3057\\u305f\\u30e6\\u30fc\\u30b6\\u30fcID\\u306e\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u884c\\u3092\\u524a\\u9664\\u3057\\u3001\\u3059\\u3079\\u3066\\u306e\\u30a2\\u30af\\u30c6\\u30a3\\u30d6\\u30bb\\u30c3\\u30b7\\u30e7\\u30f3\\u3092\\u5931\\u52b9\\u3055\\u305b\\u307e\\u3059\\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_revoke_credential_confirm_modal",
+        "sourceActionKey": "credentials_users_revoke_credential_confirm_modal"
+      }
+    ],
+    "label": "\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u5931\u52B9\u306E\u78BA\u8A8D"
   },
   {
-    "nodeId": "preview",
+    "nodeId": "credentials_users_revoke_credential_confirm_button",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "instance_operation_binding_form",
+    "parentNodeId": "credentials_users_revoke_credential_confirm_modal",
     "orderIndex": 29,
     "x": 0,
     "y": 0,
@@ -454,52 +695,33 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u5931\\u52b9\\u3092\\u78ba\\u5b9a\u0022}",
     "runtimeInteractions": [
       {
         "trigger": "click",
-        "actionType": "dispatchInstanceOperation",
-        "payloadFrom": {
-          "operation_binding_key": "node:operation_binding_key.value",
-          "instance_authority_key": "node:instance_authority_key.value"
-        },
-        "sourceActionKey": "preview",
-        "instanceTargetRef": "instance-port:runtime_instance_port:instance_authority_key:operation_binding_key"
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_revoke_credential_confirm_modal",
+        "sourceActionKey": "credentials_users_revoke_credential_confirm_button"
       }
     ],
-    "label": "Preview"
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "userId": "node:credentials_users_user_id_input.value",
+        "confirmed": "literal:true"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ad007:auth_users:revoke_credential"
+    },
+    "label": "\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u5931\u52B9\u3092\u78BA\u5B9A"
   },
   {
-    "nodeId": "instance_operation_approval_form",
-    "nodeKind": "structural_node",
-    "parentNodeId": "instance_settings_section",
-    "orderIndex": 30,
-    "x": 0,
-    "y": 0,
-    "recordType": "topology_ui_form",
-    "label": "Instance operation approval"
-  },
-  {
-    "nodeId": "instance_operation_approval_form::approval_status",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000012",
-    "parentNodeId": "instance_operation_approval_form",
-    "orderIndex": 31,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/select",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Approval status"
-  },
-  {
-    "nodeId": "apply",
+    "nodeId": "credentials_users_revoke_credential_cancel_button",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "instance_operation_approval_form",
-    "orderIndex": 32,
+    "parentNodeId": "credentials_users_revoke_credential_confirm_modal",
+    "orderIndex": 30,
     "x": 0,
     "y": 0,
     "componentKind": "action/button",
@@ -508,25 +730,85 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
     "runtimeInteractions": [
       {
         "trigger": "click",
-        "actionType": "dispatchInstanceOperation",
-        "payloadFrom": {
-          "operation_binding_key": "node:operation_binding_key.value",
-          "instance_authority_key": "node:instance_authority_key.value"
-        },
-        "sourceActionKey": "apply",
-        "instanceTargetRef": "instance-port:db_instance_port:instance_authority_key:operation_binding_key"
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_revoke_credential_confirm_modal",
+        "sourceActionKey": "credentials_users_revoke_credential_cancel_button"
       }
     ],
-    "label": "Apply"
+    "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
   },
   {
-    "nodeId": "approve",
+    "nodeId": "credentials_users_revoke_sessions_button",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "instance_operation_approval_form",
+    "parentNodeId": "credentials_users_account_section",
+    "orderIndex": 31,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u30bb\\u30c3\\u30b7\\u30e7\\u30f3\\u3092\\u5931\\u52b9(\\u78ba\\u8a8d\\u3092\\u958b\\u304f)\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "credentials_users_revoke_sessions_confirm_modal",
+        "sourceActionKey": "credentials_users_revoke_sessions_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "dryRun": "literal:true",
+        "userId": "node:credentials_users_user_id_input.value",
+        "sessionId": "node:credentials_users_session_id_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ad008:auth_users:revoke_sessions"
+    },
+    "label": "\u30BB\u30C3\u30B7\u30E7\u30F3\u3092\u5931\u52B9(\u78BA\u8A8D\u3092\u958B\u304F)"
+  },
+  {
+    "nodeId": "credentials_users_revoke_sessions_confirm_modal",
+    "nodeKind": "catalog_component",
+    "componentId": "credentials_users_revoke_sessions_confirm_modal",
+    "parentNodeId": "credentials_users_account_section",
+    "orderIndex": 32,
+    "x": 0,
+    "y": 0,
+    "componentKind": "disclosure/modal",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u30bb\\u30c3\\u30b7\\u30e7\\u30f3\\u3092\\u5931\\u52b9\u0022, \u0022body\u0022: \u0022\\u6307\\u5b9a\\u3057\\u305f\\u30bb\\u30c3\\u30b7\\u30e7\\u30f3ID(\\u7a7a\\u6b04\\u306e\\u5834\\u5408\\u306f\\u5168\\u3066)\\u306e\\u30a2\\u30af\\u30c6\\u30a3\\u30d6\\u30bb\\u30c3\\u30b7\\u30e7\\u30f3\\u3092\\u5931\\u52b9\\u3055\\u305b\\u307e\\u3059\\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_revoke_sessions_confirm_modal",
+        "sourceActionKey": "credentials_users_revoke_sessions_confirm_modal"
+      }
+    ],
+    "label": "\u30BB\u30C3\u30B7\u30E7\u30F3\u5931\u52B9\u306E\u78BA\u8A8D"
+  },
+  {
+    "nodeId": "credentials_users_revoke_sessions_confirm_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "credentials_users_revoke_sessions_confirm_modal",
     "orderIndex": 33,
     "x": 0,
     "y": 0,
@@ -536,55 +818,82 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u30bb\\u30c3\\u30b7\\u30e7\\u30f3\\u5931\\u52b9\\u3092\\u78ba\\u5b9a\u0022}",
     "runtimeInteractions": [
       {
         "trigger": "click",
-        "actionType": "dispatchInstanceOperation",
-        "payloadFrom": {
-          "operation_binding_key": "node:operation_binding_key.value",
-          "instance_authority_key": "node:instance_authority_key.value"
-        },
-        "sourceActionKey": "approve",
-        "instanceTargetRef": "instance-port:runtime_instance_port:instance_authority_key:operation_binding_key"
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_revoke_sessions_confirm_modal",
+        "sourceActionKey": "credentials_users_revoke_sessions_confirm_button"
       }
     ],
-    "label": "Approve"
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "userId": "node:credentials_users_user_id_input.value",
+        "confirmed": "literal:true",
+        "sessionId": "node:credentials_users_session_id_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000ad008:auth_users:revoke_sessions"
+    },
+    "label": "\u30BB\u30C3\u30B7\u30E7\u30F3\u5931\u52B9\u3092\u78BA\u5B9A"
   },
   {
-    "nodeId": "apply_confirm_dialog",
-    "nodeKind": "structural_node",
-    "parentNodeId": "instance_settings_section",
+    "nodeId": "credentials_users_revoke_sessions_cancel_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "credentials_users_revoke_sessions_confirm_modal",
     "orderIndex": 34,
     "x": 0,
     "y": 0,
-    "recordType": "topology_ui_validation",
-    "label": "Apply confirmation"
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_revoke_sessions_confirm_modal",
+        "sourceActionKey": "credentials_users_revoke_sessions_cancel_button"
+      }
+    ],
+    "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
   },
   {
-    "nodeId": "approve_operation_candidate_confirm_dialog",
+    "nodeId": "external_api_credential",
     "nodeKind": "structural_node",
-    "parentNodeId": "instance_settings_section",
     "orderIndex": 35,
     "x": 0,
     "y": 0,
-    "recordType": "topology_ui_validation",
-    "label": "Approve confirmation"
+    "recordType": "topology_ui_category",
+    "label": "\u5916\u90E8API\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB",
+    "visibilityBinding": {
+      "source": "ui-local:credential_category_filter.selectedCategory",
+      "matchValue": "external_api_credential"
+    }
   },
   {
-    "nodeId": "scheduler_credential_binding_section",
+    "nodeId": "external_section",
     "nodeKind": "structural_node",
     "parentNodeId": "external_api_credential",
     "orderIndex": 36,
     "x": 0,
     "y": 0,
     "recordType": "topology_ui_section",
-    "label": "Scheduler job credential/port binding"
+    "label": "\u5916\u90E8\u30DD\u30FC\u30C8\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u30B3\u30F3\u30C6\u30AD\u30B9\u30C8"
   },
   {
-    "nodeId": "scheduler_job_id_input",
+    "nodeId": "credential_reference_key",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "scheduler_credential_binding_section",
+    "parentNodeId": "external_section",
     "orderIndex": 37,
     "x": 0,
     "y": 0,
@@ -594,26 +903,20 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Scheduler job ID"
+    "label": "\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u53C2\u7167\u30AD\u30FC"
   },
   {
-    "nodeId": "scheduler_credential_requirement_ref_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "scheduler_credential_binding_section",
+    "nodeId": "scheduler_credential_binding_section",
+    "nodeKind": "structural_node",
+    "parentNodeId": "external_api_credential",
     "orderIndex": 38,
     "x": 0,
     "y": 0,
-    "componentKind": "form_input/form_field",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Credential requirement reference"
+    "recordType": "topology_ui_section",
+    "label": "\u30B9\u30B1\u30B8\u30E5\u30FC\u30E9\u30FC\u30B8\u30E7\u30D6\u306E\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB/\u30DD\u30FC\u30C8\u30D0\u30A4\u30F3\u30C7\u30A3\u30F3\u30B0"
   },
   {
-    "nodeId": "scheduler_external_port_ref_input",
+    "nodeId": "scheduler_job_id_input",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000013",
     "parentNodeId": "scheduler_credential_binding_section",
@@ -626,14 +929,46 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "External port reference"
+    "label": "\u30B9\u30B1\u30B8\u30E5\u30FC\u30E9\u30FC\u30B8\u30E7\u30D6ID"
+  },
+  {
+    "nodeId": "scheduler_credential_requirement_ref_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "scheduler_credential_binding_section",
+    "orderIndex": 40,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u8981\u4EF6\u53C2\u7167"
+  },
+  {
+    "nodeId": "scheduler_external_port_ref_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "scheduler_credential_binding_section",
+    "orderIndex": 41,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u5916\u90E8\u30DD\u30FC\u30C8\u53C2\u7167"
   },
   {
     "nodeId": "configure_scheduler_job_credential_or_port_binding_button",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000010",
     "parentNodeId": "scheduler_credential_binding_section",
-    "orderIndex": 40,
+    "orderIndex": 42,
     "x": 0,
     "y": 0,
     "componentKind": "action/button",
@@ -642,6 +977,16 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u30b9\\u30b1\\u30b8\\u30e5\\u30fc\\u30e9\\u30fc\\u30b8\\u30e7\\u30d6\\u306e\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb/\\u30dd\\u30fc\\u30c8\\u30d0\\u30a4\\u30f3\\u30c7\\u30a3\\u30f3\\u30b0\\u3092\\u8a2d\\u5b9a\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "configure_scheduler_job_credential_or_port_binding_confirm_modal",
+        "sourceActionKey": "configure_scheduler_job_credential_or_port_binding_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "dryRun": "literal:true",
@@ -653,14 +998,14 @@
     "dispatchTargetRefByTrigger": {
       "click": "manifest:00000000-0000-0000-0000-0000000cd006:credential_management:configure_scheduler_job_credential_or_port_binding"
     },
-    "label": "Configure scheduler job credential/port binding"
+    "label": "\u30B9\u30B1\u30B8\u30E5\u30FC\u30E9\u30FC\u30B8\u30E7\u30D6\u306E\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB/\u30DD\u30FC\u30C8\u30D0\u30A4\u30F3\u30C7\u30A3\u30F3\u30B0\u3092\u8A2D\u5B9A"
   },
   {
     "nodeId": "configure_scheduler_job_credential_or_port_binding_confirm_modal",
     "nodeKind": "catalog_component",
     "componentId": "configure_scheduler_job_credential_or_port_binding_confirm_modal",
     "parentNodeId": "scheduler_credential_binding_section",
-    "orderIndex": 41,
+    "orderIndex": 43,
     "x": 0,
     "y": 0,
     "componentKind": "disclosure/modal",
@@ -669,15 +1014,24 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022Configure scheduler job credential/port binding\u0022, \u0022body\u0022: \u0022Bind the entered credential/port reference to the scheduler job. Writes only credential_requirement_ref/external_port_ref; never the job body/step-chain fields it owns.\u0022}}",
-    "label": "Configure credential/port binding confirmation dialog"
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u30b9\\u30b1\\u30b8\\u30e5\\u30fc\\u30e9\\u30fc\\u30b8\\u30e7\\u30d6\\u306e\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb/\\u30dd\\u30fc\\u30c8\\u30d0\\u30a4\\u30f3\\u30c7\\u30a3\\u30f3\\u30b0\\u3092\\u8a2d\\u5b9a\u0022, \u0022body\u0022: \u0022\u5165\u529B\u3055\u308C\u305F\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB/\u30DD\u30FC\u30C8\u53C2\u7167\u3092\u30B9\u30B1\u30B8\u30E5\u30FC\u30E9\u30FC\u30B8\u30E7\u30D6\u306B\u7D10\u4ED8\u3051\u307E\u3059\u3002\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u8981\u4EF6\u53C2\u7167/\u5916\u90E8\u30DD\u30FC\u30C8\u53C2\u7167\u306E\u307F\u3092\u66F8\u304D\u8FBC\u307F\u3001\u30B8\u30E7\u30D6\u672C\u4F53\u3084\u30B9\u30C6\u30C3\u30D7\u30C1\u30A7\u30FC\u30F3\u306E\u9805\u76EE\u306F\u5909\u66F4\u3057\u307E\u305B\u3093\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "configure_scheduler_job_credential_or_port_binding_confirm_modal",
+        "sourceActionKey": "configure_scheduler_job_credential_or_port_binding_confirm_modal"
+      }
+    ],
+    "label": "\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB/\u30DD\u30FC\u30C8\u30D0\u30A4\u30F3\u30C7\u30A3\u30F3\u30B0\u8A2D\u5B9A\u306E\u78BA\u8A8D\u30C0\u30A4\u30A2\u30ED\u30B0"
   },
   {
     "nodeId": "configure_scheduler_job_credential_or_port_binding_confirm_button",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000010",
     "parentNodeId": "configure_scheduler_job_credential_or_port_binding_confirm_modal",
-    "orderIndex": 42,
+    "orderIndex": 44,
     "x": 0,
     "y": 0,
     "componentKind": "action/button",
@@ -686,6 +1040,7 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u8a2d\\u5b9a\u0022}",
     "runtimeInteractions": [
       {
         "trigger": "click",
@@ -706,14 +1061,14 @@
     "dispatchTargetRefByTrigger": {
       "click": "manifest:00000000-0000-0000-0000-0000000cd006:credential_management:configure_scheduler_job_credential_or_port_binding"
     },
-    "label": "Configure"
+    "label": "\u8A2D\u5B9A"
   },
   {
     "nodeId": "configure_scheduler_job_credential_or_port_binding_cancel_button",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000010",
     "parentNodeId": "configure_scheduler_job_credential_or_port_binding_confirm_modal",
-    "orderIndex": 43,
+    "orderIndex": 45,
     "x": 0,
     "y": 0,
     "componentKind": "action/button",
@@ -722,6 +1077,7 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
     "runtimeInteractions": [
       {
         "trigger": "click",
@@ -731,24 +1087,24 @@
         "sourceActionKey": "configure_scheduler_job_credential_or_port_binding_cancel_button"
       }
     ],
-    "label": "Cancel"
+    "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
   },
   {
     "nodeId": "external_api_credential_crud_section",
     "nodeKind": "structural_node",
     "parentNodeId": "external_api_credential",
-    "orderIndex": 44,
+    "orderIndex": 46,
     "x": 0,
     "y": 0,
     "recordType": "topology_ui_section",
-    "label": "External API credential records"
+    "label": "\u5916\u90E8API\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u30EC\u30B3\u30FC\u30C9"
   },
   {
     "nodeId": "external_api_credential_form_record_kind_input",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000012",
     "parentNodeId": "external_api_credential_crud_section",
-    "orderIndex": 45,
+    "orderIndex": 47,
     "x": 0,
     "y": 0,
     "componentKind": "form_input/select",
@@ -757,42 +1113,10 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Record kind"
+    "label": "\u30EC\u30B3\u30FC\u30C9\u7A2E\u5225"
   },
   {
     "nodeId": "external_api_credential_form_record_id_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "external_api_credential_crud_section",
-    "orderIndex": 46,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/form_field",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Record ID (leave blank to create)"
-  },
-  {
-    "nodeId": "external_api_credential_form_provider_kind_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "external_api_credential_crud_section",
-    "orderIndex": 47,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/form_field",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Provider kind"
-  },
-  {
-    "nodeId": "external_api_credential_form_required_by_bundle_input",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000013",
     "parentNodeId": "external_api_credential_crud_section",
@@ -805,10 +1129,10 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Required by bundle"
+    "label": "\u30EC\u30B3\u30FC\u30C9ID(\u65B0\u898F\u4F5C\u6210\u6642\u306F\u7A7A\u6B04)"
   },
   {
-    "nodeId": "external_api_credential_form_reference_key_input",
+    "nodeId": "external_api_credential_form_provider_kind_input",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000013",
     "parentNodeId": "external_api_credential_crud_section",
@@ -821,26 +1145,26 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Reference key"
+    "label": "\u30D7\u30ED\u30D0\u30A4\u30C0\u30FC\u7A2E\u5225"
   },
   {
-    "nodeId": "external_api_credential_form_active_input",
+    "nodeId": "external_api_credential_form_required_by_bundle_input",
     "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000012",
+    "componentId": "00000000-0000-0000-0001-000000000013",
     "parentNodeId": "external_api_credential_crud_section",
     "orderIndex": 50,
     "x": 0,
     "y": 0,
-    "componentKind": "form_input/select",
+    "componentKind": "form_input/form_field",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Active"
+    "label": "\u5FC5\u8981\u3068\u3059\u308B\u30D0\u30F3\u30C9\u30EB"
   },
   {
-    "nodeId": "external_api_credential_form_token_kind_input",
+    "nodeId": "external_api_credential_form_reference_key_input",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000013",
     "parentNodeId": "external_api_credential_crud_section",
@@ -853,26 +1177,26 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Token kind"
+    "label": "\u53C2\u7167\u30AD\u30FC"
   },
   {
-    "nodeId": "external_api_credential_form_refresh_before_seconds_input",
+    "nodeId": "external_api_credential_form_active_input",
     "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
+    "componentId": "00000000-0000-0000-0001-000000000012",
     "parentNodeId": "external_api_credential_crud_section",
     "orderIndex": 52,
     "x": 0,
     "y": 0,
-    "componentKind": "form_input/form_field",
+    "componentKind": "form_input/select",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Refresh before (seconds)"
+    "label": "\u6709\u52B9"
   },
   {
-    "nodeId": "external_api_credential_form_url_or_env_reference_input",
+    "nodeId": "external_api_credential_form_token_kind_input",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000013",
     "parentNodeId": "external_api_credential_crud_section",
@@ -885,10 +1209,10 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "URL or env reference"
+    "label": "\u30C8\u30FC\u30AF\u30F3\u7A2E\u5225"
   },
   {
-    "nodeId": "external_api_credential_form_credential_kind_input",
+    "nodeId": "external_api_credential_form_refresh_before_seconds_input",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000013",
     "parentNodeId": "external_api_credential_crud_section",
@@ -901,10 +1225,10 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Credential kind"
+    "label": "\u30EA\u30D5\u30EC\u30C3\u30B7\u30E5\u7336\u4E88(\u79D2)"
   },
   {
-    "nodeId": "external_api_credential_form_hook_path_input",
+    "nodeId": "external_api_credential_form_url_or_env_reference_input",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000013",
     "parentNodeId": "external_api_credential_crud_section",
@@ -917,10 +1241,10 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Hook path"
+    "label": "URL\u307E\u305F\u306F\u74B0\u5883\u5909\u6570\u53C2\u7167"
   },
   {
-    "nodeId": "external_api_credential_form_header_key_input",
+    "nodeId": "external_api_credential_form_credential_kind_input",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000013",
     "parentNodeId": "external_api_credential_crud_section",
@@ -933,10 +1257,10 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Header key"
+    "label": "\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u7A2E\u5225"
   },
   {
-    "nodeId": "external_api_credential_form_route_key_input",
+    "nodeId": "external_api_credential_form_hook_path_input",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000013",
     "parentNodeId": "external_api_credential_crud_section",
@@ -949,10 +1273,10 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Route key"
+    "label": "\u30D5\u30C3\u30AF\u30D1\u30B9"
   },
   {
-    "nodeId": "external_api_credential_form_secret_input",
+    "nodeId": "external_api_credential_form_header_key_input",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000013",
     "parentNodeId": "external_api_credential_crud_section",
@@ -965,10 +1289,10 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Secret (write-only; create=plaintextSecret, update=newPlaintextSecret; never projected back)"
+    "label": "\u30D8\u30C3\u30C0\u30FC\u30AD\u30FC"
   },
   {
-    "nodeId": "external_api_credential_form_encryption_key_reference_input",
+    "nodeId": "external_api_credential_form_route_key_input",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000013",
     "parentNodeId": "external_api_credential_crud_section",
@@ -981,14 +1305,46 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Encryption key reference (env:ENV_VAR_NAME)"
+    "label": "\u30EB\u30FC\u30C8\u30AD\u30FC"
+  },
+  {
+    "nodeId": "external_api_credential_form_secret_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "external_api_credential_crud_section",
+    "orderIndex": 60,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u30B7\u30FC\u30AF\u30EC\u30C3\u30C8(\u66F8\u304D\u8FBC\u307F\u5C02\u7528\u3002\u4F5C\u6210\u6642\u306FplaintextSecret\u3001\u66F4\u65B0\u6642\u306FnewPlaintextSecret\u3002\u8868\u793A\u306B\u306F\u6C7A\u3057\u3066\u623B\u3055\u306A\u3044)"
+  },
+  {
+    "nodeId": "external_api_credential_form_encryption_key_reference_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "external_api_credential_crud_section",
+    "orderIndex": 61,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u6697\u53F7\u9375\u53C2\u7167(env:ENV_VAR_NAME)"
   },
   {
     "nodeId": "external_api_credential_create_button",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000010",
     "parentNodeId": "external_api_credential_crud_section",
-    "orderIndex": 60,
+    "orderIndex": 62,
     "x": 0,
     "y": 0,
     "componentKind": "action/button",
@@ -997,6 +1353,16 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u5916\\u90e8API\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u30ec\\u30b3\\u30fc\\u30c9\\u3092\\u4f5c\\u6210\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "external_api_credential_create_confirm_modal",
+        "sourceActionKey": "external_api_credential_create_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "dryRun": "literal:true",
@@ -1018,14 +1384,14 @@
     "dispatchTargetRefByTrigger": {
       "click": "manifest:00000000-0000-0000-0000-0000000cd008:external_api_credential:create"
     },
-    "label": "Create external API credential record"
+    "label": "\u5916\u90E8API\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u30EC\u30B3\u30FC\u30C9\u3092\u4F5C\u6210"
   },
   {
     "nodeId": "external_api_credential_create_confirm_modal",
     "nodeKind": "catalog_component",
     "componentId": "external_api_credential_create_confirm_modal",
     "parentNodeId": "external_api_credential_crud_section",
-    "orderIndex": 61,
+    "orderIndex": 63,
     "x": 0,
     "y": 0,
     "componentKind": "disclosure/modal",
@@ -1034,15 +1400,24 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "propsJson": "{\u0022data\u0022:{\u0022open\u0022:false,\u0022title\u0022:\u0022Create external API credential record\u0022,\u0022body\u0022:\u0022Create a new record for the selected recordKind. Only allowed metadata fields plus a write-only secret input are sent; the secret is never echoed back.\u0022}}",
-    "label": "Create external API credential record confirmation dialog"
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u5916\\u90e8API\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u30ec\\u30b3\\u30fc\\u30c9\\u3092\\u4f5c\\u6210\u0022, \u0022body\u0022: \u0022\u9078\u629E\u3057\u305F\u30EC\u30B3\u30FC\u30C9\u7A2E\u5225\u306B\u5BFE\u3057\u3066\u65B0\u3057\u3044\u30EC\u30B3\u30FC\u30C9\u3092\u4F5C\u6210\u3057\u307E\u3059\u3002\u8A31\u53EF\u3055\u308C\u305F\u30E1\u30BF\u30C7\u30FC\u30BF\u9805\u76EE\u3068\u66F8\u304D\u8FBC\u307F\u5C02\u7528\u306E\u30B7\u30FC\u30AF\u30EC\u30C3\u30C8\u5165\u529B\u306E\u307F\u3092\u9001\u4FE1\u3057\u3001\u30B7\u30FC\u30AF\u30EC\u30C3\u30C8\u304C\u8FD4\u5374\u3055\u308C\u308B\u3053\u3068\u306F\u3042\u308A\u307E\u305B\u3093\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "external_api_credential_create_confirm_modal",
+        "sourceActionKey": "external_api_credential_create_confirm_modal"
+      }
+    ],
+    "label": "\u5916\u90E8API\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u30EC\u30B3\u30FC\u30C9\u4F5C\u6210\u306E\u78BA\u8A8D\u30C0\u30A4\u30A2\u30ED\u30B0"
   },
   {
     "nodeId": "external_api_credential_create_confirm_button",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000010",
     "parentNodeId": "external_api_credential_create_confirm_modal",
-    "orderIndex": 62,
+    "orderIndex": 64,
     "x": 0,
     "y": 0,
     "componentKind": "action/button",
@@ -1051,6 +1426,7 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u4f5c\\u6210\u0022}",
     "runtimeInteractions": [
       {
         "trigger": "click",
@@ -1081,14 +1457,14 @@
     "dispatchTargetRefByTrigger": {
       "click": "manifest:00000000-0000-0000-0000-0000000cd008:external_api_credential:create"
     },
-    "label": "Create"
+    "label": "\u4F5C\u6210"
   },
   {
     "nodeId": "external_api_credential_create_cancel_button",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000010",
     "parentNodeId": "external_api_credential_create_confirm_modal",
-    "orderIndex": 63,
+    "orderIndex": 65,
     "x": 0,
     "y": 0,
     "componentKind": "action/button",
@@ -1097,6 +1473,7 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
     "runtimeInteractions": [
       {
         "trigger": "click",
@@ -1106,14 +1483,14 @@
         "sourceActionKey": "external_api_credential_create_cancel_button"
       }
     ],
-    "label": "Cancel"
+    "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
   },
   {
     "nodeId": "external_api_credential_update_button",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000010",
     "parentNodeId": "external_api_credential_crud_section",
-    "orderIndex": 64,
+    "orderIndex": 66,
     "x": 0,
     "y": 0,
     "componentKind": "action/button",
@@ -1122,6 +1499,16 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u5916\\u90e8API\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u30ec\\u30b3\\u30fc\\u30c9\\u3092\\u66f4\\u65b0\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "external_api_credential_update_confirm_modal",
+        "sourceActionKey": "external_api_credential_update_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "active": "node:external_api_credential_form_active_input.value",
@@ -1145,14 +1532,14 @@
     "dispatchTargetRefByTrigger": {
       "click": "manifest:00000000-0000-0000-0000-0000000cd009:external_api_credential:update"
     },
-    "label": "Update external API credential record"
+    "label": "\u5916\u90E8API\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u30EC\u30B3\u30FC\u30C9\u3092\u66F4\u65B0"
   },
   {
     "nodeId": "external_api_credential_update_confirm_modal",
     "nodeKind": "catalog_component",
     "componentId": "external_api_credential_update_confirm_modal",
     "parentNodeId": "external_api_credential_crud_section",
-    "orderIndex": 65,
+    "orderIndex": 67,
     "x": 0,
     "y": 0,
     "componentKind": "disclosure/modal",
@@ -1161,15 +1548,24 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "propsJson": "{\u0022data\u0022:{\u0022open\u0022:false,\u0022title\u0022:\u0022Update external API credential record\u0022,\u0022body\u0022:\u0022Update the identified record\u0027s metadata, and optionally rotate its secret via a write-only input. Never previews or echoes secret material.\u0022}}",
-    "label": "Update external API credential record confirmation dialog"
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u5916\\u90e8API\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u30ec\\u30b3\\u30fc\\u30c9\\u3092\\u66f4\\u65b0\u0022, \u0022body\u0022: \u0022\u6307\u5B9A\u3057\u305F\u30EC\u30B3\u30FC\u30C9\u306E\u30E1\u30BF\u30C7\u30FC\u30BF\u3092\u66F4\u65B0\u3057\u3001\u66F8\u304D\u8FBC\u307F\u5C02\u7528\u306E\u5165\u529B\u306B\u3088\u308A\u30B7\u30FC\u30AF\u30EC\u30C3\u30C8\u3092\u4EFB\u610F\u3067\u30ED\u30FC\u30C6\u30FC\u30B7\u30E7\u30F3\u3067\u304D\u307E\u3059\u3002\u30B7\u30FC\u30AF\u30EC\u30C3\u30C8\u306E\u5185\u5BB9\u304C\u30D7\u30EC\u30D3\u30E5\u30FC\u307E\u305F\u306F\u8FD4\u5374\u3055\u308C\u308B\u3053\u3068\u306F\u3042\u308A\u307E\u305B\u3093\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "external_api_credential_update_confirm_modal",
+        "sourceActionKey": "external_api_credential_update_confirm_modal"
+      }
+    ],
+    "label": "\u5916\u90E8API\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u30EC\u30B3\u30FC\u30C9\u66F4\u65B0\u306E\u78BA\u8A8D\u30C0\u30A4\u30A2\u30ED\u30B0"
   },
   {
     "nodeId": "external_api_credential_update_confirm_button",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000010",
     "parentNodeId": "external_api_credential_update_confirm_modal",
-    "orderIndex": 66,
+    "orderIndex": 68,
     "x": 0,
     "y": 0,
     "componentKind": "action/button",
@@ -1178,6 +1574,7 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u66f4\\u65b0\u0022}",
     "runtimeInteractions": [
       {
         "trigger": "click",
@@ -1210,14 +1607,14 @@
     "dispatchTargetRefByTrigger": {
       "click": "manifest:00000000-0000-0000-0000-0000000cd009:external_api_credential:update"
     },
-    "label": "Update"
+    "label": "\u66F4\u65B0"
   },
   {
     "nodeId": "external_api_credential_update_cancel_button",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000010",
     "parentNodeId": "external_api_credential_update_confirm_modal",
-    "orderIndex": 67,
+    "orderIndex": 69,
     "x": 0,
     "y": 0,
     "componentKind": "action/button",
@@ -1226,6 +1623,7 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
     "runtimeInteractions": [
       {
         "trigger": "click",
@@ -1235,14 +1633,14 @@
         "sourceActionKey": "external_api_credential_update_cancel_button"
       }
     ],
-    "label": "Cancel"
+    "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
   },
   {
     "nodeId": "external_api_credential_delete_button",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000010",
     "parentNodeId": "external_api_credential_crud_section",
-    "orderIndex": 68,
+    "orderIndex": 70,
     "x": 0,
     "y": 0,
     "componentKind": "action/button",
@@ -1251,6 +1649,16 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u5916\\u90e8API\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u30ec\\u30b3\\u30fc\\u30c9\\u3092\\u7121\\u52b9\\u5316\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "external_api_credential_delete_confirm_modal",
+        "sourceActionKey": "external_api_credential_delete_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "dryRun": "literal:true",
@@ -1261,14 +1669,14 @@
     "dispatchTargetRefByTrigger": {
       "click": "manifest:00000000-0000-0000-0000-0000000cd010:external_api_credential:delete"
     },
-    "label": "Deactivate external API credential record"
+    "label": "\u5916\u90E8API\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u30EC\u30B3\u30FC\u30C9\u3092\u7121\u52B9\u5316"
   },
   {
     "nodeId": "external_api_credential_delete_confirm_modal",
     "nodeKind": "catalog_component",
     "componentId": "external_api_credential_delete_confirm_modal",
     "parentNodeId": "external_api_credential_crud_section",
-    "orderIndex": 69,
+    "orderIndex": 71,
     "x": 0,
     "y": 0,
     "componentKind": "disclosure/modal",
@@ -1277,15 +1685,24 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "propsJson": "{\u0022data\u0022:{\u0022open\u0022:false,\u0022title\u0022:\u0022Deactivate external API credential record\u0022,\u0022body\u0022:\u0022Deactivate (soft-delete) the identified record by recordKind/recordId. This never removes the row or exposes secret material.\u0022}}",
-    "label": "Deactivate external API credential record confirmation dialog"
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u5916\\u90e8API\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u30ec\\u30b3\\u30fc\\u30c9\\u3092\\u7121\\u52b9\\u5316\u0022, \u0022body\u0022: \u0022\u6307\u5B9A\u3057\u305F\u30EC\u30B3\u30FC\u30C9\u7A2E\u5225\u30FB\u30EC\u30B3\u30FC\u30C9ID\u306E\u30EC\u30B3\u30FC\u30C9\u3092\u7121\u52B9\u5316(\u8AD6\u7406\u524A\u9664)\u3057\u307E\u3059\u3002\u884C\u306E\u7269\u7406\u524A\u9664\u3084\u30B7\u30FC\u30AF\u30EC\u30C3\u30C8\u306E\u5185\u5BB9\u304C\u516C\u958B\u3055\u308C\u308B\u3053\u3068\u306F\u3042\u308A\u307E\u305B\u3093\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "external_api_credential_delete_confirm_modal",
+        "sourceActionKey": "external_api_credential_delete_confirm_modal"
+      }
+    ],
+    "label": "\u5916\u90E8API\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u30EC\u30B3\u30FC\u30C9\u7121\u52B9\u5316\u306E\u78BA\u8A8D\u30C0\u30A4\u30A2\u30ED\u30B0"
   },
   {
     "nodeId": "external_api_credential_delete_confirm_button",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000010",
     "parentNodeId": "external_api_credential_delete_confirm_modal",
-    "orderIndex": 70,
+    "orderIndex": 72,
     "x": 0,
     "y": 0,
     "componentKind": "action/button",
@@ -1294,6 +1711,7 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u7121\\u52b9\\u5316\u0022}",
     "runtimeInteractions": [
       {
         "trigger": "click",
@@ -1313,14 +1731,14 @@
     "dispatchTargetRefByTrigger": {
       "click": "manifest:00000000-0000-0000-0000-0000000cd010:external_api_credential:delete"
     },
-    "label": "Deactivate"
+    "label": "\u7121\u52B9\u5316"
   },
   {
     "nodeId": "external_api_credential_delete_cancel_button",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000010",
     "parentNodeId": "external_api_credential_delete_confirm_modal",
-    "orderIndex": 71,
+    "orderIndex": 73,
     "x": 0,
     "y": 0,
     "componentKind": "action/button",
@@ -1329,6 +1747,7 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
     "runtimeInteractions": [
       {
         "trigger": "click",
@@ -1338,150 +1757,128 @@
         "sourceActionKey": "external_api_credential_delete_cancel_button"
       }
     ],
-    "label": "Cancel"
+    "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
   },
   {
-    "nodeId": "credential_search_section",
+    "nodeId": "instance_settings",
     "nodeKind": "structural_node",
-    "orderIndex": 72,
-    "x": 0,
-    "y": 0,
-    "recordType": "topology_ui_section",
-    "label": "Search across users / external API credential / external instance credential"
-  },
-  {
-    "nodeId": "credential_category_filter",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000012",
-    "parentNodeId": "credential_search_section",
-    "orderIndex": 73,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/select",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Category (users / external_api_credential / external_instance_credential)"
-  },
-  {
-    "nodeId": "credential_search_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000002",
-    "parentNodeId": "credential_search_section",
     "orderIndex": 74,
     "x": 0,
     "y": 0,
-    "componentKind": "form_input/search_input",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Search (username / reference key / non-secret text)"
+    "recordType": "topology_ui_category",
+    "label": "\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u8A2D\u5B9A",
+    "visibilityBinding": {
+      "source": "ui-local:credential_category_filter.selectedCategory",
+      "matchValue": "external_instance_credential"
+    }
   },
   {
-    "nodeId": "credential_filter_status_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "credential_search_section",
+    "nodeId": "instance_settings_section",
+    "nodeKind": "structural_node",
+    "parentNodeId": "instance_settings",
     "orderIndex": 75,
     "x": 0,
     "y": 0,
-    "componentKind": "form_input/form_field",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Status (users category)"
+    "recordType": "topology_ui_section",
+    "label": "\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u8A2D\u5B9A"
   },
   {
-    "nodeId": "credential_filter_active_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000012",
-    "parentNodeId": "credential_search_section",
+    "nodeId": "instance_settings_import_form",
+    "nodeKind": "structural_node",
+    "parentNodeId": "instance_settings_section",
     "orderIndex": 76,
     "x": 0,
     "y": 0,
-    "componentKind": "form_input/select",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Active"
+    "recordType": "topology_ui_form",
+    "label": "\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u8A2D\u5B9AJSON\u30A4\u30F3\u30DD\u30FC\u30C8"
   },
   {
-    "nodeId": "credential_filter_record_kind_input",
+    "nodeId": "template_file",
     "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000012",
-    "parentNodeId": "credential_search_section",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "instance_settings_import_form",
     "orderIndex": 77,
     "x": 0,
     "y": 0,
-    "componentKind": "form_input/select",
+    "componentKind": "form_input/form_field",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Record kind (credential categories)"
+    "label": "\u30C6\u30F3\u30D7\u30EC\u30FC\u30C8\u30D5\u30A1\u30A4\u30EB"
   },
   {
-    "nodeId": "credential_filter_provider_kind_input",
+    "nodeId": "json_template_download",
     "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "credential_search_section",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "instance_settings_import_form",
     "orderIndex": 78,
     "x": 0,
     "y": 0,
-    "componentKind": "form_input/form_field",
+    "componentKind": "action/button",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Provider kind"
+    "propsJson": "{\u0022label\u0022: \u0022JSON\\u30c6\\u30f3\\u30d7\\u30ec\\u30fc\\u30c8\\u3092\\u30c0\\u30a6\\u30f3\\u30ed\\u30fc\\u30c9\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "targetRef": "ui-local:instance_settings_import_form.template_download_trigger",
+        "actionType": "localStateMutation",
+        "payloadFrom": {
+          "category_key": "literal:instance_settings"
+        },
+        "sourceActionKey": "json_template_download"
+      }
+    ],
+    "label": "JSON\u30C6\u30F3\u30D7\u30EC\u30FC\u30C8\u3092\u30C0\u30A6\u30F3\u30ED\u30FC\u30C9"
   },
   {
-    "nodeId": "credential_filter_required_by_bundle_input",
+    "nodeId": "json_import",
     "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "credential_search_section",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "instance_settings_import_form",
     "orderIndex": 79,
     "x": 0,
     "y": 0,
-    "componentKind": "form_input/form_field",
+    "componentKind": "action/button",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Required by bundle"
+    "propsJson": "{\u0022label\u0022: \u0022JSON\\u30c6\\u30f3\\u30d7\\u30ec\\u30fc\\u30c8\\u3092\\u30a4\\u30f3\\u30dd\\u30fc\\u30c8\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "targetRef": "ui-local:instance_settings_import_form.template_import_trigger",
+        "actionType": "localStateMutation",
+        "payloadFrom": {
+          "template_file": "node:template_file.value"
+        },
+        "sourceActionKey": "json_import"
+      }
+    ],
+    "label": "JSON\u30C6\u30F3\u30D7\u30EC\u30FC\u30C8\u3092\u30A4\u30F3\u30DD\u30FC\u30C8"
   },
   {
-    "nodeId": "credential_filter_expires_before_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "credential_search_section",
+    "nodeId": "instance_address_form",
+    "nodeKind": "structural_node",
+    "parentNodeId": "instance_settings_section",
     "orderIndex": 80,
     "x": 0,
     "y": 0,
-    "componentKind": "form_input/form_field",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Expires before"
+    "recordType": "topology_ui_form",
+    "label": "\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u30A2\u30C9\u30EC\u30B9"
   },
   {
-    "nodeId": "credential_filter_expires_after_input",
+    "nodeId": "instance_authority_key",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "credential_search_section",
+    "parentNodeId": "instance_address_form",
     "orderIndex": 81,
     "x": 0,
     "y": 0,
@@ -1491,14 +1888,110 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Expires after"
+    "label": "\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u6A29\u9650\u30AD\u30FC"
   },
   {
-    "nodeId": "credential_search_button",
+    "nodeId": "instance_display_name",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "instance_address_form",
+    "orderIndex": 82,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u8868\u793A\u540D"
+  },
+  {
+    "nodeId": "port_kind",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000012",
+    "parentNodeId": "instance_address_form",
+    "orderIndex": 83,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/select",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u30DD\u30FC\u30C8\u7A2E\u5225"
+  },
+  {
+    "nodeId": "provider_kind",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "instance_address_form",
+    "orderIndex": 84,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u30D7\u30ED\u30D0\u30A4\u30C0\u30FC\u7A2E\u5225"
+  },
+  {
+    "nodeId": "required_by_bundle",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "instance_address_form",
+    "orderIndex": 85,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u5FC5\u8981\u3068\u3059\u308B\u30D0\u30F3\u30C9\u30EB"
+  },
+  {
+    "nodeId": "address_ref",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "instance_address_form",
+    "orderIndex": 86,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u30A2\u30C9\u30EC\u30B9\u53C2\u7167"
+  },
+  {
+    "nodeId": "connection_policy_key",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "instance_address_form",
+    "orderIndex": 87,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u63A5\u7D9A\u30DD\u30EA\u30B7\u30FC\u30AD\u30FC"
+  },
+  {
+    "nodeId": "validate",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "credential_search_section",
-    "orderIndex": 82,
+    "parentNodeId": "instance_address_form",
+    "orderIndex": 88,
     "x": 0,
     "y": 0,
     "componentKind": "action/button",
@@ -1507,6 +2000,965 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u691c\\u8a3c\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "actionType": "dispatchInstanceOperation",
+        "payloadFrom": {
+          "operation_binding_key": "node:operation_binding_key.value",
+          "instance_authority_key": "node:instance_authority_key.value"
+        },
+        "sourceActionKey": "validate",
+        "instanceTargetRef": "instance-port:db_instance_port:instance_authority_key:operation_binding_key"
+      }
+    ],
+    "label": "\u691C\u8A3C"
+  },
+  {
+    "nodeId": "instance_operation_binding_form",
+    "nodeKind": "structural_node",
+    "parentNodeId": "instance_settings_section",
+    "orderIndex": 89,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_form",
+    "label": "\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u64CD\u4F5C\u30D0\u30A4\u30F3\u30C7\u30A3\u30F3\u30B0"
+  },
+  {
+    "nodeId": "operation_binding_key",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "instance_operation_binding_form",
+    "orderIndex": 90,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u64CD\u4F5C\u30D0\u30A4\u30F3\u30C7\u30A3\u30F3\u30B0\u30AD\u30FC"
+  },
+  {
+    "nodeId": "display_label",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "instance_operation_binding_form",
+    "orderIndex": 91,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u8868\u793A\u30E9\u30D9\u30EB"
+  },
+  {
+    "nodeId": "operation_protocol",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "instance_operation_binding_form",
+    "orderIndex": 92,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u64CD\u4F5C\u30D7\u30ED\u30C8\u30B3\u30EB"
+  },
+  {
+    "nodeId": "input_schema_key",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "instance_operation_binding_form",
+    "orderIndex": 93,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u5165\u529B\u30B9\u30AD\u30FC\u30DE\u30AD\u30FC"
+  },
+  {
+    "nodeId": "output_shape_key",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "instance_operation_binding_form",
+    "orderIndex": 94,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u51FA\u529B\u30B7\u30A7\u30A4\u30D7\u30AD\u30FC"
+  },
+  {
+    "nodeId": "sanitize_policy_key",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "instance_operation_binding_form",
+    "orderIndex": 95,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u30B5\u30CB\u30BF\u30A4\u30BA\u30DD\u30EA\u30B7\u30FC\u30AD\u30FC"
+  },
+  {
+    "nodeId": "callable",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000012",
+    "parentNodeId": "instance_operation_binding_form",
+    "orderIndex": 96,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/select",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u547C\u3073\u51FA\u3057\u53EF\u80FD"
+  },
+  {
+    "nodeId": "preview",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "instance_operation_binding_form",
+    "orderIndex": 97,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u30d7\\u30ec\\u30d3\\u30e5\\u30fc\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "actionType": "dispatchInstanceOperation",
+        "payloadFrom": {
+          "operation_binding_key": "node:operation_binding_key.value",
+          "instance_authority_key": "node:instance_authority_key.value"
+        },
+        "sourceActionKey": "preview",
+        "instanceTargetRef": "instance-port:runtime_instance_port:instance_authority_key:operation_binding_key"
+      }
+    ],
+    "label": "\u30D7\u30EC\u30D3\u30E5\u30FC"
+  },
+  {
+    "nodeId": "instance_operation_approval_form",
+    "nodeKind": "structural_node",
+    "parentNodeId": "instance_settings_section",
+    "orderIndex": 98,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_form",
+    "label": "\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u64CD\u4F5C\u627F\u8A8D"
+  },
+  {
+    "nodeId": "instance_operation_approval_form::approval_status",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000012",
+    "parentNodeId": "instance_operation_approval_form",
+    "orderIndex": 99,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/select",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u627F\u8A8D\u30B9\u30C6\u30FC\u30BF\u30B9"
+  },
+  {
+    "nodeId": "apply",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "instance_operation_approval_form",
+    "orderIndex": 100,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u9069\\u7528\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "actionType": "dispatchInstanceOperation",
+        "payloadFrom": {
+          "operation_binding_key": "node:operation_binding_key.value",
+          "instance_authority_key": "node:instance_authority_key.value"
+        },
+        "sourceActionKey": "apply",
+        "instanceTargetRef": "instance-port:db_instance_port:instance_authority_key:operation_binding_key"
+      }
+    ],
+    "label": "\u9069\u7528"
+  },
+  {
+    "nodeId": "approve",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "instance_operation_approval_form",
+    "orderIndex": 101,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u627f\\u8a8d\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "actionType": "dispatchInstanceOperation",
+        "payloadFrom": {
+          "operation_binding_key": "node:operation_binding_key.value",
+          "instance_authority_key": "node:instance_authority_key.value"
+        },
+        "sourceActionKey": "approve",
+        "instanceTargetRef": "instance-port:runtime_instance_port:instance_authority_key:operation_binding_key"
+      }
+    ],
+    "label": "\u627F\u8A8D"
+  },
+  {
+    "nodeId": "apply_confirm_dialog",
+    "nodeKind": "structural_node",
+    "parentNodeId": "instance_settings_section",
+    "orderIndex": 102,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_validation",
+    "label": "\u9069\u7528\u306E\u78BA\u8A8D"
+  },
+  {
+    "nodeId": "approve_operation_candidate_confirm_dialog",
+    "nodeKind": "structural_node",
+    "parentNodeId": "instance_settings_section",
+    "orderIndex": 103,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_validation",
+    "label": "\u627F\u8A8D\u306E\u78BA\u8A8D"
+  },
+  {
+    "nodeId": "external_instance_credential_crud_section",
+    "nodeKind": "structural_node",
+    "parentNodeId": "instance_settings",
+    "orderIndex": 104,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_section",
+    "label": "\u5916\u90E8\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u30EC\u30B3\u30FC\u30C9(db/runtime\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u30DD\u30FC\u30C8)"
+  },
+  {
+    "nodeId": "eic_record_kind_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000012",
+    "parentNodeId": "external_instance_credential_crud_section",
+    "orderIndex": 105,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/select",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u30EC\u30B3\u30FC\u30C9\u7A2E\u5225(db_instance_port / runtime_instance_port)"
+  },
+  {
+    "nodeId": "eic_record_id_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "external_instance_credential_crud_section",
+    "orderIndex": 106,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u30EC\u30B3\u30FC\u30C9ID(\u65B0\u898F\u4F5C\u6210\u6642\u306F\u7A7A\u6B04)"
+  },
+  {
+    "nodeId": "eic_instance_authority_key_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "external_instance_credential_crud_section",
+    "orderIndex": 107,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u6A29\u9650\u30AD\u30FC"
+  },
+  {
+    "nodeId": "eic_provider_kind_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "external_instance_credential_crud_section",
+    "orderIndex": 108,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u30D7\u30ED\u30D0\u30A4\u30C0\u30FC\u7A2E\u5225"
+  },
+  {
+    "nodeId": "eic_required_by_bundle_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "external_instance_credential_crud_section",
+    "orderIndex": 109,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u5FC5\u8981\u3068\u3059\u308B\u30D0\u30F3\u30C9\u30EB"
+  },
+  {
+    "nodeId": "eic_reference_key_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "external_instance_credential_crud_section",
+    "orderIndex": 110,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u53C2\u7167\u30AD\u30FC(\u65E2\u5B58\u306Evault\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u3092\u53C2\u7167\u3059\u308B\u5FC5\u8981\u3042\u308A)"
+  },
+  {
+    "nodeId": "eic_active_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000012",
+    "parentNodeId": "external_instance_credential_crud_section",
+    "orderIndex": 111,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/select",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u6709\u52B9"
+  },
+  {
+    "nodeId": "eic_create_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "external_instance_credential_crud_section",
+    "orderIndex": 112,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u5916\\u90e8\\u30a4\\u30f3\\u30b9\\u30bf\\u30f3\\u30b9\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u30ec\\u30b3\\u30fc\\u30c9\\u3092\\u4f5c\\u6210\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "eic_create_confirm_modal",
+        "sourceActionKey": "eic_create_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "dryRun": "literal:true",
+        "recordKind": "node:eic_record_kind_input.value",
+        "providerKind": "node:eic_provider_kind_input.value",
+        "referenceKey": "node:eic_reference_key_input.value",
+        "requiredByBundle": "node:eic_required_by_bundle_input.value",
+        "instanceAuthorityKey": "node:eic_instance_authority_key_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000cd012:external_instance_credential:create"
+    },
+    "label": "\u5916\u90E8\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u30EC\u30B3\u30FC\u30C9\u3092\u4F5C\u6210"
+  },
+  {
+    "nodeId": "eic_create_confirm_modal",
+    "nodeKind": "catalog_component",
+    "componentId": "eic_create_confirm_modal",
+    "parentNodeId": "external_instance_credential_crud_section",
+    "orderIndex": 113,
+    "x": 0,
+    "y": 0,
+    "componentKind": "disclosure/modal",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u5916\\u90e8\\u30a4\\u30f3\\u30b9\\u30bf\\u30f3\\u30b9\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u3092\\u4f5c\\u6210\u0022, \u0022body\u0022: \u0022\\u9078\\u629e\\u3057\\u305f\\u30ec\\u30b3\\u30fc\\u30c9\\u7a2e\\u5225\\u306b\\u5bfe\\u3057\\u3066\\u65b0\\u3057\\u3044\\u30ec\\u30b3\\u30fc\\u30c9\\u3092\\u4f5c\\u6210\\u3057\\u307e\\u3059\\u3002\\u8a31\\u53ef\\u3055\\u308c\\u305f\\u30e1\\u30bf\\u30c7\\u30fc\\u30bf\\u9805\\u76ee\\u306e\\u307f\\u3092\\u9001\\u4fe1\\u3057\\u307e\\u3059\\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "eic_create_confirm_modal",
+        "sourceActionKey": "eic_create_confirm_modal"
+      }
+    ],
+    "label": "\u5916\u90E8\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u30EC\u30B3\u30FC\u30C9\u4F5C\u6210\u306E\u78BA\u8A8D"
+  },
+  {
+    "nodeId": "eic_create_confirm_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "eic_create_confirm_modal",
+    "orderIndex": 114,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u4f5c\\u6210\\u3092\\u78ba\\u5b9a\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "eic_create_confirm_modal",
+        "sourceActionKey": "eic_create_confirm_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "confirmed": "literal:true",
+        "recordKind": "node:eic_record_kind_input.value",
+        "providerKind": "node:eic_provider_kind_input.value",
+        "referenceKey": "node:eic_reference_key_input.value",
+        "requiredByBundle": "node:eic_required_by_bundle_input.value",
+        "instanceAuthorityKey": "node:eic_instance_authority_key_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000cd012:external_instance_credential:create"
+    },
+    "label": "\u4F5C\u6210\u3092\u78BA\u5B9A"
+  },
+  {
+    "nodeId": "eic_create_cancel_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "eic_create_confirm_modal",
+    "orderIndex": 115,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "eic_create_confirm_modal",
+        "sourceActionKey": "eic_create_cancel_button"
+      }
+    ],
+    "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
+  },
+  {
+    "nodeId": "eic_update_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "external_instance_credential_crud_section",
+    "orderIndex": 116,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u5916\\u90e8\\u30a4\\u30f3\\u30b9\\u30bf\\u30f3\\u30b9\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u30ec\\u30b3\\u30fc\\u30c9\\u3092\\u66f4\\u65b0\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "eic_update_confirm_modal",
+        "sourceActionKey": "eic_update_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "active": "node:eic_active_input.value",
+        "dryRun": "literal:true",
+        "recordId": "node:eic_record_id_input.value",
+        "recordKind": "node:eic_record_kind_input.value",
+        "providerKind": "node:eic_provider_kind_input.value",
+        "referenceKey": "node:eic_reference_key_input.value",
+        "requiredByBundle": "node:eic_required_by_bundle_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000cd013:external_instance_credential:update"
+    },
+    "label": "\u5916\u90E8\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u30EC\u30B3\u30FC\u30C9\u3092\u66F4\u65B0"
+  },
+  {
+    "nodeId": "eic_update_confirm_modal",
+    "nodeKind": "catalog_component",
+    "componentId": "eic_update_confirm_modal",
+    "parentNodeId": "external_instance_credential_crud_section",
+    "orderIndex": 117,
+    "x": 0,
+    "y": 0,
+    "componentKind": "disclosure/modal",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u5916\\u90e8\\u30a4\\u30f3\\u30b9\\u30bf\\u30f3\\u30b9\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u3092\\u66f4\\u65b0\u0022, \u0022body\u0022: \u0022\\u6307\\u5b9a\\u3057\\u305f\\u30ec\\u30b3\\u30fc\\u30c9ID\\u306e\\u30e1\\u30bf\\u30c7\\u30fc\\u30bf\\u3092\\u66f4\\u65b0\\u3057\\u307e\\u3059\\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "eic_update_confirm_modal",
+        "sourceActionKey": "eic_update_confirm_modal"
+      }
+    ],
+    "label": "\u5916\u90E8\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u30EC\u30B3\u30FC\u30C9\u66F4\u65B0\u306E\u78BA\u8A8D"
+  },
+  {
+    "nodeId": "eic_update_confirm_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "eic_update_confirm_modal",
+    "orderIndex": 118,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u66f4\\u65b0\\u3092\\u78ba\\u5b9a\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "eic_update_confirm_modal",
+        "sourceActionKey": "eic_update_confirm_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "active": "node:eic_active_input.value",
+        "recordId": "node:eic_record_id_input.value",
+        "confirmed": "literal:true",
+        "recordKind": "node:eic_record_kind_input.value",
+        "providerKind": "node:eic_provider_kind_input.value",
+        "referenceKey": "node:eic_reference_key_input.value",
+        "requiredByBundle": "node:eic_required_by_bundle_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000cd013:external_instance_credential:update"
+    },
+    "label": "\u66F4\u65B0\u3092\u78BA\u5B9A"
+  },
+  {
+    "nodeId": "eic_update_cancel_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "eic_update_confirm_modal",
+    "orderIndex": 119,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "eic_update_confirm_modal",
+        "sourceActionKey": "eic_update_cancel_button"
+      }
+    ],
+    "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
+  },
+  {
+    "nodeId": "eic_delete_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "external_instance_credential_crud_section",
+    "orderIndex": 120,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u5916\\u90e8\\u30a4\\u30f3\\u30b9\\u30bf\\u30f3\\u30b9\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u30ec\\u30b3\\u30fc\\u30c9\\u3092\\u7121\\u52b9\\u5316\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "eic_delete_confirm_modal",
+        "sourceActionKey": "eic_delete_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "dryRun": "literal:true",
+        "recordId": "node:eic_record_id_input.value",
+        "recordKind": "node:eic_record_kind_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000cd014:external_instance_credential:delete"
+    },
+    "label": "\u5916\u90E8\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u30EC\u30B3\u30FC\u30C9\u3092\u7121\u52B9\u5316"
+  },
+  {
+    "nodeId": "eic_delete_confirm_modal",
+    "nodeKind": "catalog_component",
+    "componentId": "eic_delete_confirm_modal",
+    "parentNodeId": "external_instance_credential_crud_section",
+    "orderIndex": 121,
+    "x": 0,
+    "y": 0,
+    "componentKind": "disclosure/modal",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u5916\\u90e8\\u30a4\\u30f3\\u30b9\\u30bf\\u30f3\\u30b9\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u3092\\u7121\\u52b9\\u5316\u0022, \u0022body\u0022: \u0022\\u6307\\u5b9a\\u3057\\u305f\\u30ec\\u30b3\\u30fc\\u30c9ID\\u3092\\u7121\\u52b9\\u5316\\u3057\\u307e\\u3059\\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "eic_delete_confirm_modal",
+        "sourceActionKey": "eic_delete_confirm_modal"
+      }
+    ],
+    "label": "\u5916\u90E8\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u30EC\u30B3\u30FC\u30C9\u7121\u52B9\u5316\u306E\u78BA\u8A8D"
+  },
+  {
+    "nodeId": "eic_delete_confirm_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "eic_delete_confirm_modal",
+    "orderIndex": 122,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u7121\\u52b9\\u5316\\u3092\\u78ba\\u5b9a\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "eic_delete_confirm_modal",
+        "sourceActionKey": "eic_delete_confirm_button"
+      }
+    ],
+    "dispatchPayloadFromByTrigger": {
+      "click": {
+        "recordId": "node:eic_record_id_input.value",
+        "confirmed": "literal:true",
+        "recordKind": "node:eic_record_kind_input.value"
+      }
+    },
+    "dispatchTargetRefByTrigger": {
+      "click": "manifest:00000000-0000-0000-0000-0000000cd014:external_instance_credential:delete"
+    },
+    "label": "\u7121\u52B9\u5316\u3092\u78BA\u5B9A"
+  },
+  {
+    "nodeId": "eic_delete_cancel_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "eic_delete_confirm_modal",
+    "orderIndex": 123,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "eic_delete_confirm_modal",
+        "sourceActionKey": "eic_delete_cancel_button"
+      }
+    ],
+    "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
+  },
+  {
+    "nodeId": "credential_search_section",
+    "nodeKind": "structural_node",
+    "orderIndex": 124,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_section",
+    "label": "\u30E6\u30FC\u30B6\u30FC / \u5916\u90E8API\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB / \u5916\u90E8\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u3092\u6A2A\u65AD\u691C\u7D22"
+  },
+  {
+    "nodeId": "credential_category_filter",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000016",
+    "parentNodeId": "credential_search_section",
+    "orderIndex": 125,
+    "x": 0,
+    "y": 0,
+    "componentKind": "disclosure/tabs",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022data\u0022: {\u0022items\u0022: [{\u0022key\u0022: \u0022users\u0022, \u0022label\u0022: \u0022\u30E6\u30FC\u30B6\u30FC\u0022}, {\u0022key\u0022: \u0022external_api_credential\u0022, \u0022label\u0022: \u0022\u5916\u90E8API\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u0022}, {\u0022key\u0022: \u0022external_instance_credential\u0022, \u0022label\u0022: \u0022\u5916\u90E8\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u0022}], \u0022activeKey\u0022: \u0022external_api_credential\u0022}}",
+    "stateJson": "{\u0022selectedCategory\u0022: \u0022external_api_credential\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "select",
+        "targetRef": "ui-local:credential_category_filter.selectedCategory",
+        "actionType": "setState",
+        "payloadFrom": {
+          "value": "event.value"
+        },
+        "sourceActionKey": "credential_category_filter"
+      }
+    ],
+    "label": "\u30AB\u30C6\u30B4\u30EA (users / external_api_credential / external_instance_credential)"
+  },
+  {
+    "nodeId": "credential_search_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000002",
+    "parentNodeId": "credential_search_section",
+    "orderIndex": 126,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/search_input",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u691C\u7D22(\u30E6\u30FC\u30B6\u30FC\u540D / \u53C2\u7167\u30AD\u30FC / \u975E\u30B7\u30FC\u30AF\u30EC\u30C3\u30C8\u30C6\u30AD\u30B9\u30C8)"
+  },
+  {
+    "nodeId": "credential_filter_status_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "credential_search_section",
+    "orderIndex": 127,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u30B9\u30C6\u30FC\u30BF\u30B9(users\u30AB\u30C6\u30B4\u30EA)"
+  },
+  {
+    "nodeId": "credential_filter_active_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000012",
+    "parentNodeId": "credential_search_section",
+    "orderIndex": 128,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/select",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u6709\u52B9"
+  },
+  {
+    "nodeId": "credential_filter_record_kind_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000012",
+    "parentNodeId": "credential_search_section",
+    "orderIndex": 129,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/select",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u30EC\u30B3\u30FC\u30C9\u7A2E\u5225(\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u30AB\u30C6\u30B4\u30EA)"
+  },
+  {
+    "nodeId": "credential_filter_provider_kind_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "credential_search_section",
+    "orderIndex": 130,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u30D7\u30ED\u30D0\u30A4\u30C0\u30FC\u7A2E\u5225"
+  },
+  {
+    "nodeId": "credential_filter_required_by_bundle_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "credential_search_section",
+    "orderIndex": 131,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u5FC5\u8981\u3068\u3059\u308B\u30D0\u30F3\u30C9\u30EB"
+  },
+  {
+    "nodeId": "credential_filter_expires_before_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "credential_search_section",
+    "orderIndex": 132,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u6709\u52B9\u671F\u9650(\u3053\u308C\u3088\u308A\u524D)"
+  },
+  {
+    "nodeId": "credential_filter_expires_after_input",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000013",
+    "parentNodeId": "credential_search_section",
+    "orderIndex": 133,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/form_field",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "label": "\u6709\u52B9\u671F\u9650(\u3053\u308C\u3088\u308A\u5F8C)"
+  },
+  {
+    "nodeId": "credential_search_button",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "credential_search_section",
+    "orderIndex": 134,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "wiringId": "00000000-0000-0000-0000-0000000cd003",
+    "wiringKey": "auth.external.credential_management.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022label\u0022: \u0022\\u691c\\u7d22\u0022}",
     "dispatchPayloadFromByTrigger": {
       "click": {
         "query": "node:credential_search_input.value",
@@ -1523,14 +2975,14 @@
     "dispatchTargetRefByTrigger": {
       "click": "manifest:00000000-0000-0000-0000-000000000092:credential_management:search"
     },
-    "label": "Search"
+    "label": "\u691C\u7D22"
   },
   {
     "nodeId": "credential_result_list",
     "nodeKind": "catalog_component",
     "componentId": "00000000-0000-0000-0001-000000000020",
     "parentNodeId": "credential_search_section",
-    "orderIndex": 83,
+    "orderIndex": 135,
     "x": 0,
     "y": 0,
     "componentKind": "data_display/table",
@@ -1539,7 +2991,7 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "propsJson": "{\u0022table\u0022: null, \u0022columns\u0022: [{\u0022key\u0022: \u0022recordKind\u0022, \u0022header\u0022: \u0022Record kind\u0022}, {\u0022key\u0022: \u0022providerKind\u0022, \u0022header\u0022: \u0022Provider kind\u0022}, {\u0022key\u0022: \u0022requiredByBundle\u0022, \u0022header\u0022: \u0022Required by bundle\u0022}, {\u0022key\u0022: \u0022referenceKey\u0022, \u0022header\u0022: \u0022Reference key\u0022}, {\u0022key\u0022: \u0022active\u0022, \u0022header\u0022: \u0022Active\u0022}, {\u0022key\u0022: \u0022expiresAt\u0022, \u0022header\u0022: \u0022Expires at\u0022}, {\u0022key\u0022: \u0022updatedAt\u0022, \u0022header\u0022: \u0022Updated at\u0022}], \u0022rows\u0022: []}",
+    "propsJson": "{\u0022table\u0022: null, \u0022columns\u0022: [{\u0022key\u0022: \u0022recordKind\u0022, \u0022header\u0022: \u0022\\u30ec\\u30b3\\u30fc\\u30c9\\u7a2e\\u5225\u0022}, {\u0022key\u0022: \u0022providerKind\u0022, \u0022header\u0022: \u0022\\u30d7\\u30ed\\u30d0\\u30a4\\u30c0\\u30fc\\u7a2e\\u5225\u0022}, {\u0022key\u0022: \u0022requiredByBundle\u0022, \u0022header\u0022: \u0022\\u5fc5\\u8981\\u3068\\u3059\\u308b\\u30d0\\u30f3\\u30c9\\u30eb\u0022}, {\u0022key\u0022: \u0022referenceKey\u0022, \u0022header\u0022: \u0022\\u53c2\\u7167\\u30ad\\u30fc\u0022}, {\u0022key\u0022: \u0022active\u0022, \u0022header\u0022: \u0022\\u6709\\u52b9\u0022}, {\u0022key\u0022: \u0022expiresAt\u0022, \u0022header\u0022: \u0022\\u6709\\u52b9\\u671f\\u9650\u0022}, {\u0022key\u0022: \u0022updatedAt\u0022, \u0022header\u0022: \u0022\\u66f4\\u65b0\\u65e5\\u6642\u0022}], \u0022rows\u0022: []}",
     "propBindings": {
       "rows": {
         "source": "emission.data.records"
@@ -1549,881 +3001,6 @@
         "transform": "activeColumnsToTableColumns"
       }
     },
-    "label": "Credential search results (category-routed)"
-  },
-  {
-    "nodeId": "credentials_users_account_section",
-    "nodeKind": "structural_node",
-    "parentNodeId": "users",
-    "orderIndex": 84,
-    "x": 0,
-    "y": 0,
-    "recordType": "topology_ui_section",
-    "label": "User account lifecycle (create / update / delete / revoke)"
-  },
-  {
-    "nodeId": "credentials_users_username_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 85,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/form_field",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Username"
-  },
-  {
-    "nodeId": "credentials_users_password_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 86,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/form_field",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Initial password (create only -- admin_driven_password_replace_or_rotate is never available)"
-  },
-  {
-    "nodeId": "credentials_users_approve_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000012",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 87,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/select",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Approve"
-  },
-  {
-    "nodeId": "credentials_users_status_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 88,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/form_field",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Status"
-  },
-  {
-    "nodeId": "credentials_users_role_name_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000012",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 89,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/select",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Role (admin / user)"
-  },
-  {
-    "nodeId": "credentials_users_state_note_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 90,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/form_field",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "State note"
-  },
-  {
-    "nodeId": "credentials_users_suspended_from_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 91,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/form_field",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Suspended from"
-  },
-  {
-    "nodeId": "credentials_users_suspended_until_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 92,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/form_field",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Suspended until"
-  },
-  {
-    "nodeId": "credentials_users_active_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000012",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 93,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/select",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Active"
-  },
-  {
-    "nodeId": "credentials_users_user_id_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 94,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/form_field",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "User ID (required for update / delete / revoke)"
-  },
-  {
-    "nodeId": "credentials_users_session_id_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 95,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/form_field",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Session ID (blank = revoke all sessions)"
-  },
-  {
-    "nodeId": "credentials_users_create_button",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 96,
-    "x": 0,
-    "y": 0,
-    "componentKind": "action/button",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "dispatchPayloadFromByTrigger": {
-      "click": {
-        "dryRun": "literal:true",
-        "status": "node:credentials_users_status_input.value",
-        "approve": "node:credentials_users_approve_input.value",
-        "password": "node:credentials_users_password_input.value",
-        "roleName": "node:credentials_users_role_name_input.value",
-        "username": "node:credentials_users_username_input.value",
-        "stateNote": "node:credentials_users_state_note_input.value",
-        "suspendedFrom": "node:credentials_users_suspended_from_input.value",
-        "suspendedUntil": "node:credentials_users_suspended_until_input.value"
-      }
-    },
-    "dispatchTargetRefByTrigger": {
-      "click": "manifest:00000000-0000-0000-0000-0000000ad004:auth_users:create"
-    },
-    "label": "Create user account (with initial credential)"
-  },
-  {
-    "nodeId": "credentials_users_create_confirm_modal",
-    "nodeKind": "catalog_component",
-    "componentId": "credentials_users_create_confirm_modal",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 97,
-    "x": 0,
-    "y": 0,
-    "componentKind": "disclosure/modal",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022Create user account\u0022, \u0022body\u0022: \u0022Create a new account with the given initial password. The password is never echoed back and can never be replaced/rotated by an admin afterward.\u0022}}",
-    "label": "Create user account confirmation"
-  },
-  {
-    "nodeId": "credentials_users_create_confirm_button",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 98,
-    "x": 0,
-    "y": 0,
-    "componentKind": "action/button",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "dispatchPayloadFromByTrigger": {
-      "click": {
-        "status": "node:credentials_users_status_input.value",
-        "approve": "node:credentials_users_approve_input.value",
-        "password": "node:credentials_users_password_input.value",
-        "roleName": "node:credentials_users_role_name_input.value",
-        "username": "node:credentials_users_username_input.value",
-        "confirmed": "literal:true",
-        "stateNote": "node:credentials_users_state_note_input.value",
-        "suspendedFrom": "node:credentials_users_suspended_from_input.value",
-        "suspendedUntil": "node:credentials_users_suspended_until_input.value"
-      }
-    },
-    "dispatchTargetRefByTrigger": {
-      "click": "manifest:00000000-0000-0000-0000-0000000ad004:auth_users:create"
-    },
-    "label": "Confirm create"
-  },
-  {
-    "nodeId": "credentials_users_update_button",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 99,
-    "x": 0,
-    "y": 0,
-    "componentKind": "action/button",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "dispatchPayloadFromByTrigger": {
-      "click": {
-        "active": "node:credentials_users_active_input.value",
-        "dryRun": "literal:true",
-        "status": "node:credentials_users_status_input.value",
-        "userId": "node:credentials_users_user_id_input.value",
-        "approve": "node:credentials_users_approve_input.value",
-        "roleName": "node:credentials_users_role_name_input.value",
-        "username": "node:credentials_users_username_input.value",
-        "stateNote": "node:credentials_users_state_note_input.value",
-        "suspendedFrom": "node:credentials_users_suspended_from_input.value",
-        "suspendedUntil": "node:credentials_users_suspended_until_input.value"
-      }
-    },
-    "dispatchTargetRefByTrigger": {
-      "click": "manifest:00000000-0000-0000-0000-0000000ad005:auth_users:update"
-    },
-    "label": "Update user account metadata"
-  },
-  {
-    "nodeId": "credentials_users_update_confirm_modal",
-    "nodeKind": "catalog_component",
-    "componentId": "credentials_users_update_confirm_modal",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 100,
-    "x": 0,
-    "y": 0,
-    "componentKind": "disclosure/modal",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022Update user account\u0022, \u0022body\u0022: \u0022Update account metadata (never a password field -- admin_driven_password_replace_or_rotate is permanently unavailable).\u0022}}",
-    "label": "Update user account confirmation"
-  },
-  {
-    "nodeId": "credentials_users_update_confirm_button",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 101,
-    "x": 0,
-    "y": 0,
-    "componentKind": "action/button",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "dispatchPayloadFromByTrigger": {
-      "click": {
-        "active": "node:credentials_users_active_input.value",
-        "status": "node:credentials_users_status_input.value",
-        "userId": "node:credentials_users_user_id_input.value",
-        "approve": "node:credentials_users_approve_input.value",
-        "roleName": "node:credentials_users_role_name_input.value",
-        "username": "node:credentials_users_username_input.value",
-        "confirmed": "literal:true",
-        "stateNote": "node:credentials_users_state_note_input.value",
-        "suspendedFrom": "node:credentials_users_suspended_from_input.value",
-        "suspendedUntil": "node:credentials_users_suspended_until_input.value"
-      }
-    },
-    "dispatchTargetRefByTrigger": {
-      "click": "manifest:00000000-0000-0000-0000-0000000ad005:auth_users:update"
-    },
-    "label": "Confirm update"
-  },
-  {
-    "nodeId": "credentials_users_delete_button",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 102,
-    "x": 0,
-    "y": 0,
-    "componentKind": "action/button",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "dispatchPayloadFromByTrigger": {
-      "click": {
-        "dryRun": "literal:true",
-        "userId": "node:credentials_users_user_id_input.value"
-      }
-    },
-    "dispatchTargetRefByTrigger": {
-      "click": "manifest:00000000-0000-0000-0000-0000000ad006:auth_users:delete"
-    },
-    "label": "Delete account (with credentials)"
-  },
-  {
-    "nodeId": "credentials_users_delete_confirm_modal",
-    "nodeKind": "catalog_component",
-    "componentId": "credentials_users_delete_confirm_modal",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 103,
-    "x": 0,
-    "y": 0,
-    "componentKind": "disclosure/modal",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022Delete user account\u0022, \u0022body\u0022: \u0022Permanently deletes the account and its credentials. This cannot be undone.\u0022}}",
-    "label": "Delete account confirmation"
-  },
-  {
-    "nodeId": "credentials_users_delete_confirm_button",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 104,
-    "x": 0,
-    "y": 0,
-    "componentKind": "action/button",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "dispatchPayloadFromByTrigger": {
-      "click": {
-        "userId": "node:credentials_users_user_id_input.value",
-        "confirmed": "literal:true"
-      }
-    },
-    "dispatchTargetRefByTrigger": {
-      "click": "manifest:00000000-0000-0000-0000-0000000ad006:auth_users:delete"
-    },
-    "label": "Confirm delete"
-  },
-  {
-    "nodeId": "credentials_users_revoke_credential_button",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 105,
-    "x": 0,
-    "y": 0,
-    "componentKind": "action/button",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Revoke credential (open confirm)"
-  },
-  {
-    "nodeId": "credentials_users_revoke_credential_confirm_modal",
-    "nodeKind": "catalog_component",
-    "componentId": "credentials_users_revoke_credential_confirm_modal",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 106,
-    "x": 0,
-    "y": 0,
-    "componentKind": "disclosure/modal",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022Revoke credential\u0022, \u0022body\u0022: \u0022Deletes the account\u0027s stored credential (kill-switch). The account itself is not deleted.\u0022}}",
-    "label": "Revoke credential confirmation"
-  },
-  {
-    "nodeId": "credentials_users_revoke_credential_confirm_button",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 107,
-    "x": 0,
-    "y": 0,
-    "componentKind": "action/button",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "dispatchPayloadFromByTrigger": {
-      "click": {
-        "userId": "node:credentials_users_user_id_input.value"
-      }
-    },
-    "dispatchTargetRefByTrigger": {
-      "click": "manifest:00000000-0000-0000-0000-0000000ad007:auth_users:revoke_credential"
-    },
-    "label": "Confirm revoke credential"
-  },
-  {
-    "nodeId": "credentials_users_revoke_sessions_button",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 108,
-    "x": 0,
-    "y": 0,
-    "componentKind": "action/button",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Revoke sessions (open confirm)"
-  },
-  {
-    "nodeId": "credentials_users_revoke_sessions_confirm_modal",
-    "nodeKind": "catalog_component",
-    "componentId": "credentials_users_revoke_sessions_confirm_modal",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 109,
-    "x": 0,
-    "y": 0,
-    "componentKind": "disclosure/modal",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022Revoke sessions\u0022, \u0022body\u0022: \u0022Revokes the account\u0027s active session(s) -- a specific sessionId, or all sessions when left blank.\u0022}}",
-    "label": "Revoke sessions confirmation"
-  },
-  {
-    "nodeId": "credentials_users_revoke_sessions_confirm_button",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "credentials_users_account_section",
-    "orderIndex": 110,
-    "x": 0,
-    "y": 0,
-    "componentKind": "action/button",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "dispatchPayloadFromByTrigger": {
-      "click": {
-        "userId": "node:credentials_users_user_id_input.value",
-        "sessionId": "node:credentials_users_session_id_input.value"
-      }
-    },
-    "dispatchTargetRefByTrigger": {
-      "click": "manifest:00000000-0000-0000-0000-0000000ad008:auth_users:revoke_sessions"
-    },
-    "label": "Confirm revoke sessions"
-  },
-  {
-    "nodeId": "external_instance_credential_crud_section",
-    "nodeKind": "structural_node",
-    "parentNodeId": "instance_settings",
-    "orderIndex": 111,
-    "x": 0,
-    "y": 0,
-    "recordType": "topology_ui_section",
-    "label": "External instance credential records (db/runtime instance port)"
-  },
-  {
-    "nodeId": "eic_record_kind_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000012",
-    "parentNodeId": "external_instance_credential_crud_section",
-    "orderIndex": 112,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/select",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Record kind (db_instance_port / runtime_instance_port)"
-  },
-  {
-    "nodeId": "eic_record_id_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "external_instance_credential_crud_section",
-    "orderIndex": 113,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/form_field",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Record ID (leave blank to create)"
-  },
-  {
-    "nodeId": "eic_instance_authority_key_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "external_instance_credential_crud_section",
-    "orderIndex": 114,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/form_field",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Instance authority key"
-  },
-  {
-    "nodeId": "eic_provider_kind_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "external_instance_credential_crud_section",
-    "orderIndex": 115,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/form_field",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Provider kind"
-  },
-  {
-    "nodeId": "eic_required_by_bundle_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "external_instance_credential_crud_section",
-    "orderIndex": 116,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/form_field",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Required by bundle"
-  },
-  {
-    "nodeId": "eic_reference_key_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000013",
-    "parentNodeId": "external_instance_credential_crud_section",
-    "orderIndex": 117,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/form_field",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Reference key (must reference an existing vault credential)"
-  },
-  {
-    "nodeId": "eic_active_input",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000012",
-    "parentNodeId": "external_instance_credential_crud_section",
-    "orderIndex": 118,
-    "x": 0,
-    "y": 0,
-    "componentKind": "form_input/select",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "label": "Active"
-  },
-  {
-    "nodeId": "eic_create_button",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "external_instance_credential_crud_section",
-    "orderIndex": 119,
-    "x": 0,
-    "y": 0,
-    "componentKind": "action/button",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "dispatchPayloadFromByTrigger": {
-      "click": {
-        "dryRun": "literal:true",
-        "recordKind": "node:eic_record_kind_input.value",
-        "providerKind": "node:eic_provider_kind_input.value",
-        "referenceKey": "node:eic_reference_key_input.value",
-        "requiredByBundle": "node:eic_required_by_bundle_input.value",
-        "instanceAuthorityKey": "node:eic_instance_authority_key_input.value"
-      }
-    },
-    "dispatchTargetRefByTrigger": {
-      "click": "manifest:00000000-0000-0000-0000-0000000cd012:external_instance_credential:create"
-    },
-    "label": "Create external instance credential record"
-  },
-  {
-    "nodeId": "eic_create_confirm_modal",
-    "nodeKind": "catalog_component",
-    "componentId": "eic_create_confirm_modal",
-    "parentNodeId": "external_instance_credential_crud_section",
-    "orderIndex": 120,
-    "x": 0,
-    "y": 0,
-    "componentKind": "disclosure/modal",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022Create external instance credential record\u0022, \u0022body\u0022: \u0022Points a db_instance_port/runtime_instance_port row at an EXISTING vault reference_key. Never creates or rotates a secret.\u0022}}",
-    "label": "Create external instance credential confirmation"
-  },
-  {
-    "nodeId": "eic_create_confirm_button",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "external_instance_credential_crud_section",
-    "orderIndex": 121,
-    "x": 0,
-    "y": 0,
-    "componentKind": "action/button",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "dispatchPayloadFromByTrigger": {
-      "click": {
-        "confirmed": "literal:true",
-        "recordKind": "node:eic_record_kind_input.value",
-        "providerKind": "node:eic_provider_kind_input.value",
-        "referenceKey": "node:eic_reference_key_input.value",
-        "requiredByBundle": "node:eic_required_by_bundle_input.value",
-        "instanceAuthorityKey": "node:eic_instance_authority_key_input.value"
-      }
-    },
-    "dispatchTargetRefByTrigger": {
-      "click": "manifest:00000000-0000-0000-0000-0000000cd012:external_instance_credential:create"
-    },
-    "label": "Confirm create"
-  },
-  {
-    "nodeId": "eic_update_button",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "external_instance_credential_crud_section",
-    "orderIndex": 122,
-    "x": 0,
-    "y": 0,
-    "componentKind": "action/button",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "dispatchPayloadFromByTrigger": {
-      "click": {
-        "active": "node:eic_active_input.value",
-        "dryRun": "literal:true",
-        "recordId": "node:eic_record_id_input.value",
-        "recordKind": "node:eic_record_kind_input.value",
-        "providerKind": "node:eic_provider_kind_input.value",
-        "referenceKey": "node:eic_reference_key_input.value",
-        "requiredByBundle": "node:eic_required_by_bundle_input.value"
-      }
-    },
-    "dispatchTargetRefByTrigger": {
-      "click": "manifest:00000000-0000-0000-0000-0000000cd013:external_instance_credential:update"
-    },
-    "label": "Update external instance credential record"
-  },
-  {
-    "nodeId": "eic_update_confirm_modal",
-    "nodeKind": "catalog_component",
-    "componentId": "eic_update_confirm_modal",
-    "parentNodeId": "external_instance_credential_crud_section",
-    "orderIndex": 123,
-    "x": 0,
-    "y": 0,
-    "componentKind": "disclosure/modal",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022Update external instance credential record\u0022, \u0022body\u0022: \u0022Updates provider_kind / required_by_bundle / reference_key / active. reference_key must still reference an existing vault credential.\u0022}}",
-    "label": "Update external instance credential confirmation"
-  },
-  {
-    "nodeId": "eic_update_confirm_button",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "external_instance_credential_crud_section",
-    "orderIndex": 124,
-    "x": 0,
-    "y": 0,
-    "componentKind": "action/button",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "dispatchPayloadFromByTrigger": {
-      "click": {
-        "active": "node:eic_active_input.value",
-        "recordId": "node:eic_record_id_input.value",
-        "confirmed": "literal:true",
-        "recordKind": "node:eic_record_kind_input.value",
-        "providerKind": "node:eic_provider_kind_input.value",
-        "referenceKey": "node:eic_reference_key_input.value",
-        "requiredByBundle": "node:eic_required_by_bundle_input.value"
-      }
-    },
-    "dispatchTargetRefByTrigger": {
-      "click": "manifest:00000000-0000-0000-0000-0000000cd013:external_instance_credential:update"
-    },
-    "label": "Confirm update"
-  },
-  {
-    "nodeId": "eic_delete_button",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "external_instance_credential_crud_section",
-    "orderIndex": 125,
-    "x": 0,
-    "y": 0,
-    "componentKind": "action/button",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "dispatchPayloadFromByTrigger": {
-      "click": {
-        "dryRun": "literal:true",
-        "recordId": "node:eic_record_id_input.value",
-        "recordKind": "node:eic_record_kind_input.value"
-      }
-    },
-    "dispatchTargetRefByTrigger": {
-      "click": "manifest:00000000-0000-0000-0000-0000000cd014:external_instance_credential:delete"
-    },
-    "label": "Deactivate external instance credential record"
-  },
-  {
-    "nodeId": "eic_delete_confirm_modal",
-    "nodeKind": "catalog_component",
-    "componentId": "eic_delete_confirm_modal",
-    "parentNodeId": "external_instance_credential_crud_section",
-    "orderIndex": 126,
-    "x": 0,
-    "y": 0,
-    "componentKind": "disclosure/modal",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022Deactivate external instance credential record\u0022, \u0022body\u0022: \u0022Deactivates the record (active=false). The port row and its reference are never hard-deleted.\u0022}}",
-    "label": "Deactivate external instance credential confirmation"
-  },
-  {
-    "nodeId": "eic_delete_confirm_button",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "external_instance_credential_crud_section",
-    "orderIndex": 127,
-    "x": 0,
-    "y": 0,
-    "componentKind": "action/button",
-    "wiringId": "00000000-0000-0000-0000-0000000cd003",
-    "wiringKey": "auth.external.credential_management.projection.wiring",
-    "wiringKind": "admin_runtime",
-    "targetSurface": "manifest",
-    "targetRef": "auth.external.credential_management.projection",
-    "dispatchPayloadFromByTrigger": {
-      "click": {
-        "recordId": "node:eic_record_id_input.value",
-        "confirmed": "literal:true",
-        "recordKind": "node:eic_record_kind_input.value"
-      }
-    },
-    "dispatchTargetRefByTrigger": {
-      "click": "manifest:00000000-0000-0000-0000-0000000cd014:external_instance_credential:delete"
-    },
-    "label": "Confirm deactivate"
+    "label": "\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u691C\u7D22\u7D50\u679C(\u30AB\u30C6\u30B4\u30EA\u5225)"
   }
 ]

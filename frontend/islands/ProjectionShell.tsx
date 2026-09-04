@@ -72,6 +72,8 @@ function toRunnerWiringNodes(
       componentKind: n.componentKind,
       stateJson: n.stateJson ?? undefined,
       runtimeInteractions: n.runtimeInteractions ?? undefined,
+      parentNodeId: n.parentNodeId,
+      visibilityBinding: n.visibilityBinding ?? undefined,
     }));
 }
 
@@ -906,6 +908,7 @@ const ProjectionShell: FunctionComponent<ProjectionShellProps> = (
       <LayoutProjectionTree
         specs={specs}
         layoutId={emission?.layoutId}
+        localStateStore={stateDispatcherRef.current ?? undefined}
       />
       <nav
         data-projection-hub-navigation

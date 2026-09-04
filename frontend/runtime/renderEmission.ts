@@ -123,6 +123,12 @@ export type ComponentSpec = {
   inlineText?: string;
   /** css_dictionary token refs applied to wrapper inline style */
   cssTokenRefs?: string[];
+  /**
+   * SSOT: runtime-orchestration-ssot.yaml structural_subtree_conditional_visibility_contract.
+   * Carried verbatim from LayoutNode.visibilityBinding — never evaluated here (LayoutProjectionTree
+   * evaluates it against the live state store at render time; see structuralVisibility.ts).
+   */
+  visibilityBinding?: { source: string; matchValue: unknown } | null;
 };
 
 /**
@@ -873,6 +879,7 @@ function buildLocalUiStateEventBinding(
       : "";
     if (!trigger || !actionType) continue;
     if (wiringSettingCategoryOf({ actionType }) !== "ui_state_update") continue;
+    const payloadFromRaw = wiring.payloadFrom;
     const resolved = resolveUiStateUpdateMutation({
       actionType,
       targetNodeId: typeof wiring.targetNodeId === "string"
@@ -884,6 +891,10 @@ function buildLocalUiStateEventBinding(
       value: wiring.value,
       targetRef: typeof wiring.targetRef === "string"
         ? wiring.targetRef
+        : undefined,
+      payloadFrom: (typeof payloadFromRaw === "object" && payloadFromRaw !== null &&
+          !Array.isArray(payloadFromRaw))
+        ? payloadFromRaw as Record<string, string>
         : undefined,
     });
     if (!resolved) continue;
@@ -1048,13 +1059,26 @@ function applyLocalStateOverrides(
  * liveNodeValueTracker.ts/payloadFromResolver.ts's existing contract. Applies
  * ONLY when (a) the tracker has an entry for this exact nodeId (untouched
  * nodes are entirely unaffected — no invented value) and (b) the node's
- * already-built default props carry a `data.value` key (never invents a
- * "value" concept for a component kind that doesn't have one — e.g.
- * action/button, form_input/form_field). Applied BEFORE propBindings
- * resolution (resolvePropBindings runs later in the pipeline), so a node
- * whose value is ALSO server-data-bound via propBindings still lets that
- * fresher, data-driven binding win — a stale local edit is not preferred over
- * live server data once the projection actually carries one.
+ * already-built default props carry a `data.value` and/or `data.activeKey`
+ * key (never invents a controlled-value concept for a component kind that
+ * doesn't have one — e.g. action/button, form_input/form_field). `activeKey`
+ * (tabs.template's own controlled-selection prop — see Tabs.tsx/tabsFactory)
+ * is checked generically alongside `value` for the SAME reason
+ * presentation_component_independence (docs/design/runtime-orchestration-
+ * ssot.yaml structural_subtree_conditional_visibility_contract) treats
+ * tabs.template's onSelect as an equally legal driver of the same
+ * ui-local:<nodeId>.<stateKey> slot select.template's onChange already
+ * drives: without this, a tabs-presented node's own displayed active tab
+ * would silently desync from the state it just switched (a real, visible
+ * regression select.template never had, since a native <select> element's
+ * own DOM value happens to persist independently of the vdom diff) — zero
+ * credential-management or tabs-specific branching, purely shape-driven by
+ * which controlled-value key(s) the node's own props.data already declares.
+ * Applied BEFORE propBindings resolution (resolvePropBindings runs later in
+ * the pipeline), so a node whose value is ALSO server-data-bound via
+ * propBindings still lets that fresher, data-driven binding win — a stale
+ * local edit is not preferred over live server data once the projection
+ * actually carries one.
  */
 function applyLiveNodeValueOverride(
   props: Record<string, unknown>,
@@ -1068,19 +1092,24 @@ function applyLiveNodeValueOverride(
   const trackedValue = payloadFromNodeValues[nodeId];
   const existingData = props.data;
   if (
-    typeof existingData === "object" && existingData !== null &&
-    !Array.isArray(existingData) &&
-    Object.prototype.hasOwnProperty.call(existingData, "value")
+    typeof existingData !== "object" || existingData === null ||
+    Array.isArray(existingData)
   ) {
-    return {
-      ...props,
-      data: {
-        ...(existingData as Record<string, unknown>),
-        value: trackedValue,
-      },
-    };
+    return props;
   }
-  return props;
+  const dataRecord = existingData as Record<string, unknown>;
+  const overrides: Record<string, unknown> = {};
+  if (Object.prototype.hasOwnProperty.call(dataRecord, "value")) {
+    overrides.value = trackedValue;
+  }
+  if (Object.prototype.hasOwnProperty.call(dataRecord, "activeKey")) {
+    overrides.activeKey = trackedValue;
+  }
+  if (Object.keys(overrides).length === 0) return props;
+  return {
+    ...props,
+    data: { ...dataRecord, ...overrides },
+  };
 }
 
 /**
@@ -1270,6 +1299,7 @@ export function renderEmission(
           widthMode: node.widthMode,
           heightMode: node.heightMode,
           layoutClassRefs: node.layoutClassRefs,
+          visibilityBinding: node.visibilityBinding,
         };
 
         const design = node.componentDesign;

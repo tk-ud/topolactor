@@ -305,8 +305,8 @@ react_schema_topology_seed_translator_ssot:
         rule: one of wiring_lane_contract.lanes keys
     per_unit_grammar:
       projection: '[projection key=.. label=.. sourceYamlRefs=..] ... [/projection]'
-      category: '[category key=.. label=.. sourceYamlRefs=..] ... [/category]'
-      section: '[section key=.. label=.. sectionKind=.. sourceYamlRefs=..] ... [/section]'
+      category: '[category key=.. label=.. sourceYamlRefs=.. visibilityBindingSource=.. visibilityBindingMatchValue=..] ... [/category]'
+      section: '[section key=.. label=.. sectionKind=.. sourceYamlRefs=.. visibilityBindingSource=.. visibilityBindingMatchValue=..] ... [/section]'
       form: '[form key=.. label=.. target=.. mode=.. authorityMarker=.. sourceYamlRefs=..] ... [/form]'
       field: '[field key=.. label=.. control=.. required=true|false sourceYamlRefs=.. knownGapRefs=.. valueFrom=.. wiringLane=.. actionRef=.. trigger=.. payloadFrom=.. optionsSource=.. optionsLabelPath=.. optionsValuePath=.. authorityMarker=.. debounceMs=..]'
       table: '[table key=.. label=.. source=.. display=.. displayColumns=.. rowsSource=.. sourceYamlRefs=..]'
@@ -397,6 +397,23 @@ react_schema_topology_seed_translator_ssot:
       both) -- see convert_node_to_seed_record's per-nodeId single-owner propBindings merge
       comment in .agent/scripts/react_schema_topology_seed_translator.py for why this convention
       matters generically, not just for this specific Field.
+    category_section_visibility_binding_attributes: >-
+      structural-subtree-conditional-visibility-implementation round (source-fixture-lineage
+      completion). visibilityBindingSource/visibilityBindingMatchValue are a Category/Section's own
+      OPTIONAL DSL-authorable carrier for the visibilityBinding field documented above
+      (conditional_visibility_binding_ref) -- authored TOGETHER or NEITHER, mirroring
+      field_options_source_attributes' own all-or-nothing convention. Before this round, a
+      DSL-authored (generate_react_schema mode) source fixture had NO way to reproduce a
+      Category/Section that declares visibilityBinding at all -- the field could only be added by
+      hand-patching the react-schema JSON after generate-react-schema ran, which is exactly the gap
+      that stalled credential-management manifest 092's own source-fixture-vs-physical-seed
+      lineage. When authored, this becomes node.visibilityBinding =
+      {"source":visibilityBindingSource,"matchValue":visibilityBindingMatchValue} on the
+      react-schema Category/Section node, verbatim, subject to the SAME shape validation
+      (validate_visibility_binding_shape) as any other visibilityBinding regardless of how it was
+      authored. matchValue is always the string value the DSL's plain-attribute grammar naturally
+      produces; every authored_record_type_scope matchValue in this manifest is itself a string (a
+      category enum name), so no fidelity is lost by this attribute convention.
     field_value_from_attribute: >-
       admin-enum subBundle closure round. valueFrom is a Field's own OPTIONAL data-defined carrier
       for selected-row-relative field prefill -- e.g. a group-detail input field whose value should
@@ -604,6 +621,7 @@ react_schema_topology_seed_translator_ssot:
       - raw_html_tag_emission
       - topology_ui_seed_record_missing_common_or_type_required_field
       - componentKind_absent_from_ui_catalog_boundary_contract_frontend_component_catalog
+      - visibilityBinding_present_with_source_not_matching_ui_local_nodeId_stateKey_shape_or_missing_matchValue
 
   # ===========================================================================
   # 5. topology_ui_seed_contract
@@ -632,8 +650,10 @@ react_schema_topology_seed_translator_ssot:
         required: [surface, categories]
       topology_ui_category:
         required: [categoryKey, sections]
+        optional: [visibilityBinding]
       topology_ui_section:
         required: [sectionKey, sectionKind, children]
+        optional: [visibilityBinding]
       topology_ui_form:
         required: [formKey, target, mode, fields, actions, authorityMarker]
       topology_ui_field:
@@ -691,6 +711,32 @@ react_schema_topology_seed_translator_ssot:
       apply / admin-approve boundary described in authority_mapping before anything it describes
       can execute. This holds even after a record is advanced into a RuntimeComponentSpec
       candidate under projection_render_exchange_contract.
+    conditional_visibility_binding_ref: >-
+      design_change (credential-management manifest 092 category-collapse audit) addition,
+      corrected in the structural-subtree-conditional-visibility-implementation round: only
+      topology_ui_category and topology_ui_section records' optional visibilityBinding field
+      (above) is a SEED EMISSION SHAPE declaration -- {source: "ui-local:<nodeId>.<stateKey>",
+      matchValue: <scalar>}, authored the same way any other record field is authored in the
+      React-like Schema source, carried verbatim through layoutAdoptionCandidates into
+      components_layout_design.layout_schema_json.records[] (schema-composed ONLY), never
+      evaluated by this translator or by LayoutSchemaTensorComposer.Compose. It is NEVER authored
+      directly onto a layout_patch_json.nodes[] entry (tensor-only) -- an earlier version of this
+      note claimed that shape was also legal; docs/design/runtime-orchestration-ssot.yaml
+      ui_projection_render_reachability_contract.structural_subtree_conditional_visibility_contract
+      record_carrier_tensor_only retracted that claim as never implementable (a tensor-only layout
+      has no Category/Section concept, and NodeLocalData's catalog-leaf-only merge never applies to
+      structural nodes even on a schema-composed layout's own tensor override lane) and
+      NpgsqlUiTopologyRepository.ValidateLayoutPatchNodes now fails such a node closed at save time
+      with LAYOUT_PATCH_VISIBILITY_BINDING_NOT_ALLOWED regardless of well-formed or malformed
+      shape. The RUNTIME PROJECTION/RENDER meaning of this field -- structural mount/unmount,
+      static-topology authority boundary, state store identity, fail-close behavior for an
+      undeclared/malformed binding, and the prohibition on promoting it to dispatch/backend
+      authority -- is fully owned by docs/design/runtime-orchestration-ssot.yaml
+      ui_projection_render_reachability_contract.structural_subtree_conditional_visibility_contract,
+      mirroring how layout_schema_structural_render_contract already owns the runtime
+      classification of every other record type this SSOT emits
+      (authority_boundary_with_translator_ssot above). This SSOT does not restate that contract's
+      body and does not itself define what visibilityBinding DOES at render time.
 
   # ===========================================================================
   # 5a. storage_adoption_contract
@@ -712,6 +758,33 @@ react_schema_topology_seed_translator_ssot:
       index: idx_manifest_topology
       index_type: gin
       index_definition_ref: db/manifest_tables.sql
+      applies_only_to: manifestRefsCandidate
+      applies_only_to_note: >-
+        structural-subtree-conditional-visibility-implementation round correction: this budget
+        (constraint.budget_bytes below) is anchored specifically to idx_manifest_topology -- a GIN
+        index over the manifest.topology jsonb[] column, which indexes each array element as one
+        indexable item. adoption_candidate_separation_contract's other buckets
+        (layoutAdoptionCandidates / wiringAdoptionCandidates / tensorAdoptionCandidates /
+        packageAdoptionCandidates / componentGroupBundleAdoptionCandidates) target
+        topology.components_layout_design.layout_schema_json / ui_wiring_registry /
+        ui_topology_tensor / components_package_design / ui_component_package
+        (db/ui_topology_tables.sql) -- none of which is a jsonb[] column with a GIN index over it
+        (layout_schema_json is a single scalar JSONB document, not an array, and has no GIN index
+        defined at all), so none of them carries a comparable per-element size ceiling. Only
+        manifestRefsCandidate (the refs/vector-only entry actually written into manifest.topology)
+        is checked against constraint.budget_bytes -- see validation_rules'
+        serialized_flattened_record_must_fit_target_storage_budget and
+        .agent/scripts/react_schema_topology_seed_translator.py validate_flat_seed_records's own
+        docstring. An earlier version of this contract's tooling checked every
+        topologyUiSeedFlatRecords wrapper (i.e. every Category/Section/Form/Field/Action/etc.
+        record, regardless of its real adoption target) against this same budget -- a leftover
+        from before adoption_candidate_separation_contract existed to move UI-entity payload OUT of
+        manifest.topology entirely (top_ssot_alignment below) that was never updated once that
+        contract shipped. That mismatch produced false-positive SEED_RECORD_EXCEEDS_STORAGE_BUDGET
+        failures for legitimately large but correctly-routed layoutAdoptionCandidates-bound records
+        (e.g. credential-management manifest 092's multi-field CRUD confirm Actions), which are
+        never proposed for manifest.topology adoption at all and so were never actually at risk of
+        the Postgres failure this contract exists to prevent.
     constraint:
       each_jsonb_array_element_must_fit_indexable_item_budget: true
       budget_bytes: 2712
@@ -1197,6 +1270,22 @@ react_schema_topology_seed_translator_ssot:
       StyleRef: topology_ui_style_ref
       Unresolved: topology_ui_unresolved
 
+    projection_section_membership: >-
+      Bug fix (structural-subtree-conditional-visibility-implementation round, source-fixture-
+      lineage completion). A Projection may directly own a Section, not only Category -- e.g.
+      credential-management manifest 092's own credential_search_section, a category-independent
+      shared search/filter bar with no single owning Category (it searches ACROSS all three
+      categories at once). validate_structural_node never restricted a Section's own parent kind
+      to Category (the same generic posture SECTION_OWNABLE_ACTION_LANES already takes for a
+      Section-owned Action), so this shape was always structurally legal, but
+      convert_node_to_seed_record's Projection branch only ever populated a `categories` bucket --
+      any directly-owned Section was silently dropped from the converted record with zero
+      validation error (converted_children computed it correctly; nothing downstream of that
+      categories-only filter ever read it). Fixed by adding a parallel `sections` bucket to the
+      Projection record (flattened via SEED_RECORD_NESTED_LIST_KEYS'
+      topology_ui_projection: [(categories, categoryKeys), (sections, sectionKeys)]), mirroring how
+      Category's own `sections`/`sectionKeys` bucket already works.
+
     seed_record_to_schema_candidate_mapping:
       rule: inverse of schema_to_seed_record_mapping, applied only under reverse_direction
       per_record_requirement:
@@ -1336,12 +1425,21 @@ react_schema_topology_seed_translator_ssot:
         examples: [enum_group_create_preview, enum_group_create_confirm, admin_write_operation_selector_override]
         targetRef_shape: 'manifest:<manifestId>:<layer>:<action>'
         authority_ref: docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml admin_runtime_target_ref_override_contract
-        allowed_authority_mapping_values: [validation_only, preview_only, draft_apply_not_execution_authority, draft_or_projection_only]
+        allowed_authority_mapping_values: [validation_only, preview_only, draft_apply_not_execution_authority, draft_or_projection_only, read_only]
         allowed_authority_mapping_values_note: >-
           draft_or_projection_only (round 37) is additive and Field-only -- see
           field_participation's rule 4 below. Action/Step's own use of this lane (rules 1-5 above,
-          gated on kind=="Action") is unaffected and still uses only the original three values;
-          nothing about this addition changes what an Action/Step may declare.
+          gated on kind=="Action") is unaffected and still uses only the original three values plus
+          read_only (structural_subtree_conditional_visibility_contract implementation round,
+          additive): a pure read/filter dispatch that never previews or applies any mutation (e.g.
+          credential_management:search's own credential_search_button, whose payload carries only
+          filter criteria, never a business field a preview/apply/confirm pairing would govern) has
+          no other value in this list that honestly describes it -- preview_only/validation_only/
+          draft_apply_not_execution_authority all imply a mutation candidate somewhere in the same
+          flow, which a read-only search action never has. This addition does not relax any
+          existing check: section_owned_dryrun_preview_pairing's preview/confirm pairing rules
+          below are unaffected (a read_only action never participates in that pairing at all,
+          exactly like an ordinary unwired read dispatch).
         allowed_payload_from_sources: [node_value, event_path, literal]
         record_carrier: >-
           Distinct from every other lane above: this lane's Action/Step candidate is NEVER folded
@@ -2020,14 +2118,18 @@ react_schema_topology_seed_translator_ssot:
         declared_by_yaml_ref: docs/design/instance-port-substrate-ssot.yaml existing_credential_management_projection_extension
         seed_role: credential_management_projection_manifest_seed
         record_subjects: [manifest_projection, screen_data_shape, projection_categories]
-        exchange_units: [category, form, field, action, workflow, authority_marker]
+        exchange_units: [category, section, form, field, action, table, modal, validation, workflow, authority_marker]
         authority_boundary: draft_import_validate_preview_apply_admin_approve
         component_catalog_refs:
           catalog_ref: ui_catalog_boundary_contract.frontend_component_catalog
           componentKinds:
             - form_input/select
             - form_input/form_field
+            - form_input/search_input
             - action/button
+            - data_display/table
+            - disclosure/modal
+            - disclosure/tabs
             - safety_guard/apply_confirm_dialog
         style_catalog_refs:
           catalog_ref: ui_catalog_boundary_contract.style_catalog
@@ -2044,6 +2146,11 @@ react_schema_topology_seed_translator_ssot:
           - lane: internal_instance_wiring
             catalog_ref: wiring_lane_contract.lanes.internal_instance_wiring
             targetRefs: ["ui-local:credential_management_mode_switch.value"]
+          - lane: admin_runtime_dispatch_override_wiring
+            catalog_ref: wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring
+            targetRefs:
+              - "manifest:00000000-0000-0000-0000-0000000ad004:auth_users:create"
+              - "manifest:00000000-0000-0000-0000-000000000092:credential_management:search"
         known_gaps:
           - gap: instance_settings_projection_category_not_yet_represented
             classification: ssot_ambiguity_gap
@@ -2067,6 +2174,23 @@ react_schema_topology_seed_translator_ssot:
               seed-representation gap; docs/system-roadmap.yaml known_gap_ref
               instance_settings_admin_authoring_ui_pending (the actual admin authoring
               frontend route/island and backend action) remains open and unrelated.
+          - gap: declared_catalog_stale_against_real_128_record_seed_content
+            classification: ssot_catalog_staleness_gap
+            status: resolved
+            note: >-
+              structural_subtree_conditional_visibility_contract implementation round: this
+              entry's exchange_units/component_catalog_refs/wiring_lane_refs previously matched
+              only an early, small subset of the manifest's real content (predating the
+              credentials.users/external_api_credential CRUD sections, the shared credential
+              search/filter/result_list block, and every Modal confirm dialog) and could not
+              validate the actual current db/seed_empty.sql content through generate-react-schema
+              -> generate-topology-seed. Corrected to add section/table/modal/validation to
+              exchange_units, form_input/search_input/data_display/table/disclosure/modal to
+              componentKinds, and the admin_runtime_dispatch_override_wiring lane (used by the
+              credentials.users/external_api_credential/external_instance_credential CRUD actions
+              and by credential_search_input's debounced search dispatch) to wiring_lane_refs --
+              closing the gap that previously made the fixture -> translator -> seed lineage
+              unreproducible for this surface's real content.
 
       - seed_surface_key: admin.enum.management.projection
         declared_by_yaml_ref: docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.enum
@@ -2542,6 +2666,7 @@ react_schema_topology_seed_translator_ssot:
       - every_emitted_seed_record_is_recursively_checked_against_its_record_type_required_fields
       - no_emitted_seed_record_carries_a_null_or_empty_required_field
       - emitted_action_and_step_records_carry_a_lane_conforming_eventBinding
+      - emitted_category_or_section_visibilityBinding_source_matches_ui_local_nodeId_stateKey_shape_and_carries_a_non_empty_matchValue
 
     storage_adoption_validation: >-
       see storage_adoption_contract.validation_rules; enforced by

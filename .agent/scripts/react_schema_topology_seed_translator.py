@@ -71,7 +71,7 @@ MANIFEST_TOPOLOGY_ARRAY_ELEMENT_BYTE_BUDGET = 2712
 # (see flatten_topology_ui_seed_tree). Mirrors the nesting convert_node_to_seed_record
 # builds for each react_kind.
 SEED_RECORD_NESTED_LIST_KEYS = {
-    "topology_ui_projection": [("categories", "categoryKeys")],
+    "topology_ui_projection": [("categories", "categoryKeys"), ("sections", "sectionKeys")],
     "topology_ui_category": [("sections", "sectionKeys")],
     "topology_ui_section": [("children", "childKeys")],
     "topology_ui_form": [("fields", "fieldKeys"), ("actions", "actionKeys")],
@@ -479,6 +479,7 @@ COMPONENT_KIND_TO_COMPONENT_KEY = {
     "form_input/textarea_template": "textarea.template",
     "action/button": "button.primitive",
     "disclosure/modal": "modal.template",
+    "disclosure/tabs": "tabs.template",
 }
 
 # Generic componentKind -> scalar propBindings target prop name for a Field's own valueFrom
@@ -687,6 +688,25 @@ def build_node(kind, attrs, source_refs, known_gaps):
     authority_marker = attrs.get("authorityMarker")
     if authority_marker:
         node["authorityMarker"] = authority_marker
+
+    if kind in ("category", "section"):
+        # structural_subtree_conditional_visibility_contract's authored shape
+        # (docs/design/runtime-orchestration-ssot.yaml), authorable from DSL source as of the
+        # structural-subtree-conditional-visibility-implementation round -- previously this field
+        # could only be added to a react-schema tree by hand-patching JSON after
+        # generate-react-schema ran, which meant a DSL-authored fixture could never reproduce a
+        # Category/Section that declares it (see conditional_visibility_binding_ref). Two
+        # attributes together (never independently -- authoring only one is a genuine defect the
+        # SAME way optionsSource/optionsLabelPath/optionsValuePath must be authored together
+        # above), mirroring visibilityBinding's own {source, matchValue} object shape exactly.
+        # matchValue is always the string DSL attributes naturally produce -- every
+        # authored_record_type_scope matchValue in this manifest is itself a string (a category
+        # enum name), so this is not a fidelity loss; a future non-string matchValue would need a
+        # typed attribute convention, not invented speculatively here.
+        vb_source = attrs.get("visibilityBindingSource")
+        vb_match_value = attrs.get("visibilityBindingMatchValue")
+        if vb_source or vb_match_value is not None:
+            node["visibilityBinding"] = {"source": vb_source or "", "matchValue": vb_match_value}
 
     if kind in CONTAINER_UNITS:
         node["children"] = []
@@ -1418,7 +1438,24 @@ def validate_admin_runtime_preview_action_pairing(node, nodes_by_key, errors, pa
     if node.get("kind") == "Action":
         eb = node.get("eventBinding") or {}
         parent_kind = parent.get("kind") if parent else None
-        if isinstance(eb, dict) and eb.get("wiringLane") == "admin_runtime_dispatch_override_wiring" and parent_kind == "Section":
+        if (
+            isinstance(eb, dict)
+            and eb.get("wiringLane") == "admin_runtime_dispatch_override_wiring"
+            and parent_kind == "Section"
+            # read_only exemption (structural-subtree-conditional-visibility-implementation round,
+            # closing a real SSOT-vs-implementation drift): wiring_lane_contract.lanes.
+            # admin_runtime_dispatch_override_wiring.allowed_authority_mapping_values_note already
+            # documents that "a read_only action never participates in that pairing at all, exactly
+            # like an ordinary unwired read dispatch" -- a pure read/filter dispatch (e.g.
+            # credential_management:search's own credential_search_button) never previews or
+            # applies any mutation, so it has no Modal/Confirm to pair against and must not be
+            # forced to invent a fake one. That SSOT sentence had no corresponding code path here
+            # until this fix -- every Section-owned use of this lane was checked identically
+            # regardless of authority, so a real read_only Action (credential_search_button) failed
+            # this rule the same way a genuine unpaired mutation would, even though nothing about it
+            # is actually unsafe.
+            and eb.get("authority") != "read_only"
+        ):
             node_path = node.get("_path", path)
             key = node.get("key")
             payload_from = eb.get("payloadFrom") or {}
@@ -1696,8 +1733,8 @@ COMMON_NODE_KEYS = {"kind", "key", "label", "sourceYamlRefs", "knownGapRefs", "a
 
 KIND_SPECIFIC_CONSUMED_KEYS = {
     "Projection": set(),
-    "Category": set(),
-    "Section": {"sectionKind"},
+    "Category": {"visibilityBinding"},
+    "Section": {"sectionKind", "visibilityBinding"},
     "Form": {"target", "mode", "fields", "actions"},
     "Field": {"control", "required", "valueFrom", "eventBinding", "optionsSource", "optionsLabelPath", "optionsValuePath", "debounceMs"},
     "Table": {"source", "display", "displayColumns", "rowsSource", "_rawDisplayColumns"},
@@ -1751,13 +1788,32 @@ def convert_node_to_seed_record(node, schema_to_seed_map, target_surface, loss_e
     if react_kind == "Projection":
         record["surface"] = target_surface
         record["categories"] = [c for c in converted_children if c["recordType"] == "topology_ui_category"]
+        # Bug fix (structural-subtree-conditional-visibility-implementation round,
+        # source-fixture-lineage completion): a Projection may ALSO directly own a Section --
+        # e.g. credential-management manifest 092's own credential_search_section, a
+        # category-independent shared search/filter bar that legitimately has no single owning
+        # Category (it searches ACROSS all three categories at once) -- the same way a Section may
+        # directly own certain Actions (SECTION_OWNABLE_ACTION_LANES above). validate_structural_node
+        # never restricted a Section's own parent kind to Category, so this shape was always
+        # structurally legal; only this conversion step (and the matching
+        # SEED_RECORD_NESTED_LIST_KEYS entry below) had no bucket for it, which meant a
+        # DSL/react-schema source authoring this REAL, already-live shape had its Section silently
+        # DISCARDED here with zero validation error -- converted_children computed it correctly,
+        # but nothing downstream of this "categories"-only filter ever read it. This is exactly the
+        # no_silent_loss gap exchange_report_contract exists to catch, closed here rather than
+        # papered over by wrapping the Section in an artificial Category it does not belong to.
+        record["sections"] = [c for c in converted_children if c["recordType"] == "topology_ui_section"]
     elif react_kind == "Category":
         record["categoryKey"] = record["key"]
         record["sections"] = [c for c in converted_children if c["recordType"] == "topology_ui_section"]
+        if node.get("visibilityBinding") is not None:
+            record["visibilityBinding"] = node["visibilityBinding"]
     elif react_kind == "Section":
         record["sectionKey"] = record["key"]
         record["sectionKind"] = node.get("sectionKind", "")
         record["children"] = converted_children
+        if node.get("visibilityBinding") is not None:
+            record["visibilityBinding"] = node["visibilityBinding"]
     elif react_kind == "Form":
         record["formKey"] = record["key"]
         record["target"] = node.get("target", "")
@@ -1891,11 +1947,17 @@ def new_output_shell():
         "topologyUiSeedCandidate": None,
         # storage_adoption_contract: populated only for generate_topology_ui_seed,
         # mirroring topologyUiSeedCandidate's populated-when rule. A flat list of
-        # topology_ui_seed_record wrappers (see flatten_topology_ui_seed_tree),
-        # each sized against MANIFEST_TOPOLOGY_ARRAY_ELEMENT_BYTE_BUDGET -- this
-        # is the seed-safe adoption shape; topologyUiSeedCandidate's nested tree
-        # remains debug/review-only and must never be adopted as a single
-        # manifest.topology array element (see PR #573's index row size failure).
+        # topology_ui_seed_record wrappers (see flatten_topology_ui_seed_tree) --
+        # a review/migration intermediate only (seed_sql_authority: false), NOT
+        # itself budget-checked or seed-adoptable (allowed_adoption_shapes
+        # downgraded this from PR #573's original "seed adoption shape").
+        # adoptionCandidates below (adoption_candidate_separation_contract) is
+        # the actual seed-safe adoption shape; only its manifestRefsCandidate
+        # bucket is sized against MANIFEST_TOPOLOGY_ARRAY_ELEMENT_BYTE_BUDGET,
+        # since that is the only bucket actually adopted into manifest.topology
+        # (see PR #573's original index row size failure, and
+        # validate_flat_seed_records's docstring for why every other bucket is
+        # exempt from this specific budget).
         "topologyUiSeedFlatRecords": None,
         # storage_adoption_contract.adoption_candidate_separation_contract: the
         # actual seed-safe adoption shape, built from topologyUiSeedFlatRecords.
@@ -1953,6 +2015,52 @@ COMMON_SEED_RECORD_REQUIRED_FIELDS = ["recordType", "key", "label", "sourceYamlR
 
 SEED_RECORD_CHILD_LIST_FIELDS = ("categories", "sections", "children", "fields", "actions", "steps", "columns")
 
+# SSOT: docs/design/runtime-orchestration-ssot.yaml
+# ui_projection_render_reachability_contract.structural_subtree_conditional_visibility_contract
+# authored_record_type_scope. Mirrors backend/repository/LayoutSchemaTensorComposer.cs's
+# VisibilityBindingEligibleRecordTypes / VisibilityBindingSourceRe exactly, so a malformed
+# visibilityBinding fails close at generation time (translator) the same way it fails close at
+# read time (LayoutSchemaTensorComposer.ParseRecords) -- never a gap where only one layer checks.
+VISIBILITY_BINDING_ELIGIBLE_RECORD_TYPES = {"topology_ui_category", "topology_ui_section"}
+VISIBILITY_BINDING_SOURCE_RE = re.compile(r"^ui-local:[^.]+\.(.+)$")
+
+
+def validate_visibility_binding(record, errors):
+    """Validates an authored visibilityBinding {source, matchValue} on a single record (not
+    recursive — called once per record from validate_seed_record_tree's own recursion)."""
+    vb = record.get("visibilityBinding")
+    if vb is None:
+        return
+    record_type = record.get("recordType")
+    path = record.get("sourceReactPath", "$.root")
+    key = record.get("key")
+    if record_type not in VISIBILITY_BINDING_ELIGIBLE_RECORD_TYPES:
+        errors.append(err(
+            "SEED_RECORD_VISIBILITY_BINDING_INELIGIBLE_RECORD_TYPE", path, "blocking",
+            f"{record_type} record '{key}' authors visibilityBinding, but it is only legal on "
+            "topology_ui_category or topology_ui_section",
+        ))
+        return
+    if not isinstance(vb, dict):
+        errors.append(err(
+            "SEED_RECORD_VISIBILITY_BINDING_INVALID_SHAPE", path, "blocking",
+            f"{record_type} record '{key}' visibilityBinding must be an object",
+        ))
+        return
+    source = vb.get("source")
+    if not isinstance(source, str) or not VISIBILITY_BINDING_SOURCE_RE.match(source or ""):
+        errors.append(err(
+            "SEED_RECORD_VISIBILITY_BINDING_INVALID_SOURCE", path, "blocking",
+            f"{record_type} record '{key}' visibilityBinding.source must be a non-empty "
+            "\"ui-local:<nodeId>.<stateKey>\" string",
+        ))
+    match_value = vb.get("matchValue", "__MISSING__")
+    if match_value == "__MISSING__" or isinstance(match_value, (dict, list)) or match_value is None:
+        errors.append(err(
+            "SEED_RECORD_VISIBILITY_BINDING_INVALID_MATCH_VALUE", path, "blocking",
+            f"{record_type} record '{key}' visibilityBinding.matchValue must be present and a scalar",
+        ))
+
 
 def validate_seed_record_tree(record, record_types_def, errors):
     """topology_ui_seed_contract.record_common_required_fields plus each
@@ -1978,6 +2086,8 @@ def validate_seed_record_tree(record, record_types_def, errors):
             )
     if not record.get("sourceYamlRefs"):
         errors.append(err("SEED_RECORD_EMPTY_SOURCE_YAML_REFS", path, "blocking", f"{record_type} record '{key}' has empty sourceYamlRefs"))
+
+    validate_visibility_binding(record, errors)
 
     type_def = record_types_def.get(record_type) or {}
     for field in type_def.get("required", []):
@@ -2051,32 +2161,47 @@ def flatten_topology_ui_seed_tree(record, seed_key, parent_key=None, out=None):
     return out
 
 
-def validate_flat_seed_records(flat_records, budget_bytes=MANIFEST_TOPOLOGY_ARRAY_ELEMENT_BYTE_BUDGET):
-    """storage_adoption_contract.validation_rules: every flattened wrapper
-    must independently fit the manifest.topology jsonb[] GIN index's
-    per-array-element byte budget once it is adopted as a seed array
-    element. Checked on the exact JSON text the seed would carry (compact
-    separators, matching the existing seed store's single-line jsonb
-    literal style) so this catches the failure at generation time instead
-    of at insert time. budget_bytes is a UTF-8 *byte* budget (the Postgres
-    index item size limit is byte-based), so the check must measure UTF-8
-    encoded length, not Python string/character length -- multi-byte
-    labels (e.g. non-ASCII text) would otherwise silently pass a
+def validate_flat_seed_records(manifest_refs_candidate, budget_bytes=MANIFEST_TOPOLOGY_ARRAY_ELEMENT_BYTE_BUDGET):
+    """storage_adoption_contract.validation_rules
+    (serialized_flattened_record_must_fit_target_storage_budget): the rule name says "TARGET
+    storage budget" deliberately -- the manifest.topology / idx_manifest_topology GIN index's
+    per-array-element byte budget applies only to the one shape actually adopted into that column,
+    manifestRefsCandidate (a small refs/vector-only entry: type/packageIds/layoutId/wiringId/
+    tensorId). It does NOT apply to topologyUiSeedFlatRecords / layoutAdoptionCandidates /
+    wiringAdoptionCandidates / tensorAdoptionCandidates / packageAdoptionCandidates /
+    componentGroupBundleAdoptionCandidates content: adoption_candidate_separation_contract moved
+    all UI-entity payload (Category/Section/Form/Field/Action/etc.) OUT of manifest.topology and
+    into topology.components_layout_design / ui_wiring_registry / ui_topology_tensor /
+    components_package_design / ui_component_package, none of which carry a GIN index over a
+    jsonb[] column with a comparable per-element ceiling (the ui_topology_tables schema --
+    components_layout_design.layout_schema_json is a single scalar JSONB column, not an array, and
+    has no GIN index at all). An earlier version of this function checked every
+    topologyUiSeedFlatRecords wrapper against this budget regardless of its actual adoption
+    target -- a leftover from before adoption_candidate_separation_contract existed (PR #573 had
+    briefly treated the flattened array itself as the manifest.topology adoption shape; see
+    top_ssot_alignment) that was never updated once that contract moved UI payload elsewhere. That
+    over-broad check produced false-positive SEED_RECORD_EXCEEDS_STORAGE_BUDGET failures for
+    legitimately large, correctly-routed layoutAdoptionCandidates-bound records (e.g. a CRUD
+    confirm Action carrying a full multi-field payloadFrom map plus sourceYamlRefs) that were never
+    going to be stored in manifest.topology at all. Checked on the exact JSON text the seed would
+    carry (compact separators, matching the existing seed store's single-line jsonb literal style)
+    so a genuine manifest.topology-bound overflow is still caught at generation time instead of at
+    insert time. budget_bytes is a UTF-8 *byte* budget (the Postgres index item size limit is
+    byte-based), so the check must measure UTF-8 encoded length, not Python string/character
+    length -- multi-byte labels (e.g. non-ASCII text) would otherwise silently pass a
     character-count check while still overflowing the real byte budget."""
     errors = []
-    for wrapper in flat_records:
-        size = len(json.dumps(wrapper, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
-        if size > budget_bytes:
-            record = wrapper.get("record") or {}
-            path = record.get("sourceReactPath", "$.root")
-            errors.append(err(
-                "SEED_RECORD_EXCEEDS_STORAGE_BUDGET",
-                path,
-                "blocking",
-                f"flattened record '{record.get('key')}' ({record.get('recordType')}) serializes to "
-                f"{size} bytes, exceeding the {budget_bytes}-byte manifest.topology / "
-                f"idx_manifest_topology storage_adoption_contract budget",
-            ))
+    if not manifest_refs_candidate:
+        return errors
+    size = len(json.dumps(manifest_refs_candidate, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
+    if size > budget_bytes:
+        errors.append(err(
+            "SEED_RECORD_EXCEEDS_STORAGE_BUDGET",
+            "$.adoptionCandidates.manifestRefsCandidate",
+            "blocking",
+            f"manifestRefsCandidate serializes to {size} bytes, exceeding the {budget_bytes}-byte "
+            f"manifest.topology / idx_manifest_topology storage_adoption_contract budget",
+        ))
     return errors
 
 
@@ -2180,6 +2305,7 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                     "seedKey": seed_key,
                     "surface": record.get("surface"),
                     "categoryKeys": record.get("categoryKeys") or [],
+                    "sectionKeys": record.get("sectionKeys") or [],
                 },
                 "sourceRecordKey": key,
             })
@@ -3304,21 +3430,25 @@ def cmd_generate_topology_seed(args):
     output["topologyUiSeedCandidate"] = build_topology_ui_seed_candidate(supplied_schema, target_surface, root_record, exchange_report)
 
     # storage_adoption_contract: derive the seed-safe flat adoption shape from
-    # the same root_record the nested candidate above was built from, and
-    # validate every flattened element against the manifest.topology /
-    # idx_manifest_topology GIN index byte budget before it is ever proposed
-    # for seed adoption.
+    # the same root_record the nested candidate above was built from. This
+    # flat shape is a review/migration intermediate only (seed_sql_authority:
+    # false) -- it is never itself the manifest.topology adoption payload, so
+    # it is not budget-checked here (see adoption_candidate_separation_contract
+    # split below and validate_flat_seed_records's own docstring for why the
+    # byte-budget check applies only to manifestRefsCandidate).
     flat_records = flatten_topology_ui_seed_tree(root_record, target_surface) if root_record is not None else []
     output["topologyUiSeedFlatRecords"] = flat_records
-    budget_errors = validate_flat_seed_records(flat_records)
-    output["validationErrors"].extend(budget_errors)
 
     # adoption_candidate_separation_contract: the actual seed-safe adoption
-    # shape. Built and validated even when budget_errors is non-empty, so a
-    # caller sees every collected violation from one run (fail-fast is
-    # prohibited for this check) rather than only the byte-budget errors.
+    # shape. manifestRefsCandidate is the ONLY bucket actually adopted into
+    # manifest.topology (a jsonb[] column with idx_manifest_topology's
+    # per-array-element GIN budget) -- every other bucket targets a table/
+    # column with no comparable per-element size ceiling, so only
+    # manifestRefsCandidate is checked against that budget, after it is built.
     adoption_candidates = split_flat_records_into_adoption_candidates(flat_records, target_surface)
     output["adoptionCandidates"] = adoption_candidates
+    budget_errors = validate_flat_seed_records(adoption_candidates.get("manifestRefsCandidate"))
+    output["validationErrors"].extend(budget_errors)
     output["validationErrors"].extend(validate_adoption_candidates(adoption_candidates, flat_records))
 
     doc = {"schemaId": "topolactor.translator_output.v1", **output}
