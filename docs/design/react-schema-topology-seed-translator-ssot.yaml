@@ -2129,6 +2129,7 @@ react_schema_topology_seed_translator_ssot:
             - action/button
             - data_display/table
             - disclosure/modal
+            - disclosure/tabs
             - safety_guard/apply_confirm_dialog
         style_catalog_refs:
           catalog_ref: ui_catalog_boundary_contract.style_catalog

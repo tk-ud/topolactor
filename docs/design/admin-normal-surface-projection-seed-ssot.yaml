@@ -368,8 +368,24 @@ admin_normal_surface_projection_seed_ssot:
                 component_key: search_input.alias
                 responsibility: query non-secret metadata only
               - node_key: credential_category_filter
-                component_key: select.template
+                component_key: tabs.template
                 responsibility: filter users external_api_credential external_instance_credential
+                presentation_history: >-
+                  Owner-directed presentation change (structural-subtree-conditional-visibility-
+                  implementation round, tabs-presentation closure). Was component_key: select.template
+                  through this contract's first several implementation rounds; docs/design/
+                  runtime-orchestration-ssot.yaml ui_projection_render_reachability_contract.
+                  structural_subtree_conditional_visibility_contract's own
+                  presentation_component_independence text already named this exact transition as a
+                  legal, zero-generic-contract-change future consumer move ("a future consumer is
+                  free to drive the exact same source slot from a tabs.template node instead, with
+                  zero change to this contract") -- this is that anticipated move actually happening,
+                  not a new design. docs/design/component-catalog-classification-ssot.yaml's
+                  tabs.template catalog entry (frontend/components/Tabs.tsx,
+                  frontend/runtime/runtimeComponentFactory.ts tabsFactory) is the existing,
+                  already-registered (topology.ui_component_registry, componentId
+                  00000000-0000-0000-0001-000000000016) catalog authority this presentation is
+                  grounded in -- never a new component, never a hidden select behind a tabs facade.
                 conditional_visibility_note: >-
                   design_change (category-collapse audit) addition: "filter" here means this
                   node's selection actually gates which of the three categories' structural
@@ -378,10 +394,28 @@ admin_normal_surface_projection_seed_ssot:
                   semantics, fail-close behavior) is owned entirely by docs/design/runtime-
                   orchestration-ssot.yaml ui_projection_render_reachability_contract.
                   structural_subtree_conditional_visibility_contract -- this surface is that
-                  contract's FIRST CONSUMER/evidence, never its authority owner, and this
-                  component_key: select.template declaration is unchanged and non-exclusive: a
+                  contract's CONSUMER/evidence, never its authority owner, and this
+                  component_key: tabs.template declaration is itself unchanged and non-exclusive: a
                   future consumer of the same generic contract may drive an equivalent selection
-                  from a different presentation component without this SSOT needing to change.
+                  from yet another presentation component without this SSOT needing to change.
+                state_and_event_shape: >-
+                  Grounded in docs/design/runtime-orchestration-ssot.yaml
+                  structural_subtree_conditional_visibility_contract.write_read_separation /
+                  write_side_dynamic_value -- never invented ad hoc for this consumer.
+                  tabs.template's onSelect drives the SAME "ui-local:credential_category_filter.
+                  selectedCategory" UI状態更新 (setState) slot select.template's onChange
+                  previously drove, through the SAME payloadFrom.value = "event.<path>" dynamic-value
+                  grammar, unchanged. The Field's own propsJson shape moves from
+                  {data:{value,options[{label,value}],label,placeholder}} (select.template's shape)
+                  to {data:{items[{key,label}],activeKey}} (tabs.template's own TabItem/TabsProps
+                  shape, frontend/components/Tabs.tsx) -- items[].key IS the canonical
+                  Topolactor.Schema.CredentialManagementCategories.All value (unchanged, unrenamed,
+                  unrenumbered: users / external_api_credential / external_instance_credential),
+                  activeKey IS the current selectedCategory, mirroring select.template's own
+                  value/options[].value convention exactly, one-to-one, under tabs' own field names.
+                  No hidden select.template node coexists behind or beneath this tabs.template node
+                  -- component_key above is this Field's ONLY authored control, not an additional
+                  layer.
               - node_key: credential_result_list
                 component_key: table.primitive
                 responsibility: list allowed metadata fields only
@@ -399,7 +433,8 @@ admin_normal_surface_projection_seed_ssot:
                 Owner-directed minimal display-language boundary for this surface's seed-authored
                 user-facing content only. topology_ui_category/topology_ui_section/topology_ui_form/
                 topology_ui_field/topology_ui_action/topology_ui_modal `label` (and Modal `title`/
-                `body`, and a select-control Field's `propsJson.data.options[].label`) are authored
+                `body`, a select-control Field's `propsJson.data.options[].label`, and a
+                tabs-control Field's `propsJson.data.items[].label`) are authored
                 in Japanese from the React-like Schema source for this surface, since operators of
                 this surface read Japanese. This is a content-authoring choice for THIS surface's
                 seed, never a runtime/generic i18n mechanism -- no locale switch, translation table,

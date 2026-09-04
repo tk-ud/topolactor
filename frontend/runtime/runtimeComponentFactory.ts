@@ -3238,7 +3238,17 @@ function tabsFactory(spec: RuntimeComponentSpec): RenderResult {
       design: spec.design ?? {},
       onSelect: spec.eventBinding.select
         ? (key: string) => {
-          const r = emitBoundEvent(spec, "select", { key });
+          // `value` mirrors `key` generically (structural-subtree-conditional-visibility-
+          // implementation round, tabs-presentation closure): emitBoundEvent's Lane 3 node-value-
+          // tracking and payloadFromResolver.ts's "event.value" grammar both key off a `value`
+          // field specifically -- the SAME convention every other controlled_value component's
+          // change/input trigger already emits (see tabs.template's capabilityTags). Emitting
+          // `value` here (never renaming `key`, never dropping it -- some callers may still read
+          // `key` directly) is what lets a Tabs-driven UI状態更新 payloadFrom.value =
+          // "event.<path>" mutation and a Tabs-driven node:<nodeId>.value admin_runtime dispatch
+          // payloadFrom resolve identically to a select/input-driven one, generically, with zero
+          // Tabs-specific (let alone credential-management-specific) branch anywhere in this file.
+          const r = emitBoundEvent(spec, "select", { key, value: key });
           if (!r.ok) throw new Error(r.error);
         }
         : () => {},

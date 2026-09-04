@@ -673,7 +673,15 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     semanticRole: "navigation",
     visualRole: "tabs",
     lifecycleStatus: "code_only_drift",
-    capabilityTags: ["selectable", "accepts_design"],
+    // controlled_value/emits_event added (structural-subtree-conditional-visibility-implementation
+    // round, tabs-presentation closure): tabsFactory's onSelect now also emits a generic `value`
+    // payload field (mirroring every other controlled_value component's change/input trigger),
+    // making Tabs a real controlled-value driver of the generic node-value-tracking lane
+    // (runtimeComponentFactory.ts emitBoundEvent Lane 3) and of a UI状態更新 payloadFrom.value =
+    // "event.<path>" dynamic-value mutation -- see docs/design/admin-normal-surface-projection-
+    // seed-ssot.yaml credentials.seed_contract.component_tree[credential_category_filter] for its
+    // first real production consumer.
+    capabilityTags: ["selectable", "controlled_value", "emits_event", "accepts_design"],
     runtimeConnected: true,
     registrationRequired: true,
   },

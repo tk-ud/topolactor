@@ -479,6 +479,7 @@ COMPONENT_KIND_TO_COMPONENT_KEY = {
     "form_input/textarea_template": "textarea.template",
     "action/button": "button.primitive",
     "disclosure/modal": "modal.template",
+    "disclosure/tabs": "tabs.template",
 }
 
 # Generic componentKind -> scalar propBindings target prop name for a Field's own valueFrom
