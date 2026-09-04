@@ -192,6 +192,80 @@ runtime-assigned:
   admin authoring frontend route/island and backend action for JSON template
   download/import/validate/preview/apply/approve remain unimplemented. This bundle only
   relocates the seed-representation; it does not build that UI.
+  - credential-management-ux-gaps SSOT/proof-closure round, mechanism confirmed: `template_file`'s
+    own authored `payloadFrom="template_file:node:template_file.value"` on the `json_import`
+    button is structurally unreachable today, not merely unbuilt-UI-adjacent. `json_import`'s
+    `wiringLane="internal_instance_wiring"` maps to `actionType: "localStateMutation"`, and
+    `frontend/runtime/uiEventEffectRunner.ts`'s `resolveUiStateUpdateMutation` resolves EVERY
+    `localStateMutation` to the fixed literal `true` via `UI_STATE_UPDATE_OPEN_ACTIONS` — the
+    same fixed-boolean branch `openModal`/`closeModal` use — never consulting `payloadFrom` at
+    all for this actionType. A real native `<input>` keystroke on `template_file` still reaches
+    `liveNodeValueTracker` (the write side works, proven in
+    `frontend/tests/credentialManagementCategorySelectorProductionPath.test.ts`), and a real
+    click on `json_import` still flips its own local-state flag to `true` (the one effect
+    `localStateMutation` actually performs) — but the typed value itself never reaches any
+    dispatch. Not fixed by this round; a real fix belongs to whichever future bundle actually
+    builds the pending admin authoring UI/backend action above, since it would need to decide
+    what a JSON-template-import mutation should even DO with that value first.
 - `package_internal_api_wiring_lane` idempotency applicability
   (`docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml` `lane_storage_boundary`):
   left as `known_gap`, not asserted resolved by this bundle.
+- The remaining select-controlled Fields sharing the users/external_api_credential/
+  external_instance_credential CRUD forms (`record_kind`/`active`/`approve`/`role_name`) render
+  a real `<select>` (control=form_input/select, never the form_input/form_field bug the
+  credential-management-ux-gaps round fixed for their sibling text Fields) but with only the
+  placeholder `""` option — `data.options` is empty in the real seed. A user cannot actually
+  choose a business value from these controls today; this is a separate, still-open seed/
+  options-wiring gap, not resolved by this document's revision or by
+  credential-management-ux-gaps.
+
+## credential-management-ux-gaps round (production DOM UX remediation)
+
+Two follow-up rounds after the migration above, a captured production DOM revealed and this
+round fixed:
+
+- 37 Fields across all three categories whose value a create/update/search Action's own
+  `payloadFrom` reads (`node:<id>.value`) were authored `control=form_input/form_field`
+  (`formFieldFactory` → a label plus a hardcoded empty `<span>`, never a real `<input>`) — not
+  actually typeable in production. Re-authored to `control=form_input/input` in the canonical
+  markup source and regenerated through the translator (never hand-edited into
+  `db/seed_empty.sql`). Fields with no `payloadFrom` reference were left read-only.
+- `credential_search_section` (the shared cross-category search/filter bar hosting
+  `credential_category_filter`, the tabs.template category selector) rendered AFTER all three
+  gated category subtrees' own content, because `topology_ui_projection`'s
+  `SEED_RECORD_NESTED_LIST_KEYS` entry always flattens every Category child before every Section
+  child, independent of authored source order — confirmed to have NO existing override authority
+  (neither DSL source-text position nor a `ui_topology_tensor.layout_patch_json` override, since a
+  schema-composed layout's override delta never carries `ParentNodeId`/`OrderIndex`/`SlotKey`).
+  Resolved by adding a new, generic, opt-in `mixed_sibling_ordering_contract` capability to
+  `docs/design/react-schema-topology-seed-translator-ssot.yaml` / the translator (an authored
+  `siblingOrder` integer on a Category or Section, default-preserving for every surface that does
+  not author it) and authoring `credential_search_section siblingOrder="-1"`, so the category
+  selector itself is reachable before any category's own subtree content. See that SSOT's
+  `mixed_sibling_ordering_contract` for the full contract and the alternatives it rejected.
+- The credential-management hub-navigation link showed the raw hub UUID as its visible label
+  (`hubs.hub.relation_registry_id` was never seeded). Fixed with a seed-data-only
+  `topology.relation_registry` row; no runtime/backend code changed.
+
+### SSOT/proof-closure round
+
+A follow-up audit found the SSOT's own `mixed_sibling_ordering_contract.credential_management_usage`
+text said `siblingOrder=0` while the canonical source actually authors `siblingOrder=-1` (0 ties
+with the first category's own default rank and loses the stable-sort tie-break; -1 is required to
+sort strictly first) — corrected in the SSOT text, no behavior change.
+
+Real native-`<input>` production-path proof was extended from the 26 of 37 Fields the Modal-chain
+test already covered to 36 of 37: 5 more (`credential_filter_status_input`/
+`provider_kind_input`/`required_by_bundle_input`/`expires_before_input`/`expires_after_input`, via
+`credential_search_button`'s own non-Modal direct dispatch) and 2 more (`instance_authority_key`/
+`operation_binding_key`, via the `dispatchInstanceOperation` lane's `validate`/`preview`/`apply`/
+`approve` buttons, also non-Modal). The 37th, `template_file`, is deliberately left as a
+write-side-only proof — see the `instance_settings_admin_authoring_ui_pending` known-gap entry
+above for the confirmed mechanism (its own `payloadFrom` is structurally unreachable for the
+`localStateMutation` actionType `json_import` uses, independent of this round). This is not a
+partial 37/37 claim; it is reported precisely as 36/37 full round-trip plus 1 honest partial.
+
+Added a positive+negative unit-level proof (`.agent/scripts/check_react_schema_topology_seed_translator.py`
+checks 132-135) that a non-integer `siblingOrder` (string, float, or bool) fails the whole
+`generate-react-schema` run closed via `SIBLING_ORDER_MUST_BE_INTEGER`, and that a valid integer
+(the same `-1` credential-management itself authors) does not.

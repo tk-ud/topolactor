@@ -295,6 +295,14 @@ Deno.test("production path: manifest 092's real credential_category_filter tabs 
  * test does not exercise), not something this round's translation work introduced -- fixed here
  * because it directly blocks this round's own explicit requirement to prove a Modal actually
  * opens via a real click, never a hidden/never-reachable disclosure state.
+ *
+ * credential-management-ux-gaps-followup round: the 37 payloadFrom-referenced Fields this test's
+ * scenarios read (control was form_input/form_field -- a label plus a hardcoded empty <span>,
+ * never a real <input>, until that round re-authored them to form_input/input) are now driven by
+ * real native <input> "input" events on their real rendered elements (typeIntoRealInput /
+ * typeRealInputsForCategoryOnce below), not tracker.set() -- see the comment at their call site
+ * for the still-open, out-of-scope exception (the handful of sibling Select fields whose seed
+ * carries no real, non-placeholder option to select from).
  */
 Deno.test("production path: real dryRun-preview click opens each reachable confirmation Modal (real DOM, real settled dispatch, Japanese title/body/confirm/cancel, dispatchTargetRef/payloadFrom preserved on Confirm)", async () => {
   const layoutNodes = await loadManifest092Fixture();
@@ -457,23 +465,41 @@ Deno.test("production path: real dryRun-preview click opens each reachable confi
     renderTree();
     await flushUpdates();
 
-    // Each preview button's own dryRun payloadFrom resolves several "node:<id>.value" live-
-    // tracker references (the same form fields a real user would have typed into) — payloadFrom
-    // resolution is a hard fail-close when any referenced node has no live value at all
-    // (SSOT remaining_write_payload_capture_gap), so a real click on an as-yet-untouched form
-    // would legitimately throw here in production too. Seeding the tracker directly (the SAME
-    // write side onNodeValueChange/a real <input> keystroke would use — see
-    // liveNodeValueTracker.ts) is the minimal real-data population needed to exercise the actual
-    // subject of this test (the openModal/dispatch/Confirm chain), without re-deriving a full
-    // form-typing proof credentialManagementCategorySelectorProductionPath.test.ts's sibling
-    // production-path test and admin_runtime Field-dispatch tests already cover elsewhere.
-    for (
-      const fieldNodeId of [
+    // credential-management-ux-gaps-followup round: the 37 payloadFrom-referenced Fields that
+    // were authored control=form_input/form_field (formFieldFactory -> a label plus a hardcoded
+    // empty <span>, no real <input> at all) were re-authored to control=form_input/input (see
+    // db/seed_empty.sql's cd002 layout row and .agent/tests/fixtures/
+    // react-schema-topology-seed-translator/credential-management-0092.input.json). The comment
+    // this replaced claimed a full form-typing proof existed "elsewhere" for these fields, which
+    // was never true for THIS surface's own 37 fields (they were not typeable in production at
+    // all until that round) — so this test now drives every one of them via a REAL native <input>
+    // "input" event on the REAL rendered element (typeIntoRealInput below), the same write path
+    // liveNodeValueTracker.ts's onNodeValueChange documents a genuine keystroke using, never
+    // tracker.set() standing in for it.
+    //
+    // The handful of already-select-controlled fields in the same forms (record_kind/active/
+    // approve/role_name — control=form_input/select, unaffected by the form_input/form_field bug
+    // this round fixed) are a SEPARATE, still-open, out-of-scope gap: manifest 092's real seed
+    // authors these Select nodes with only the placeholder "" option — data.options is empty —
+    // confirmed against the real DOM dump this Bundle used as its own bug evidence, so there is no
+    // real non-empty <option> a genuine user could select today. Faking one here would misrepresent
+    // that gap as fixed. These keep using tracker.set() (documented, not hidden) until that
+    // separate seed/options-wiring gap is addressed.
+    function typeIntoRealInput(nodeId: string, value: string): void {
+      const inputEl = container.querySelector(
+        `[data-node-id="${nodeId}"] input`,
+      ) as unknown as { value: string; dispatchEvent: (e: Event) => boolean } | null;
+      assert(inputEl, `expected a real <input> for Field "${nodeId}" (control=form_input/input) in the currently-active category's mounted DOM`);
+      inputEl.value = value;
+      inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    const realInputFieldsByCategory: Record<string, string[]> = {
+      external_api_credential: [
         "external_api_credential_form_hook_path_input",
         "external_api_credential_form_route_key_input",
         "external_api_credential_form_header_key_input",
         "external_api_credential_form_token_kind_input",
-        "external_api_credential_form_record_kind_input",
         "external_api_credential_form_provider_kind_input",
         "external_api_credential_form_reference_key_input",
         "external_api_credential_form_credential_kind_input",
@@ -482,32 +508,51 @@ Deno.test("production path: real dryRun-preview click opens each reachable confi
         "external_api_credential_form_url_or_env_reference_input",
         "external_api_credential_form_refresh_before_seconds_input",
         "external_api_credential_form_encryption_key_reference_input",
-        "external_api_credential_form_active_input",
         "external_api_credential_form_record_id_input",
         "scheduler_job_id_input",
         "scheduler_external_port_ref_input",
         "scheduler_credential_requirement_ref_input",
+      ],
+      users: [
         "credentials_users_username_input",
         "credentials_users_password_input",
-        "credentials_users_approve_input",
         "credentials_users_status_input",
-        "credentials_users_role_name_input",
         "credentials_users_suspended_from_input",
         "credentials_users_suspended_until_input",
         "credentials_users_state_note_input",
-        "credentials_users_active_input",
         "credentials_users_user_id_input",
         "credentials_users_session_id_input",
-        "eic_record_kind_input",
+      ],
+      external_instance_credential: [
         "eic_provider_kind_input",
         "eic_reference_key_input",
         "eic_required_by_bundle_input",
         "eic_instance_authority_key_input",
-        "eic_active_input",
         "eic_record_id_input",
+      ],
+    };
+    // Select-controlled Fields sharing the SAME forms above — see the out-of-scope note above.
+    for (
+      const fieldNodeId of [
+        "external_api_credential_form_record_kind_input",
+        "external_api_credential_form_active_input",
+        "credentials_users_approve_input",
+        "credentials_users_role_name_input",
+        "credentials_users_active_input",
+        "eic_record_kind_input",
+        "eic_active_input",
       ]
     ) {
       tracker.set(fieldNodeId, "test-value");
+    }
+
+    const categoriesAlreadyTyped = new Set<string>();
+    function typeRealInputsForCategoryOnce(category: string): void {
+      if (categoriesAlreadyTyped.has(category)) return;
+      categoriesAlreadyTyped.add(category);
+      for (const nodeId of realInputFieldsByCategory[category] ?? []) {
+        typeIntoRealInput(nodeId, `real-dom-value:${nodeId}`);
+      }
     }
 
     function modalHtml(base: string): string {
@@ -529,6 +574,13 @@ Deno.test("production path: real dryRun-preview click opens each reachable confi
         await flushUpdates();
       }
       assertEquals(activeTabKey(container), scenario.category, `expected category "${scenario.category}" to be active before exercising "${scenario.base}"`);
+
+      // Real native <input> "input" events on this category's own now-mounted real <input>
+      // elements — see typeRealInputsForCategoryOnce above. Runs once per category (the first
+      // scenario to visit it); later scenarios sharing the same category/form reuse the same
+      // already-typed live-tracker values, exactly as a real user re-using an already-filled form
+      // across several of its own action buttons would.
+      typeRealInputsForCategoryOnce(scenario.category);
 
       const previewButton = container.querySelector(
         `[data-node-id="${scenario.base}_button"] button`,
@@ -628,8 +680,280 @@ Deno.test("production path: real dryRun-preview click opens each reachable confi
         `expected the real Confirm dispatch payload to carry no dryRun flag at all (unlike the preview button's own payload)`,
       );
 
+      // Full round trip proof: at least one value this scenario actually TYPED into a real
+      // <input> (typeRealInputsForCategoryOnce above) is present somewhere in the real Confirm
+      // dispatch payload -- native input event -> liveNodeValueTracker (onNodeValueChange) ->
+      // payloadFrom "node:<id>.value" resolution -> this exact request body. Scoped to fields
+      // this scenario's own category actually has (some categories share fewer fields with a
+      // given business action than others), so this never spuriously requires a field a
+      // scenario's own dispatch never reads.
+      const typedFieldsForThisCategory = realInputFieldsByCategory[scenario.category] ?? [];
+      const confirmPayloadValues = Object.values(confirmPayload!).map((v) => String(v));
+      assert(
+        typedFieldsForThisCategory.some((nodeId) =>
+          confirmPayloadValues.includes(`real-dom-value:${nodeId}`)
+        ),
+        `expected "${scenario.base}"'s real Confirm dispatch payload to carry at least one value ` +
+          `actually typed into a real <input> for category "${scenario.category}" (payloadFrom ` +
+          `round trip from native DOM input through liveNodeValueTracker), got ${
+            JSON.stringify(confirmPayload)
+          }`,
+      );
+
       assertEquals(modalHtml(scenario.base), "", `expected "${scenario.base}_confirm_modal" to render empty again after a real Confirm settles and closes the Modal`);
     }
+  } finally {
+    render(null, container as unknown as Element);
+    cleanup();
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
+});
+
+/**
+ * credential-management-ux-gaps SSOT/proof-closure round: the Modal-chain test above only
+ * exercises admin_runtime_dispatch_override_wiring's Section-owned preview/Confirm shape. Two
+ * OTHER real, non-Modal, single-click direct-dispatch action families in the same manifest also
+ * read now-interactive Fields via payloadFrom and were never proven with real native DOM input:
+ *
+ * 1. credential_search_button (credential_search_section, always-mounted regardless of active
+ *    category) — admin_runtime_dispatch_override_wiring, no Modal, one click posts directly.
+ *    Proves credential_filter_status_input/provider_kind_input/required_by_bundle_input/
+ *    expires_before_input/expires_after_input (the 5 of the 37 form_input/input fields under this
+ *    section not exercised by the Modal-chain test, which never switches away from a category
+ *    whose own CRUD form shares none of these fields).
+ * 2. instance_settings category's validate/preview/apply/approve buttons — a DIFFERENT dispatch
+ *    lane (external_instance_wiring / dispatchInstanceOperation, not admin_runtime), also no
+ *    Modal. Proves instance_authority_key/operation_binding_key.
+ *
+ * A third instance_settings Field, template_file, is DELIBERATELY not proven to reach a dispatch
+ * payload here, because it does not: json_import's own wiringLane (internal_instance_wiring) maps
+ * to actionType "localStateMutation", and frontend/runtime/uiEventEffectRunner.ts's
+ * resolveUiStateUpdateMutation resolves EVERY localStateMutation to the fixed literal `true` via
+ * UI_STATE_UPDATE_OPEN_ACTIONS (see that map's own comment: "a localStateMutation trigger writes
+ * true to its ui-local: target -- a flag write ... never a business-data value") — the SAME
+ * fixed-boolean branch openModal/closeModal use, never consulting payloadFrom.template_file at
+ * all. This is confirmed here as a real, pre-existing, out-of-scope gap (the seed's own
+ * payloadFrom="template_file:node:template_file.value" is authored but structurally unreachable
+ * for this actionType), the SAME area docs/projection_design/credential-management-projection-
+ * design.md's instance_settings_admin_authoring_ui_pending known gap already tracks -- not
+ * newly introduced and not fixed by this round. What IS proven for template_file is the WRITE
+ * side only: a real native <input> keystroke still reaches liveNodeValueTracker (the same
+ * onNodeValueChange path every other Field uses), and the button's own real local-state effect
+ * (writing true to instance_settings_import_form.template_import_trigger) still fires on a real
+ * click -- neither of those depends on the broken payloadFrom-to-localStateMutation path.
+ */
+Deno.test("production path: real native <input> values reach non-Modal direct-dispatch actions (credential_search_button, instance_settings validate/preview/apply/approve), and template_file's known dead payloadFrom is confirmed, not silently assumed fixed", async () => {
+  const layoutNodes = await loadManifest092Fixture();
+  const emission: Emission = {
+    layoutId: "00000000-0000-0000-0000-0000000cd002",
+    layoutNodes,
+    packageId: "00000000-0000-0000-0000-0000000cd005",
+    manifestId: "00000000-0000-0000-0000-000000000092",
+  };
+
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  const dispatchedBodies: Record<string, unknown>[] = [];
+  // deno-lint-ignore no-explicit-any
+  (globalThis as any).fetch = (url: string, init?: RequestInit) => {
+    const path = url.toString();
+    if (path !== "/api/dispatch") {
+      return Promise.resolve(new Response(JSON.stringify({ success: true }), { status: 200 }));
+    }
+    const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    dispatchedBodies.push(body);
+    const requestPayload = body.payload as Record<string, unknown> | undefined;
+    const targetRef = typeof requestPayload?.target_ref === "string" ? requestPayload.target_ref : undefined;
+    const manifestMatch = targetRef ? /^manifest:([^:]+):/.exec(targetRef) : null;
+    const manifestId = manifestMatch ? manifestMatch[1] : "00000000-0000-0000-0000-000000000000";
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          emission: { manifestId, layoutId: "mock-non-modal-dispatch", layoutNodes: [] },
+        }),
+        { status: 200 },
+      ),
+    );
+  };
+
+  const localStore = createRuntimeLocalStateStore();
+  const dispatcher = createProjectionStateDispatcher(toRunnerWiringNodes(layoutNodes), localStore);
+  const tracker = createLiveNodeValueTracker();
+  const { container, cleanup } = setupDom();
+
+  try {
+    function renderTree(): void {
+      const specs = renderEmission(emission, defaultComponentRegistry, {
+        localStateStore: dispatcher,
+        payloadFromNodeValues: tracker.snapshot(),
+        onNodeValueChange: (nodeId, value) => tracker.set(nodeId, value),
+      });
+      render(
+        h(LayoutProjectionTree, { specs, layoutId: emission.layoutId, localStateStore: dispatcher }),
+        container,
+      );
+    }
+    localStore.subscribe(renderTree);
+    renderTree();
+    await flushUpdates();
+
+    function typeIntoRealInput(nodeId: string, value: string): void {
+      const inputEl = container.querySelector(
+        `[data-node-id="${nodeId}"] input`,
+      ) as unknown as { value: string; dispatchEvent: (e: Event) => boolean } | null;
+      assert(inputEl, `expected a real <input> for Field "${nodeId}" in the currently-mounted DOM`);
+      inputEl.value = value;
+      inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    // --- 1. credential_search_button: always-mounted, admin_runtime, no Modal ---
+    // credential_filter_active_input / credential_filter_record_kind_input are the pre-existing,
+    // separately-tracked Select fields with no real option (see the out-of-scope note in the
+    // Modal-chain test above) -- tracker.set() here for the SAME documented reason, not silently
+    // reintroduced without explanation.
+    tracker.set("credential_filter_active_input", "test-value");
+    tracker.set("credential_filter_record_kind_input", "test-value");
+
+    // credential_category_filter (the tabs) and credential_search_input are ALSO referenced by
+    // credential_search_button's own payloadFrom (category/query) but were never exercised by the
+    // Modal-chain test above (which never clicks the search button). A real click on the
+    // already-active tab is a genuine native interaction (the tabs' own onSelect still fires and
+    // captures the current key into liveNodeValueTracker, the SAME "re-click a no-op tab" pattern
+    // the Modal-chain test's own category-switch proof already relies on) -- never dispatcher.set().
+    clickTab(container, "external_api_credential");
+    await flushUpdates();
+    typeIntoRealInput("credential_search_input", "real-dom-value:credential_search_input");
+
+    const searchFields: Record<string, string> = {
+      credential_filter_status_input: "real-dom-value:credential_filter_status_input",
+      credential_filter_provider_kind_input: "real-dom-value:credential_filter_provider_kind_input",
+      credential_filter_required_by_bundle_input: "real-dom-value:credential_filter_required_by_bundle_input",
+      credential_filter_expires_before_input: "real-dom-value:credential_filter_expires_before_input",
+      credential_filter_expires_after_input: "real-dom-value:credential_filter_expires_after_input",
+    };
+    for (const [nodeId, value] of Object.entries(searchFields)) {
+      typeIntoRealInput(nodeId, value);
+    }
+
+    const searchButton = container.querySelector(
+      '[data-node-id="credential_search_button"] button',
+    ) as unknown as { dispatchEvent: (e: Event) => boolean } | null;
+    assert(searchButton, "expected a real credential_search_button in the DOM");
+    const dispatchedBeforeSearch = dispatchedBodies.length;
+    searchButton!.dispatchEvent(new Event("click", { bubbles: true }));
+    await flushUpdates();
+    assertEquals(
+      dispatchedBodies.length,
+      dispatchedBeforeSearch + 1,
+      "expected exactly one new /api/dispatch request from the real credential_search_button click",
+    );
+    const searchPayload = dispatchedBodies[dispatchedBodies.length - 1].payload as
+      | Record<string, unknown>
+      | undefined;
+    assert(searchPayload, "expected the real search dispatch to carry a payload");
+    assertEquals(
+      searchPayload!.category,
+      "external_api_credential",
+      "expected the real search dispatch payload to carry the real tab click's own category value",
+    );
+    assertEquals(
+      searchPayload!.query,
+      "real-dom-value:credential_search_input",
+      "expected the real search dispatch payload to carry the real typed credential_search_input value",
+    );
+    for (const [nodeId, value] of Object.entries(searchFields)) {
+      assert(
+        Object.values(searchPayload!).includes(value),
+        `expected the real search dispatch payload to carry the value typed into "${nodeId}" ` +
+          `(native <input> -> liveNodeValueTracker -> payloadFrom round trip), got ${
+            JSON.stringify(searchPayload)
+          }`,
+      );
+    }
+
+    // --- 2. instance_settings category (external_instance_credential tab): validate/preview/
+    // apply/approve, dispatchInstanceOperation lane, no Modal ---
+    clickTab(container, "external_instance_credential");
+    await flushUpdates();
+    assertEquals(activeTabKey(container), "external_instance_credential");
+
+    typeIntoRealInput("instance_authority_key", "real-dom-value:instance_authority_key");
+    typeIntoRealInput("operation_binding_key", "real-dom-value:operation_binding_key");
+
+    const instanceActions: { nodeId: string; expectedTargetRefPrefix: string }[] = [
+      { nodeId: "validate", expectedTargetRefPrefix: "instance-port:db_instance_port:" },
+      { nodeId: "preview", expectedTargetRefPrefix: "instance-port:runtime_instance_port:" },
+      { nodeId: "apply", expectedTargetRefPrefix: "instance-port:db_instance_port:" },
+      { nodeId: "approve", expectedTargetRefPrefix: "instance-port:runtime_instance_port:" },
+    ];
+    for (const action of instanceActions) {
+      const buttonEl = container.querySelector(
+        `[data-node-id="${action.nodeId}"] button`,
+      ) as unknown as { dispatchEvent: (e: Event) => boolean } | null;
+      assert(buttonEl, `expected a real "${action.nodeId}" button in the DOM`);
+      const dispatchedBefore = dispatchedBodies.length;
+      buttonEl!.dispatchEvent(new Event("click", { bubbles: true }));
+      await flushUpdates();
+      assertEquals(
+        dispatchedBodies.length,
+        dispatchedBefore + 1,
+        `expected exactly one new /api/dispatch request from the real "${action.nodeId}" click`,
+      );
+      const body = dispatchedBodies[dispatchedBodies.length - 1];
+      const payload = body.payload as Record<string, unknown> | undefined;
+      assert(payload, `expected the real "${action.nodeId}" dispatch to carry a payload`);
+      assert(
+        typeof payload!.instance_target_ref === "string" &&
+          (payload!.instance_target_ref as string).startsWith(action.expectedTargetRefPrefix),
+        `expected "${action.nodeId}"'s instance_target_ref to start with "${action.expectedTargetRefPrefix}", got ${
+          JSON.stringify(payload)
+        }`,
+      );
+      const dispatchPayload = payload!.dispatch_payload as Record<string, unknown> | undefined;
+      assert(dispatchPayload, `expected "${action.nodeId}"'s payload to carry a nested dispatch_payload`);
+      assertEquals(
+        dispatchPayload!.instance_authority_key,
+        "real-dom-value:instance_authority_key",
+        `expected "${action.nodeId}"'s dispatch_payload to carry the real typed instance_authority_key value`,
+      );
+      assertEquals(
+        dispatchPayload!.operation_binding_key,
+        "real-dom-value:operation_binding_key",
+        `expected "${action.nodeId}"'s dispatch_payload to carry the real typed operation_binding_key value`,
+      );
+    }
+
+    // --- 3. template_file / json_import: write side works, read side is a confirmed dead end ---
+    typeIntoRealInput("template_file", "real-dom-value:template_file");
+    assertEquals(
+      tracker.snapshot()["template_file"],
+      "real-dom-value:template_file",
+      "expected the real native <input> keystroke on template_file to still reach liveNodeValueTracker",
+    );
+
+    const jsonImportButton = container.querySelector(
+      '[data-node-id="json_import"] button',
+    ) as unknown as { dispatchEvent: (e: Event) => boolean } | null;
+    assert(jsonImportButton, "expected a real json_import button in the DOM");
+    const dispatchedBeforeImport = dispatchedBodies.length;
+    jsonImportButton!.dispatchEvent(new Event("click", { bubbles: true }));
+    await flushUpdates();
+    assertEquals(
+      dispatchedBodies.length,
+      dispatchedBeforeImport,
+      "expected json_import's real click to fire NO /api/dispatch request at all (localStateMutation " +
+        "never posts to the network) -- confirms template_file's authored payloadFrom is structurally " +
+        "unreachable for this actionType, not merely untested",
+    );
+    assertEquals(
+      dispatcher.get("instance_settings_import_form", "template_import_trigger"),
+      true,
+      "expected json_import's real click to still flip its own local-state flag to true " +
+        "(the one effect localStateMutation actually performs, ignoring template_file's typed value)",
+    );
   } finally {
     render(null, container as unknown as Element);
     cleanup();
