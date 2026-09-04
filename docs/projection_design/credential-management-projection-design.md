@@ -192,6 +192,21 @@ runtime-assigned:
   admin authoring frontend route/island and backend action for JSON template
   download/import/validate/preview/apply/approve remain unimplemented. This bundle only
   relocates the seed-representation; it does not build that UI.
+  - credential-management-ux-gaps SSOT/proof-closure round, mechanism confirmed: `template_file`'s
+    own authored `payloadFrom="template_file:node:template_file.value"` on the `json_import`
+    button is structurally unreachable today, not merely unbuilt-UI-adjacent. `json_import`'s
+    `wiringLane="internal_instance_wiring"` maps to `actionType: "localStateMutation"`, and
+    `frontend/runtime/uiEventEffectRunner.ts`'s `resolveUiStateUpdateMutation` resolves EVERY
+    `localStateMutation` to the fixed literal `true` via `UI_STATE_UPDATE_OPEN_ACTIONS` — the
+    same fixed-boolean branch `openModal`/`closeModal` use — never consulting `payloadFrom` at
+    all for this actionType. A real native `<input>` keystroke on `template_file` still reaches
+    `liveNodeValueTracker` (the write side works, proven in
+    `frontend/tests/credentialManagementCategorySelectorProductionPath.test.ts`), and a real
+    click on `json_import` still flips its own local-state flag to `true` (the one effect
+    `localStateMutation` actually performs) — but the typed value itself never reaches any
+    dispatch. Not fixed by this round; a real fix belongs to whichever future bundle actually
+    builds the pending admin authoring UI/backend action above, since it would need to decide
+    what a JSON-template-import mutation should even DO with that value first.
 - `package_internal_api_wiring_lane` idempotency applicability
   (`docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml` `lane_storage_boundary`):
   left as `known_gap`, not asserted resolved by this bundle.
@@ -231,3 +246,26 @@ round fixed:
 - The credential-management hub-navigation link showed the raw hub UUID as its visible label
   (`hubs.hub.relation_registry_id` was never seeded). Fixed with a seed-data-only
   `topology.relation_registry` row; no runtime/backend code changed.
+
+### SSOT/proof-closure round
+
+A follow-up audit found the SSOT's own `mixed_sibling_ordering_contract.credential_management_usage`
+text said `siblingOrder=0` while the canonical source actually authors `siblingOrder=-1` (0 ties
+with the first category's own default rank and loses the stable-sort tie-break; -1 is required to
+sort strictly first) — corrected in the SSOT text, no behavior change.
+
+Real native-`<input>` production-path proof was extended from the 26 of 37 Fields the Modal-chain
+test already covered to 36 of 37: 5 more (`credential_filter_status_input`/
+`provider_kind_input`/`required_by_bundle_input`/`expires_before_input`/`expires_after_input`, via
+`credential_search_button`'s own non-Modal direct dispatch) and 2 more (`instance_authority_key`/
+`operation_binding_key`, via the `dispatchInstanceOperation` lane's `validate`/`preview`/`apply`/
+`approve` buttons, also non-Modal). The 37th, `template_file`, is deliberately left as a
+write-side-only proof — see the `instance_settings_admin_authoring_ui_pending` known-gap entry
+above for the confirmed mechanism (its own `payloadFrom` is structurally unreachable for the
+`localStateMutation` actionType `json_import` uses, independent of this round). This is not a
+partial 37/37 claim; it is reported precisely as 36/37 full round-trip plus 1 honest partial.
+
+Added a positive+negative unit-level proof (`.agent/scripts/check_react_schema_topology_seed_translator.py`
+checks 132-135) that a non-integer `siblingOrder` (string, float, or bool) fails the whole
+`generate-react-schema` run closed via `SIBLING_ORDER_MUST_BE_INTEGER`, and that a valid integer
+(the same `-1` credential-management itself authors) does not.

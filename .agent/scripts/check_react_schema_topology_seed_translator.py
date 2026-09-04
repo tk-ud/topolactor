@@ -2631,6 +2631,43 @@ def main():
             ),
         )
 
+        # 132-135 (credential-management-ux-gaps SSOT/proof-closure round):
+        # mixed_sibling_ordering_contract's SIBLING_ORDER_MUST_BE_INTEGER fail-close (docs/design/
+        # react-schema-topology-seed-translator-ssot.yaml mixed_sibling_ordering_contract.
+        # opt_in_override) -- a Category/Section's optional siblingOrder must be a plain integer or
+        # the whole generate-react-schema run fails closed via validate_structural_node, never
+        # silently ignored, coerced, or left to corrupt flatten_topology_ui_seed_tree's stable sort
+        # with a non-comparable key.
+        def run_structural_check(node):
+            errs = []
+            translator_impl.validate_structural_node(node, None, errs, "$.test")
+            return [e["ruleId"] for e in errs]
+
+        expect(
+            "132. validate_structural_node rejects a Category whose authored siblingOrder is a non-numeric string via SIBLING_ORDER_MUST_BE_INTEGER (mixed_sibling_ordering_contract) -- never silently ignored or coerced",
+            "SIBLING_ORDER_MUST_BE_INTEGER" in run_structural_check(
+                {"kind": "Category", "key": "test_category_bad_sibling_order", "siblingOrder": "not-an-integer"},
+            ),
+        )
+        expect(
+            "133. validate_structural_node rejects a Section whose authored siblingOrder is a float (not a plain integer) via SIBLING_ORDER_MUST_BE_INTEGER",
+            "SIBLING_ORDER_MUST_BE_INTEGER" in run_structural_check(
+                {"kind": "Section", "key": "test_section_bad_sibling_order", "siblingOrder": 1.5},
+            ),
+        )
+        expect(
+            "134. validate_structural_node rejects a Category whose authored siblingOrder is a bool via SIBLING_ORDER_MUST_BE_INTEGER (Python's isinstance(True, int) is True, so this guards a real footgun the naive isinstance check alone would silently accept)",
+            "SIBLING_ORDER_MUST_BE_INTEGER" in run_structural_check(
+                {"kind": "Category", "key": "test_category_bool_sibling_order", "siblingOrder": True},
+            ),
+        )
+        expect(
+            "135. validate_structural_node positive control: a Category with a valid integer siblingOrder (-1, the same value credential_search_section itself authors) produces zero SIBLING_ORDER_MUST_BE_INTEGER errors, proving 132-134 fail for the right reason and not because every siblingOrder-bearing node fails",
+            "SIBLING_ORDER_MUST_BE_INTEGER" not in run_structural_check(
+                {"kind": "Category", "key": "test_category_valid_sibling_order", "siblingOrder": -1},
+            ),
+        )
+
     print()
     if FAILURES:
         print(f"=== {len(FAILURES)} react-schema-topology-seed-translator check(s) failed ===", file=sys.stderr)

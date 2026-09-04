@@ -778,10 +778,18 @@ react_schema_topology_seed_translator_ssot:
         cross-category search/filter bar hosting credential_category_filter, the tabs.template
         category selector -- see surface_axes.admin.surfaces.credentials.seed_contract.
         component_tree[credential_category_filter] in docs/design/
-        admin-normal-surface-projection-seed-ssot.yaml) authors siblingOrder=0, placing it before
-        the three topology_ui_category subtrees (users/external_api_credential/instance_settings,
-        left unauthored -- default bucket rank keeps their existing relative order), so the
-        category selector itself is reachable in the DOM before any category's own
+        admin-normal-surface-projection-seed-ssot.yaml) authors siblingOrder=-1 (not 0 -- see
+        default_behavior's own stable-sort rule: the three topology_ui_category children, left
+        unauthored, each fall back to their own default bucket-order rank, and those ranks start
+        at 0 for the FIRST category; a siblingOrder=0 on credential_search_section would tie that
+        first category's own rank-0 fallback, and Python's stable sort keeps a tie in child_records'
+        pre-sort order -- categories were extended into child_records before sections, so the tied
+        category would still win and credential_search_section would land second, not first. -1
+        is strictly less than every default rank (0, 1, 2, ...), so it is guaranteed to sort first
+        regardless of how many categories exist or how their own defaults are numbered), placing
+        it before the three topology_ui_category subtrees (users/external_api_credential/
+        instance_settings, left unauthored -- default bucket rank keeps their existing relative
+        order), so the category selector itself is reachable in the DOM before any category's own
         (potentially large) subtree content, resolving the credential-management-ux-gaps Bundle's
         category-selector-primacy finding through this generic capability rather than a
         credential-specific hack or the previously-rejected artificial-Category workaround (see
