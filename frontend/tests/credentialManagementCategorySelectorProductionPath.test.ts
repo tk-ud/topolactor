@@ -66,6 +66,7 @@ import {
 import { createLiveNodeValueTracker } from "../runtime/liveNodeValueTracker.ts";
 import type { WiringNode } from "../lib/uiBuilderWiringProjection.ts";
 import { setupDom, flushUpdates } from "./test-dom-setup.ts";
+import { __testOnly as schedulerTestOnly } from "../runtime/frontendScheduler.ts";
 
 // deno-lint-ignore no-explicit-any
 (options as any).requestAnimationFrame = (cb: () => void): number => {
@@ -265,5 +266,279 @@ Deno.test("production path: manifest 092's real credential_category_filter tabs 
   } finally {
     render(null, container as unknown as Element);
     cleanup();
+  }
+});
+
+/**
+ * Confirmation-Modal production-path proof (existing-pr-update round, credential-category
+ * tabs source-lineage closure): the category-switch proof above only proves category state
+ * change and structural mount/unmount; it never opens a Modal. This test drives, via real DOM
+ * clicks (never dispatcher.set()/direct state mutation), the full preview -> dryRun dispatch ->
+ * settle -> deferred openModal local-state mutation -> real Modal DOM chain for every reachable
+ * mutation-preview action under the default-active external_api_credential category (the same
+ * category credential_category_filter's own stateJson default already renders without a tab
+ * switch): create / update / delete, plus the sibling consumer_reference_binding action
+ * (configure_scheduler_job_credential_or_port_binding), whose Modal body was pre-translation
+ * English until this round (see admin-normal-surface-projection-seed-ssot.yaml
+ * display_language_boundary).
+ *
+ * Mid-work discovery this round: db/seed_empty.sql's manifest-092 cd004 tensor authored every
+ * one of these 12 preview buttons' openModal runtimeInteraction directly on the BUTTON's own
+ * tensor node (sourceActionKey == nodeId), but LayoutSchemaTensorComposer.cs's merge only
+ * resolves a leaf's runtimeInteractions via "{resolvedParentNodeId}::{key}" -- the SAME
+ * parent-scoped convention credential_search_section/credential_category_filter's own tabs
+ * wiring already uses correctly. The self-scoped authoring silently orphaned every openModal
+ * interaction at real compose time (proven empirically: a real click never set the Modal's
+ * open state before this round's fix relocated each entry onto its owning Section's own tensor
+ * node, sourceActionKey unchanged). This was a genuine, systemic, pre-existing production gap
+ * across the WHOLE credential-management surface (also affects the users/eic CRUD Modals this
+ * test does not exercise), not something this round's translation work introduced -- fixed here
+ * because it directly blocks this round's own explicit requirement to prove a Modal actually
+ * opens via a real click, never a hidden/never-reachable disclosure state.
+ */
+Deno.test("production path: real dryRun-preview click opens each reachable confirmation Modal (real DOM, real settled dispatch, Japanese title/body/confirm/cancel, dispatchTargetRef/payloadFrom preserved on Confirm)", async () => {
+  const layoutNodes = await loadManifest092Fixture();
+  const emission: Emission = {
+    layoutId: "00000000-0000-0000-0000-0000000cd002",
+    layoutNodes,
+    packageId: "00000000-0000-0000-0000-0000000cd005",
+    manifestId: "00000000-0000-0000-0000-000000000092",
+  };
+
+  const scenarios: {
+    base: string;
+    title: string;
+    bodyIncludes: string;
+    confirmLabel: string;
+  }[] = [
+    {
+      base: "external_api_credential_create",
+      title: "外部APIクレデンシャルレコードを作成",
+      bodyIncludes: "選択したレコード種別に対して新しいレコードを作成します",
+      confirmLabel: "作成",
+    },
+    {
+      base: "external_api_credential_update",
+      title: "外部APIクレデンシャルレコードを更新",
+      bodyIncludes: "指定したレコードのメタデータを更新し",
+      confirmLabel: "更新",
+    },
+    {
+      base: "external_api_credential_delete",
+      title: "外部APIクレデンシャルレコードを無効化",
+      bodyIncludes: "無効化(論理削除)します",
+      confirmLabel: "無効化",
+    },
+    {
+      base: "configure_scheduler_job_credential_or_port_binding",
+      title: "スケジューラージョブのクレデンシャル/ポートバインディングを設定",
+      bodyIncludes: "クレデンシャル/ポート参照をスケジューラージョブに紐付けます",
+      confirmLabel: "設定",
+    },
+  ];
+
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  const dispatchedBodies: Record<string, unknown>[] = [];
+  // deno-lint-ignore no-explicit-any
+  (globalThis as any).fetch = (url: string, init?: RequestInit) => {
+    const path = url.toString();
+    if (path !== "/api/dispatch") {
+      return Promise.resolve(new Response(JSON.stringify({ success: true }), { status: 200 }));
+    }
+    const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    dispatchedBodies.push(body);
+    // target_ref rides inside the request's own "payload" object (see
+    // frontendScheduler.ts enqueueRuntimeComponentCommand: payload.target_ref = spec.targetRef),
+    // never at the request body's top level.
+    const requestPayload = body.payload as Record<string, unknown> | undefined;
+    const targetRef = typeof requestPayload?.target_ref === "string" ? requestPayload.target_ref : undefined;
+    const manifestMatch = targetRef ? /^manifest:([^:]+):/.exec(targetRef) : null;
+    const manifestId = manifestMatch ? manifestMatch[1] : "00000000-0000-0000-0000-000000000000";
+    // A settled dispatch is only "accepted" (see runtimeDispatchSettlement.ts) when it carries
+    // an emission whose manifestId matches the targetRef's own embedded manifest UUID -- the
+    // SAME real acceptance gate a genuine backend response must satisfy, never bypassed here.
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          emission: { manifestId, layoutId: "mock-confirm-modal-dispatch", layoutNodes: [] },
+        }),
+        { status: 200 },
+      ),
+    );
+  };
+
+  const localStore = createRuntimeLocalStateStore();
+  const dispatcher = createProjectionStateDispatcher(toRunnerWiringNodes(layoutNodes), localStore);
+  const tracker = createLiveNodeValueTracker();
+  const { container, cleanup } = setupDom();
+
+  try {
+    function renderTree(): void {
+      const specs = renderEmission(emission, defaultComponentRegistry, {
+        localStateStore: dispatcher,
+        payloadFromNodeValues: tracker.snapshot(),
+        onNodeValueChange: (nodeId, value) => tracker.set(nodeId, value),
+      });
+      render(
+        h(LayoutProjectionTree, { specs, layoutId: emission.layoutId, localStateStore: dispatcher }),
+        container,
+      );
+    }
+    localStore.subscribe(renderTree);
+    renderTree();
+    await flushUpdates();
+
+    // Each preview button's own dryRun payloadFrom resolves several "node:<id>.value" live-
+    // tracker references (the same form fields a real user would have typed into) — payloadFrom
+    // resolution is a hard fail-close when any referenced node has no live value at all
+    // (SSOT remaining_write_payload_capture_gap), so a real click on an as-yet-untouched form
+    // would legitimately throw here in production too. Seeding the tracker directly (the SAME
+    // write side onNodeValueChange/a real <input> keystroke would use — see
+    // liveNodeValueTracker.ts) is the minimal real-data population needed to exercise the actual
+    // subject of this test (the openModal/dispatch/Confirm chain), without re-deriving a full
+    // form-typing proof credentialManagementCategorySelectorProductionPath.test.ts's sibling
+    // production-path test and admin_runtime Field-dispatch tests already cover elsewhere.
+    for (
+      const fieldNodeId of [
+        "external_api_credential_form_hook_path_input",
+        "external_api_credential_form_route_key_input",
+        "external_api_credential_form_header_key_input",
+        "external_api_credential_form_token_kind_input",
+        "external_api_credential_form_record_kind_input",
+        "external_api_credential_form_provider_kind_input",
+        "external_api_credential_form_reference_key_input",
+        "external_api_credential_form_credential_kind_input",
+        "external_api_credential_form_secret_input",
+        "external_api_credential_form_required_by_bundle_input",
+        "external_api_credential_form_url_or_env_reference_input",
+        "external_api_credential_form_refresh_before_seconds_input",
+        "external_api_credential_form_encryption_key_reference_input",
+        "external_api_credential_form_active_input",
+        "external_api_credential_form_record_id_input",
+        "scheduler_job_id_input",
+        "scheduler_external_port_ref_input",
+        "scheduler_credential_requirement_ref_input",
+      ]
+    ) {
+      tracker.set(fieldNodeId, "test-value");
+    }
+
+    function modalHtml(base: string): string {
+      // Scoped to the Modal's OWN DOM subtree — never the whole page's innerHTML, since the
+      // preview button's own label is byte-identical to its paired Modal's title for several of
+      // these scenarios (e.g. "外部APIクレデンシャルレコードを作成" names both), which would make a
+      // whole-page substring check pass even while the Modal itself never actually opened.
+      return container.querySelector(`[data-node-id="${base}_confirm_modal"]`)?.innerHTML ?? "";
+    }
+
+    for (const scenario of scenarios) {
+      const previewButton = container.querySelector(
+        `[data-node-id="${scenario.base}_button"] button`,
+      ) as unknown as { dispatchEvent: (e: Event) => boolean } | null;
+      assert(previewButton, `expected a real preview button for "${scenario.base}"`);
+
+      // Hidden-until-opened: the Modal's own subtree must render nothing before the real click
+      // (modalFactory renders an empty subtree while closed — see runtimeComponentFactory.ts).
+      assertEquals(modalHtml(scenario.base), "", `expected "${scenario.base}_confirm_modal" to render empty before the preview click`);
+
+      // 1. Real native click on the REAL preview button — never dispatcher.set()/direct state
+      // mutation standing in for the user's own dryRun-preview interaction.
+      previewButton!.dispatchEvent(new Event("click", { bubbles: true }));
+      // The dryRun dispatch settles asynchronously through the real FIFO queue + fetch mock;
+      // poll real microtask/macrotask turns until the Modal's local "open" state actually flips.
+      let opened = false;
+      for (let i = 0; i < 40 && !opened; i++) {
+        await flushUpdates();
+        opened = dispatcher.get(`${scenario.base}_confirm_modal`, "open") === true;
+      }
+      assert(opened, `expected "${scenario.base}_confirm_modal"'s open state to become true after the real dryRun-preview click settles`);
+
+      // 2. The real Modal DOM now shows the seed-authored Japanese title/body — never the
+      // pre-translation English body this round replaced, and never a string-absence-only proof
+      // standing in for actually opening the Modal.
+      assert(modalHtml(scenario.base).includes(scenario.title), `expected the real Modal DOM to show title "${scenario.title}" after opening`);
+      assert(modalHtml(scenario.base).includes(scenario.bodyIncludes), `expected the real Modal DOM to show the Japanese body containing "${scenario.bodyIncludes}"`);
+      assert(modalHtml(scenario.base).includes(`>${scenario.confirmLabel}<`), `expected the real Modal DOM to show the Confirm button label "${scenario.confirmLabel}"`);
+      assert(modalHtml(scenario.base).includes(">キャンセル<"), `expected the real Modal DOM to show the Cancel button label "キャンセル"`);
+
+      // 3. Real Cancel click closes the Modal (toggle/closeModal) — machine wiring intact.
+      const cancelButton = container.querySelector(
+        `[data-node-id="${scenario.base}_cancel_button"] button`,
+      ) as unknown as { dispatchEvent: (e: Event) => boolean } | null;
+      assert(cancelButton, `expected a real Cancel button for "${scenario.base}"`);
+      cancelButton!.dispatchEvent(new Event("click", { bubbles: true }));
+      await flushUpdates();
+      assertEquals(
+        dispatcher.get(`${scenario.base}_confirm_modal`, "open"),
+        false,
+        `expected "${scenario.base}_confirm_modal" to close on a real Cancel click`,
+      );
+      assertEquals(modalHtml(scenario.base), "", `expected "${scenario.base}_confirm_modal" to render empty again after Cancel`);
+
+      // 4. Re-open, then click Confirm for real — proving the Confirm button's own
+      // dispatchTargetRef/payloadFrom (never the preview button's dryRun copy) is what actually
+      // gets dispatched, confirmed=true, and the Modal closes only once that dispatch settles.
+      previewButton!.dispatchEvent(new Event("click", { bubbles: true }));
+      opened = false;
+      for (let i = 0; i < 40 && !opened; i++) {
+        await flushUpdates();
+        opened = dispatcher.get(`${scenario.base}_confirm_modal`, "open") === true;
+      }
+      assert(opened, `expected "${scenario.base}_confirm_modal" to re-open on a second real preview click`);
+
+      const confirmButtonNode = layoutNodes.find((n) => n.nodeId === `${scenario.base}_confirm_button`);
+      assert(confirmButtonNode, `expected a real confirm button LayoutNode for "${scenario.base}"`);
+      const expectedTargetRef =
+        (confirmButtonNode!.dispatchTargetRefByTrigger as Record<string, string> | undefined)?.click;
+      assert(expectedTargetRef, `expected the seed-authored dispatchTargetRefByTrigger.click on "${scenario.base}_confirm_button"`);
+
+      const confirmButton = container.querySelector(
+        `[data-node-id="${scenario.base}_confirm_button"] button`,
+      ) as unknown as { dispatchEvent: (e: Event) => boolean } | null;
+      assert(confirmButton, `expected a real Confirm button for "${scenario.base}"`);
+      const dispatchedBeforeConfirm = dispatchedBodies.length;
+      confirmButton!.dispatchEvent(new Event("click", { bubbles: true }));
+      let closed = false;
+      for (let i = 0; i < 40 && !closed; i++) {
+        await flushUpdates();
+        closed = dispatcher.get(`${scenario.base}_confirm_modal`, "open") === false;
+      }
+      assert(closed, `expected "${scenario.base}_confirm_modal" to close once the real Confirm dispatch settles`);
+      assertEquals(
+        dispatchedBodies.length,
+        dispatchedBeforeConfirm + 1,
+        `expected exactly one new /api/dispatch request from the real Confirm click`,
+      );
+      const confirmBody = dispatchedBodies[dispatchedBodies.length - 1];
+      const confirmPayload = confirmBody.payload as Record<string, unknown> | undefined;
+      assert(confirmPayload, "expected the real Confirm dispatch to carry a payload");
+      assertEquals(
+        confirmPayload!.target_ref,
+        expectedTargetRef,
+        `expected the real Confirm dispatch to carry "${scenario.base}_confirm_button"'s own seed-authored dispatchTargetRef, unchanged by opening/closing the Modal`,
+      );
+      // resolvePayloadFrom resolves "literal:true" to the string "true" (see
+      // payloadFromResolver.ts) — the SAME literal-string convention dryRun's own
+      // "literal:true" resolves to on the preview button, never a JS boolean.
+      assertEquals(
+        confirmPayload!.confirmed,
+        "true",
+        `expected the real Confirm dispatch payload to carry confirmed="true" (never the preview button's dryRun="true")`,
+      );
+      assert(
+        !("dryRun" in confirmPayload!),
+        `expected the real Confirm dispatch payload to carry no dryRun flag at all (unlike the preview button's own payload)`,
+      );
+
+      assertEquals(modalHtml(scenario.base), "", `expected "${scenario.base}_confirm_modal" to render empty again after a real Confirm settles and closes the Modal`);
+    }
+  } finally {
+    render(null, container as unknown as Element);
+    cleanup();
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
   }
 });

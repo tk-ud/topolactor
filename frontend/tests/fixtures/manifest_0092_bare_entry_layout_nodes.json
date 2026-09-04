@@ -239,6 +239,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u30e6\\u30fc\\u30b6\\u30fc\\u30a2\\u30ab\\u30a6\\u30f3\\u30c8\\u3092\\u4f5c\\u6210(\\u521d\\u671f\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u8fbc\\u307f)\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "credentials_users_create_confirm_modal",
+        "sourceActionKey": "credentials_users_create_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "dryRun": "literal:true",
@@ -272,6 +281,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u30e6\\u30fc\\u30b6\\u30fc\\u30a2\\u30ab\\u30a6\\u30f3\\u30c8\\u3092\\u4f5c\\u6210\u0022, \u0022body\u0022: \u0022\\u6307\\u5b9a\\u3057\\u305f\\u30e6\\u30fc\\u30b6\\u30fc\\u540d\\u30fb\\u521d\\u671f\\u30d1\\u30b9\\u30ef\\u30fc\\u30c9\\u30fb\\u30ed\\u30fc\\u30eb\\u7b49\\u3067\\u30a2\\u30ab\\u30a6\\u30f3\\u30c8\\u3068\\u521d\\u671f\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u3092\\u4f5c\\u6210\\u3057\\u307e\\u3059\\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_create_confirm_modal",
+        "sourceActionKey": "credentials_users_create_confirm_modal"
+      }
+    ],
     "label": "\u30E6\u30FC\u30B6\u30FC\u30A2\u30AB\u30A6\u30F3\u30C8\u4F5C\u6210\u306E\u78BA\u8A8D"
   },
   {
@@ -322,6 +340,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_create_confirm_modal",
+        "sourceActionKey": "credentials_users_create_cancel_button"
+      }
+    ],
     "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
   },
   {
@@ -339,6 +366,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u30e6\\u30fc\\u30b6\\u30fc\\u30a2\\u30ab\\u30a6\\u30f3\\u30c8\\u306e\\u30e1\\u30bf\\u30c7\\u30fc\\u30bf\\u3092\\u66f4\\u65b0\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "credentials_users_update_confirm_modal",
+        "sourceActionKey": "credentials_users_update_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "active": "node:credentials_users_active_input.value",
@@ -373,6 +409,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u30e6\\u30fc\\u30b6\\u30fc\\u30a2\\u30ab\\u30a6\\u30f3\\u30c8\\u3092\\u66f4\\u65b0\u0022, \u0022body\u0022: \u0022\\u6307\\u5b9a\\u3057\\u305f\\u30e6\\u30fc\\u30b6\\u30fcID\\u306e\\u30a2\\u30ab\\u30a6\\u30f3\\u30c8\\u30e1\\u30bf\\u30c7\\u30fc\\u30bf(\\u30b9\\u30c6\\u30fc\\u30bf\\u30b9\\u30fb\\u30ed\\u30fc\\u30eb\\u30fb\\u72b6\\u614b\\u30e1\\u30e2\\u7b49)\\u3092\\u66f4\\u65b0\\u3057\\u307e\\u3059\\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_update_confirm_modal",
+        "sourceActionKey": "credentials_users_update_confirm_modal"
+      }
+    ],
     "label": "\u30E6\u30FC\u30B6\u30FC\u30A2\u30AB\u30A6\u30F3\u30C8\u66F4\u65B0\u306E\u78BA\u8A8D"
   },
   {
@@ -424,6 +469,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_update_confirm_modal",
+        "sourceActionKey": "credentials_users_update_cancel_button"
+      }
+    ],
     "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
   },
   {
@@ -441,6 +495,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u30a2\\u30ab\\u30a6\\u30f3\\u30c8\\u3092\\u524a\\u9664(\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u8fbc\\u307f)\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "credentials_users_delete_confirm_modal",
+        "sourceActionKey": "credentials_users_delete_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "dryRun": "literal:true",
@@ -467,6 +530,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u30a2\\u30ab\\u30a6\\u30f3\\u30c8\\u3092\\u524a\\u9664\u0022, \u0022body\u0022: \u0022\\u6307\\u5b9a\\u3057\\u305f\\u30e6\\u30fc\\u30b6\\u30fcID\\u306e\\u30a2\\u30ab\\u30a6\\u30f3\\u30c8\\u3068\\u7d10\\u3065\\u304f\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u3092\\u524a\\u9664\\u3057\\u307e\\u3059\\u3002\\u3053\\u306e\\u64cd\\u4f5c\\u306f\\u53d6\\u308a\\u6d88\\u305b\\u307e\\u305b\\u3093\\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_delete_confirm_modal",
+        "sourceActionKey": "credentials_users_delete_confirm_modal"
+      }
+    ],
     "label": "\u30A2\u30AB\u30A6\u30F3\u30C8\u524A\u9664\u306E\u78BA\u8A8D"
   },
   {
@@ -510,6 +582,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_delete_confirm_modal",
+        "sourceActionKey": "credentials_users_delete_cancel_button"
+      }
+    ],
     "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
   },
   {
@@ -527,6 +608,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u3092\\u5931\\u52b9(\\u78ba\\u8a8d\\u3092\\u958b\\u304f)\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "credentials_users_revoke_credential_confirm_modal",
+        "sourceActionKey": "credentials_users_revoke_credential_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "dryRun": "literal:true",
@@ -553,6 +643,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u3092\\u5931\\u52b9\u0022, \u0022body\u0022: \u0022\\u6307\\u5b9a\\u3057\\u305f\\u30e6\\u30fc\\u30b6\\u30fcID\\u306e\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u884c\\u3092\\u524a\\u9664\\u3057\\u3001\\u3059\\u3079\\u3066\\u306e\\u30a2\\u30af\\u30c6\\u30a3\\u30d6\\u30bb\\u30c3\\u30b7\\u30e7\\u30f3\\u3092\\u5931\\u52b9\\u3055\\u305b\\u307e\\u3059\\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_revoke_credential_confirm_modal",
+        "sourceActionKey": "credentials_users_revoke_credential_confirm_modal"
+      }
+    ],
     "label": "\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u5931\u52B9\u306E\u78BA\u8A8D"
   },
   {
@@ -596,6 +695,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_revoke_credential_confirm_modal",
+        "sourceActionKey": "credentials_users_revoke_credential_cancel_button"
+      }
+    ],
     "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
   },
   {
@@ -613,6 +721,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u30bb\\u30c3\\u30b7\\u30e7\\u30f3\\u3092\\u5931\\u52b9(\\u78ba\\u8a8d\\u3092\\u958b\\u304f)\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "credentials_users_revoke_sessions_confirm_modal",
+        "sourceActionKey": "credentials_users_revoke_sessions_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "dryRun": "literal:true",
@@ -640,6 +757,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u30bb\\u30c3\\u30b7\\u30e7\\u30f3\\u3092\\u5931\\u52b9\u0022, \u0022body\u0022: \u0022\\u6307\\u5b9a\\u3057\\u305f\\u30bb\\u30c3\\u30b7\\u30e7\\u30f3ID(\\u7a7a\\u6b04\\u306e\\u5834\\u5408\\u306f\\u5168\\u3066)\\u306e\\u30a2\\u30af\\u30c6\\u30a3\\u30d6\\u30bb\\u30c3\\u30b7\\u30e7\\u30f3\\u3092\\u5931\\u52b9\\u3055\\u305b\\u307e\\u3059\\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_revoke_sessions_confirm_modal",
+        "sourceActionKey": "credentials_users_revoke_sessions_confirm_modal"
+      }
+    ],
     "label": "\u30BB\u30C3\u30B7\u30E7\u30F3\u5931\u52B9\u306E\u78BA\u8A8D"
   },
   {
@@ -684,6 +810,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_revoke_sessions_confirm_modal",
+        "sourceActionKey": "credentials_users_revoke_sessions_cancel_button"
+      }
+    ],
     "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
   },
   {
@@ -798,6 +933,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u30b9\\u30b1\\u30b8\\u30e5\\u30fc\\u30e9\\u30fc\\u30b8\\u30e7\\u30d6\\u306e\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb/\\u30dd\\u30fc\\u30c8\\u30d0\\u30a4\\u30f3\\u30c7\\u30a3\\u30f3\\u30b0\\u3092\\u8a2d\\u5b9a\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "configure_scheduler_job_credential_or_port_binding_confirm_modal",
+        "sourceActionKey": "configure_scheduler_job_credential_or_port_binding_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "dryRun": "literal:true",
@@ -825,7 +969,16 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u30b9\\u30b1\\u30b8\\u30e5\\u30fc\\u30e9\\u30fc\\u30b8\\u30e7\\u30d6\\u306e\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb/\\u30dd\\u30fc\\u30c8\\u30d0\\u30a4\\u30f3\\u30c7\\u30a3\\u30f3\\u30b0\\u3092\\u8a2d\\u5b9a\u0022, \u0022body\u0022: \u0022Bind the entered credential/port reference to the scheduler job. Writes only credential_requirement_ref/external_port_ref; never the job body/step-chain fields it owns.\u0022}}",
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u30b9\\u30b1\\u30b8\\u30e5\\u30fc\\u30e9\\u30fc\\u30b8\\u30e7\\u30d6\\u306e\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb/\\u30dd\\u30fc\\u30c8\\u30d0\\u30a4\\u30f3\\u30c7\\u30a3\\u30f3\\u30b0\\u3092\\u8a2d\\u5b9a\u0022, \u0022body\u0022: \u0022\u5165\u529B\u3055\u308C\u305F\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB/\u30DD\u30FC\u30C8\u53C2\u7167\u3092\u30B9\u30B1\u30B8\u30E5\u30FC\u30E9\u30FC\u30B8\u30E7\u30D6\u306B\u7D10\u4ED8\u3051\u307E\u3059\u3002\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u8981\u4EF6\u53C2\u7167/\u5916\u90E8\u30DD\u30FC\u30C8\u53C2\u7167\u306E\u307F\u3092\u66F8\u304D\u8FBC\u307F\u3001\u30B8\u30E7\u30D6\u672C\u4F53\u3084\u30B9\u30C6\u30C3\u30D7\u30C1\u30A7\u30FC\u30F3\u306E\u9805\u76EE\u306F\u5909\u66F4\u3057\u307E\u305B\u3093\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "configure_scheduler_job_credential_or_port_binding_confirm_modal",
+        "sourceActionKey": "configure_scheduler_job_credential_or_port_binding_confirm_modal"
+      }
+    ],
     "label": "\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB/\u30DD\u30FC\u30C8\u30D0\u30A4\u30F3\u30C7\u30A3\u30F3\u30B0\u8A2D\u5B9A\u306E\u78BA\u8A8D\u30C0\u30A4\u30A2\u30ED\u30B0"
   },
   {
@@ -843,6 +996,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u8a2d\\u5b9a\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "configure_scheduler_job_credential_or_port_binding_confirm_modal",
+        "sourceActionKey": "configure_scheduler_job_credential_or_port_binding_confirm_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "confirmed": "literal:true",
@@ -871,6 +1033,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "configure_scheduler_job_credential_or_port_binding_confirm_modal",
+        "sourceActionKey": "configure_scheduler_job_credential_or_port_binding_cancel_button"
+      }
+    ],
     "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
   },
   {
@@ -1138,6 +1309,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u5916\\u90e8API\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u30ec\\u30b3\\u30fc\\u30c9\\u3092\\u4f5c\\u6210\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "external_api_credential_create_confirm_modal",
+        "sourceActionKey": "external_api_credential_create_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "dryRun": "literal:true",
@@ -1175,7 +1355,16 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u5916\\u90e8API\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u30ec\\u30b3\\u30fc\\u30c9\\u3092\\u4f5c\\u6210\u0022, \u0022body\u0022: \u0022Create a new record for the selected recordKind. Only allowed metadata fields plus a write-only secret input are sent; the secret is never echoed back.\u0022}}",
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u5916\\u90e8API\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u30ec\\u30b3\\u30fc\\u30c9\\u3092\\u4f5c\\u6210\u0022, \u0022body\u0022: \u0022\u9078\u629E\u3057\u305F\u30EC\u30B3\u30FC\u30C9\u7A2E\u5225\u306B\u5BFE\u3057\u3066\u65B0\u3057\u3044\u30EC\u30B3\u30FC\u30C9\u3092\u4F5C\u6210\u3057\u307E\u3059\u3002\u8A31\u53EF\u3055\u308C\u305F\u30E1\u30BF\u30C7\u30FC\u30BF\u9805\u76EE\u3068\u66F8\u304D\u8FBC\u307F\u5C02\u7528\u306E\u30B7\u30FC\u30AF\u30EC\u30C3\u30C8\u5165\u529B\u306E\u307F\u3092\u9001\u4FE1\u3057\u3001\u30B7\u30FC\u30AF\u30EC\u30C3\u30C8\u304C\u8FD4\u5374\u3055\u308C\u308B\u3053\u3068\u306F\u3042\u308A\u307E\u305B\u3093\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "external_api_credential_create_confirm_modal",
+        "sourceActionKey": "external_api_credential_create_confirm_modal"
+      }
+    ],
     "label": "\u5916\u90E8API\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u30EC\u30B3\u30FC\u30C9\u4F5C\u6210\u306E\u78BA\u8A8D\u30C0\u30A4\u30A2\u30ED\u30B0"
   },
   {
@@ -1193,6 +1382,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u4f5c\\u6210\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "external_api_credential_create_confirm_modal",
+        "sourceActionKey": "external_api_credential_create_confirm_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "hookPath": "node:external_api_credential_form_hook_path_input.value",
@@ -1231,6 +1429,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "external_api_credential_create_confirm_modal",
+        "sourceActionKey": "external_api_credential_create_cancel_button"
+      }
+    ],
     "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
   },
   {
@@ -1248,6 +1455,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u5916\\u90e8API\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u30ec\\u30b3\\u30fc\\u30c9\\u3092\\u66f4\\u65b0\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "external_api_credential_update_confirm_modal",
+        "sourceActionKey": "external_api_credential_update_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "active": "node:external_api_credential_form_active_input.value",
@@ -1287,7 +1503,16 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u5916\\u90e8API\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u30ec\\u30b3\\u30fc\\u30c9\\u3092\\u66f4\\u65b0\u0022, \u0022body\u0022: \u0022Update the identified record\u0027s metadata, and optionally rotate its secret via a write-only input. Never previews or echoes secret material.\u0022}}",
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u5916\\u90e8API\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u30ec\\u30b3\\u30fc\\u30c9\\u3092\\u66f4\\u65b0\u0022, \u0022body\u0022: \u0022\u6307\u5B9A\u3057\u305F\u30EC\u30B3\u30FC\u30C9\u306E\u30E1\u30BF\u30C7\u30FC\u30BF\u3092\u66F4\u65B0\u3057\u3001\u66F8\u304D\u8FBC\u307F\u5C02\u7528\u306E\u5165\u529B\u306B\u3088\u308A\u30B7\u30FC\u30AF\u30EC\u30C3\u30C8\u3092\u4EFB\u610F\u3067\u30ED\u30FC\u30C6\u30FC\u30B7\u30E7\u30F3\u3067\u304D\u307E\u3059\u3002\u30B7\u30FC\u30AF\u30EC\u30C3\u30C8\u306E\u5185\u5BB9\u304C\u30D7\u30EC\u30D3\u30E5\u30FC\u307E\u305F\u306F\u8FD4\u5374\u3055\u308C\u308B\u3053\u3068\u306F\u3042\u308A\u307E\u305B\u3093\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "external_api_credential_update_confirm_modal",
+        "sourceActionKey": "external_api_credential_update_confirm_modal"
+      }
+    ],
     "label": "\u5916\u90E8API\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u30EC\u30B3\u30FC\u30C9\u66F4\u65B0\u306E\u78BA\u8A8D\u30C0\u30A4\u30A2\u30ED\u30B0"
   },
   {
@@ -1305,6 +1530,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u66f4\\u65b0\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "external_api_credential_update_confirm_modal",
+        "sourceActionKey": "external_api_credential_update_confirm_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "active": "node:external_api_credential_form_active_input.value",
@@ -1345,6 +1579,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "external_api_credential_update_confirm_modal",
+        "sourceActionKey": "external_api_credential_update_cancel_button"
+      }
+    ],
     "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
   },
   {
@@ -1362,6 +1605,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u5916\\u90e8API\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u30ec\\u30b3\\u30fc\\u30c9\\u3092\\u7121\\u52b9\\u5316\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "external_api_credential_delete_confirm_modal",
+        "sourceActionKey": "external_api_credential_delete_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "dryRun": "literal:true",
@@ -1388,7 +1640,16 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u5916\\u90e8API\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u30ec\\u30b3\\u30fc\\u30c9\\u3092\\u7121\\u52b9\\u5316\u0022, \u0022body\u0022: \u0022Deactivate (soft-delete) the identified record by recordKind/recordId. This never removes the row or exposes secret material.\u0022}}",
+    "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u5916\\u90e8API\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u30ec\\u30b3\\u30fc\\u30c9\\u3092\\u7121\\u52b9\\u5316\u0022, \u0022body\u0022: \u0022\u6307\u5B9A\u3057\u305F\u30EC\u30B3\u30FC\u30C9\u7A2E\u5225\u30FB\u30EC\u30B3\u30FC\u30C9ID\u306E\u30EC\u30B3\u30FC\u30C9\u3092\u7121\u52B9\u5316(\u8AD6\u7406\u524A\u9664)\u3057\u307E\u3059\u3002\u884C\u306E\u7269\u7406\u524A\u9664\u3084\u30B7\u30FC\u30AF\u30EC\u30C3\u30C8\u306E\u5185\u5BB9\u304C\u516C\u958B\u3055\u308C\u308B\u3053\u3068\u306F\u3042\u308A\u307E\u305B\u3093\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "external_api_credential_delete_confirm_modal",
+        "sourceActionKey": "external_api_credential_delete_confirm_modal"
+      }
+    ],
     "label": "\u5916\u90E8API\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u30EC\u30B3\u30FC\u30C9\u7121\u52B9\u5316\u306E\u78BA\u8A8D\u30C0\u30A4\u30A2\u30ED\u30B0"
   },
   {
@@ -1406,6 +1667,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u7121\\u52b9\\u5316\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "external_api_credential_delete_confirm_modal",
+        "sourceActionKey": "external_api_credential_delete_confirm_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "recordId": "node:external_api_credential_form_record_id_input.value",
@@ -1433,6 +1703,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "external_api_credential_delete_confirm_modal",
+        "sourceActionKey": "external_api_credential_delete_cancel_button"
+      }
+    ],
     "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
   },
   {
@@ -2083,6 +2362,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u5916\\u90e8\\u30a4\\u30f3\\u30b9\\u30bf\\u30f3\\u30b9\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u30ec\\u30b3\\u30fc\\u30c9\\u3092\\u4f5c\\u6210\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "eic_create_confirm_modal",
+        "sourceActionKey": "eic_create_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "dryRun": "literal:true",
@@ -2113,6 +2401,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u5916\\u90e8\\u30a4\\u30f3\\u30b9\\u30bf\\u30f3\\u30b9\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u3092\\u4f5c\\u6210\u0022, \u0022body\u0022: \u0022\\u9078\\u629e\\u3057\\u305f\\u30ec\\u30b3\\u30fc\\u30c9\\u7a2e\\u5225\\u306b\\u5bfe\\u3057\\u3066\\u65b0\\u3057\\u3044\\u30ec\\u30b3\\u30fc\\u30c9\\u3092\\u4f5c\\u6210\\u3057\\u307e\\u3059\\u3002\\u8a31\\u53ef\\u3055\\u308c\\u305f\\u30e1\\u30bf\\u30c7\\u30fc\\u30bf\\u9805\\u76ee\\u306e\\u307f\\u3092\\u9001\\u4fe1\\u3057\\u307e\\u3059\\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "eic_create_confirm_modal",
+        "sourceActionKey": "eic_create_confirm_modal"
+      }
+    ],
     "label": "\u5916\u90E8\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u30EC\u30B3\u30FC\u30C9\u4F5C\u6210\u306E\u78BA\u8A8D"
   },
   {
@@ -2160,6 +2457,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "eic_create_confirm_modal",
+        "sourceActionKey": "eic_create_cancel_button"
+      }
+    ],
     "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
   },
   {
@@ -2177,6 +2483,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u5916\\u90e8\\u30a4\\u30f3\\u30b9\\u30bf\\u30f3\\u30b9\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u30ec\\u30b3\\u30fc\\u30c9\\u3092\\u66f4\\u65b0\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "eic_update_confirm_modal",
+        "sourceActionKey": "eic_update_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "active": "node:eic_active_input.value",
@@ -2208,6 +2523,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u5916\\u90e8\\u30a4\\u30f3\\u30b9\\u30bf\\u30f3\\u30b9\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u3092\\u66f4\\u65b0\u0022, \u0022body\u0022: \u0022\\u6307\\u5b9a\\u3057\\u305f\\u30ec\\u30b3\\u30fc\\u30c9ID\\u306e\\u30e1\\u30bf\\u30c7\\u30fc\\u30bf\\u3092\\u66f4\\u65b0\\u3057\\u307e\\u3059\\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "eic_update_confirm_modal",
+        "sourceActionKey": "eic_update_confirm_modal"
+      }
+    ],
     "label": "\u5916\u90E8\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u30EC\u30B3\u30FC\u30C9\u66F4\u65B0\u306E\u78BA\u8A8D"
   },
   {
@@ -2256,6 +2580,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "eic_update_confirm_modal",
+        "sourceActionKey": "eic_update_cancel_button"
+      }
+    ],
     "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
   },
   {
@@ -2273,6 +2606,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u5916\\u90e8\\u30a4\\u30f3\\u30b9\\u30bf\\u30f3\\u30b9\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u30ec\\u30b3\\u30fc\\u30c9\\u3092\\u7121\\u52b9\\u5316\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "openModal",
+        "targetNodeId": "eic_delete_confirm_modal",
+        "sourceActionKey": "eic_delete_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "dryRun": "literal:true",
@@ -2300,6 +2642,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022data\u0022: {\u0022open\u0022: false, \u0022title\u0022: \u0022\\u5916\\u90e8\\u30a4\\u30f3\\u30b9\\u30bf\\u30f3\\u30b9\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u3092\\u7121\\u52b9\\u5316\u0022, \u0022body\u0022: \u0022\\u6307\\u5b9a\\u3057\\u305f\\u30ec\\u30b3\\u30fc\\u30c9ID\\u3092\\u7121\\u52b9\\u5316\\u3057\\u307e\\u3059\\u3002\u0022}}",
+    "runtimeInteractions": [
+      {
+        "trigger": "toggle",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "eic_delete_confirm_modal",
+        "sourceActionKey": "eic_delete_confirm_modal"
+      }
+    ],
     "label": "\u5916\u90E8\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u30EC\u30B3\u30FC\u30C9\u7121\u52B9\u5316\u306E\u78BA\u8A8D"
   },
   {
@@ -2344,6 +2695,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u30ad\\u30e3\\u30f3\\u30bb\\u30eb\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "eic_delete_confirm_modal",
+        "sourceActionKey": "eic_delete_cancel_button"
+      }
+    ],
     "label": "\u30AD\u30E3\u30F3\u30BB\u30EB"
   },
   {
