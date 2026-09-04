@@ -708,6 +708,23 @@ def build_node(kind, attrs, source_refs, known_gaps):
         if vb_source or vb_match_value is not None:
             node["visibilityBinding"] = {"source": vb_source or "", "matchValue": vb_match_value}
 
+        # mixed_sibling_ordering_contract (credential-management-ux-gaps-followup round):
+        # SEED_RECORD_NESTED_LIST_KEYS groups a multi-bucket parent's children by record TYPE
+        # (e.g. topology_ui_projection's categories[] before sections[]) regardless of authored
+        # DSL source order -- a real, deliberate default (see the resolved
+        # declared_catalog_stale_against_real_128_record_seed_content gap note, which explicitly
+        # rejected wrapping a Section in an artificial Category to fake a different order). An
+        # authored Category/Section may OPT IN to an explicit cross-bucket position via
+        # siblingOrder (an integer), mirroring debounceMs's own optional-integer-attribute idiom
+        # immediately below on Field. Absent siblingOrder on every child of a multi-bucket parent,
+        # flatten_topology_ui_seed_tree's merge is BYTE-IDENTICAL to today's fixed bucket order --
+        # this is an opt-in escape hatch, never a default behavior change for any existing surface.
+        if attrs.get("siblingOrder") is not None:
+            try:
+                node["siblingOrder"] = int(attrs.get("siblingOrder"))
+            except (TypeError, ValueError):
+                node["siblingOrder"] = attrs.get("siblingOrder")
+
     if kind in CONTAINER_UNITS:
         node["children"] = []
     if kind == "section":
@@ -1284,6 +1301,18 @@ def validate_structural_node(node, parent, errors, path):
     if node.get("kind") == "Form" and not (node.get("fields") or []):
         errors.append(err("EMPTY_FORM", path, "blocking", f"Form '{node.get('key')}' has no Field children"))
 
+    if node.get("kind") in ("Category", "Section") and "siblingOrder" in node:
+        if not isinstance(node.get("siblingOrder"), int) or isinstance(node.get("siblingOrder"), bool):
+            errors.append(
+                err(
+                    "SIBLING_ORDER_MUST_BE_INTEGER",
+                    path,
+                    "blocking",
+                    f"{node.get('kind')} '{node.get('key')}' authored siblingOrder={node.get('siblingOrder')!r} -- "
+                    f"must be a plain integer (mixed_sibling_ordering_contract)",
+                )
+            )
+
     if node.get("kind") == "Action":
         parent_kind = parent.get("kind") if parent else None
         action_lane = (node.get("eventBinding") or {}).get("wiringLane")
@@ -1733,8 +1762,8 @@ COMMON_NODE_KEYS = {"kind", "key", "label", "sourceYamlRefs", "knownGapRefs", "a
 
 KIND_SPECIFIC_CONSUMED_KEYS = {
     "Projection": set(),
-    "Category": {"visibilityBinding"},
-    "Section": {"sectionKind", "visibilityBinding"},
+    "Category": {"visibilityBinding", "siblingOrder"},
+    "Section": {"sectionKind", "visibilityBinding", "siblingOrder"},
     "Form": {"target", "mode", "fields", "actions"},
     "Field": {"control", "required", "valueFrom", "eventBinding", "optionsSource", "optionsLabelPath", "optionsValuePath", "debounceMs"},
     "Table": {"source", "display", "displayColumns", "rowsSource", "_rawDisplayColumns"},
@@ -1808,12 +1837,16 @@ def convert_node_to_seed_record(node, schema_to_seed_map, target_surface, loss_e
         record["sections"] = [c for c in converted_children if c["recordType"] == "topology_ui_section"]
         if node.get("visibilityBinding") is not None:
             record["visibilityBinding"] = node["visibilityBinding"]
+        if "siblingOrder" in node:
+            record["siblingOrder"] = node["siblingOrder"]
     elif react_kind == "Section":
         record["sectionKey"] = record["key"]
         record["sectionKind"] = node.get("sectionKind", "")
         record["children"] = converted_children
         if node.get("visibilityBinding") is not None:
             record["visibilityBinding"] = node["visibilityBinding"]
+        if "siblingOrder" in node:
+            record["siblingOrder"] = node["siblingOrder"]
     elif react_kind == "Form":
         record["formKey"] = record["key"]
         record["target"] = node.get("target", "")
@@ -2146,6 +2179,24 @@ def flatten_topology_ui_seed_tree(record, seed_key, parent_key=None, out=None):
             continue
         shell[shell_key] = [c.get("key") for c in children]
         child_records.extend(children)
+
+    # mixed_sibling_ordering_contract (credential-management-ux-gaps-followup round; see the SAME
+    # name in docs/design/react-schema-topology-seed-translator-ssot.yaml): a multi-bucket parent
+    # (currently topology_ui_projection's categories+sections, topology_ui_form's fields+actions)
+    # otherwise ALWAYS flattens/recurses bucket-by-bucket in nested_specs' own fixed declaration
+    # order, regardless of authored DSL source order -- every existing surface relies on that
+    # default and authors no siblingOrder at all, so this block is a no-op stable pass-through for
+    # all of them (default_ranks below reproduces child_records' own pre-sort order exactly, and
+    # sorted() with equal keys preserves it). Only when at least one child of THIS parent carries
+    # an explicit integer siblingOrder does this reorder child_records -- the sole opt-in mechanism
+    # a Category/Section author has to make one bucket's record precede another bucket's, without
+    # inventing a new node kind (e.g. an "artificial Category") or hand-editing the physical seed.
+    if len(nested_specs) > 1 and any(c.get("siblingOrder") is not None for c in child_records):
+        default_ranks = {id(c): i for i, c in enumerate(child_records)}
+        child_records = sorted(
+            child_records,
+            key=lambda c: c["siblingOrder"] if c.get("siblingOrder") is not None else default_ranks[id(c)],
+        )
 
     out.append({
         "type": "topology_ui_seed_record",

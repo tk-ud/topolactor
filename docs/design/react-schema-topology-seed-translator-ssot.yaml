@@ -650,10 +650,10 @@ react_schema_topology_seed_translator_ssot:
         required: [surface, categories]
       topology_ui_category:
         required: [categoryKey, sections]
-        optional: [visibilityBinding]
+        optional: [visibilityBinding, siblingOrder]
       topology_ui_section:
         required: [sectionKey, sectionKind, children]
-        optional: [visibilityBinding]
+        optional: [visibilityBinding, siblingOrder]
       topology_ui_form:
         required: [formKey, target, mode, fields, actions, authorityMarker]
       topology_ui_field:
@@ -737,6 +737,79 @@ react_schema_topology_seed_translator_ssot:
       classification of every other record type this SSOT emits
       (authority_boundary_with_translator_ssot above). This SSOT does not restate that contract's
       body and does not itself define what visibilityBinding DOES at render time.
+    mixed_sibling_ordering_contract:
+      status: added_credential_management_ux_gaps_followup_round_never_previously_authorable
+      default_behavior: >-
+        A multi-bucket parent record (currently topology_ui_projection, whose
+        SEED_RECORD_NESTED_LIST_KEYS entry is [(categories, categoryKeys),
+        (sections, sectionKeys)]; also topology_ui_form, [(fields, fieldKeys),
+        (actions, actionKeys)]) always flattens/recurses bucket-by-bucket in that FIXED
+        declaration order, independent of authored DSL source order -- e.g. every
+        topology_ui_category child of a Projection precedes every topology_ui_section child of
+        the SAME Projection in components_layout_design.layout_schema_json.records[], and
+        therefore in LayoutSchemaTensorComposer.Compose's OrderIndex (a plain incrementing
+        counter over the records[] array's own stored order -- see backend/repository/
+        LayoutSchemaTensorComposer.cs Compose), and therefore in frontend/runtime/
+        renderEmission.ts buildChildrenMap's per-parent sibling sort, and therefore in the final
+        DOM. This is every existing surface's actual, relied-upon behavior today; this contract
+        does not change it by default.
+      opt_in_override: >-
+        A Category or Section record may author an OPTIONAL siblingOrder (a plain integer),
+        parsed from the DSL's siblingOrder="<int>" attribute (mirrors Field's own optional
+        debounceMs attribute idiom) into the react_schema node, carried verbatim into the seed
+        record (record_types.topology_ui_category/topology_ui_section optional field above), and
+        consumed ONLY inside .agent/scripts/react_schema_topology_seed_translator.py
+        flatten_topology_ui_seed_tree: when at least one child of a multi-bucket parent carries
+        an authored siblingOrder, ALL of that parent's children (across every bucket, not just
+        one) are stable-sorted by (siblingOrder if authored else that child's own default
+        bucket-order rank) before being flattened/recursed -- letting a later-bucket record (e.g.
+        a Section) precede an earlier-bucket record (e.g. a Category) when the author explicitly
+        says so. A malformed (non-integer) siblingOrder fails the whole generate-react-schema run
+        closed via SIBLING_ORDER_MUST_BE_INTEGER (validate_structural_node), never silently
+        ignored or coerced.
+      default_preserving_guarantee: >-
+        Absent siblingOrder on every child of a given multi-bucket parent (the case for every
+        surface's real seed content as of this round, credential-management included until it
+        opts in below), flatten_topology_ui_seed_tree's default-rank fallback reproduces the
+        pre-existing child_records order exactly, so Python's stable sort is a byte-identical
+        no-op -- this contract cannot regress any surface that does not author it.
+      credential_management_usage: >-
+        auth.external.credential_management.projection's credential_search_section (the shared
+        cross-category search/filter bar hosting credential_category_filter, the tabs.template
+        category selector -- see surface_axes.admin.surfaces.credentials.seed_contract.
+        component_tree[credential_category_filter] in docs/design/
+        admin-normal-surface-projection-seed-ssot.yaml) authors siblingOrder=0, placing it before
+        the three topology_ui_category subtrees (users/external_api_credential/instance_settings,
+        left unauthored -- default bucket rank keeps their existing relative order), so the
+        category selector itself is reachable in the DOM before any category's own
+        (potentially large) subtree content, resolving the credential-management-ux-gaps Bundle's
+        category-selector-primacy finding through this generic capability rather than a
+        credential-specific hack or the previously-rejected artificial-Category workaround (see
+        the resolved declared_catalog_stale_against_real_128_record_seed_content gap note above).
+      rejected_alternatives:
+        - alternative: wrap_credential_search_section_in_an_artificial_unbound_category
+          reason: >-
+            Already tried and reverted in an earlier round (see the resolved
+            declared_catalog_stale_against_real_128_record_seed_content gap note above); conflates
+            recordType topology_ui_category (a mutually-exclusive, visibilityBinding-gated
+            subtree) with topology_ui_section (a shared, always-visible bar), which several
+            existing checks (VISIBILITY_BINDING_ELIGIBLE_RECORD_TYPES,
+            validate_ui_catalog_node componentKinds) key off of by exact recordType.
+        - alternative: reorder_credential_search_section_earlier_in_the_dsl_source_text_alone
+          reason: >-
+            Empirically verified to have NO effect: SEED_RECORD_NESTED_LIST_KEYS' fixed
+            categories-before-sections bucket order is independent of source text position (only
+            sourceReactPath, a documentation-only field, moves).
+        - alternative: author_an_orderIndex_override_via_ui_topology_tensor.layout_patch_json
+          reason: >-
+            Verified against backend/repository/LayoutSchemaTensorComposer.cs Compose and
+            backend/repository/NpgsqlUiTopologyRepository.cs's own round-39/40 documentation: for
+            a schema-composed layout (fixed_form_projection, which credential-management is), a
+            tensor override delta (layout_patch_json.nodes[]) carries ONLY propsJson/stateJson/
+            propBindings/dispatch-fields/debounceMs -- ParentNodeId/OrderIndex/SlotKey/
+            LayoutClassRefs are schema-tree-derived facts Compose() assigns as literal/counter
+            values, never looked up from any override map, so no existing UI Builder authoring
+            path can move a schema-composed node's position at all.
 
   # ===========================================================================
   # 5a. storage_adoption_contract

@@ -295,6 +295,14 @@ Deno.test("production path: manifest 092's real credential_category_filter tabs 
  * test does not exercise), not something this round's translation work introduced -- fixed here
  * because it directly blocks this round's own explicit requirement to prove a Modal actually
  * opens via a real click, never a hidden/never-reachable disclosure state.
+ *
+ * credential-management-ux-gaps-followup round: the 37 payloadFrom-referenced Fields this test's
+ * scenarios read (control was form_input/form_field -- a label plus a hardcoded empty <span>,
+ * never a real <input>, until that round re-authored them to form_input/input) are now driven by
+ * real native <input> "input" events on their real rendered elements (typeIntoRealInput /
+ * typeRealInputsForCategoryOnce below), not tracker.set() -- see the comment at their call site
+ * for the still-open, out-of-scope exception (the handful of sibling Select fields whose seed
+ * carries no real, non-placeholder option to select from).
  */
 Deno.test("production path: real dryRun-preview click opens each reachable confirmation Modal (real DOM, real settled dispatch, Japanese title/body/confirm/cancel, dispatchTargetRef/payloadFrom preserved on Confirm)", async () => {
   const layoutNodes = await loadManifest092Fixture();
@@ -457,23 +465,41 @@ Deno.test("production path: real dryRun-preview click opens each reachable confi
     renderTree();
     await flushUpdates();
 
-    // Each preview button's own dryRun payloadFrom resolves several "node:<id>.value" live-
-    // tracker references (the same form fields a real user would have typed into) — payloadFrom
-    // resolution is a hard fail-close when any referenced node has no live value at all
-    // (SSOT remaining_write_payload_capture_gap), so a real click on an as-yet-untouched form
-    // would legitimately throw here in production too. Seeding the tracker directly (the SAME
-    // write side onNodeValueChange/a real <input> keystroke would use — see
-    // liveNodeValueTracker.ts) is the minimal real-data population needed to exercise the actual
-    // subject of this test (the openModal/dispatch/Confirm chain), without re-deriving a full
-    // form-typing proof credentialManagementCategorySelectorProductionPath.test.ts's sibling
-    // production-path test and admin_runtime Field-dispatch tests already cover elsewhere.
-    for (
-      const fieldNodeId of [
+    // credential-management-ux-gaps-followup round: the 37 payloadFrom-referenced Fields that
+    // were authored control=form_input/form_field (formFieldFactory -> a label plus a hardcoded
+    // empty <span>, no real <input> at all) were re-authored to control=form_input/input (see
+    // db/seed_empty.sql's cd002 layout row and .agent/tests/fixtures/
+    // react-schema-topology-seed-translator/credential-management-0092.input.json). The comment
+    // this replaced claimed a full form-typing proof existed "elsewhere" for these fields, which
+    // was never true for THIS surface's own 37 fields (they were not typeable in production at
+    // all until that round) — so this test now drives every one of them via a REAL native <input>
+    // "input" event on the REAL rendered element (typeIntoRealInput below), the same write path
+    // liveNodeValueTracker.ts's onNodeValueChange documents a genuine keystroke using, never
+    // tracker.set() standing in for it.
+    //
+    // The handful of already-select-controlled fields in the same forms (record_kind/active/
+    // approve/role_name — control=form_input/select, unaffected by the form_input/form_field bug
+    // this round fixed) are a SEPARATE, still-open, out-of-scope gap: manifest 092's real seed
+    // authors these Select nodes with only the placeholder "" option — data.options is empty —
+    // confirmed against the real DOM dump this Bundle used as its own bug evidence, so there is no
+    // real non-empty <option> a genuine user could select today. Faking one here would misrepresent
+    // that gap as fixed. These keep using tracker.set() (documented, not hidden) until that
+    // separate seed/options-wiring gap is addressed.
+    function typeIntoRealInput(nodeId: string, value: string): void {
+      const inputEl = container.querySelector(
+        `[data-node-id="${nodeId}"] input`,
+      ) as unknown as { value: string; dispatchEvent: (e: Event) => boolean } | null;
+      assert(inputEl, `expected a real <input> for Field "${nodeId}" (control=form_input/input) in the currently-active category's mounted DOM`);
+      inputEl.value = value;
+      inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    const realInputFieldsByCategory: Record<string, string[]> = {
+      external_api_credential: [
         "external_api_credential_form_hook_path_input",
         "external_api_credential_form_route_key_input",
         "external_api_credential_form_header_key_input",
         "external_api_credential_form_token_kind_input",
-        "external_api_credential_form_record_kind_input",
         "external_api_credential_form_provider_kind_input",
         "external_api_credential_form_reference_key_input",
         "external_api_credential_form_credential_kind_input",
@@ -482,32 +508,51 @@ Deno.test("production path: real dryRun-preview click opens each reachable confi
         "external_api_credential_form_url_or_env_reference_input",
         "external_api_credential_form_refresh_before_seconds_input",
         "external_api_credential_form_encryption_key_reference_input",
-        "external_api_credential_form_active_input",
         "external_api_credential_form_record_id_input",
         "scheduler_job_id_input",
         "scheduler_external_port_ref_input",
         "scheduler_credential_requirement_ref_input",
+      ],
+      users: [
         "credentials_users_username_input",
         "credentials_users_password_input",
-        "credentials_users_approve_input",
         "credentials_users_status_input",
-        "credentials_users_role_name_input",
         "credentials_users_suspended_from_input",
         "credentials_users_suspended_until_input",
         "credentials_users_state_note_input",
-        "credentials_users_active_input",
         "credentials_users_user_id_input",
         "credentials_users_session_id_input",
-        "eic_record_kind_input",
+      ],
+      external_instance_credential: [
         "eic_provider_kind_input",
         "eic_reference_key_input",
         "eic_required_by_bundle_input",
         "eic_instance_authority_key_input",
-        "eic_active_input",
         "eic_record_id_input",
+      ],
+    };
+    // Select-controlled Fields sharing the SAME forms above — see the out-of-scope note above.
+    for (
+      const fieldNodeId of [
+        "external_api_credential_form_record_kind_input",
+        "external_api_credential_form_active_input",
+        "credentials_users_approve_input",
+        "credentials_users_role_name_input",
+        "credentials_users_active_input",
+        "eic_record_kind_input",
+        "eic_active_input",
       ]
     ) {
       tracker.set(fieldNodeId, "test-value");
+    }
+
+    const categoriesAlreadyTyped = new Set<string>();
+    function typeRealInputsForCategoryOnce(category: string): void {
+      if (categoriesAlreadyTyped.has(category)) return;
+      categoriesAlreadyTyped.add(category);
+      for (const nodeId of realInputFieldsByCategory[category] ?? []) {
+        typeIntoRealInput(nodeId, `real-dom-value:${nodeId}`);
+      }
     }
 
     function modalHtml(base: string): string {
@@ -529,6 +574,13 @@ Deno.test("production path: real dryRun-preview click opens each reachable confi
         await flushUpdates();
       }
       assertEquals(activeTabKey(container), scenario.category, `expected category "${scenario.category}" to be active before exercising "${scenario.base}"`);
+
+      // Real native <input> "input" events on this category's own now-mounted real <input>
+      // elements — see typeRealInputsForCategoryOnce above. Runs once per category (the first
+      // scenario to visit it); later scenarios sharing the same category/form reuse the same
+      // already-typed live-tracker values, exactly as a real user re-using an already-filled form
+      // across several of its own action buttons would.
+      typeRealInputsForCategoryOnce(scenario.category);
 
       const previewButton = container.querySelector(
         `[data-node-id="${scenario.base}_button"] button`,
@@ -626,6 +678,26 @@ Deno.test("production path: real dryRun-preview click opens each reachable confi
       assert(
         !("dryRun" in confirmPayload!),
         `expected the real Confirm dispatch payload to carry no dryRun flag at all (unlike the preview button's own payload)`,
+      );
+
+      // Full round trip proof: at least one value this scenario actually TYPED into a real
+      // <input> (typeRealInputsForCategoryOnce above) is present somewhere in the real Confirm
+      // dispatch payload -- native input event -> liveNodeValueTracker (onNodeValueChange) ->
+      // payloadFrom "node:<id>.value" resolution -> this exact request body. Scoped to fields
+      // this scenario's own category actually has (some categories share fewer fields with a
+      // given business action than others), so this never spuriously requires a field a
+      // scenario's own dispatch never reads.
+      const typedFieldsForThisCategory = realInputFieldsByCategory[scenario.category] ?? [];
+      const confirmPayloadValues = Object.values(confirmPayload!).map((v) => String(v));
+      assert(
+        typedFieldsForThisCategory.some((nodeId) =>
+          confirmPayloadValues.includes(`real-dom-value:${nodeId}`)
+        ),
+        `expected "${scenario.base}"'s real Confirm dispatch payload to carry at least one value ` +
+          `actually typed into a real <input> for category "${scenario.category}" (payloadFrom ` +
+          `round trip from native DOM input through liveNodeValueTracker), got ${
+            JSON.stringify(confirmPayload)
+          }`,
       );
 
       assertEquals(modalHtml(scenario.base), "", `expected "${scenario.base}_confirm_modal" to render empty again after a real Confirm settles and closes the Modal`);

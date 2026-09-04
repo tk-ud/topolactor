@@ -195,3 +195,39 @@ runtime-assigned:
 - `package_internal_api_wiring_lane` idempotency applicability
   (`docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml` `lane_storage_boundary`):
   left as `known_gap`, not asserted resolved by this bundle.
+- The remaining select-controlled Fields sharing the users/external_api_credential/
+  external_instance_credential CRUD forms (`record_kind`/`active`/`approve`/`role_name`) render
+  a real `<select>` (control=form_input/select, never the form_input/form_field bug the
+  credential-management-ux-gaps round fixed for their sibling text Fields) but with only the
+  placeholder `""` option — `data.options` is empty in the real seed. A user cannot actually
+  choose a business value from these controls today; this is a separate, still-open seed/
+  options-wiring gap, not resolved by this document's revision or by
+  credential-management-ux-gaps.
+
+## credential-management-ux-gaps round (production DOM UX remediation)
+
+Two follow-up rounds after the migration above, a captured production DOM revealed and this
+round fixed:
+
+- 37 Fields across all three categories whose value a create/update/search Action's own
+  `payloadFrom` reads (`node:<id>.value`) were authored `control=form_input/form_field`
+  (`formFieldFactory` → a label plus a hardcoded empty `<span>`, never a real `<input>`) — not
+  actually typeable in production. Re-authored to `control=form_input/input` in the canonical
+  markup source and regenerated through the translator (never hand-edited into
+  `db/seed_empty.sql`). Fields with no `payloadFrom` reference were left read-only.
+- `credential_search_section` (the shared cross-category search/filter bar hosting
+  `credential_category_filter`, the tabs.template category selector) rendered AFTER all three
+  gated category subtrees' own content, because `topology_ui_projection`'s
+  `SEED_RECORD_NESTED_LIST_KEYS` entry always flattens every Category child before every Section
+  child, independent of authored source order — confirmed to have NO existing override authority
+  (neither DSL source-text position nor a `ui_topology_tensor.layout_patch_json` override, since a
+  schema-composed layout's override delta never carries `ParentNodeId`/`OrderIndex`/`SlotKey`).
+  Resolved by adding a new, generic, opt-in `mixed_sibling_ordering_contract` capability to
+  `docs/design/react-schema-topology-seed-translator-ssot.yaml` / the translator (an authored
+  `siblingOrder` integer on a Category or Section, default-preserving for every surface that does
+  not author it) and authoring `credential_search_section siblingOrder="-1"`, so the category
+  selector itself is reachable before any category's own subtree content. See that SSOT's
+  `mixed_sibling_ordering_contract` for the full contract and the alternatives it rejected.
+- The credential-management hub-navigation link showed the raw hub UUID as its visible label
+  (`hubs.hub.relation_registry_id` was never seeded). Fixed with a seed-data-only
+  `topology.relation_registry` row; no runtime/backend code changed.
