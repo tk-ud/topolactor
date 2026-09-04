@@ -2358,22 +2358,22 @@
   {
     "nodeId": "credential_category_filter",
     "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000012",
+    "componentId": "00000000-0000-0000-0001-000000000016",
     "parentNodeId": "credential_search_section",
     "orderIndex": 125,
     "x": 0,
     "y": 0,
-    "componentKind": "form_input/select",
+    "componentKind": "disclosure/tabs",
     "wiringId": "00000000-0000-0000-0000-0000000cd003",
     "wiringKey": "auth.external.credential_management.projection.wiring",
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "propsJson": "{\u0022data\u0022: {\u0022value\u0022: \u0022external_api_credential\u0022, \u0022options\u0022: [{\u0022label\u0022: \u0022\u30E6\u30FC\u30B6\u30FC\u0022, \u0022value\u0022: \u0022users\u0022}, {\u0022label\u0022: \u0022\u5916\u90E8API\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u0022, \u0022value\u0022: \u0022external_api_credential\u0022}, {\u0022label\u0022: \u0022\u5916\u90E8\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u0022, \u0022value\u0022: \u0022external_instance_credential\u0022}], \u0022label\u0022: \u0022\u30AB\u30C6\u30B4\u30EA (users / external_api_credential / external_instance_credential)\u0022, \u0022placeholder\u0022: \u0022\u30AB\u30C6\u30B4\u30EA (users / external_api_credential / external_instance_credential)\u0022}}",
+    "propsJson": "{\u0022data\u0022: {\u0022items\u0022: [{\u0022key\u0022: \u0022users\u0022, \u0022label\u0022: \u0022\u30E6\u30FC\u30B6\u30FC\u0022}, {\u0022key\u0022: \u0022external_api_credential\u0022, \u0022label\u0022: \u0022\u5916\u90E8API\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u0022}, {\u0022key\u0022: \u0022external_instance_credential\u0022, \u0022label\u0022: \u0022\u5916\u90E8\u30A4\u30F3\u30B9\u30BF\u30F3\u30B9\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u0022}], \u0022activeKey\u0022: \u0022external_api_credential\u0022}}",
     "stateJson": "{\u0022selectedCategory\u0022: \u0022external_api_credential\u0022}",
     "runtimeInteractions": [
       {
-        "trigger": "change",
+        "trigger": "select",
         "targetRef": "ui-local:credential_category_filter.selectedCategory",
         "actionType": "setState",
         "payloadFrom": {
@@ -2559,7 +2559,7 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "propsJson": "{\u0022table\u0022: null, \u0022columns\u0022: [{\u0022key\u0022: \u0022recordKind\u0022, \u0022header\u0022: \u0022\u30EC\u30B3\u30FC\u30C9\u7A2E\u5225\u0022}, {\u0022key\u0022: \u0022providerKind\u0022, \u0022header\u0022: \u0022\u30D7\u30ED\u30D0\u30A4\u30C0\u30FC\u7A2E\u5225\u0022}, {\u0022key\u0022: \u0022requiredByBundle\u0022, \u0022header\u0022: \u0022\u5FC5\u8981\u3068\u3059\u308B\u30D0\u30F3\u30C9\u30EB\u0022}, {\u0022key\u0022: \u0022referenceKey\u0022, \u0022header\u0022: \u0022\u53C2\u7167\u30AD\u30FC\u0022}, {\u0022key\u0022: \u0022active\u0022, \u0022header\u0022: \u0022\u6709\u52B9\u0022}, {\u0022key\u0022: \u0022expiresAt\u0022, \u0022header\u0022: \u0022\u6709\u52B9\u671F\u9650\u0022}, {\u0022key\u0022: \u0022updatedAt\u0022, \u0022header\u0022: \u0022\u66F4\u65B0\u65E5\u6642\u0022}], \u0022rows\u0022: []}",
+    "propsJson": "{\u0022table\u0022: null, \u0022columns\u0022: [{\u0022key\u0022: \u0022recordKind\u0022, \u0022header\u0022: \u0022\\u30ec\\u30b3\\u30fc\\u30c9\\u7a2e\\u5225\u0022}, {\u0022key\u0022: \u0022providerKind\u0022, \u0022header\u0022: \u0022\\u30d7\\u30ed\\u30d0\\u30a4\\u30c0\\u30fc\\u7a2e\\u5225\u0022}, {\u0022key\u0022: \u0022requiredByBundle\u0022, \u0022header\u0022: \u0022\\u5fc5\\u8981\\u3068\\u3059\\u308b\\u30d0\\u30f3\\u30c9\\u30eb\u0022}, {\u0022key\u0022: \u0022referenceKey\u0022, \u0022header\u0022: \u0022\\u53c2\\u7167\\u30ad\\u30fc\u0022}, {\u0022key\u0022: \u0022active\u0022, \u0022header\u0022: \u0022\\u6709\\u52b9\u0022}, {\u0022key\u0022: \u0022expiresAt\u0022, \u0022header\u0022: \u0022\\u6709\\u52b9\\u671f\\u9650\u0022}, {\u0022key\u0022: \u0022updatedAt\u0022, \u0022header\u0022: \u0022\\u66f4\\u65b0\\u65e5\\u6642\u0022}], \u0022rows\u0022: []}",
     "propBindings": {
       "rows": {
         "source": "emission.data.records"

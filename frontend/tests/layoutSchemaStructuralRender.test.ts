@@ -228,13 +228,13 @@ Deno.test("DOM-connected proof: manifest 0092's REAL bare-entry-resolved LayoutN
   // stateJson slot. This test's six target Action leaves (validate/preview/apply/approve/
   // json_template_download/json_import) all live under the physical instance_settings category
   // node, whose visibilityBinding matchValue is "external_instance_credential" — the SAME
-  // Topolactor.Schema.CredentialManagementCategories discriminator the real <select>'s own
-  // authored options carry (see credential_category_filter's propsJson; the physical node key
+  // Topolactor.Schema.CredentialManagementCategories discriminator the real tabs' own authored
+  // items carry (see credential_category_filter's propsJson; the physical node key
   // "instance_settings" and the matchValue are deliberately different strings, see
   // LayoutSchemaStructuralCompositionTests.cs's own ManifestCd002RealSeedContent test). This
   // test's own subject is whether an ALREADY-ACTIVE category's real Action leaves reach the DOM,
   // not the switch mechanism itself (see credentialManagementCategorySelectorProductionPath.test.ts
-  // for the real-<select>-driven switch proof), so positioning the scenario with a direct set()
+  // for the real-tab-click-driven switch proof), so positioning the scenario with a direct set()
   // here — mirroring ProjectionShell.tsx's own predeclare-then-set() production wiring — is not
   // standing in for that separate proof.
   const dispatcher = createProjectionStateDispatcher(toRunnerWiringNodes(layoutNodes), createRuntimeLocalStateStore());
@@ -274,21 +274,23 @@ Deno.test("DOM-connected proof: manifest 0092's REAL bare-entry-resolved LayoutN
 
   // The real DOM ALSO shows zero error boxes. Of the fourteen plain select fields with no
   // authored "change" binding at all (approval_status x2, port_kind, callable,
-  // external_api_credential_form_record_kind_input/active_input, credential_category_filter/
+  // external_api_credential_form_record_kind_input/active_input,
   // credential_filter_active_input/credential_filter_record_kind_input (round 5 shared search
   // block, always mounted — credential_search_section is a root-level sibling of every category,
   // never itself gated), credentials_users_approve_input/role_name_input/active_input (round 5
   // credentials.users CRUD), eic_record_kind_input/active_input (round 5 external_instance_credential
-  // CRUD)), only the ones under the active instance_settings category (port_kind, callable,
-  // approval_status, eic_record_kind_input, eic_active_input — 5) plus the 3 always-mounted search
-  // block selects actually reach the DOM here — the other 6 (users' 4, external_api_credential's 2)
-  // are unmounted along with their whole non-active category, per
-  // structural_subtree_conditional_visibility_contract. selectFactory renders every one of these
-  // without requiring a "change" binding (the SAME no-binding-required posture formFieldFactory
-  // already has for form_input/form_field), closing the gap renderEmission()'s error-spec count
-  // alone could not see. Never a substitute proof: this test exists specifically to catch the case
-  // where renderEmission() says zero but the real DOM still shows an error box, and it now proves
-  // that case does not occur for this scenario.
+  // CRUD)) — credential_category_filter itself moved from a select field to a tabs.template
+  // presentation this round (see admin-normal-surface-projection-seed-ssot.yaml's
+  // presentation_history) and is asserted separately below — only the ones under the active
+  // instance_settings category (port_kind, callable, approval_status, eic_record_kind_input,
+  // eic_active_input — 5) plus the 2 always-mounted search block selects actually reach the DOM
+  // here — the other 6 (users' 4, external_api_credential's 2) are unmounted along with their
+  // whole non-active category, per structural_subtree_conditional_visibility_contract.
+  // selectFactory renders every one of these without requiring a "change" binding (the SAME
+  // no-binding-required posture formFieldFactory already has for form_input/form_field), closing
+  // the gap renderEmission()'s error-spec count alone could not see. Never a substitute proof:
+  // this test exists specifically to catch the case where renderEmission() says zero but the real
+  // DOM still shows an error box, and it now proves that case does not occur for this scenario.
   const errorBoxMatches = html.match(/rounded border border-red-200/g) ?? [];
   assertEquals(
     errorBoxMatches.length,
@@ -296,7 +298,7 @@ Deno.test("DOM-connected proof: manifest 0092's REAL bare-entry-resolved LayoutN
     "expected zero visible error boxes in the real DOM for the manifest 092 bare-entry representative scenario",
   );
 
-  // With instance_settings active, its own 5 unwired selects plus the 3 always-mounted search
+  // With instance_settings active, its own 5 unwired selects plus the 2 always-mounted search
   // block selects render as real <select> elements (not error boxes) — no Field-level
   // read-only/editable authority is introduced; they render the same way an unwired
   // form_input/form_field already does. The other two categories' 6 unwired selects (users' 4,
@@ -305,11 +307,23 @@ Deno.test("DOM-connected proof: manifest 0092's REAL bare-entry-resolved LayoutN
   const selectMatches = html.match(/<select\b[^>]*>/g) ?? [];
   assertEquals(
     selectMatches.length,
-    8,
+    7,
     "expected the 5 unwired instance_settings select fields (port_kind, callable, approval_status, " +
-      "eic_record_kind_input, eic_active_input) plus the 3 always-mounted search-block select fields " +
-      "(credential_category_filter, credential_filter_active_input, credential_filter_record_kind_input) " +
+      "eic_record_kind_input, eic_active_input) plus the 2 always-mounted search-block select fields " +
+      "(credential_filter_active_input, credential_filter_record_kind_input) " +
       "to render as <select> elements in the real DOM, with users'/external_api_credential's unwired " +
       "selects unmounted along with their non-active categories",
+  );
+
+  // credential_category_filter itself no longer renders a <select> at all (presentation_history:
+  // select.template -> tabs.template) — it renders the shared Tabs.tsx primitive's real
+  // role="tablist"/role="tab" markup instead, always mounted (a root-level sibling of every
+  // category, never itself gated) with exactly one real tab button per authored category. The 7
+  // selectMatches above already exclude it (no hidden <select> coexists behind the tabs).
+  const tabButtonMatches = html.match(/<button[^>]*\brole="tab"[^>]*>/g) ?? [];
+  assertEquals(
+    tabButtonMatches.length,
+    3,
+    "expected credential_category_filter's real tabs.template presentation to render exactly 3 tab buttons (users/external_api_credential/external_instance_credential), never a hidden <select> behind it",
   );
 });

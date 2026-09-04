@@ -1480,20 +1480,28 @@ public class LayoutSchemaStructuralCompositionTests
     }
 
     [Fact]
-    public void ManifestCd004RealSeedContent_CategoryFilterOptions_MatchCredentialManagementCategoriesExactly()
+    public void ManifestCd004RealSeedContent_CategoryFilterTabsItems_MatchCredentialManagementCategoriesExactly()
     {
         // Companion to ManifestCd002RealSeedContent above: credential_category_filter's real
-        // options list is authored as a literal db/seed_empty.sql tensor (layout_patch_json)
+        // tabs items list is authored as a literal db/seed_empty.sql tensor (layout_patch_json)
         // propsJson override — a static, closed 3-member enumeration, not a live emission.data-
         // bound source (the bare/default entry never auto-dispatches credential_management:search,
         // so an emission.data-bound optionsSource would render as empty options on first paint —
         // see credential_result_list's own "renders zero rows on bare entry" proof). This test pins
         // that literal list to the SAME Topolactor.Schema.CredentialManagementCategories.All enum
         // the search dispatch validates requests against (AdminRuntime.CredentialManagementSearch.cs
-        // DataCredentialManagementSearchAsync) -- an option value the real <select> can never
+        // DataCredentialManagementSearchAsync) -- an item key the real tabs control can never
         // produce would otherwise silently make one category permanently unreachable through the
         // real control (see structural_subtree_conditional_visibility_contract's operation_
         // reachability), never caught by composition alone since Compose() never evaluates props.
+        // Owner-directed presentation change (structural-subtree-conditional-visibility-
+        // implementation round, tabs-presentation closure): component_key moved from
+        // select.template to tabs.template (docs/design/admin-normal-surface-projection-seed-
+        // ssot.yaml credentials.seed_contract.component_tree[credential_category_filter]), so the
+        // authored shape is tabs.template's own {data:{items[{key,label}],activeKey}}
+        // (frontend/components/Tabs.tsx TabItem/TabsProps) rather than select.template's
+        // {data:{value,options[{label,value}]}} -- items[].key is still the SAME canonical
+        // CredentialManagementCategories.All value, unrenamed.
         var sqlPath = Path.Combine(RepoRoot(), "db", "seed_empty.sql");
         var sql = File.ReadAllText(sqlPath);
         var marker = "'00000000-0000-0000-0000-0000000cd004'";
@@ -1517,20 +1525,20 @@ public class LayoutSchemaStructuralCompositionTests
         using var propsDoc = JsonDocument.Parse(propsJson);
         var data = propsDoc.RootElement.GetProperty("data");
 
-        // The default rendered value must equal the same declared stateJson default — the real
-        // <select>'s displayed value and the visibility-gating state slot's initial value must
-        // never independently drift onto two different literals.
-        Assert.Equal(defaultCategory, data.GetProperty("value").GetString());
+        // The default rendered activeKey must equal the same declared stateJson default — the
+        // real tabs control's active tab and the visibility-gating state slot's initial value
+        // must never independently drift onto two different literals.
+        Assert.Equal(defaultCategory, data.GetProperty("activeKey").GetString());
 
-        var options = data.GetProperty("options").EnumerateArray()
-            .Select(o => o.GetProperty("value").GetString()!)
+        var itemKeys = data.GetProperty("items").EnumerateArray()
+            .Select(o => o.GetProperty("key").GetString()!)
             .ToList();
-        Assert.Equal(CredentialManagementCategories.All.Count, options.Count);
-        Assert.Equal(CredentialManagementCategories.All.ToList(), options);
+        Assert.Equal(CredentialManagementCategories.All.Count, itemKeys.Count);
+        Assert.Equal(CredentialManagementCategories.All.ToList(), itemKeys);
 
-        // Never an empty-options select masquerading as a completed category selector.
-        Assert.NotEmpty(options);
-        var labels = data.GetProperty("options").EnumerateArray()
+        // Never an empty-items tabs control masquerading as a completed category selector.
+        Assert.NotEmpty(itemKeys);
+        var labels = data.GetProperty("items").EnumerateArray()
             .Select(o => o.GetProperty("label").GetString())
             .ToList();
         Assert.All(labels, l => Assert.False(string.IsNullOrWhiteSpace(l)));

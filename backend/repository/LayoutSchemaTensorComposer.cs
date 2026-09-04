@@ -95,6 +95,7 @@ public static class LayoutSchemaTensorComposer
             ["form_input/input"] = "input.primitive",
             ["form_input/textarea"] = "textarea.alias",
             ["form_input/search_input"] = "search_input.alias",
+            ["disclosure/tabs"] = "tabs.template",
         };
 
     // Canonical display -> ui_component_registry.component_key convention for Table leaves.
