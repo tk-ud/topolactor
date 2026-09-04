@@ -307,6 +307,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u4f5c\\u6210\\u3092\\u78ba\\u5b9a\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_create_confirm_modal",
+        "sourceActionKey": "credentials_users_create_confirm_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "status": "node:credentials_users_status_input.value",
@@ -435,6 +444,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u66f4\\u65b0\\u3092\\u78ba\\u5b9a\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_update_confirm_modal",
+        "sourceActionKey": "credentials_users_update_confirm_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "active": "node:credentials_users_active_input.value",
@@ -556,6 +574,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u524a\\u9664\\u3092\\u78ba\\u5b9a\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_delete_confirm_modal",
+        "sourceActionKey": "credentials_users_delete_confirm_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "userId": "node:credentials_users_user_id_input.value",
@@ -669,6 +696,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u30af\\u30ec\\u30c7\\u30f3\\u30b7\\u30e3\\u30eb\\u5931\\u52b9\\u3092\\u78ba\\u5b9a\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_revoke_credential_confirm_modal",
+        "sourceActionKey": "credentials_users_revoke_credential_confirm_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "userId": "node:credentials_users_user_id_input.value",
@@ -783,6 +819,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u30bb\\u30c3\\u30b7\\u30e7\\u30f3\\u5931\\u52b9\\u3092\\u78ba\\u5b9a\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "credentials_users_revoke_sessions_confirm_modal",
+        "sourceActionKey": "credentials_users_revoke_sessions_confirm_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "userId": "node:credentials_users_user_id_input.value",
@@ -2427,6 +2472,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u4f5c\\u6210\\u3092\\u78ba\\u5b9a\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "eic_create_confirm_modal",
+        "sourceActionKey": "eic_create_confirm_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "confirmed": "literal:true",
@@ -2549,6 +2603,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u66f4\\u65b0\\u3092\\u78ba\\u5b9a\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "eic_update_confirm_modal",
+        "sourceActionKey": "eic_update_confirm_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "active": "node:eic_active_input.value",
@@ -2668,6 +2731,15 @@
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
     "propsJson": "{\u0022label\u0022: \u0022\\u7121\\u52b9\\u5316\\u3092\\u78ba\\u5b9a\u0022}",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "statePath": "open",
+        "actionType": "closeModal",
+        "targetNodeId": "eic_delete_confirm_modal",
+        "sourceActionKey": "eic_delete_confirm_button"
+      }
+    ],
     "dispatchPayloadFromByTrigger": {
       "click": {
         "recordId": "node:eic_record_id_input.value",

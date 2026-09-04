@@ -307,33 +307,99 @@ Deno.test("production path: real dryRun-preview click opens each reachable confi
 
   const scenarios: {
     base: string;
+    category: string;
     title: string;
     bodyIncludes: string;
     confirmLabel: string;
   }[] = [
     {
       base: "external_api_credential_create",
+      category: "external_api_credential",
       title: "外部APIクレデンシャルレコードを作成",
       bodyIncludes: "選択したレコード種別に対して新しいレコードを作成します",
       confirmLabel: "作成",
     },
     {
       base: "external_api_credential_update",
+      category: "external_api_credential",
       title: "外部APIクレデンシャルレコードを更新",
       bodyIncludes: "指定したレコードのメタデータを更新し",
       confirmLabel: "更新",
     },
     {
       base: "external_api_credential_delete",
+      category: "external_api_credential",
       title: "外部APIクレデンシャルレコードを無効化",
       bodyIncludes: "無効化(論理削除)します",
       confirmLabel: "無効化",
     },
     {
       base: "configure_scheduler_job_credential_or_port_binding",
+      category: "external_api_credential",
       title: "スケジューラージョブのクレデンシャル/ポートバインディングを設定",
       bodyIncludes: "クレデンシャル/ポート参照をスケジューラージョブに紐付けます",
       confirmLabel: "設定",
+    },
+    // structural-subtree-conditional-visibility-implementation bundle closure round: the
+    // remaining 8 of 12 confirmation-Modal pairs, requiring a real tab switch (users /
+    // external_instance_credential are never the default-active category) to mount their
+    // preview button at all — proving the SAME open/Cancel-close/reopen/Confirm chain survives
+    // a real category hide->show round trip, not just the already-active default category.
+    {
+      base: "credentials_users_create",
+      category: "users",
+      title: "ユーザーアカウントを作成",
+      bodyIncludes: "指定したユーザー名・初期パスワード・ロール等でアカウントと初期クレデンシャルを作成します",
+      confirmLabel: "作成を確定",
+    },
+    {
+      base: "credentials_users_update",
+      category: "users",
+      title: "ユーザーアカウントを更新",
+      bodyIncludes: "指定したユーザーIDのアカウントメタデータ",
+      confirmLabel: "更新を確定",
+    },
+    {
+      base: "credentials_users_delete",
+      category: "users",
+      title: "アカウントを削除",
+      bodyIncludes: "指定したユーザーIDのアカウントと紐づくクレデンシャルを削除します",
+      confirmLabel: "削除を確定",
+    },
+    {
+      base: "credentials_users_revoke_credential",
+      category: "users",
+      title: "クレデンシャルを失効",
+      bodyIncludes: "指定したユーザーIDのクレデンシャル行を削除し",
+      confirmLabel: "クレデンシャル失効を確定",
+    },
+    {
+      base: "credentials_users_revoke_sessions",
+      category: "users",
+      title: "セッションを失効",
+      bodyIncludes: "指定したセッションID(空欄の場合は全て)のアクティブセッションを失効させます",
+      confirmLabel: "セッション失効を確定",
+    },
+    {
+      base: "eic_create",
+      category: "external_instance_credential",
+      title: "外部インスタンスクレデンシャルを作成",
+      bodyIncludes: "選択したレコード種別に対して新しいレコードを作成します",
+      confirmLabel: "作成を確定",
+    },
+    {
+      base: "eic_update",
+      category: "external_instance_credential",
+      title: "外部インスタンスクレデンシャルを更新",
+      bodyIncludes: "指定したレコードIDのメタデータを更新します",
+      confirmLabel: "更新を確定",
+    },
+    {
+      base: "eic_delete",
+      category: "external_instance_credential",
+      title: "外部インスタンスクレデンシャルを無効化",
+      bodyIncludes: "指定したレコードIDを無効化します",
+      confirmLabel: "無効化を確定",
     },
   ];
 
@@ -421,6 +487,24 @@ Deno.test("production path: real dryRun-preview click opens each reachable confi
         "scheduler_job_id_input",
         "scheduler_external_port_ref_input",
         "scheduler_credential_requirement_ref_input",
+        "credentials_users_username_input",
+        "credentials_users_password_input",
+        "credentials_users_approve_input",
+        "credentials_users_status_input",
+        "credentials_users_role_name_input",
+        "credentials_users_suspended_from_input",
+        "credentials_users_suspended_until_input",
+        "credentials_users_state_note_input",
+        "credentials_users_active_input",
+        "credentials_users_user_id_input",
+        "credentials_users_session_id_input",
+        "eic_record_kind_input",
+        "eic_provider_kind_input",
+        "eic_reference_key_input",
+        "eic_required_by_bundle_input",
+        "eic_instance_authority_key_input",
+        "eic_active_input",
+        "eic_record_id_input",
       ]
     ) {
       tracker.set(fieldNodeId, "test-value");
@@ -435,10 +519,21 @@ Deno.test("production path: real dryRun-preview click opens each reachable confi
     }
 
     for (const scenario of scenarios) {
+      // Real tab click to mount this scenario's own category — a no-op re-click when the
+      // category is already active (external_api_credential, the stateJson default), and a
+      // real hide->show round trip for users/external_instance_credential, which are never
+      // default-active. Proves the confirmation-Modal chain survives a real category switch,
+      // not just the already-mounted default category.
+      if (activeTabKey(container) !== scenario.category) {
+        clickTab(container, scenario.category);
+        await flushUpdates();
+      }
+      assertEquals(activeTabKey(container), scenario.category, `expected category "${scenario.category}" to be active before exercising "${scenario.base}"`);
+
       const previewButton = container.querySelector(
         `[data-node-id="${scenario.base}_button"] button`,
       ) as unknown as { dispatchEvent: (e: Event) => boolean } | null;
-      assert(previewButton, `expected a real preview button for "${scenario.base}"`);
+      assert(previewButton, `expected a real preview button for "${scenario.base}" under category "${scenario.category}"`);
 
       // Hidden-until-opened: the Modal's own subtree must render nothing before the real click
       // (modalFactory renders an empty subtree while closed — see runtimeComponentFactory.ts).
