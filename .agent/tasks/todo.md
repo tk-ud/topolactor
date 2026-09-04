@@ -434,6 +434,16 @@ PR #608での `credential_category_filter` の select→tabs.template presentati
 - `.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.topology-seed.input.json`（同上）
 - `.agent/tools/logs/generate.log`（sha256再計算）
 
+### 本ラウンド（confirmation Modal 12ペア全件のproof gap閉鎖 + Confirm-closeModal wiring欠落修正）で解消した残課題
+
+前ラウンドの受入条件「credential-management surfaceの全confirmation Modal(12ペア)について...実DOM操作で証明した」は、実際には`credentialManagementCategorySelectorProductionPath.test.ts`がexternal_api_credential create/update/deleteとscheduler credential/port bindingの4ペアのみを実証しており、users category(create/update/delete/revoke_credential/revoke_sessions の5ペア)とexternal_instance_credential category(create/update/delete の3ペア)の計8ペアは実DOM証明が存在しないまま「12ペア証明済み」と記載されていた、という宣言とevidenceの不一致が監査で発見された。本ラウンドでこの8ペアを実際にproductionのtabs操作(実`credential_category_filter` tab click経由でのusers/external_instance_credential categoryへの実mount)を含む同一チェーンで証明する過程で、以下の追加の既存production bugを発見・修正した。
+
+**発見**: `external_api_credential_*`/`configure_scheduler_job_credential_or_port_binding`の4ペアはConfirmボタン自身に`secondaryDisclosureActionType="closeModal"`（source DSL）/`secondaryDisclosureAction`（react-schema tree）が authorされ、Confirm click成功後にModalが自動closeするが、`credentials_users_*`(5ペア)と`eic_*`(3ペア)の計8ペアのConfirmボタンにはこの属性が一切authorされておらず（cd004のconfirm buttonノード自身の`runtimeInteractions`が空配列`[]`のまま）、Confirm click成功後もModalが開いたまま残る状態だった。`docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`の`dryrun_preview_gated_confirm_modal`が明示する「a Confirm button's own secondaryDisclosureActionType=closeModal」という既存の generic 標準パターン(admin-enumの7 write actionsが全て採用)に対する、この8ペアだけの既存の authoring 抜け漏れであると判明した。
+
+**修正**: source fixture (`credential-management-0092.input.json`/`.topology-seed.input.json`)の該当8 Confirmボタンに`secondaryDisclosureActionType="closeModal"`/`secondaryDisclosureTargetNodeId`/`secondaryDisclosureStatePath="open"`(DSL)、および対応する`secondaryDisclosureAction`(JSON tree)を追加し、`generate-react-schema`/`generate-topology-seed`で`gateStatus: pass, validationErrors: 0`を確認。生成されたtensor-shapeの`runtimeInteractions`エントリ(`sourceActionKey`=各Confirmボタン自身のkey)を、既存のopenModal/closeModal再配置規約(所属Modal自身のtensor nodeへ、Cancelエントリと同じ配列内へマージ)に従って`db/seed_empty.sql`のcd004へ適用。
+
+`credentialManagementCategorySelectorProductionPath.test.ts`の既存Modal production-path proofを4→12シナリオへ拡張し、各シナリオの実行前に実`credential_category_filter` tab clickで対象category(`users`/`external_api_credential`/`external_instance_credential`)を実際にmountしてから、既存4ペアと完全に同一のchain(preview click→dryRun dispatch決着→Modal open→日本語title/body/Confirm/Cancel表示→Cancel close→reopen→Confirm click→Confirm自身のdispatchTargetRef/payload・confirmed="true"保持→決着→close)を12ペア全件に対して実証した。既存4ペアのproof・既存tabs/activeKey/dynamic-column-binding/日本語化evidenceは全て回帰なく維持されている。
+
 ### 受入条件
 
 - [x] 初期表示で非選択categoryの操作群が同時常設表示されない(DOM上に存在しない)。
