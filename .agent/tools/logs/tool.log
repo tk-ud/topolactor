@@ -98,3 +98,4 @@
 2026-08-17T22:32:28Z 352811f3-2ad0-4d24-a94b-c89365153625 scheduler-settings-input-boundary-fail-close-audit implementation_change
 2026-09-03T16:09:49Z c53ec511-1729-4cc7-b9fa-195d59847f06 generic-schema-composed-conditional-visibility-design design_change
 2026-09-03T18:46:04Z 5bbea1d1-015f-42dd-b161-868de4c54417 structural_subtree_conditional_visibility_implementation existing_pr_update
+2026-09-04T00:16:51Z 7b577a52-ba20-4c85-baf3-3c58b5355b78 structural_subtree_conditional_visibility_bundle_closure existing_pr_update

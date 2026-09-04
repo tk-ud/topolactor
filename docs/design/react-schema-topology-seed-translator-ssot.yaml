@@ -1356,12 +1356,21 @@ react_schema_topology_seed_translator_ssot:
         examples: [enum_group_create_preview, enum_group_create_confirm, admin_write_operation_selector_override]
         targetRef_shape: 'manifest:<manifestId>:<layer>:<action>'
         authority_ref: docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml admin_runtime_target_ref_override_contract
-        allowed_authority_mapping_values: [validation_only, preview_only, draft_apply_not_execution_authority, draft_or_projection_only]
+        allowed_authority_mapping_values: [validation_only, preview_only, draft_apply_not_execution_authority, draft_or_projection_only, read_only]
         allowed_authority_mapping_values_note: >-
           draft_or_projection_only (round 37) is additive and Field-only -- see
           field_participation's rule 4 below. Action/Step's own use of this lane (rules 1-5 above,
-          gated on kind=="Action") is unaffected and still uses only the original three values;
-          nothing about this addition changes what an Action/Step may declare.
+          gated on kind=="Action") is unaffected and still uses only the original three values plus
+          read_only (structural_subtree_conditional_visibility_contract implementation round,
+          additive): a pure read/filter dispatch that never previews or applies any mutation (e.g.
+          credential_management:search's own credential_search_button, whose payload carries only
+          filter criteria, never a business field a preview/apply/confirm pairing would govern) has
+          no other value in this list that honestly describes it -- preview_only/validation_only/
+          draft_apply_not_execution_authority all imply a mutation candidate somewhere in the same
+          flow, which a read-only search action never has. This addition does not relax any
+          existing check: section_owned_dryrun_preview_pairing's preview/confirm pairing rules
+          below are unaffected (a read_only action never participates in that pairing at all,
+          exactly like an ordinary unwired read dispatch).
         allowed_payload_from_sources: [node_value, event_path, literal]
         record_carrier: >-
           Distinct from every other lane above: this lane's Action/Step candidate is NEVER folded
@@ -2040,14 +2049,17 @@ react_schema_topology_seed_translator_ssot:
         declared_by_yaml_ref: docs/design/instance-port-substrate-ssot.yaml existing_credential_management_projection_extension
         seed_role: credential_management_projection_manifest_seed
         record_subjects: [manifest_projection, screen_data_shape, projection_categories]
-        exchange_units: [category, form, field, action, workflow, authority_marker]
+        exchange_units: [category, section, form, field, action, table, modal, validation, workflow, authority_marker]
         authority_boundary: draft_import_validate_preview_apply_admin_approve
         component_catalog_refs:
           catalog_ref: ui_catalog_boundary_contract.frontend_component_catalog
           componentKinds:
             - form_input/select
             - form_input/form_field
+            - form_input/search_input
             - action/button
+            - data_display/table
+            - disclosure/modal
             - safety_guard/apply_confirm_dialog
         style_catalog_refs:
           catalog_ref: ui_catalog_boundary_contract.style_catalog
@@ -2064,6 +2076,11 @@ react_schema_topology_seed_translator_ssot:
           - lane: internal_instance_wiring
             catalog_ref: wiring_lane_contract.lanes.internal_instance_wiring
             targetRefs: ["ui-local:credential_management_mode_switch.value"]
+          - lane: admin_runtime_dispatch_override_wiring
+            catalog_ref: wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring
+            targetRefs:
+              - "manifest:00000000-0000-0000-0000-0000000ad004:auth_users:create"
+              - "manifest:00000000-0000-0000-0000-000000000092:credential_management:search"
         known_gaps:
           - gap: instance_settings_projection_category_not_yet_represented
             classification: ssot_ambiguity_gap
@@ -2087,6 +2104,23 @@ react_schema_topology_seed_translator_ssot:
               seed-representation gap; docs/system-roadmap.yaml known_gap_ref
               instance_settings_admin_authoring_ui_pending (the actual admin authoring
               frontend route/island and backend action) remains open and unrelated.
+          - gap: declared_catalog_stale_against_real_128_record_seed_content
+            classification: ssot_catalog_staleness_gap
+            status: resolved
+            note: >-
+              structural_subtree_conditional_visibility_contract implementation round: this
+              entry's exchange_units/component_catalog_refs/wiring_lane_refs previously matched
+              only an early, small subset of the manifest's real content (predating the
+              credentials.users/external_api_credential CRUD sections, the shared credential
+              search/filter/result_list block, and every Modal confirm dialog) and could not
+              validate the actual current db/seed_empty.sql content through generate-react-schema
+              -> generate-topology-seed. Corrected to add section/table/modal/validation to
+              exchange_units, form_input/search_input/data_display/table/disclosure/modal to
+              componentKinds, and the admin_runtime_dispatch_override_wiring lane (used by the
+              credentials.users/external_api_credential/external_instance_credential CRUD actions
+              and by credential_search_input's debounced search dispatch) to wiring_lane_refs --
+              closing the gap that previously made the fixture -> translator -> seed lineage
+              unreproducible for this surface's real content.
 
       - seed_surface_key: admin.enum.management.projection
         declared_by_yaml_ref: docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.enum

@@ -226,11 +226,19 @@ Deno.test("DOM-connected proof: manifest 0092's REAL bare-entry-resolved LayoutN
   // structural_subtree_conditional_visibility_contract: the real seed now authors
   // visibilityBinding on all 3 categories, keyed off credential_category_filter's declared
   // stateJson slot. This test's six target Action leaves (validate/preview/apply/approve/
-  // json_template_download/json_import) all live under the instance_settings category, so the
-  // dispatcher's declared state is switched to instance_settings — same production wiring
-  // ProjectionShell.tsx uses (predeclare via the node's own stateJson, then set()).
+  // json_template_download/json_import) all live under the physical instance_settings category
+  // node, whose visibilityBinding matchValue is "external_instance_credential" — the SAME
+  // Topolactor.Schema.CredentialManagementCategories discriminator the real <select>'s own
+  // authored options carry (see credential_category_filter's propsJson; the physical node key
+  // "instance_settings" and the matchValue are deliberately different strings, see
+  // LayoutSchemaStructuralCompositionTests.cs's own ManifestCd002RealSeedContent test). This
+  // test's own subject is whether an ALREADY-ACTIVE category's real Action leaves reach the DOM,
+  // not the switch mechanism itself (see credentialManagementCategorySelectorProductionPath.test.ts
+  // for the real-<select>-driven switch proof), so positioning the scenario with a direct set()
+  // here — mirroring ProjectionShell.tsx's own predeclare-then-set() production wiring — is not
+  // standing in for that separate proof.
   const dispatcher = createProjectionStateDispatcher(toRunnerWiringNodes(layoutNodes), createRuntimeLocalStateStore());
-  assert(dispatcher.set("credential_category_filter", "selectedCategory", "instance_settings").ok);
+  assert(dispatcher.set("credential_category_filter", "selectedCategory", "external_instance_credential").ok);
 
   const specs = renderEmission(emission, defaultComponentRegistry, { localStateStore: dispatcher });
   const html = renderToString(

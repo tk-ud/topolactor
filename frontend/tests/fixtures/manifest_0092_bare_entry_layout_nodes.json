@@ -87,7 +87,7 @@
     "label": "Instance settings",
     "visibilityBinding": {
       "source": "ui-local:credential_category_filter.selectedCategory",
-      "matchValue": "instance_settings"
+      "matchValue": "external_instance_credential"
     }
   },
   {
@@ -1375,6 +1375,7 @@
     "wiringKind": "admin_runtime",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
+    "propsJson": "{\u0022data\u0022:{\u0022value\u0022:\u0022external_api_credential\u0022,\u0022options\u0022:[{\u0022label\u0022:\u0022Users\u0022,\u0022value\u0022:\u0022users\u0022},{\u0022label\u0022:\u0022External API credential\u0022,\u0022value\u0022:\u0022external_api_credential\u0022},{\u0022label\u0022:\u0022External instance credential\u0022,\u0022value\u0022:\u0022external_instance_credential\u0022}],\u0022label\u0022:\u0022Category (users / external_api_credential / external_instance_credential)\u0022,\u0022placeholder\u0022:\u0022Category (users / external_api_credential / external_instance_credential)\u0022}}",
     "stateJson": "{\u0022selectedCategory\u0022:\u0022external_api_credential\u0022}",
     "runtimeInteractions": [
       {

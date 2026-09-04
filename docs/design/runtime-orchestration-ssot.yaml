@@ -1073,10 +1073,14 @@ runtime_orchestration_ssot:
         presentation_component_independence below.
       authored_record_type_scope: >-
         visibilityBinding may be authored ONLY on topology_ui_category and topology_ui_section
-        records (equivalently, a tensor-only node whose schema-composed counterpart would be one
-        of those two types) -- never on a catalog_component leaf (topology_ui_field /
-        topology_ui_action / topology_ui_table / topology_ui_workflow_step) or on
-        topology_ui_form/topology_ui_workflow/topology_ui_validation. This is a deliberate scope
+        records on the components_layout_design.layout_schema_json.records[] structural authority
+        tree -- never on a catalog_component leaf (topology_ui_field / topology_ui_action /
+        topology_ui_table / topology_ui_workflow_step), never on
+        topology_ui_form/topology_ui_workflow/topology_ui_validation, and never directly on a
+        topology.ui_topology_tensor.layout_patch_json.nodes[] entry at all (see
+        record_carrier_tensor_only -- that surface has no Category/Section concept for any node it
+        can ever carry, tensor-only layout or a schema-composed layout's own override lane alike).
+        This is a deliberate scope
         restriction, not an evaluator limitation: the credential-management category-collapse
         consumer needs Category/Section-level subtree switching only, and leaf-level conditional
         visibility has no real consumer today -- generalizing the AUTHORING surface beyond what a
@@ -1129,18 +1133,29 @@ runtime_orchestration_ssot:
           array -- never silently dropped, never silently treated as "no binding" (see
           invalid_binding_fail_close below).
         record_carrier_tensor_only: >-
-          On topology.ui_topology_tensor.layout_patch_json.nodes[] entries authored without a
-          records[] tree (most UI-Builder-authored layouts), the SAME field may appear directly
-          on a node entry -- LayoutNodeRecord gains a new optional carrier, VisibilityBindingJson,
-          alongside its existing PropsJson/StateJson/PropBindingsJson/DispatchPayloadFromByTriggerJson/
-          DispatchTargetRefByTriggerJson siblings, merged via the SAME NodeLocalData /
-          BuildNodeLocalDataByNodeId pattern LayoutSchemaTensorComposer already uses so a schema-
-          composed leaf's visibilityBinding (defined on its schema record) and a tensor-only
-          node's visibilityBinding (defined directly on the tensor node) converge onto the
-          identical LayoutNodeRecord.VisibilityBindingJson field, consumed identically by the
-          frontend regardless of which authoring mode produced it -- exactly the same convergence
-          node_id_collision_handling/tensor_runtime_interactions_merge already achieve for
-          runtimeInteractions across the two authoring modes.
+          Corrected (this contract's own audit round): visibilityBinding is NEVER authored on
+          topology.ui_topology_tensor.layout_patch_json.nodes[] directly, on any layout shape,
+          schema-composed or tensor-only. An earlier draft of this contract claimed a tensor-only
+          node "may appear directly" and would converge via the SAME NodeLocalData /
+          BuildNodeLocalDataByNodeId pattern runtimeInteractions/propsJson/stateJson already use --
+          that claim was never implementable and is retracted here, for two independent reasons,
+          either one alone sufficient: (1) authored_record_type_scope requires the node to BE a
+          topology_ui_category or topology_ui_section record -- a recordType that exists only on
+          the components_layout_design.layout_schema_json.records[] structural authority tree
+          (LayoutSchemaTensorComposer.ParseRecords owns it); a tensor-only layout (no records[]
+          tree at all) has no such concept for any of its nodes, which are always catalog_component
+          or structural_html. (2) Even for a schema-composed layout's OWN tensor override lane
+          (a layout_patch_json entry sharing a nodeId with an existing records[] entry),
+          BuildNodeLocalDataByNodeId's merge is catalog-leaf-only and never applies to a structural
+          Category/Section node -- so even a tensor override
+          entry naming a real Category/Section nodeId is never merged onto it, by a rule that
+          predates and is unrelated to this contract. NpgsqlUiTopologyRepository.
+          ValidateLayoutPatchAsync (ValidateLayoutPatchNodes) fails a layout_patch_json save closed
+          with LAYOUT_PATCH_VISIBILITY_BINDING_NOT_ALLOWED if ANY node authors a visibilityBinding
+          key at all -- well-formed or malformed, since neither is ever eligible on this surface --
+          mirroring, but never substituting for, ParseRecords' own independent fail-close on the
+          records[] surface (see invalid_binding_fail_close): the two authoring surfaces are
+          validated, and proof-tested, separately.
       render_side_evaluation: >-
         frontend/runtime/renderEmission.ts carries visibilityBinding onto ComponentSpec verbatim,
         unevaluated (evaluating it once at ComponentSpec-build time would freeze a value that must
@@ -1233,16 +1248,21 @@ runtime_orchestration_ssot:
         (RUNTIME_STATE_UPDATE_VALUE_FROM_REQUIRES_EVENT) rather than writing undefined -- dynamic
         value resolution is meaningful only for a genuinely user-triggered UI状態更新.
       invalid_binding_fail_close: >-
-        A visibilityBinding whose source resolves to an UNDECLARED slot at evaluation time, or
-        whose shape is malformed in a way ParseRecords' schema-level check cannot catch (a
-        tensor-only-authored node, parsed too late for a whole-array fail-close), is a real
-        authoring defect: it renders as an explicit error node (STRUCTURAL_VISIBILITY_BINDING_
-        SOURCE_UNDECLARED / STRUCTURAL_VISIBILITY_BINDING_INVALID), mirroring
-        CATALOG_COMPONENT_KIND_REQUIRED and RUNTIME_INTERACTION_UNATTRIBUTABLE's existing
+        A visibilityBinding whose source resolves to an UNDECLARED slot at evaluation time is a
+        real authoring defect even though ParseRecords' own schema-level shape check already
+        passed it (source shape and matchValue scalar-ness are the only things knowable at
+        records[]-parse time; whether that exact <nodeId>.<stateKey> slot is ever actually
+        declared by a real UI監視割当/predeclareProjectionState call is knowable only at render
+        time, against the live node list): it renders as an explicit error node
+        (STRUCTURAL_VISIBILITY_BINDING_SOURCE_UNDECLARED / STRUCTURAL_VISIBILITY_BINDING_INVALID),
+        mirroring CATALOG_COMPONENT_KIND_REQUIRED and RUNTIME_INTERACTION_UNATTRIBUTABLE's existing
         fail-close posture at the same layer -- never silently treated as "no binding" (always
         visible) and never as "binding present, condition false" (always hidden); both would
         paper over a real authoring defect exactly as absent_vs_invalid_records already refuses
-        to do for records[] itself.
+        to do for records[] itself. A tensor-only-authored node never reaches this render-time
+        check carrying a visibilityBinding at all -- see record_carrier_tensor_only: that authoring
+        surface fails an entire layout_patch_json save closed (LAYOUT_PATCH_VISIBILITY_BINDING_
+        NOT_ALLOWED) the moment the key is present, well-formed or not.
       authority_non_promotion: >-
         visibilityBinding's resolved boolean is a PRESENTATION decision only. It MUST NOT be
         forwarded as dispatch payload authority, MUST NOT be persisted as canonical/business data,
@@ -1289,6 +1309,9 @@ runtime_orchestration_ssot:
         - authoring_visibilityBinding_on_a_catalog_component_leaf_or_any_record_type_outside_authored_record_type_scope
         - declaring_a_separate_valueType_carrier_or_field_for_matchValue_that_no_production_path_actually_backs
         - a_hidden_nodes_lifecycle_interaction_firing_because_only_DOM_mount_was_checked_and_the_effect_runners_own_node_list_was_not
+        - authoring_visibilityBinding_directly_on_a_layout_patch_json_tensor_only_node_on_any_layout_shape_well_formed_or_malformed_alike_see_record_carrier_tensor_only
+        - a_categorys_visibilityBinding_matchValue_assumed_equal_to_its_own_physical_topology_ui_category_node_key_without_checking_the_actual_live_state_value_vocabulary_the_driving_control_produces
+        - an_empty_or_unauthored_options_list_on_the_driving_selector_control_treated_as_a_completed_category_selector
       test_proof_contract:
         note: >-
           A completion proof for this contract must demonstrate, for a real representative
@@ -1308,6 +1331,8 @@ runtime_orchestration_ssot:
           - dispatchTargetRefByTrigger_and_payloadFrom_bindings_on_a_categorys_actions_are_identical_before_and_after_a_round_trip_through_hide_then_show_again
           - a_second_independent_consumer_outside_credential_management_drives_the_same_generic_evaluator_with_no_credential_specific_code_path_involved
           - selecting_an_option_in_credential_category_filter_writes_that_exact_option_value_into_the_predeclared_state_slot_via_event_value_payloadFrom
+          - credential_category_filter_renders_a_real_non_empty_options_list_matching_the_backend_search_dispatchs_own_category_enum_exactly_never_an_empty_select
+          - the_switch_is_driven_by_a_real_native_change_DOM_event_on_the_real_select_element_never_a_direct_state_store_mutation_standing_in_for_the_users_own_interaction
         negative_cases:
           - a_non_active_categorys_action_button_is_not_present_in_the_DOM_to_click_at_all_not_merely_disabled_or_CSS_hidden
           - a_non_active_categorys_lifecycle_triggered_runtimeInteraction_initial_mount_or_route_enter_or_initial_display_does_not_execute_via_emitLifecycle
@@ -1315,6 +1340,7 @@ runtime_orchestration_ssot:
           - a_malformed_visibilityBinding_shape_on_a_schema_composed_record_is_LAYOUT_SCHEMA_RECORDS_INVALID_for_the_whole_records_array
           - a_visibilityBinding_authored_on_a_catalog_component_leaf_record_is_LAYOUT_SCHEMA_RECORDS_INVALID_for_the_whole_records_array
           - a_valueFrom_event_value_mutation_fired_from_a_lifecycle_trigger_fails_close_RUNTIME_STATE_UPDATE_VALUE_FROM_REQUIRES_EVENT_rather_than_writing_undefined
+          - a_visibilityBinding_authored_directly_on_a_layout_patch_json_tensor_only_node_fails_LAYOUT_PATCH_VISIBILITY_BINDING_NOT_ALLOWED_well_formed_and_malformed_shapes_alike_proven_as_a_SEPARATE_fail_close_boundary_from_the_records_array_path_above
           - secret_projection_deny_and_existing_live_DB_dispatch_projection_proofs_for_manifest_092_regress_zero_from_this_contracts_adoption
 
   runtime_vocabulary_contract:

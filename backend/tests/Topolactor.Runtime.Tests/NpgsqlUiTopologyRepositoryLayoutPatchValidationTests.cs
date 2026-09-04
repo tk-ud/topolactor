@@ -81,6 +81,125 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
         Assert.Equal("DRAFT_ONLY_NODE_NOT_APPLICABLE:DRAFT_ONLY_NODE_CANNOT_BE_APPLIED", result.Message);
     }
 
+    // ------------------------------------------------------------------------------------------
+    // structural_subtree_conditional_visibility_contract's authored_record_type_scope
+    // (docs/design/runtime-orchestration-ssot.yaml) restricts visibilityBinding authoring to
+    // topology_ui_category/topology_ui_section records on the layout_schema_json.records[]
+    // structural authority tree (see LayoutSchemaStructuralCompositionTests.cs's own
+    // ParseRecords_VisibilityBindingOn* tests for THAT authoring path's fail-close boundary).
+    // These tests prove the SEPARATE tensor-only authoring path (layout_patch_json.nodes[], this
+    // file's own surface) has its OWN, independently-exercised fail-close boundary: since a raw
+    // tensor node is always catalog_component or structural_html, never a schema-composed
+    // Category/Section, visibilityBinding can never be eligible here regardless of shape —
+    // well-formed and malformed alike are rejected the same way, never silently omitted into null.
+    // ------------------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_CatalogComponentNodeWithWellFormedVisibilityBinding_FailsClose()
+    {
+        var repo = new NonSchemaComposedLayoutPatchTestRepository();
+        var tensorPatchJson = """
+        {
+          "nodes": [
+            {
+              "nodeId": "node-1",
+              "componentKey": "Sample",
+              "visibilityBinding": {"source": "ui-local:selector.selectedCategory", "matchValue": "a"}
+            }
+          ]
+        }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, ["color.action.primary.background"], null);
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("LAYOUT_PATCH_VISIBILITY_BINDING_NOT_ALLOWED:node-1", result.Message);
+    }
+
+    [Theory]
+    [InlineData(""" "visibilityBinding": "not-an-object" """)]
+    [InlineData(""" "visibilityBinding": 123 """)]
+    [InlineData(""" "visibilityBinding": null """)]
+    [InlineData(""" "visibilityBinding": {} """)]
+    [InlineData(""" "visibilityBinding": {"source": "not-a-ui-local-ref"} """)]
+    public async Task ValidateLayoutPatchAsync_CatalogComponentNodeWithMalformedVisibilityBinding_AlsoFailsClose_SameCodeAsWellFormed(
+        string visibilityBindingField)
+    {
+        // Malformed and well-formed are equally out of scope on this surface — both fail with the
+        // SAME code, never a different "shape error" code that would imply a well-formed one might
+        // have been accepted here.
+        var repo = new NonSchemaComposedLayoutPatchTestRepository();
+        var tensorPatchJson = $$"""
+        {
+          "nodes": [
+            {
+              "nodeId": "node-1",
+              "componentKey": "Sample",
+              {{visibilityBindingField}}
+            }
+          ]
+        }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, ["color.action.primary.background"], null);
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("LAYOUT_PATCH_VISIBILITY_BINDING_NOT_ALLOWED:node-1", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_StructuralHtmlNodeWithVisibilityBinding_AlsoFailsClose_NotOnlyCatalogComponent()
+    {
+        var repo = new NonSchemaComposedLayoutPatchTestRepository();
+        // componentKey is a harmless, ignored extra field on a structural_html node here — its
+        // only purpose is keeping this single-node patch out of ValidateLayoutPatchAsync's
+        // unrelated schema-composed-identity DB round trip (ContainsNodeMissingComponentKey),
+        // which this test is not exercising; the visibilityBinding check under test runs before
+        // any nodeKind branch, so it fires identically either way.
+        var tensorPatchJson = """
+        {
+          "nodes": [
+            {
+              "nodeId": "node-1",
+              "nodeKind": "structural_html",
+              "htmlTag": "div",
+              "slotKey": "body",
+              "orderIndex": 0,
+              "componentKey": "Sample",
+              "visibilityBinding": {"source": "ui-local:selector.selectedCategory", "matchValue": "a"}
+            }
+          ]
+        }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, ["color.action.primary.background"], null);
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("LAYOUT_PATCH_VISIBILITY_BINDING_NOT_ALLOWED:node-1", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_NodeWithoutVisibilityBindingKeyAtAll_UnaffectedByTheNewGate()
+    {
+        // Positive control: proves the two negative tests above fail for the right reason (the
+        // authored visibilityBinding key), not because every node on this surface now fails.
+        var repo = new NonSchemaComposedLayoutPatchTestRepository();
+        var tensorPatchJson = """
+        {
+          "nodes": [
+            {
+              "nodeId": "node-1",
+              "componentKey": "Sample"
+            }
+          ]
+        }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, ["color.action.primary.background"], null);
+        Assert.True(result.Ok);
+        Assert.True(result.Valid);
+    }
+
     [Fact]
     public async Task ApplyConfirmedLayoutPatchAsync_DraftOnlyNode_FailsBeforePersistence()
     {

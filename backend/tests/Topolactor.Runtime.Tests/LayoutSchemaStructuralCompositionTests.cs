@@ -1,5 +1,7 @@
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Topolactor.Repository;
+using Topolactor.Schema;
 using Xunit;
 
 namespace Topolactor.Runtime.Tests;
@@ -1435,10 +1437,30 @@ public class LayoutSchemaStructuralCompositionTests
         Assert.Equal(3, categories.Count);
         var bindingsByKey = categories.ToDictionary(c => c.Key, c => c.VisibilityBindingJson);
         Assert.All(bindingsByKey.Values, v => Assert.NotNull(v));
-        Assert.Contains("\"matchValue\":\"users\"", bindingsByKey["users"]);
-        Assert.Contains("\"matchValue\":\"external_api_credential\"", bindingsByKey["external_api_credential"]);
-        Assert.Contains("\"matchValue\":\"instance_settings\"", bindingsByKey["instance_settings"]);
         Assert.All(bindingsByKey.Values, v => Assert.Contains("ui-local:credential_category_filter.selectedCategory", v));
+
+        // The physical category node KEY (users/external_api_credential/instance_settings — the
+        // topology_ui_category record's own identity) is independent from the visibilityBinding's
+        // matchValue (what live selectedCategory state value makes that node visible): the third
+        // category's physical key is "instance_settings" but its matchValue must be
+        // "external_instance_credential" — the SAME category discriminator
+        // AdminRuntime.CredentialManagementSearch.cs / Topolactor.Schema.CredentialManagementCategories
+        // already uses for search dispatch (docs/design/admin-normal-surface-projection-seed-ssot.yaml
+        // external_instance_projection_columns note: "credential-management's external_instance_
+        // credential category (instance_settings)"). credential_category_filter's own value (see
+        // ManifestCd004RealSeedContent test below) is drawn from that SAME backend enum, so a
+        // matchValue of "instance_settings" here would make the third category structurally
+        // unreachable through the real <select> — this pins the SSOT-grounded relationship rather
+        // than the physical key, which the earlier round incorrectly assumed.
+        var matchValueByPhysicalKey = bindingsByKey.ToDictionary(
+            kv => kv.Key,
+            kv => JsonDocument.Parse(kv.Value!).RootElement.GetProperty("matchValue").GetString());
+        Assert.Equal("users", matchValueByPhysicalKey["users"]);
+        Assert.Equal("external_api_credential", matchValueByPhysicalKey["external_api_credential"]);
+        Assert.Equal("external_instance_credential", matchValueByPhysicalKey["instance_settings"]);
+        // Every authored matchValue must be a real, current CredentialManagementCategories member —
+        // fails this regression test (not silently drifts) if either side is ever renamed alone.
+        Assert.All(matchValueByPhysicalKey.Values, v => Assert.Contains(v, CredentialManagementCategories.All));
 
         // Compose() must not error on the real 128-record tree with the new field present —
         // resolve every distinct control/display to a synthetic componentId so composition can
@@ -1455,6 +1477,63 @@ public class LayoutSchemaStructuralCompositionTests
         Assert.Equal(valid.Rows.Count, composed.Count);
         var filterNode = Assert.Single(composed, n => n.NodeId == "credential_category_filter");
         Assert.Equal("catalog_component", filterNode.NodeKind);
+    }
+
+    [Fact]
+    public void ManifestCd004RealSeedContent_CategoryFilterOptions_MatchCredentialManagementCategoriesExactly()
+    {
+        // Companion to ManifestCd002RealSeedContent above: credential_category_filter's real
+        // options list is authored as a literal db/seed_empty.sql tensor (layout_patch_json)
+        // propsJson override — a static, closed 3-member enumeration, not a live emission.data-
+        // bound source (the bare/default entry never auto-dispatches credential_management:search,
+        // so an emission.data-bound optionsSource would render as empty options on first paint —
+        // see credential_result_list's own "renders zero rows on bare entry" proof). This test pins
+        // that literal list to the SAME Topolactor.Schema.CredentialManagementCategories.All enum
+        // the search dispatch validates requests against (AdminRuntime.CredentialManagementSearch.cs
+        // DataCredentialManagementSearchAsync) -- an option value the real <select> can never
+        // produce would otherwise silently make one category permanently unreachable through the
+        // real control (see structural_subtree_conditional_visibility_contract's operation_
+        // reachability), never caught by composition alone since Compose() never evaluates props.
+        var sqlPath = Path.Combine(RepoRoot(), "db", "seed_empty.sql");
+        var sql = File.ReadAllText(sqlPath);
+        var marker = "'00000000-0000-0000-0000-0000000cd004'";
+        var idx = sql.IndexOf(marker, StringComparison.Ordinal);
+        Assert.True(idx >= 0, "manifest 092 tensor row (cd004) not found in db/seed_empty.sql");
+        var litStart = sql.IndexOf("'{\"nodes\":", idx, StringComparison.Ordinal);
+        Assert.True(litStart >= 0, "cd004 layout_patch_json literal not found");
+        var json = ExtractSqlJsonLiteral(sql, litStart);
+
+        using var doc = JsonDocument.Parse(json);
+        var nodes = doc.RootElement.GetProperty("nodes").EnumerateArray().ToList();
+        var filterNode = Assert.Single(nodes, n =>
+            n.TryGetProperty("nodeId", out var nid) && nid.GetString() == "credential_category_filter");
+
+        var stateJson = filterNode.GetProperty("stateJson").GetString()!;
+        var defaultCategory = JsonDocument.Parse(stateJson).RootElement.GetProperty("selectedCategory").GetString();
+        Assert.Equal("external_api_credential", defaultCategory);
+        Assert.Contains(defaultCategory, CredentialManagementCategories.All);
+
+        var propsJson = filterNode.GetProperty("propsJson").GetString()!;
+        using var propsDoc = JsonDocument.Parse(propsJson);
+        var data = propsDoc.RootElement.GetProperty("data");
+
+        // The default rendered value must equal the same declared stateJson default — the real
+        // <select>'s displayed value and the visibility-gating state slot's initial value must
+        // never independently drift onto two different literals.
+        Assert.Equal(defaultCategory, data.GetProperty("value").GetString());
+
+        var options = data.GetProperty("options").EnumerateArray()
+            .Select(o => o.GetProperty("value").GetString()!)
+            .ToList();
+        Assert.Equal(CredentialManagementCategories.All.Count, options.Count);
+        Assert.Equal(CredentialManagementCategories.All.ToList(), options);
+
+        // Never an empty-options select masquerading as a completed category selector.
+        Assert.NotEmpty(options);
+        var labels = data.GetProperty("options").EnumerateArray()
+            .Select(o => o.GetProperty("label").GetString())
+            .ToList();
+        Assert.All(labels, l => Assert.False(string.IsNullOrWhiteSpace(l)));
     }
 
     // ------------------------------------------------------------------------------------------
