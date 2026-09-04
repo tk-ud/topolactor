@@ -2125,6 +2125,7 @@ react_schema_topology_seed_translator_ssot:
           componentKinds:
             - form_input/select
             - form_input/form_field
+            - form_input/input
             - form_input/search_input
             - action/button
             - data_display/table
@@ -2191,6 +2192,44 @@ react_schema_topology_seed_translator_ssot:
               and by credential_search_input's debounced search dispatch) to wiring_lane_refs --
               closing the gap that previously made the fixture -> translator -> seed lineage
               unreproducible for this surface's real content.
+          - gap: credential_management_mutation_field_control_kind_corrected_to_real_input
+            classification: production_dom_reachability_bug
+            status: resolved
+            resolution_note: >-
+              credential-management-ux-gaps Bundle: the SAME bug pattern already fixed once for
+              admin.enum.management.projection above (gap:
+              admin_enum_write_field_control_kind_corrected_to_real_input) was independently
+              confirmed against a real captured production DOM for this surface too. Every Field
+              whose value is read by some Action's payloadFrom (node:<fieldKey>.value -- e.g.
+              credentials_users_create_button's username/password, external_api_credential_form's
+              create/update buttons, eic_create_button's create fields, instance_authority_key/
+              operation_binding_key/template_file referenced by the instance_settings category's
+              validate/preview/apply actions, and the scheduler_job_id_input/
+              scheduler_*_ref_input trio referenced by configure_scheduler_job_credential_or_
+              port_binding) but authored control=form_input/form_field rendered a label plus a
+              hardcoded empty <span> (formFieldFactory / FormField.tsx) -- never a real <input> --
+              so none of these fields were actually typeable in production, confirmed by reading
+              the captured production DOM directly (every such Field renders
+              `<span></span>` with no editable descendant). Fixed the same way: re-authored every
+              payloadFrom-referenced Field still on control=form_input/form_field to
+              control=form_input/input (input.primitive -> inputFactory, a real <Input> whose
+              onChange reaches the live node value tracker via emitBoundEvent's unconditional
+              onNodeValueChange call, frontend/runtime/runtimeComponentFactory.ts) in the canonical
+              markup source (credential-management-0092.input.json), regenerated
+              db/seed_empty.sql's cd002/cd003 rows via generate-react-schema ->
+              generate-topology-seed (never hand-edited), and added form_input/input to this
+              surface's own component_catalog_refs.componentKinds above (previously missing here
+              even though the primitive itself was already catalog-registered and already used by
+              the admin.enum.management.projection surface below -- the translator's per-surface
+              UNKNOWN_COMPONENT_KIND gate would otherwise reject the corrected fixture). Fields
+              NOT referenced by any Action's payloadFrom (e.g. instance_display_name,
+              provider_kind, required_by_bundle, address_ref, connection_policy_key,
+              display_label, operation_protocol, input_schema_key, output_shape_key,
+              sanitize_policy_key -- all read-only descriptive rows under the instance_settings
+              category, whose own backend write path remains the documented
+              instance_settings_admin_authoring_ui_pending known_gap above) were deliberately left
+              on control=form_input/form_field: display-only content must not be blanket-converted
+              to an editable control merely because sibling fields in the same form needed fixing.
 
       - seed_surface_key: admin.enum.management.projection
         declared_by_yaml_ref: docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.enum
