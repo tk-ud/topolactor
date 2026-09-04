@@ -305,8 +305,8 @@ react_schema_topology_seed_translator_ssot:
         rule: one of wiring_lane_contract.lanes keys
     per_unit_grammar:
       projection: '[projection key=.. label=.. sourceYamlRefs=..] ... [/projection]'
-      category: '[category key=.. label=.. sourceYamlRefs=..] ... [/category]'
-      section: '[section key=.. label=.. sectionKind=.. sourceYamlRefs=..] ... [/section]'
+      category: '[category key=.. label=.. sourceYamlRefs=.. visibilityBindingSource=.. visibilityBindingMatchValue=..] ... [/category]'
+      section: '[section key=.. label=.. sectionKind=.. sourceYamlRefs=.. visibilityBindingSource=.. visibilityBindingMatchValue=..] ... [/section]'
       form: '[form key=.. label=.. target=.. mode=.. authorityMarker=.. sourceYamlRefs=..] ... [/form]'
       field: '[field key=.. label=.. control=.. required=true|false sourceYamlRefs=.. knownGapRefs=.. valueFrom=.. wiringLane=.. actionRef=.. trigger=.. payloadFrom=.. optionsSource=.. optionsLabelPath=.. optionsValuePath=.. authorityMarker=.. debounceMs=..]'
       table: '[table key=.. label=.. source=.. display=.. displayColumns=.. rowsSource=.. sourceYamlRefs=..]'
@@ -397,6 +397,23 @@ react_schema_topology_seed_translator_ssot:
       both) -- see convert_node_to_seed_record's per-nodeId single-owner propBindings merge
       comment in .agent/scripts/react_schema_topology_seed_translator.py for why this convention
       matters generically, not just for this specific Field.
+    category_section_visibility_binding_attributes: >-
+      structural-subtree-conditional-visibility-implementation round (source-fixture-lineage
+      completion). visibilityBindingSource/visibilityBindingMatchValue are a Category/Section's own
+      OPTIONAL DSL-authorable carrier for the visibilityBinding field documented above
+      (conditional_visibility_binding_ref) -- authored TOGETHER or NEITHER, mirroring
+      field_options_source_attributes' own all-or-nothing convention. Before this round, a
+      DSL-authored (generate_react_schema mode) source fixture had NO way to reproduce a
+      Category/Section that declares visibilityBinding at all -- the field could only be added by
+      hand-patching the react-schema JSON after generate-react-schema ran, which is exactly the gap
+      that stalled credential-management manifest 092's own source-fixture-vs-physical-seed
+      lineage. When authored, this becomes node.visibilityBinding =
+      {"source":visibilityBindingSource,"matchValue":visibilityBindingMatchValue} on the
+      react-schema Category/Section node, verbatim, subject to the SAME shape validation
+      (validate_visibility_binding_shape) as any other visibilityBinding regardless of how it was
+      authored. matchValue is always the string value the DSL's plain-attribute grammar naturally
+      produces; every authored_record_type_scope matchValue in this manifest is itself a string (a
+      category enum name), so no fidelity is lost by this attribute convention.
     field_value_from_attribute: >-
       admin-enum subBundle closure round. valueFrom is a Field's own OPTIONAL data-defined carrier
       for selected-row-relative field prefill -- e.g. a group-detail input field whose value should
@@ -1252,6 +1269,22 @@ react_schema_topology_seed_translator_ssot:
       PayloadFrom: topology_ui_payload_from
       StyleRef: topology_ui_style_ref
       Unresolved: topology_ui_unresolved
+
+    projection_section_membership: >-
+      Bug fix (structural-subtree-conditional-visibility-implementation round, source-fixture-
+      lineage completion). A Projection may directly own a Section, not only Category -- e.g.
+      credential-management manifest 092's own credential_search_section, a category-independent
+      shared search/filter bar with no single owning Category (it searches ACROSS all three
+      categories at once). validate_structural_node never restricted a Section's own parent kind
+      to Category (the same generic posture SECTION_OWNABLE_ACTION_LANES already takes for a
+      Section-owned Action), so this shape was always structurally legal, but
+      convert_node_to_seed_record's Projection branch only ever populated a `categories` bucket --
+      any directly-owned Section was silently dropped from the converted record with zero
+      validation error (converted_children computed it correctly; nothing downstream of that
+      categories-only filter ever read it). Fixed by adding a parallel `sections` bucket to the
+      Projection record (flattened via SEED_RECORD_NESTED_LIST_KEYS'
+      topology_ui_projection: [(categories, categoryKeys), (sections, sectionKeys)]), mirroring how
+      Category's own `sections`/`sectionKeys` bucket already works.
 
     seed_record_to_schema_candidate_mapping:
       rule: inverse of schema_to_seed_record_mapping, applied only under reverse_direction

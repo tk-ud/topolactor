@@ -71,7 +71,7 @@ MANIFEST_TOPOLOGY_ARRAY_ELEMENT_BYTE_BUDGET = 2712
 # (see flatten_topology_ui_seed_tree). Mirrors the nesting convert_node_to_seed_record
 # builds for each react_kind.
 SEED_RECORD_NESTED_LIST_KEYS = {
-    "topology_ui_projection": [("categories", "categoryKeys")],
+    "topology_ui_projection": [("categories", "categoryKeys"), ("sections", "sectionKeys")],
     "topology_ui_category": [("sections", "sectionKeys")],
     "topology_ui_section": [("children", "childKeys")],
     "topology_ui_form": [("fields", "fieldKeys"), ("actions", "actionKeys")],
@@ -687,6 +687,25 @@ def build_node(kind, attrs, source_refs, known_gaps):
     authority_marker = attrs.get("authorityMarker")
     if authority_marker:
         node["authorityMarker"] = authority_marker
+
+    if kind in ("category", "section"):
+        # structural_subtree_conditional_visibility_contract's authored shape
+        # (docs/design/runtime-orchestration-ssot.yaml), authorable from DSL source as of the
+        # structural-subtree-conditional-visibility-implementation round -- previously this field
+        # could only be added to a react-schema tree by hand-patching JSON after
+        # generate-react-schema ran, which meant a DSL-authored fixture could never reproduce a
+        # Category/Section that declares it (see conditional_visibility_binding_ref). Two
+        # attributes together (never independently -- authoring only one is a genuine defect the
+        # SAME way optionsSource/optionsLabelPath/optionsValuePath must be authored together
+        # above), mirroring visibilityBinding's own {source, matchValue} object shape exactly.
+        # matchValue is always the string DSL attributes naturally produce -- every
+        # authored_record_type_scope matchValue in this manifest is itself a string (a category
+        # enum name), so this is not a fidelity loss; a future non-string matchValue would need a
+        # typed attribute convention, not invented speculatively here.
+        vb_source = attrs.get("visibilityBindingSource")
+        vb_match_value = attrs.get("visibilityBindingMatchValue")
+        if vb_source or vb_match_value is not None:
+            node["visibilityBinding"] = {"source": vb_source or "", "matchValue": vb_match_value}
 
     if kind in CONTAINER_UNITS:
         node["children"] = []
@@ -1418,7 +1437,24 @@ def validate_admin_runtime_preview_action_pairing(node, nodes_by_key, errors, pa
     if node.get("kind") == "Action":
         eb = node.get("eventBinding") or {}
         parent_kind = parent.get("kind") if parent else None
-        if isinstance(eb, dict) and eb.get("wiringLane") == "admin_runtime_dispatch_override_wiring" and parent_kind == "Section":
+        if (
+            isinstance(eb, dict)
+            and eb.get("wiringLane") == "admin_runtime_dispatch_override_wiring"
+            and parent_kind == "Section"
+            # read_only exemption (structural-subtree-conditional-visibility-implementation round,
+            # closing a real SSOT-vs-implementation drift): wiring_lane_contract.lanes.
+            # admin_runtime_dispatch_override_wiring.allowed_authority_mapping_values_note already
+            # documents that "a read_only action never participates in that pairing at all, exactly
+            # like an ordinary unwired read dispatch" -- a pure read/filter dispatch (e.g.
+            # credential_management:search's own credential_search_button) never previews or
+            # applies any mutation, so it has no Modal/Confirm to pair against and must not be
+            # forced to invent a fake one. That SSOT sentence had no corresponding code path here
+            # until this fix -- every Section-owned use of this lane was checked identically
+            # regardless of authority, so a real read_only Action (credential_search_button) failed
+            # this rule the same way a genuine unpaired mutation would, even though nothing about it
+            # is actually unsafe.
+            and eb.get("authority") != "read_only"
+        ):
             node_path = node.get("_path", path)
             key = node.get("key")
             payload_from = eb.get("payloadFrom") or {}
@@ -1751,6 +1787,21 @@ def convert_node_to_seed_record(node, schema_to_seed_map, target_surface, loss_e
     if react_kind == "Projection":
         record["surface"] = target_surface
         record["categories"] = [c for c in converted_children if c["recordType"] == "topology_ui_category"]
+        # Bug fix (structural-subtree-conditional-visibility-implementation round,
+        # source-fixture-lineage completion): a Projection may ALSO directly own a Section --
+        # e.g. credential-management manifest 092's own credential_search_section, a
+        # category-independent shared search/filter bar that legitimately has no single owning
+        # Category (it searches ACROSS all three categories at once) -- the same way a Section may
+        # directly own certain Actions (SECTION_OWNABLE_ACTION_LANES above). validate_structural_node
+        # never restricted a Section's own parent kind to Category, so this shape was always
+        # structurally legal; only this conversion step (and the matching
+        # SEED_RECORD_NESTED_LIST_KEYS entry below) had no bucket for it, which meant a
+        # DSL/react-schema source authoring this REAL, already-live shape had its Section silently
+        # DISCARDED here with zero validation error -- converted_children computed it correctly,
+        # but nothing downstream of this "categories"-only filter ever read it. This is exactly the
+        # no_silent_loss gap exchange_report_contract exists to catch, closed here rather than
+        # papered over by wrapping the Section in an artificial Category it does not belong to.
+        record["sections"] = [c for c in converted_children if c["recordType"] == "topology_ui_section"]
     elif react_kind == "Category":
         record["categoryKey"] = record["key"]
         record["sections"] = [c for c in converted_children if c["recordType"] == "topology_ui_section"]
@@ -2253,6 +2304,7 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                     "seedKey": seed_key,
                     "surface": record.get("surface"),
                     "categoryKeys": record.get("categoryKeys") or [],
+                    "sectionKeys": record.get("sectionKeys") or [],
                 },
                 "sourceRecordKey": key,
             })

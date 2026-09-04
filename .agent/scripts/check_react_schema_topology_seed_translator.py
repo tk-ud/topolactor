@@ -403,7 +403,7 @@ def main():
 
         root = schema_candidate.get("root") or {}
         category_keys = collect_keys_by_kind(root, "Category")
-        expect("10. reactSchemaCandidate contains categories user_auth/external/instance_settings", set(["user_auth", "external", "instance_settings"]).issubset(set(category_keys)))
+        expect("10. reactSchemaCandidate contains categories users/external_api_credential/instance_settings", set(["users", "external_api_credential", "instance_settings"]).issubset(set(category_keys)))
 
         form_keys = set(collect_keys_by_kind(root, "Form"))
         expected_forms = {"instance_settings_import_form", "instance_address_form", "instance_operation_binding_form", "instance_operation_approval_form"}
@@ -545,7 +545,7 @@ def main():
         expect("30. root projection record recordType == topology_ui_projection and surface is set", proj.get("recordType") == "topology_ui_projection" and proj.get("surface") == "auth.external.credential_management.projection")
 
         category_record_keys = {c.get("categoryKey") for c in proj.get("categories") or []}
-        expect("31. topology_ui_category records preserve user_auth/external/instance_settings", {"user_auth", "external", "instance_settings"}.issubset(category_record_keys))
+        expect("31. topology_ui_category records preserve users/external_api_credential/instance_settings", {"users", "external_api_credential", "instance_settings"}.issubset(category_record_keys))
 
         instance_settings_cat = next((c for c in proj.get("categories") or [] if c.get("categoryKey") == "instance_settings"), {})
         section0 = (instance_settings_cat.get("sections") or [{}])[0]
