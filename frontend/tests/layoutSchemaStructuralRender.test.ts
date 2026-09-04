@@ -254,14 +254,17 @@ Deno.test("DOM-connected proof: manifest 0092's REAL bare-entry-resolved LayoutN
   // a dedicated ui-local trigger key, template_import_trigger — mirroring its sibling
   // json_template_download — never the template_file field's own change event), matching
   // buttonFactory's requireBinding("click") exactly; no componentKind/trigger mismatch.
-  for (const label of ["Validate", "Preview", "Apply", "Approve", "Download JSON template", "Import JSON template"]) {
+  // Labels are Japanese (structural-subtree-conditional-visibility-implementation round's
+  // credential-management seed UI日本語化) -- machine identity (nodeId/actionRef/wiringLane) is
+  // unchanged, only the display label text.
+  for (const label of ["検証", "プレビュー", "適用", "承認", "JSONテンプレートをダウンロード", "JSONテンプレートをインポート"]) {
     assert(html.includes(`>${label}<`), `expected the real DOM markup to contain the button label "${label}"; html: ${html.slice(0, 2000)}`);
   }
   // action/button never renders a native <button disabled> for these leaves — production
   // rendering must not inject the UI-Builder canvas-preview placeholder's forced disabled:true
   // (see buildProductionCatalogComponentProps in renderEmission.ts).
   assert(
-    !/<button[^>]*\bdisabled\b[^>]*>(?:Validate|Preview|Apply|Approve|Download JSON template|Import JSON template)</.test(html),
+    !/<button[^>]*\bdisabled\b[^>]*>(?:検証|プレビュー|適用|承認|JSONテンプレートをダウンロード|JSONテンプレートをインポート)</.test(html),
     "expected validate/preview/apply/approve/json_template_download/json_import buttons to render enabled (no disabled attribute) in the real DOM",
   );
 

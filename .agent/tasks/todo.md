@@ -13,7 +13,6 @@
 | `test-orchestration-review` | Seed conversion後の proof / test orchestration review | not_started | 1 | proof surface carry-over | `docs/design/pipeline-continuity-ssot.yaml` |
 | `frontend-canonical-surface-structure-label-boundary` | Seed conversion後の frontend canonical surface label boundary | not_started | 1 | frontend canonical UI structure/wiring surfaces | canonical surface UI structure/wiring SSOTs, `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml` |
 | `admin-console-workflow-step-wording-boundary` | Seed conversion後の admin console workflow wording boundary | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
-| `structural-subtree-conditional-visibility-implementation` | credential-management manifest 092 category-collapse実装 (generic visibilityBinding contract の実装/seed適用) | partial | 1 | credential-management category-collapse audit | `docs/design/runtime-orchestration-ssot.yaml` |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
 
@@ -352,7 +351,7 @@ implementation_change で、SSOTに従って helper schema / seed artifact を�
 
 ## Bundle `structural-subtree-conditional-visibility-implementation`
 
-**Status:** `partial`
+**Status:** `implemented` (本ラウンドで全受入条件を満たした自己申告。`.agent/tools` 出力/本記述自体は completion judgment の根拠にならないため、監査役が全差分を読んだ上で最終確認すること — 確認後、本 Bundle セクション自体の削除可否も監査役判断とする)
 **Primary SSOT:** `docs/design/runtime-orchestration-ssot.yaml` `ui_projection_render_reachability_contract.structural_subtree_conditional_visibility_contract`
 **Position:** design_change (本 design_change で追加された generic contract) の後段 implementation_change。credential-management manifest 092 の category-collapse blocking finding に対する実装。
 
@@ -376,16 +375,15 @@ manifest 092 (`auth.external.credential_management.projection`) の `credential_
 - **[本ラウンド追加] SSOT 修正**: `runtime-orchestration-ssot.yaml` の `record_carrier_tensor_only`/`authored_record_type_scope`/`invalid_binding_fail_close` が「tensor-only ノードも visibilityBinding を持てる」という実装不可能な誤った記述をしていたのを訂正（`NodeLocalData`/`BuildNodeLocalDataByNodeId` の catalog-leaf-only merge は元々 Category/Section へ絶対に適用されないため、この tensor-only 経路は最初から実装され得なかった）。`prohibited`/`test_proof_contract` に該当項目を追加。
 - test/proof: `frontend/tests/structuralVisibility.test.ts`（純粋ロジック9件）、`frontend/tests/uiEventEffectRunner.test.ts` 追加分（動的値解決・lifecycle可視性ゲーティング）、`frontend/tests/layoutProjectionTreeVisibilityRender.test.ts`（実 composer 出力 fixture 経由の DOM-connected proof、汎用 catA/catB）、`frontend/tests/credentialManagementCategorySelectorProductionPath.test.ts`（**本ラウンド新規** — 実 manifest 092 fixture・実 happy-dom・実 `<select>` への実 native "change" DOM event 発火による実 production category switch 経路の e2e proof。dispatcher.set() 直書きに頼らない）、backend 側 fixture-backed byte-exact proof（cd002 matchValue 訂正 + cd004 propsJson options の内容を `CredentialManagementCategories.All` と突合する新規テスト2件含む）、`NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs` の tensor-only fail-close 負例5件。secret deny / 既存 live-DB dispatch・projection proof は既存テストスイート全体（backend 1760+/1760+、frontend 2138+/2138+、translator suite の 1件の既存無関係failureのみ変わらず）で回帰なしを確認。
 
-### 未完了・既知の残課題 (silently完了扱いにしない)
+### 本ラウンド（source fixture lineage完成 + 日本語UI化）で解消した残課題
 
-- **source fixture の完全再構築・translator 経由 regenerate は未完了 — 新たに特定した具体的 blocking 要因あり**: 本ラウンドで実際に再構築を試みた（現行 `db/seed_empty.sql` cd002 の128レコードから react schema tree を機械的に逆算し、`generate-topology-seed` へ通す実験を実施）。その過程で以下を発見・是正済み:
-  - `react-schema-topology-seed-translator-ssot.yaml` `declared_seed_surface_catalog[auth.external.credential_management.projection]` の `exchange_units`/`component_catalog_refs.componentKinds`/`wiring_lane_refs` が、credentials.users/external_api_credential CRUD セクション・共有検索/フィルタ・Modal確認ダイアログ追加以前の古い宣言のままで、実内容を一切validateできなかった。`section`/`table`/`modal`/`validation`/`form_input/search_input`/`data_display/table`/`disclosure/modal`/`admin_runtime_dispatch_override_wiring` を追加して是正済み（コミット済み）。
-  - `wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring.allowed_authority_mapping_values` に、`credential_search_button` が実際に使っている `read_only`（純粋な読み取り専用検索 dispatch — preview/validation/draft_apply のいずれの意味論も当てはまらない）が欠けていた。追加して是正済み（コミット済み）。
-  - 上記2点の是正後、`generate-topology-seed` の gateStatus は `pass` まで到達したが、**新たな、visibilityBinding とは無関係の、pre-existing なアーキテクチャ不整合**を発見: `validate_admin_runtime_preview_action_pairing`（`ADMIN_RUNTIME_PREVIEW_ACTION_SECONDARY_OPEN_MODAL_REQUIRED` 等、約30件）は「Confirm/Cancel ボタンは対象 Modal の子ノードとして react-schema tree に nest されている」ことを前提に、Section直下の Confirm ボタンを（誤って）「openModal と pairing していない preview トリガー」として fail-close する。しかし実際の `db/seed_empty.sql` では、Confirm/Cancel ボタンは Modal の子ではなく **Section の flat sibling**（`parentKey` が Section 自身）として authorされている（credentials.users/external_api_credential/external_instance_credential の全 CRUD 確認ダイアログ、計約12モーダル・24ボタンに影響）。この構造は現在の本番で実際に動作・テスト済みだが、translator の pairing validator のモデルとは合致しない。
-  - **この不整合の解消は本 Bundle の scope を超える design_change を要すると判断し、本ラウンドでは実施しなかった**: 解消には (a) 該当20+ノードの `parentKey`/DOM nesting を Modal 子へ実際に付け替える（3カテゴリ全ての確認ダイアログ UI の実挙動に影響し得る、visibilityBinding と無関係な広範な変更）か、(b) validator 側に「Modal 隣接する flat sibling Confirm ボタン」パターンを正規に認識させる新しい判定手段（例: 明示的な `confirmsModal` 属性等）を設計するか、のいずれかの設計判断が必要で、どちらを採るかは本タスクの独断で決めるべきではないと判断した。
-  - 上記に加え、`external_api_credential_create_button`/`create_confirm_button`/`update_button`/`update_confirm_button` の4レコードは `flatten_topology_ui_seed_tree` の `SEED_RECORD_EXCEEDS_STORAGE_BUDGET`（2712 byte 予算)を超過することも判明（sourceYamlRefs 等を含めた完全な形でflattenすると発生 — 実内容そのものに由来し、本ラウンドの再構築作業由来ではない）。
-  - 上記のため、`.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.input.json`/`.topology-seed.input.json` はまだ古いまま未置換（誤って「validatorを通る」ことだけを目的に実構造と異なる木を authorし、fixture として偽装することは避けた）。
-- 上記以外の受入条件はすべて満たしている。
+前ラウンドで「本 Bundle の scope を超える design_change を要する」として保留した Confirm/Cancel flat-sibling 不整合、および storage budget 超過は、いずれも狭い実装/design 誤りであると判明したため、本ラウンドで実際に解消した（scope を切り詰めず、当初の残課題を最後まで閉じた）。
+
+- **Confirm/Cancel Modal-nesting 修正（本番データの実バグ）**: `credentials_users_*`（create/update/delete/revoke_credential/revoke_sessions の5フロー）と `eic_*`（create/update/delete の3フロー、計8フロー）は、`external_api_credential_*` の正しいパターン（Confirm/Cancelボタンが対象ModalのDOM/react-schema上の子）と異なり、(a) preview buttonにModalを開くrutimeInteractionが一切無い（クリックしても確認モーダルが開かない）、(b) Confirm/Cancelボタンが Modal の子ではなく Section の flat sibling として author されている、(c) Cancel ボタンがそもそも存在しない、(d) Confirm ボタンの authorityMarker が preview 用の `preview_only` のままで Modal-owned Confirm 用の `draft_apply_not_execution_authority` になっていない、(e) revoke_credential/revoke_sessions フローは preview 側 `dryRun=literal:true` / confirm 側 `confirmed=literal:true` すら authorされていない、という**実際に動作していなかった本番バグ**であったと判明。react-schema (DSL) レベルで Modal-nested-children + 新規Cancelボタン + 正しい authorityMarker/dryRun/confirmed を author し、translator で再生成することで解消した。`configure_scheduler_job_credential_or_port_binding_cancel_button` と `instance_settings` カテゴリの `apply`/`approve`/`json_import`/`json_template_download`/`preview`/`validate` の各Actionも、同じ理由で従来tensorに実体が無かった(=クリックしても何も起きなかった)ことが判明し、re-generateにより正しく解消された。
+- **storage budget (2712 byte) 誤適用の是正**: `flatten_topology_ui_seed_tree`/`validate_flat_seed_records` が `manifest.topology` / `idx_manifest_topology` GIN index の per-element budget を、実際には `manifest.topology` に一切 adopt されない `layoutAdoptionCandidates` 等の record にまで一律適用していたバグと判明（`adoption_candidate_separation_contract` が UI-entity payload を `manifest.topology` から追い出した際に、この budget check だけ古いスコープのまま取り残されていた）。budget check を実際に `manifest.topology` へ adopt される `manifestRefsCandidate` のみに再スコープし、`external_api_credential_update_confirm_button`(3793 byte) 等の4レコードは元々このbudgetの対象外であったことを明らかにした。2712定数は変更・無効化していない。
+- **翻訳サイクル中に発見した2件の独立した翻訳器バグ**: (1) `convert_node_to_seed_record` の Projection 分岐が `categories` のみを見て直下の Section (`credential_search_section` — 3カテゴリ横断の共有検索バーで、単一の親カテゴリを持たない)を validationErrorゼロのまま**無条件silent dropしていた**（`converted_children`には含まれるが、Projectionレコード自身のフィルタで捨てられていた）。`sections`/`sectionKeys` バケットを追加して解消。(2) `validate_admin_runtime_preview_action_pairing` が SSOT (`wiring_lane_contract...allowed_authority_mapping_values_note`) の「read_only action は pairing対象外」という明文規定をコードに実装しておらず、`credential_search_button`（純粋な検索action）を誤って fail-close していた。`authority != "read_only"` の除外条件を追加して解消。
+- **credential-management seed UI の日本語化（Owner指示）**: 上記 source fixture 再構築と同じ DSL 経由で、`docs/design/admin-normal-surface-projection-seed-ssot.yaml` `credentials.seed_contract.display_language_boundary` に従い、全 category/section/form/field/action/modal の `label`・Modal `title`/`body`・`credential_result_list` の表示列見出し・`credential_category_filter` の option label を日本語化。node key・recordType・componentKind・manifest key・targetRef・payloadFrom・statePath・`visibilityBinding.matchValue`・`CredentialManagementCategories.All` の値はすべて不変（canonical値のまま）。新規 i18n ランタイム・credential専用翻訳分岐は追加していない。
+- **source fixture → translator → 物理 seed lineage 完全再生成**: `.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.input.json`/`.topology-seed.input.json` を実際の128レコード（+今回追加した8件のCancelボタン = 136レコード）に対応する内容へ再構築し、`generate-react-schema`→`generate-topology-seed` を実行して `gateStatus: pass, validationErrors: 0` を達成。translatorの出力（`adoptionCandidates`）から `db/seed_empty.sql` の cd001(component_group_bundle)/cd002(layout_schema_json)/cd003(wiring_schema_json)/cd004(layout_patch_json)/cd005(package layout) を実際に regenerate して採用。`credential_category_filter` の静的3択オプション（translatorにはliteral optionsをauthorする文法が無いため）、`credential_search_section`の`onChange→setState`配線、`instance_settings`カテゴリ4フォームの`dispatchInstanceOperation`/`localStateMutation`配線、`credential_result_list`の`propBindings.columns`(`activeColumnsToTableColumns`動的列)は、translatorが再現できないtensor-only leaf overrideとして温存し、regenerate後に再適用した（削除・欠落なし、旧cd004との nodeId set 差分は新規追加8件のみで一致確認済み）。
 
 ### 対応資料
 
@@ -411,9 +409,14 @@ manifest 092 (`auth.external.credential_management.projection`) の `credential_
 - `frontend/lib/uiBuilderWiringProjection.ts`
 - `frontend/api/dispatch.ts`
 - `.agent/scripts/react_schema_topology_seed_translator.py`
-- `db/seed_empty.sql` (manifest 092 / layout `00000000-0000-0000-0000-0000000cd002` / tensor `00000000-0000-0000-0000-0000000cd004`)
-- `.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.input.json` (未再生成 — 残課題。上記 blocking 要因を参照)
-- `.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.topology-seed.input.json` (未再生成 — 残課題。上記 blocking 要因を参照)
+- `.agent/scripts/check_react_schema_topology_seed_translator.py`
+- `db/seed_empty.sql` (manifest 092 / package `cd001`/`cd005` / layout `00000000-0000-0000-0000-0000000cd002` / wiring `cd003` / tensor `00000000-0000-0000-0000-0000000cd004`)
+- `.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.input.json` (本ラウンドで再構築済み)
+- `.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.topology-seed.input.json` (本ラウンドで再構築済み)
+- `frontend/tests/fixtures/manifest_0092_bare_entry_layout_nodes.json` (本ラウンドで再生成済み)
+- `backend/tests/Topolactor.Integration.Tests/CredentialManagementHubRelationUiProjectionLiveDbTests.cs`
+- `frontend/tests/layoutSchemaStructuralRender.test.ts`
+- `frontend/tests/credentialManagementCategorySelectorProductionPath.test.ts`
 
 ### 受入条件
 
@@ -425,4 +428,7 @@ manifest 092 (`auth.external.credential_management.projection`) の `credential_
 - [x] credentials以外の再利用consumerで同一generic機構が動くことを証明する。
 - [x] production上で実際のcategory selector操作(実 `<select>` への実 native change event)からprojection-local state更新、structural visibility評価、DOM mount/unmountまでが連続して成立することを証明する（`credentialManagementCategorySelectorProductionPath.test.ts`）。
 - [x] tensor-only 経路の不正 visibilityBinding が silent omit されず、SSOT準拠でexplicit fail-closeする（records[]経路とは独立したnegative testあり）。
-- [ ] source fixture (`credential-management-0092.input.json`/`.topology-seed.input.json`) を実際の manifest 092 seed 内容に合わせて再構築し、translator 経由で `db/seed_empty.sql` を regenerate する。**新たに特定した blocking 要因**（Confirm/Cancelボタンの flat-sibling構造 vs. translatorのModal-nested-children前提の不整合、上記参照）の解消には別途 design_change が必要と判断。カタログ宣言(componentKinds/wiring_lane_refs/exchange_units)と read_only authority の2つの是正は本ラウンドで完了済み。
+- [x] source fixture (`credential-management-0092.input.json`/`.topology-seed.input.json`) を実際の manifest 092 seed 内容に合わせて再構築し、translator 経由で `db/seed_empty.sql` を regenerate した。Confirm/Cancelボタンの flat-sibling構造 vs. translatorのModal-nested-children前提の不整合、storage budget誤適用の2件を実際に解消。
+- [x] credential-management seed UI (label/title/body/column見出し/option label) を日本語化し、machine vocabulary（node key/recordType/componentKind/targetRef/payloadFrom/statePath/matchValue/`CredentialManagementCategories.All`）は不変のまま維持した。旧英語operation文言が reachable surface に残っていないことを production DOM proofで監査した。
+
+Bundleの全受入条件を満たしたため、Status を `partial` → `implemented` として扱ってよい（次回 audit/レビューで確認されるまでは Roadmap bundle index からの削除・完全クローズはオーナー/監査役判断とする）。

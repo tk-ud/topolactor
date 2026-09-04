@@ -34,6 +34,15 @@
  * anywhere in manifest 092's real seed today, so this file does not fabricate one; lifecycle
  * reachability gating by the SAME resolveNodeVisibility evaluator is proven generically by
  * frontend/tests/uiEventEffectRunner.test.ts instead.
+ *
+ * structural-subtree-conditional-visibility-implementation round (owner-directed
+ * credential-management seed UI日本語化): action labels asserted here are the real, seed-authored
+ * Japanese display text (admin-normal-surface-projection-seed-ssot.yaml credentials.seed_contract.
+ * display_language_boundary) -- machine identity (data-node-id, the option `value`s asserted
+ * against EXPECTED_CATEGORY_VALUES, targetRef/payloadFrom) stays canonical/English and is never
+ * used interchangeably with a label string as an identifier. Step 6 below additionally audits
+ * that no pre-translation English operation sentence remains reachable anywhere in this
+ * manifest's rendered surface, across all three categories.
  */
 import { assert, assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { h, options, render } from "preact";
@@ -139,9 +148,9 @@ Deno.test("production path: manifest 092's real credential_category_filter <sele
 
     // 3. Initial DOM: only the default-active category's real Action leaves are reachable.
     let html = container.innerHTML;
-    assert(html.includes("Create external API credential record"), "expected external_api_credential's own action in the initial DOM");
-    assert(!html.includes("Create user account (with initial credential)"), "expected users' action absent from the initial DOM");
-    assert(!html.includes(">Validate<"), "expected instance_settings/external_instance_credential's action absent from the initial DOM");
+    assert(html.includes("外部APIクレデンシャルレコードを作成"), "expected external_api_credential's own action in the initial DOM");
+    assert(!html.includes("ユーザーアカウントを作成"), "expected users' action absent from the initial DOM");
+    assert(!html.includes(">検証<"), "expected instance_settings/external_instance_credential's action absent from the initial DOM");
     assert(!/rounded border border-red-200/.test(html), "expected zero visible error boxes on initial render");
 
     const firstApiCredentialActionHtml = container.querySelector(
@@ -162,9 +171,9 @@ Deno.test("production path: manifest 092's real credential_category_filter <sele
       "external_instance_credential",
       "expected the real <select>'s displayed value to follow the user's own real selection",
     );
-    assert(html.includes(">Validate<"), "expected instance_settings/external_instance_credential's own action to mount after the real switch");
-    assert(!html.includes("Create external API credential record"), "expected external_api_credential's action to unmount — never merely hidden — after switching away from it");
-    assert(!html.includes("Create user account (with initial credential)"), "expected users' action to remain absent");
+    assert(html.includes(">検証<"), "expected instance_settings/external_instance_credential's own action to mount after the real switch");
+    assert(!html.includes("外部APIクレデンシャルレコードを作成"), "expected external_api_credential's action to unmount — never merely hidden — after switching away from it");
+    assert(!html.includes("ユーザーアカウントを作成"), "expected users' action to remain absent");
     assert(!/rounded border border-red-200/.test(html), "expected zero visible error boxes after the real switch");
     // The options themselves never change — this is a structural mount/unmount of content, not a
     // re-population of the filter control itself.
@@ -188,8 +197,8 @@ Deno.test("production path: manifest 092's real credential_category_filter <sele
     await flushUpdates();
 
     html = container.innerHTML;
-    assert(html.includes("Create external API credential record"), "expected external_api_credential's action to re-mount on switching back");
-    assert(!html.includes(">Validate<"), "expected instance_settings/external_instance_credential's action to unmount again after switching away");
+    assert(html.includes("外部APIクレデンシャルレコードを作成"), "expected external_api_credential's action to re-mount on switching back");
+    assert(!html.includes(">検証<"), "expected instance_settings/external_instance_credential's action to unmount again after switching away");
     const roundTrippedApiCredentialActionHtml = container.querySelector(
       '[data-node-id="external_api_credential_create_button"]',
     )?.outerHTML;
@@ -198,6 +207,40 @@ Deno.test("production path: manifest 092's real credential_category_filter <sele
       firstApiCredentialActionHtml,
       "expected the external_api_credential action's markup (dispatchTargetRef/payloadFrom wiring) to survive a real hide-then-show round trip byte-identically",
     );
+
+    // 6. Japanese seed UI audit (structural-subtree-conditional-visibility-implementation round,
+    // owner-directed credential-management seed UI日本語化): none of the pre-translation English
+    // operation sentences this exact production-path proof used to assert are still reachable
+    // anywhere in this manifest's rendered surface, across every category. Cycle through all
+    // three categories (the third, external_instance_credential, was never re-selected above) so
+    // this check covers content this test's earlier steps never rendered.
+    const select = container.querySelector('[data-node-id="credential_category_filter"] select') as unknown as {
+      value: string;
+      dispatchEvent: (e: Event) => boolean;
+    };
+    let allHtml = html;
+    for (const category of EXPECTED_CATEGORY_VALUES) {
+      select.value = category;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      await flushUpdates();
+      allHtml += container.innerHTML;
+    }
+    for (
+      const staleEnglish of [
+        "Create external API credential record",
+        "Create user account (with initial credential)",
+        "Create external instance credential record",
+        ">Validate<",
+        ">Preview<",
+        ">Apply<",
+        ">Approve<",
+      ]
+    ) {
+      assert(
+        !allHtml.includes(staleEnglish),
+        `expected no pre-translation English operation sentence "${staleEnglish}" to remain reachable anywhere in the credential-management surface`,
+      );
+    }
   } finally {
     render(null, container as unknown as Element);
     cleanup();
