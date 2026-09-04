@@ -418,6 +418,22 @@ manifest 092 (`auth.external.credential_management.projection`) の `credential_
 - `frontend/tests/layoutSchemaStructuralRender.test.ts`
 - `frontend/tests/credentialManagementCategorySelectorProductionPath.test.ts`
 
+### 本ラウンド（tabs presentation source lineage完成 + 残Modal日本語化 + openModal/closeModal systemic bug修正）で解消した残課題
+
+PR #608での `credential_category_filter` の select→tabs.template presentation移行（design_change/implementation_change、docs/design/admin-normal-surface-projection-seed-ssot.yaml `presentation_history`）の後、本Bundleのcanonical source fixture（上記2ファイル）は `control="form_input/select"` のまま更新されておらず、production（`db/seed_empty.sql`）とcanonical sourceが再び乖離していた。本ラウンドで両source fixtureを `disclosure/tabs` へ修正し、`generate-react-schema`/`generate-topology-seed` を実行して `gateStatus: pass, validationErrors: 0` を確認、出力された `control`/`componentKey` が `db/seed_empty.sql` cd002の既存内容と完全一致することを検証した（sourceのみの手直しでproductionを個別に合わせる、逆にproductionのみをtabs化してsourceをselectのまま残す、のいずれでもない）。
+
+同時に、このBundleのcredential-management surfaceに残っていた最後の4件の英語Modal body（`configure_scheduler_job_credential_or_port_binding`, `external_api_credential` create/update/delete）を、`display_language_boundary`に従い日本語化し、source fixture→translator出力→`db/seed_empty.sql`の3層すべてへ反映した。
+
+本ラウンドのproduction-path proof拡張（実クリックでConfirmation Modalを実際にopenする証明）作業中に、manifest 092のcd004 tensorが**credential-management surface全体の12個のconfirm-Modalペア全て**（users create/update/delete/revoke_credential/revoke_sessions、scheduler credential/port binding、external_api_credential create/update/delete、external_instance_credential create/update/delete）について、openModal/closeModalの `runtimeInteractions` をbutton/Modal自身のtensor nodeへself-scoped authoring（`sourceActionKey == nodeId`）していたため、`LayoutSchemaTensorComposer.Compose()`の`interactionsBySourceActionKey["{resolvedParentNodeId}::{key}"]`マージ規約（`credential_search_section`/`credential_category_filter`の正しいtabs配線が既に使っている規約と同一）と一致せず、実compose時に全34エントリが孤児化(orphan)していたという、本Bundleの完了時点で見過ごされていた深刻な既存production bugを発見した。実クリックで検証した結果、Modal open/closeが production で一切機能していなかったことを確認し、各エントリを実際の親（Modalの`toggle`closeModalは所属Sectionへ、Confirm/Cancelボタンの`click`closeModalは所属Modalへ）へ再配置して解消した。既存のtabs presentation/generic structural visibility/tabs event/value lane/activeKey live-value sync/`credential_result_list`のdynamic column bindingは全て回帰なく維持されている。
+
+`credentialManagementCategorySelectorProductionPath.test.ts`に、実dryRun-preview button click→実`/api/dispatch`決着(mocked fetch, 実FIFOキュー)→実deferred openModal local-state mutation→実Modal DOMでの日本語title/body/Confirm/Cancel表示→実Cancel clickでのclose→再open→実Confirm clickでのConfirm自身のdispatchTargetRef/payload（`confirmed="true"`, preview側の`dryRun`copyではない）保持→決着→closeまでを、`dispatcher.set()`や文字列absenceのみに頼らず実DOM操作で証明する新規テストを追加した。
+
+### 対応資料（本ラウンド追加分）
+
+- `.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.input.json`（本ラウンドでcontrol修正・Modal body日本語化）
+- `.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.topology-seed.input.json`（同上）
+- `.agent/tools/logs/generate.log`（sha256再計算）
+
 ### 受入条件
 
 - [x] 初期表示で非選択categoryの操作群が同時常設表示されない(DOM上に存在しない)。
@@ -430,5 +446,7 @@ manifest 092 (`auth.external.credential_management.projection`) の `credential_
 - [x] tensor-only 経路の不正 visibilityBinding が silent omit されず、SSOT準拠でexplicit fail-closeする（records[]経路とは独立したnegative testあり）。
 - [x] source fixture (`credential-management-0092.input.json`/`.topology-seed.input.json`) を実際の manifest 092 seed 内容に合わせて再構築し、translator 経由で `db/seed_empty.sql` を regenerate した。Confirm/Cancelボタンの flat-sibling構造 vs. translatorのModal-nested-children前提の不整合、storage budget誤適用の2件を実際に解消。
 - [x] credential-management seed UI (label/title/body/column見出し/option label) を日本語化し、machine vocabulary（node key/recordType/componentKind/targetRef/payloadFrom/statePath/matchValue/`CredentialManagementCategories.All`）は不変のまま維持した。旧英語operation文言が reachable surface に残っていないことを production DOM proofで監査した。
+- [x] `credential_category_filter`のtabs presentationについて、canonical source fixture (`credential-management-0092.input.json`/`.topology-seed.input.json`) がtranslator経由で`db/seed_empty.sql`と同一のtabs内容を再生成できる（source→translator→physical seedのlineageが一致し、physical seedのみのtabs化・sourceのみの放置のいずれも発生していない）。
+- [x] credential-management surfaceの全confirmation Modal(12ペア)について、実tab/preview button clickによるdryRun dispatch決着後、実際にModalがopenし、日本語title/body/Confirm/Cancelが表示され、実Cancel/Confirm clickで正しくclose・dispatchTargetRef/payloadFrom保持まで到達することを実DOM操作で証明した（文字列absenceのみの証明ではない）。
 
 Bundleの全受入条件を満たしたため、Status を `partial` → `implemented` として扱ってよい（次回 audit/レビューで確認されるまでは Roadmap bundle index からの削除・完全クローズはオーナー/監査役判断とする）。
