@@ -598,9 +598,14 @@ def main():
         # adoption shape, derived from the same tree as topologyUiSeedCandidate.
         flat_records = (doc_ts or {}).get("topologyUiSeedFlatRecords") or []
         expect("36a. topologyUiSeedFlatRecords is populated for the golden fixture", bool(flat_records))
+        golden_manifest_refs = ((doc_ts or {}).get("adoptionCandidates") or {}).get("manifestRefsCandidate")
         expect(
-            "36b. every flattened record independently fits the manifest.topology / idx_manifest_topology storage budget (UTF-8 byte length)",
-            all(record_byte_size(r) <= 2712 for r in flat_records),
+            "36b. manifestRefsCandidate -- the only bucket actually adopted into manifest.topology -- "
+            "fits the idx_manifest_topology GIN index storage budget (UTF-8 byte length) for the golden "
+            "fixture; layoutAdoptionCandidates/wiringAdoptionCandidates/tensorAdoptionCandidates-bound "
+            "flat records are not subject to this budget at all (see storage_adoption_contract."
+            "target_storage.applies_only_to_note) and may legitimately exceed it",
+            bool(golden_manifest_refs) and record_byte_size(golden_manifest_refs) <= 2712,
         )
         flat_keys = {r.get("record", {}).get("key") for r in flat_records}
         root_flat = [r for r in flat_records if r.get("parentKey") is None]
@@ -1025,10 +1030,19 @@ def main():
             and "one candidate per Action/Step record carrying eventBinding" not in wiring_cardinality_doc_text,
         )
 
-        # 36f-36h: a synthetic oversized single-field candidate must be caught
-        # by storage_adoption_contract's budget check at generation time, not
-        # discovered later as a real Postgres INSERT failure (the PR #573 gap
-        # this section closes).
+        # 36f-36h (structural-subtree-conditional-visibility-implementation round
+        # correction): a large single-field candidate whose record lands in
+        # layoutAdoptionCandidates (components_layout_design.layout_schema_json, a
+        # scalar JSONB column with no GIN index at all -- see
+        # storage_adoption_contract.target_storage.applies_only_to_note) must NOT be
+        # blocked by SEED_RECORD_EXCEEDS_STORAGE_BUDGET, since that record is never
+        # proposed for manifest.topology adoption. This is the corrected behavior:
+        # an earlier version of this budget check applied the manifest.topology /
+        # idx_manifest_topology GIN per-element ceiling to every flattened record
+        # regardless of its real adoption target, which produced false-positive
+        # blocking failures for legitimately large, correctly-routed
+        # layoutAdoptionCandidates-bound records (the exact gap that stalled
+        # credential-management manifest 092's own source-fixture regeneration).
         oversize_schema = {
             "schema": "topolactor.react_schema.v1",
             "presetKey": "auth.external.credential_management.projection",
@@ -1051,55 +1065,68 @@ def main():
         tmp36 = write_topology_seed_tmp_fixture(json.dumps(oversize_schema), tmpdir=tmpdir)
         oversize_fragment_path = Path(tmpdir) / "oversize-fragment.sql"
         proc36, doc36 = run_generate_topology_seed(tmp36, extra_args=["--seed-sql-fragment", str(oversize_fragment_path)])
-        expect("36f. an oversized flattened field is reported as blocking SEED_RECORD_EXCEEDS_STORAGE_BUDGET", proc36.returncode != 0 and "SEED_RECORD_EXCEEDS_STORAGE_BUDGET" in rule_ids(doc36))
-        expect("36g. topologyUiSeedFlatRecords is still populated for review even when a record is over budget", bool((doc36 or {}).get("topologyUiSeedFlatRecords")))
-        expect("36h. --seed-sql-fragment is not written when any record is over budget (never hands a reviewer a broken fragment)", not oversize_fragment_path.exists())
-
-        # 36i-36j: the budget must be measured in UTF-8 *bytes*, not Python
-        # characters -- a multi-byte (non-ASCII) label can be well under the
-        # 2712 *character* count while its UTF-8 encoding still overflows the
-        # 2712 *byte* budget Postgres actually enforces. 800 "あ" (3 bytes
-        # each in UTF-8) keeps the field's flattened record at ~1.2k
-        # characters (would pass a naive len(str) check) but ~2.8k bytes
-        # (must fail the real byte-length check).
-        def multibyte_field_schema(repeat_count):
-            return {
-                "schema": "topolactor.react_schema.v1",
-                "presetKey": "auth.external.credential_management.projection",
-                "surface": "auth.external.credential_management.projection",
-                "sourceYamlRefs": ["docs/design/react-schema-topology-seed-translator-ssot.yaml#declared_seed_surface_catalog"],
-                "root": {
-                    "kind": "Projection", "key": "p", "label": "p", "sourceYamlRefs": ["a"],
-                    "children": [{
-                        "kind": "Category", "key": "c1", "label": "c1", "sourceYamlRefs": ["a"],
-                        "children": [{
-                            "kind": "Section", "key": "s1", "label": "s1", "sourceYamlRefs": ["a"], "sectionKind": "readonly_boundary",
-                            "children": [{
-                                "kind": "Field", "key": "f1", "label": "あ" * repeat_count, "sourceYamlRefs": ["a"],
-                                "control": "form_input/form_field", "required": False,
-                            }],
-                        }],
-                    }],
-                },
-            }
-
-        tmp36i = write_topology_seed_tmp_fixture(json.dumps(multibyte_field_schema(800)), tmpdir=tmpdir)
-        proc36i, doc36i = run_generate_topology_seed(tmp36i)
-        multibyte_over_flat = (doc36i or {}).get("topologyUiSeedFlatRecords") or []
-        multibyte_over_field = next((r for r in multibyte_over_flat if r.get("record", {}).get("key") == "f1"), {})
         expect(
-            "36i. a multi-byte-label field under 2712 *characters* but over 2712 UTF-8 *bytes* is still caught as blocking SEED_RECORD_EXCEEDS_STORAGE_BUDGET",
-            proc36i.returncode != 0
-            and "SEED_RECORD_EXCEEDS_STORAGE_BUDGET" in rule_ids(doc36i)
-            and len(json.dumps(multibyte_over_field, separators=(",", ":"), ensure_ascii=False)) <= 2712
-            and record_byte_size(multibyte_over_field) > 2712,
+            "36f. a large layoutAdoptionCandidates-bound flattened field does NOT block generation "
+            "with SEED_RECORD_EXCEEDS_STORAGE_BUDGET (it is never adopted into manifest.topology, so "
+            "the GIN index budget does not apply to it)",
+            proc36.returncode == 0 and "SEED_RECORD_EXCEEDS_STORAGE_BUDGET" not in rule_ids(doc36),
+        )
+        expect("36g. topologyUiSeedFlatRecords is still populated for review", bool((doc36 or {}).get("topologyUiSeedFlatRecords")))
+        expect("36h. --seed-sql-fragment IS written for this large-but-correctly-routed record (nothing here is manifest.topology-bound or over its budget)", oversize_fragment_path.exists())
+
+        # 36i-36j (unit-level, corrected target): the budget must be measured in
+        # UTF-8 *bytes*, not Python characters, but ONLY applies to
+        # manifestRefsCandidate now -- exercised directly against
+        # validate_flat_seed_records since the CLI's own manifestRefsCandidate
+        # (packageIds/layoutId/wiringId/tensorId only) cannot organically grow
+        # large enough to hit 2712 bytes from ordinary React-like Schema input.
+        # 900 "あ" (3 bytes each in UTF-8) keeps a synthetic manifestRefsCandidate
+        # at ~1.2k characters (would pass a naive len(str) check) but ~2.8k bytes
+        # (must fail the real byte-length check).
+        oversized_manifest_refs_multibyte = {
+            "type": "ui_projection",
+            "packageIds": ["あ" * 900],
+            "layoutId": "<x.layout>",
+            "wiringId": "<x.wiring>",
+            "tensorId": "<x.tensor>",
+        }
+        multibyte_over_errors = translator_impl.validate_flat_seed_records(oversized_manifest_refs_multibyte)
+        expect(
+            "36i. a multi-byte manifestRefsCandidate under 2712 *characters* but over 2712 UTF-8 "
+            "*bytes* is still caught as blocking SEED_RECORD_EXCEEDS_STORAGE_BUDGET",
+            "SEED_RECORD_EXCEEDS_STORAGE_BUDGET" in [e["ruleId"] for e in multibyte_over_errors]
+            and len(json.dumps(oversized_manifest_refs_multibyte, separators=(",", ":"), ensure_ascii=False)) <= 2712
+            and record_byte_size(oversized_manifest_refs_multibyte) > 2712,
         )
 
-        tmp36j = write_topology_seed_tmp_fixture(json.dumps(multibyte_field_schema(600)), tmpdir=tmpdir)
-        proc36j, doc36j = run_generate_topology_seed(tmp36j)
+        oversized_manifest_refs_multibyte_ok = {
+            "type": "ui_projection",
+            "packageIds": ["あ" * 600],
+            "layoutId": "<x.layout>",
+            "wiringId": "<x.wiring>",
+            "tensorId": "<x.tensor>",
+        }
+        multibyte_ok_errors = translator_impl.validate_flat_seed_records(oversized_manifest_refs_multibyte_ok)
         expect(
-            "36j. a smaller multi-byte-label field that stays under the byte budget is not flagged (byte check is not overly conservative)",
-            proc36j.returncode == 0 and "SEED_RECORD_EXCEEDS_STORAGE_BUDGET" not in rule_ids(doc36j),
+            "36j. a smaller multi-byte manifestRefsCandidate that stays under the byte budget is not "
+            "flagged (byte check is not overly conservative)",
+            "SEED_RECORD_EXCEEDS_STORAGE_BUDGET" not in [e["ruleId"] for e in multibyte_ok_errors],
+        )
+
+        # 36j1: wiring proof that validate_flat_seed_records is actually called
+        # against adoptionCandidates["manifestRefsCandidate"] (post-separation),
+        # never against the pre-separation topologyUiSeedFlatRecords list -- a
+        # real manifestRefsCandidate can never organically grow past 2712 bytes
+        # from ordinary React-like Schema input (packageIds always holds exactly
+        # one entry -- one packageAdoptionCandidates row per Projection root,
+        # never one per Category -- and every field is a short
+        # "<seedKey.suffix>" template string), so this call-site wiring is
+        # checked structurally rather than forcing an artificial end-to-end
+        # overflow through the CLI.
+        translator_src_for_budget_wiring = (REPO_ROOT / ".agent" / "scripts" / "react_schema_topology_seed_translator.py").read_text(encoding="utf-8")
+        expect(
+            "36j1. validate_flat_seed_records is wired against adoptionCandidates.manifestRefsCandidate, not the pre-separation flat_records list",
+            'validate_flat_seed_records(adoption_candidates.get("manifestRefsCandidate"))' in translator_src_for_budget_wiring,
         )
 
         # 37. generate-react-schema envelope rejected by generate-topology-seed (mode mismatch)

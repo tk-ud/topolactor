@@ -1895,11 +1895,17 @@ def new_output_shell():
         "topologyUiSeedCandidate": None,
         # storage_adoption_contract: populated only for generate_topology_ui_seed,
         # mirroring topologyUiSeedCandidate's populated-when rule. A flat list of
-        # topology_ui_seed_record wrappers (see flatten_topology_ui_seed_tree),
-        # each sized against MANIFEST_TOPOLOGY_ARRAY_ELEMENT_BYTE_BUDGET -- this
-        # is the seed-safe adoption shape; topologyUiSeedCandidate's nested tree
-        # remains debug/review-only and must never be adopted as a single
-        # manifest.topology array element (see PR #573's index row size failure).
+        # topology_ui_seed_record wrappers (see flatten_topology_ui_seed_tree) --
+        # a review/migration intermediate only (seed_sql_authority: false), NOT
+        # itself budget-checked or seed-adoptable (allowed_adoption_shapes
+        # downgraded this from PR #573's original "seed adoption shape").
+        # adoptionCandidates below (adoption_candidate_separation_contract) is
+        # the actual seed-safe adoption shape; only its manifestRefsCandidate
+        # bucket is sized against MANIFEST_TOPOLOGY_ARRAY_ELEMENT_BYTE_BUDGET,
+        # since that is the only bucket actually adopted into manifest.topology
+        # (see PR #573's original index row size failure, and
+        # validate_flat_seed_records's docstring for why every other bucket is
+        # exempt from this specific budget).
         "topologyUiSeedFlatRecords": None,
         # storage_adoption_contract.adoption_candidate_separation_contract: the
         # actual seed-safe adoption shape, built from topologyUiSeedFlatRecords.
@@ -2103,32 +2109,47 @@ def flatten_topology_ui_seed_tree(record, seed_key, parent_key=None, out=None):
     return out
 
 
-def validate_flat_seed_records(flat_records, budget_bytes=MANIFEST_TOPOLOGY_ARRAY_ELEMENT_BYTE_BUDGET):
-    """storage_adoption_contract.validation_rules: every flattened wrapper
-    must independently fit the manifest.topology jsonb[] GIN index's
-    per-array-element byte budget once it is adopted as a seed array
-    element. Checked on the exact JSON text the seed would carry (compact
-    separators, matching the existing seed store's single-line jsonb
-    literal style) so this catches the failure at generation time instead
-    of at insert time. budget_bytes is a UTF-8 *byte* budget (the Postgres
-    index item size limit is byte-based), so the check must measure UTF-8
-    encoded length, not Python string/character length -- multi-byte
-    labels (e.g. non-ASCII text) would otherwise silently pass a
+def validate_flat_seed_records(manifest_refs_candidate, budget_bytes=MANIFEST_TOPOLOGY_ARRAY_ELEMENT_BYTE_BUDGET):
+    """storage_adoption_contract.validation_rules
+    (serialized_flattened_record_must_fit_target_storage_budget): the rule name says "TARGET
+    storage budget" deliberately -- the manifest.topology / idx_manifest_topology GIN index's
+    per-array-element byte budget applies only to the one shape actually adopted into that column,
+    manifestRefsCandidate (a small refs/vector-only entry: type/packageIds/layoutId/wiringId/
+    tensorId). It does NOT apply to topologyUiSeedFlatRecords / layoutAdoptionCandidates /
+    wiringAdoptionCandidates / tensorAdoptionCandidates / packageAdoptionCandidates /
+    componentGroupBundleAdoptionCandidates content: adoption_candidate_separation_contract moved
+    all UI-entity payload (Category/Section/Form/Field/Action/etc.) OUT of manifest.topology and
+    into topology.components_layout_design / ui_wiring_registry / ui_topology_tensor /
+    components_package_design / ui_component_package, none of which carry a GIN index over a
+    jsonb[] column with a comparable per-element ceiling (the ui_topology_tables schema --
+    components_layout_design.layout_schema_json is a single scalar JSONB column, not an array, and
+    has no GIN index at all). An earlier version of this function checked every
+    topologyUiSeedFlatRecords wrapper against this budget regardless of its actual adoption
+    target -- a leftover from before adoption_candidate_separation_contract existed (PR #573 had
+    briefly treated the flattened array itself as the manifest.topology adoption shape; see
+    top_ssot_alignment) that was never updated once that contract moved UI payload elsewhere. That
+    over-broad check produced false-positive SEED_RECORD_EXCEEDS_STORAGE_BUDGET failures for
+    legitimately large, correctly-routed layoutAdoptionCandidates-bound records (e.g. a CRUD
+    confirm Action carrying a full multi-field payloadFrom map plus sourceYamlRefs) that were never
+    going to be stored in manifest.topology at all. Checked on the exact JSON text the seed would
+    carry (compact separators, matching the existing seed store's single-line jsonb literal style)
+    so a genuine manifest.topology-bound overflow is still caught at generation time instead of at
+    insert time. budget_bytes is a UTF-8 *byte* budget (the Postgres index item size limit is
+    byte-based), so the check must measure UTF-8 encoded length, not Python string/character
+    length -- multi-byte labels (e.g. non-ASCII text) would otherwise silently pass a
     character-count check while still overflowing the real byte budget."""
     errors = []
-    for wrapper in flat_records:
-        size = len(json.dumps(wrapper, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
-        if size > budget_bytes:
-            record = wrapper.get("record") or {}
-            path = record.get("sourceReactPath", "$.root")
-            errors.append(err(
-                "SEED_RECORD_EXCEEDS_STORAGE_BUDGET",
-                path,
-                "blocking",
-                f"flattened record '{record.get('key')}' ({record.get('recordType')}) serializes to "
-                f"{size} bytes, exceeding the {budget_bytes}-byte manifest.topology / "
-                f"idx_manifest_topology storage_adoption_contract budget",
-            ))
+    if not manifest_refs_candidate:
+        return errors
+    size = len(json.dumps(manifest_refs_candidate, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
+    if size > budget_bytes:
+        errors.append(err(
+            "SEED_RECORD_EXCEEDS_STORAGE_BUDGET",
+            "$.adoptionCandidates.manifestRefsCandidate",
+            "blocking",
+            f"manifestRefsCandidate serializes to {size} bytes, exceeding the {budget_bytes}-byte "
+            f"manifest.topology / idx_manifest_topology storage_adoption_contract budget",
+        ))
     return errors
 
 
@@ -3356,21 +3377,25 @@ def cmd_generate_topology_seed(args):
     output["topologyUiSeedCandidate"] = build_topology_ui_seed_candidate(supplied_schema, target_surface, root_record, exchange_report)
 
     # storage_adoption_contract: derive the seed-safe flat adoption shape from
-    # the same root_record the nested candidate above was built from, and
-    # validate every flattened element against the manifest.topology /
-    # idx_manifest_topology GIN index byte budget before it is ever proposed
-    # for seed adoption.
+    # the same root_record the nested candidate above was built from. This
+    # flat shape is a review/migration intermediate only (seed_sql_authority:
+    # false) -- it is never itself the manifest.topology adoption payload, so
+    # it is not budget-checked here (see adoption_candidate_separation_contract
+    # split below and validate_flat_seed_records's own docstring for why the
+    # byte-budget check applies only to manifestRefsCandidate).
     flat_records = flatten_topology_ui_seed_tree(root_record, target_surface) if root_record is not None else []
     output["topologyUiSeedFlatRecords"] = flat_records
-    budget_errors = validate_flat_seed_records(flat_records)
-    output["validationErrors"].extend(budget_errors)
 
     # adoption_candidate_separation_contract: the actual seed-safe adoption
-    # shape. Built and validated even when budget_errors is non-empty, so a
-    # caller sees every collected violation from one run (fail-fast is
-    # prohibited for this check) rather than only the byte-budget errors.
+    # shape. manifestRefsCandidate is the ONLY bucket actually adopted into
+    # manifest.topology (a jsonb[] column with idx_manifest_topology's
+    # per-array-element GIN budget) -- every other bucket targets a table/
+    # column with no comparable per-element size ceiling, so only
+    # manifestRefsCandidate is checked against that budget, after it is built.
     adoption_candidates = split_flat_records_into_adoption_candidates(flat_records, target_surface)
     output["adoptionCandidates"] = adoption_candidates
+    budget_errors = validate_flat_seed_records(adoption_candidates.get("manifestRefsCandidate"))
+    output["validationErrors"].extend(budget_errors)
     output["validationErrors"].extend(validate_adoption_candidates(adoption_candidates, flat_records))
 
     doc = {"schemaId": "topolactor.translator_output.v1", **output}

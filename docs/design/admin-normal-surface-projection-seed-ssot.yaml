@@ -393,6 +393,32 @@ admin_normal_surface_projection_seed_ssot:
                 responsibility: explicit account create/update/credential-revoke/session-revoke/delete, or external_api_credential/external_instance_credential replace/rotate confirmation; never an admin-driven account password replace/rotate confirmation
             mutation_confirmation_contract: [preview_account_or_credential_delta_without_secret, validate_policy_and_transaction_boundary, explicit_confirm, write, diff_log_without_secret]
             loading_empty_error_projection: [loading_credentials, empty_credentials, credential_error_fail_close]
+            display_language_boundary:
+              status: added_structural_subtree_conditional_visibility_implementation_round_owner_directed
+              rule: >-
+                Owner-directed minimal display-language boundary for this surface's seed-authored
+                user-facing content only. topology_ui_category/topology_ui_section/topology_ui_form/
+                topology_ui_field/topology_ui_action/topology_ui_modal `label` (and Modal `title`/
+                `body`, and a select-control Field's `propsJson.data.options[].label`) are authored
+                in Japanese from the React-like Schema source for this surface, since operators of
+                this surface read Japanese. This is a content-authoring choice for THIS surface's
+                seed, never a runtime/generic i18n mechanism -- no locale switch, translation table,
+                or per-viewer language selection exists or is introduced by this rule, and none of
+                LayoutProjectionTree/renderEmission/runtimeComponentFactory/ProjectionShell gain a
+                credential-management-specific (or any) translation branch. Every machine-vocabulary
+                value stays in its existing canonical, English, code-identifier form and is NEVER
+                translated: node key (e.g. credential_category_filter, instance_settings), recordType
+                (e.g. topology_ui_category), componentKind (e.g. disclosure/modal), manifest key/UUID,
+                targetRef, payloadFrom source string (e.g. node:<nodeId>.value, literal:true),
+                statePath, `visibilityBinding.source`/`matchValue`, and every
+                Topolactor.Schema.CredentialManagementCategories.All enum value (users /
+                external_api_credential / external_instance_credential) -- a select Field's authored
+                option `value` is always one of these three canonical strings; only its sibling
+                `label` is Japanese. Ordinary technical tokens that a Japanese-reading operator
+                already reads as-is (API, JSON, URL, ID, and the like) are not force-translated into
+                an awkward Japanese equivalent inside a label string. This rule governs ONLY this
+                surface's own seed-authored display text; it creates no general admin-surface
+                language policy and does not apply to any other surface_axes entry.
         users:
           primary_projection: user_status
           data_authority_ref: auth.users

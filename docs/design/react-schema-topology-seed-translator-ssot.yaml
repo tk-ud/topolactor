@@ -695,20 +695,29 @@ react_schema_topology_seed_translator_ssot:
       can execute. This holds even after a record is advanced into a RuntimeComponentSpec
       candidate under projection_render_exchange_contract.
     conditional_visibility_binding_ref: >-
-      design_change (credential-management manifest 092 category-collapse audit) addition:
+      design_change (credential-management manifest 092 category-collapse audit) addition,
+      corrected in the structural-subtree-conditional-visibility-implementation round: only
       topology_ui_category and topology_ui_section records' optional visibilityBinding field
-      (above) is a SEED EMISSION SHAPE declaration only -- {source: "ui-local:<nodeId>.<stateKey>",
+      (above) is a SEED EMISSION SHAPE declaration -- {source: "ui-local:<nodeId>.<stateKey>",
       matchValue: <scalar>}, authored the same way any other record field is authored in the
       React-like Schema source, carried verbatim through layoutAdoptionCandidates into
-      components_layout_design.layout_schema_json.records[] (schema-composed) or directly onto a
-      layout_patch_json.nodes[] entry (tensor-only), never evaluated by this translator or by
-      LayoutSchemaTensorComposer.Compose. The RUNTIME PROJECTION/RENDER meaning of this field --
-      structural mount/unmount, static-topology authority boundary, state store identity,
-      fail-close behavior for an undeclared/malformed binding, and the prohibition on promoting it
-      to dispatch/backend authority -- is fully owned by docs/design/runtime-orchestration-
-      ssot.yaml ui_projection_render_reachability_contract.structural_subtree_conditional_
-      visibility_contract, mirroring how layout_schema_structural_render_contract already owns the
-      runtime classification of every other record type this SSOT emits
+      components_layout_design.layout_schema_json.records[] (schema-composed ONLY), never
+      evaluated by this translator or by LayoutSchemaTensorComposer.Compose. It is NEVER authored
+      directly onto a layout_patch_json.nodes[] entry (tensor-only) -- an earlier version of this
+      note claimed that shape was also legal; docs/design/runtime-orchestration-ssot.yaml
+      ui_projection_render_reachability_contract.structural_subtree_conditional_visibility_contract
+      record_carrier_tensor_only retracted that claim as never implementable (a tensor-only layout
+      has no Category/Section concept, and NodeLocalData's catalog-leaf-only merge never applies to
+      structural nodes even on a schema-composed layout's own tensor override lane) and
+      NpgsqlUiTopologyRepository.ValidateLayoutPatchNodes now fails such a node closed at save time
+      with LAYOUT_PATCH_VISIBILITY_BINDING_NOT_ALLOWED regardless of well-formed or malformed
+      shape. The RUNTIME PROJECTION/RENDER meaning of this field -- structural mount/unmount,
+      static-topology authority boundary, state store identity, fail-close behavior for an
+      undeclared/malformed binding, and the prohibition on promoting it to dispatch/backend
+      authority -- is fully owned by docs/design/runtime-orchestration-ssot.yaml
+      ui_projection_render_reachability_contract.structural_subtree_conditional_visibility_contract,
+      mirroring how layout_schema_structural_render_contract already owns the runtime
+      classification of every other record type this SSOT emits
       (authority_boundary_with_translator_ssot above). This SSOT does not restate that contract's
       body and does not itself define what visibilityBinding DOES at render time.
 
@@ -732,6 +741,33 @@ react_schema_topology_seed_translator_ssot:
       index: idx_manifest_topology
       index_type: gin
       index_definition_ref: db/manifest_tables.sql
+      applies_only_to: manifestRefsCandidate
+      applies_only_to_note: >-
+        structural-subtree-conditional-visibility-implementation round correction: this budget
+        (constraint.budget_bytes below) is anchored specifically to idx_manifest_topology -- a GIN
+        index over the manifest.topology jsonb[] column, which indexes each array element as one
+        indexable item. adoption_candidate_separation_contract's other buckets
+        (layoutAdoptionCandidates / wiringAdoptionCandidates / tensorAdoptionCandidates /
+        packageAdoptionCandidates / componentGroupBundleAdoptionCandidates) target
+        topology.components_layout_design.layout_schema_json / ui_wiring_registry /
+        ui_topology_tensor / components_package_design / ui_component_package
+        (db/ui_topology_tables.sql) -- none of which is a jsonb[] column with a GIN index over it
+        (layout_schema_json is a single scalar JSONB document, not an array, and has no GIN index
+        defined at all), so none of them carries a comparable per-element size ceiling. Only
+        manifestRefsCandidate (the refs/vector-only entry actually written into manifest.topology)
+        is checked against constraint.budget_bytes -- see validation_rules'
+        serialized_flattened_record_must_fit_target_storage_budget and
+        .agent/scripts/react_schema_topology_seed_translator.py validate_flat_seed_records's own
+        docstring. An earlier version of this contract's tooling checked every
+        topologyUiSeedFlatRecords wrapper (i.e. every Category/Section/Form/Field/Action/etc.
+        record, regardless of its real adoption target) against this same budget -- a leftover
+        from before adoption_candidate_separation_contract existed to move UI-entity payload OUT of
+        manifest.topology entirely (top_ssot_alignment below) that was never updated once that
+        contract shipped. That mismatch produced false-positive SEED_RECORD_EXCEEDS_STORAGE_BUDGET
+        failures for legitimately large but correctly-routed layoutAdoptionCandidates-bound records
+        (e.g. credential-management manifest 092's multi-field CRUD confirm Actions), which are
+        never proposed for manifest.topology adoption at all and so were never actually at risk of
+        the Postgres failure this contract exists to prevent.
     constraint:
       each_jsonb_array_element_must_fit_indexable_item_budget: true
       budget_bytes: 2712

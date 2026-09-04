@@ -333,10 +333,14 @@ public record LayoutNodeRecord(
     /// SSOT: docs/design/runtime-orchestration-ssot.yaml
     /// ui_projection_render_reachability_contract.structural_subtree_conditional_visibility_contract.
     /// Node-local conditional-mount JSON object {"source":"ui-local:&lt;nodeId&gt;.&lt;stateKey&gt;","matchValue":&lt;scalar&gt;}
-    /// — only ever authored on a topology_ui_category/topology_ui_section record (schema-composed)
-    /// or the tensor-only equivalent. Carried verbatim; never evaluated backend-side (Compose stays
-    /// static/state-blind — see static_topology_authority_boundary). Null when not authored (the
-    /// overwhelmingly common case, and the only case for every layout that predates this contract).
+    /// — only ever authored on a topology_ui_category/topology_ui_section record (schema-composed).
+    /// Never authored directly on a layout_patch_json.nodes[] tensor-only entry — that shape fails
+    /// closed at save time (NpgsqlUiTopologyRepository.ValidateLayoutPatchNodes,
+    /// LAYOUT_PATCH_VISIBILITY_BINDING_NOT_ALLOWED) regardless of well-formed or malformed shape,
+    /// so this value is always sourced from the schema-composed records[] path. Carried verbatim;
+    /// never evaluated backend-side (Compose stays static/state-blind — see
+    /// static_topology_authority_boundary). Null when not authored (the overwhelmingly common
+    /// case, and the only case for every layout that predates this contract).
     /// </summary>
     string? VisibilityBindingJson = null
 );
