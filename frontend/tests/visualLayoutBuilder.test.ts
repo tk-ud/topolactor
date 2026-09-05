@@ -1063,6 +1063,33 @@ Deno.test("parseVisualLayoutPatchJson: hydrates nodes and layoutClassRefs", () =
   assertEquals(result.value.nodes[0].componentId, "c1");
 });
 
+// KNOWN GAP (2026-09-05 audit; reported, not fixed — out of the label-boundary
+// Bundle's proportionate scope): a schema-composed override-delta node's persisted
+// layout_patch_json entry legitimately omits componentKey server-side
+// (react-schema-topology-seed-translator-ssot.yaml storage_adoption_contract round
+// 40/41/43 — componentKey there is schema-tree-derived, resolved only for
+// ValidateLayoutPatchAsync's save-time authority check, never enriched back onto
+// the persisted entry). readPatchNode requires componentKey for any non-
+// structural_html node and silently drops the entry when absent, so such a node —
+// not merely unnamed — never reaches DraftNode[]/WiringNode[] at all on the next
+// /admin/ui-builder open for that layout: absent from the Layer Tree, the canvas,
+// and WiringGraphPanel alike, along with whatever propsJson/stateJson/
+// runtimeInteractions overrides were authored on it. This proves the CURRENT
+// (gap) behavior, not a fix — fixing it is Owner design_change scope (see
+// frontend/lib/uiBuilderWiringProjection.ts wiringNodeDisplayLabel's own doc).
+Deno.test("parseVisualLayoutPatchJson: KNOWN GAP — a non-structural_html node entry missing componentKey (the real shape of a persisted schema-composed override-delta node) is silently dropped, not merely unnamed", () => {
+  const raw = JSON.stringify({
+    nodes: [
+      { nodeId: "n-schema-leaf", x: 0, y: 0 },
+      { nodeId: "n-normal", componentKey: "display/card", x: 10, y: 20 },
+    ],
+  });
+  const result = parseVisualLayoutPatchJson(raw, []);
+  assertEquals(result.ok, true);
+  if (!result.ok) return;
+  assertEquals(result.value.nodes.map((n) => n.nodeId), ["n-normal"]);
+});
+
 Deno.test("seedDraftNodesFromPalette: stacks promotable entries", () => {
   const seeds = seedDraftNodesFromPalette([
     { componentKey: "a/b", componentKind: "primitive", isDraftOnly: false },

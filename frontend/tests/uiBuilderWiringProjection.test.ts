@@ -30,6 +30,7 @@ import {
   dependencyClosureOfTriggerSource,
   deriveUiWatchBindings,
   findRuntimeInteractionPolicyErrors,
+  findRuntimeInteractionPolicyViolations,
   findSideEffectCycleErrors,
   HIGH_FREQUENCY_TRIGGERS,
   isBackendOrExternalDispatchAction,
@@ -238,6 +239,77 @@ Deno.test("policy: bindRuntimeDispatchPayload (a stray leftover actionType, no l
   const errors = findRuntimeInteractionPolicyErrors(nodes);
   assertEquals(errors.length, 1);
   assert(errors[0].includes("ACTION_OUTSIDE_VOCABULARY"));
+});
+
+Deno.test("findRuntimeInteractionPolicyViolations: identifies each violation by nodeId+interactionIndex, never by display label — two nodes with the identical componentKey (hence identical wiringNodeDisplayLabel) at the same interaction index resolve to distinct, correctly-owned violations", () => {
+  const nodes: WiringNode[] = [
+    {
+      nodeId: "n-a",
+      componentKey: "layout/box",
+      runtimeInteractions: [{
+        trigger: "initial_mount",
+        actionType: "dispatchExternalPort",
+        portTargetRef: "external-port:access_port:port-a",
+        sideEffectNone: true,
+      }],
+    },
+    {
+      nodeId: "n-b",
+      componentKey: "layout/box",
+      runtimeInteractions: [{
+        trigger: "initial_mount",
+        actionType: "dispatchExternalPort",
+        portTargetRef: "external-port:access_port:port-b",
+        sideEffectNone: true,
+      }],
+    },
+  ];
+  const violations = findRuntimeInteractionPolicyViolations(nodes);
+  // Each node's own violation set (confirmation + idempotency), attributed to
+  // its own nodeId — never merged or cross-assigned despite the identical
+  // display label ("box") and identical interactionIndex (0) on both nodes.
+  assertEquals(violations.length, 4);
+  const forA = violations.filter((v) => v.nodeId === "n-a");
+  const forB = violations.filter((v) => v.nodeId === "n-b");
+  assertEquals(forA.length, 2);
+  assertEquals(forB.length, 2);
+  assert(forA.every((v) => v.interactionIndex === 0));
+  assert(forB.every((v) => v.interactionIndex === 0));
+  // The human-facing message text is identical between the two (same label,
+  // same index) — proving nodeId is the ONLY thing that distinguishes them,
+  // exactly the field a string-prefix correlation would have discarded.
+  assertEquals(
+    forA.map((v) => v.message).sort(),
+    forB.map((v) => v.message).sort(),
+  );
+});
+
+Deno.test("findRuntimeInteractionPolicyViolations: message text matches findRuntimeInteractionPolicyErrors' own string[] exactly (single source, no drift)", () => {
+  const nodes: WiringNode[] = [{
+    nodeId: "n1",
+    componentKey: "form_input/text",
+    runtimeInteractions: [
+      {
+        trigger: "load",
+        actionType: "dispatchExternalPort",
+        portTargetRef: "external-port:access_port:port-1",
+      },
+      {
+        trigger: "initial_mount",
+        actionType: "dispatchExternalPort",
+        portTargetRef: "external-port:access_port:port-2",
+        sideEffectNone: true,
+      },
+    ],
+  }];
+  const violationMessages = findRuntimeInteractionPolicyViolations(nodes).map((v) =>
+    v.message
+  );
+  const errorStrings = findRuntimeInteractionPolicyErrors(nodes);
+  // findRuntimeInteractionPolicyErrors appends findSideEffectCycleErrors after
+  // the per-interaction messages — none fire here (no value-reactive write), so
+  // the two arrays must be identical, not merely overlapping.
+  assertEquals(violationMessages, errorStrings);
 });
 
 // ─── UI監視割当（宣言）と UI状態更新（更新）の分離 ───────────────────────────

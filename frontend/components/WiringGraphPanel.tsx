@@ -73,10 +73,11 @@ function edgeTargetLabel(
     const local = parseUiLocalTargetRef(edge.targetRef);
     const resolvedNodeId = local?.targetNodeId ?? edge.targetRef;
     const target = nodes.find((n) => n.nodeId === resolvedNodeId);
-    // Same friendly-label authority the Layer Tree/palette use for this node
-    // elsewhere in the SAME canvas workspace (wiringNodeDisplayLabel), never the
-    // raw resolvedNodeId — a stale/deleted target is its own distinct, meaningful
-    // state, not a name.
+    // Same resolver (wiringNodeDisplayLabel) the Layer Tree/palette use for this
+    // node elsewhere in the SAME canvas workspace — see its own doc for why this
+    // is a local operator convenience, not the SSOT authored-label carrier — never
+    // the raw resolvedNodeId. A stale/deleted target is its own distinct,
+    // meaningful state, not a name.
     return target ? wiringNodeDisplayLabel(target) : "（参照先が見つかりません）";
   }
   if (edge.targetKind === "external_port") return "外部APIに接続済み";
