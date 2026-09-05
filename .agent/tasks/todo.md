@@ -11,10 +11,11 @@
 | `helper-manual` | helper reference artifact / admin helper projection | not_started | 1 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 2 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 | `test-orchestration-review` | Seed conversion後の proof / test orchestration review | not_started | 1 | proof surface carry-over | `docs/design/pipeline-continuity-ssot.yaml` |
-| `frontend-canonical-surface-structure-label-boundary` | Seed conversion後の frontend canonical surface label boundary | not_started | 1 | frontend canonical UI structure/wiring surfaces | canonical surface UI structure/wiring SSOTs, `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml` |
 | `admin-console-workflow-step-wording-boundary` | Seed conversion後の admin console workflow wording boundary | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
+
+注: `frontend-canonical-surface-structure-label-boundary` は PR#610 により完了済み（wiring inspector canonical taxonomy統一・internal_api projection接続・canvas workspace sequential framing除去・panel fixed/docked化・normal label / technical disclosure boundary。3ラウンドの監査を経て全SSOT scope整合を確認）。上位 Roadmap `product.admin_topology_authoring` はこのsubBundle単独では昇格しない。
 
 ---
 
@@ -23,7 +24,7 @@
 削除前 ref `018b80fa23949a67a7b03f1853cc9c3f2e45ce3c` の `.agent/reports/frontend-ui-audit-bundle-semantic-frame.md` と `.agent/reports/ui-projection-surface-gap-audit-2026-07-07.md` を全文確認した分類。report 由来 scope は finding 番号や route 名ではなく owning SSOT / Bundle / 意味要素単位で扱う。プロンプト発行者の scope が狭い可能性があるため、実装 Agent は関連箇所を追加調査し、SSOT / wiring / test-proof surface の不足を blocking として記録してから product 実装へ進む。
 
 - `test-orchestration-review`: **seed conversion 完了後の後段**。旧 `pipeline-continuity-frontend-route-seed-proof` は実装 Bundle ではなく、seed conversion 後に test tier / scenario harness / route-presence-test replacement を点検・見直す proof orchestration review として扱う。route absence 単独や hardcoded route presence test を canonical proof として残さない。
-- `frontend-canonical-surface-structure-label-boundary`: **seed conversion 後の後段**。語彙・label boundary 修正は seed conversion 実装に混ぜず、conversion 完了後に canonical surface label / technical disclosure scope として扱う。
+- `frontend-canonical-surface-structure-label-boundary`: **完了済み（PR#610）**。wiring inspector canonical taxonomy統一・internal_api projection接続・canvas workspace sequential framing除去・panel fixed/docked化・normal label / technical disclosure boundaryを3ラウンドの監査を経て実装。
 - `admin-console-workflow-step-wording-boundary`: **seed conversion 後の後段**。Step wording 修正は seed conversion 実装に混ぜず、conversion 完了後に admin console workflow wording scope として扱う。
 - `product-nocode-loop-acceptance`: **acceptance_pending 維持**。Agent が仕様確定や受入完了を代行せず、オーナーが統合 UX / manual acceptance scope を精査する。
 - `helper-manual`: **仕様確定後 scope 維持**。helper manual は仕様確定前に実装へ進めず、user-facing helper manual SSOT に従う後段 scope とする。
@@ -90,62 +91,6 @@ seed conversion 完了後に test tier / scenario harness / route-presence-test 
 - test tier / scenario harness / route-presence-test replacement の点検 scope として記述されている。
 - proof bundle を seed conversion 実装 Bundle として扱わない。
 - route absence 単独や hardcoded route presence test を canonical proof として残さない。
-
----
-
-## Bundle `frontend-canonical-surface-structure-label-boundary`
-
-**Status:** `not_started`
-**Primary SSOT:** canonical surface UI structure/wiring SSOTs, including `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`
-**Position:** `admin-surface-topology-seed-conversion` 完了後の後段語彙修正 scope。
-
-### 問題点
-
-normal view label boundary と technical disclosure boundary を seed conversion 実装前に混ぜると、seed conversion の route retirement / projection render wiring と語彙修正が同時変更になり、証明範囲が不明確になる。
-
-### 目的
-
-seed conversion 完了後に、canonical surfaces ごとの UI structure/wiring と表示 label boundary を owning SSOT へ戻す。
-
-### 改善方針
-
-- seed conversion 実装には混ぜず、後段 scope として実施する。
-- normal view label boundary では raw id / UUID / topology / manifest / screen_data_shape / DB / backend / Route / Primary Table / UI Builder Key 等を通常表示の意味にしない。
-- technical details は explicit technical disclosure として扱う。
-- operator visible labels は raw-first にしない。
-
-### 対応資料
-
-- canonical surface UI structure/wiring SSOTs
-- `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`
-- `docs/design/runtime-orchestration-ssot.yaml`
-- `docs/design/admin-console-workflow-ssot.yaml`
-- `.agent/tasks/todo.md`
-
-### 対象ファイル名
-
-- `.agent/tasks/todo.md`
-- `frontend/routes/index.tsx`
-- `frontend/routes/auth.tsx`
-- `frontend/routes/super_auth.tsx`
-- `frontend/routes/admin/index.tsx`
-- `frontend/routes/admin/contents.tsx`
-- `frontend/routes/admin/ui-builder.tsx`
-- `frontend/routes/admin/manifests.tsx`
-- frontend components / islands that render canonical surface labels and technical disclosure
-
-### 対象関数名
-
-- future normal label mapping functions
-- future technical disclosure rendering functions
-- future operator label mapping functions
-- future canonical surface view model builders
-
-### 受入条件
-
-- 語彙修正は seed conversion 実装後の後段 scope として扱われている。
-- normal user-facing views do not expose raw ids / UUIDs / internal vocabulary as primary meaning.
-- technical details, if needed, are behind explicit technical disclosure and not normal operation labels.
 
 ---
 
