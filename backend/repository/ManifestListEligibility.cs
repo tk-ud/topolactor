@@ -74,9 +74,9 @@ public static class ManifestListEligibility
         }
 
         var shape = shapeEntry.Value;
-        var contentsType = ExtractStringProperty(shape, "contentsType");
-        var topologySystemName = ExtractStringProperty(shape, "topologySystemName");
-        var userFacingLabel = ExtractStringProperty(shape, "userFacingTopologyLabel");
+        var contentsType = ScreenDataShapeTopologyReader.ExtractStringProperty(shape, "contentsType");
+        var topologySystemName = ScreenDataShapeTopologyReader.ExtractStringProperty(shape, "topologySystemName");
+        var userFacingLabel = ScreenDataShapeTopologyReader.ExtractStringProperty(shape, "userFacingTopologyLabel");
         var tableRef = ManifestCanonicalProjection.ExtractTableRef(shape);
         var logicalTables = ManifestRelationIntentValidator.ExtractLogicalTables(topology);
         var physicalBound = !string.IsNullOrWhiteSpace(tableRef) &&
@@ -134,7 +134,7 @@ public static class ManifestListEligibility
                 initial);
         }
 
-        if (string.Equals(ExtractStringProperty(existing.Value, "contentsType"), contentsType, StringComparison.Ordinal))
+        if (string.Equals(ScreenDataShapeTopologyReader.ExtractStringProperty(existing.Value, "contentsType"), contentsType, StringComparison.Ordinal))
             return topology.ToList();
 
         var updated = StampContentsType(existing.Value, contentsType);
@@ -168,7 +168,7 @@ public static class ManifestListEligibility
 
     private static string? ComputeAuthoringProgressStep(JsonElement shape, int logicalTableCount)
     {
-        var topologySystemName = ExtractStringProperty(shape, "topologySystemName");
+        var topologySystemName = ScreenDataShapeTopologyReader.ExtractStringProperty(shape, "topologySystemName");
         if (string.IsNullOrWhiteSpace(topologySystemName))
             return null;
 
@@ -228,13 +228,5 @@ public static class ManifestListEligibility
             }
         }
         return list;
-    }
-
-    private static string? ExtractStringProperty(JsonElement obj, string name)
-    {
-        if (!obj.TryGetProperty(name, out var el) || el.ValueKind != JsonValueKind.String)
-            return null;
-        var value = el.GetString()?.Trim();
-        return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 }

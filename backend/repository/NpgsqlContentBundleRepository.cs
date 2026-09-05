@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using Topolactor.Runtime;
 using Topolactor.Schema;
 
 namespace Topolactor.Repository;
@@ -645,11 +646,11 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "SELECT tm.topology_manifest_id::text, COALESCE(tm.manifest_key, '—'), " +
-            "       tm.hub_id::text, COUNT(hr.hub_relation_id)::int " +
+            "       tm.hub_id::text, COUNT(hr.hub_relation_id)::int, tm.topology_jsonb::text " +
             "FROM hubs.topology_manifests tm " +
             "LEFT JOIN hubs.hub_relations hr ON hr.topology_manifest_id = tm.topology_manifest_id " +
             "   AND hr.status = 'active' " +
-            "GROUP BY tm.topology_manifest_id, tm.manifest_key, tm.hub_id " +
+            "GROUP BY tm.topology_manifest_id, tm.manifest_key, tm.hub_id, tm.topology_jsonb " +
             "ORDER BY tm.hub_id, tm.created_at";
 
         var items = new List<HubNavigationManifestItemDto>();
@@ -657,11 +658,29 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         while (await reader.ReadAsync(ct))
         {
             var count = reader.GetInt32(3);
+            var (topologySystemName, userFacingLabel) = ExtractTopologyNamingFields(
+                reader.IsDBNull(4) ? null : reader.GetString(4));
             items.Add(new HubNavigationManifestItemDto(
                 reader.GetString(0), reader.GetString(1), reader.GetString(2),
-                count > 0, count));
+                count > 0, count, topologySystemName, userFacingLabel));
         }
         return items;
+    }
+
+    /// <summary>
+    /// Reads the topology-naming SSOT fields (docs/design/admin-console-workflow-ssot.yaml
+    /// topology_naming_ssot) off whatever screen_data_shape entry
+    /// ScreenDataShapeTopologyReader can locate in this row's topology_jsonb. Never a new DB
+    /// column -- only reads canonical entry data already mirrored onto this row.
+    /// </summary>
+    private static (string? TopologySystemName, string? UserFacingTopologyLabel) ExtractTopologyNamingFields(
+        string? topologyJsonbText)
+    {
+        var shapeEntry = ScreenDataShapeTopologyReader.FindScreenDataShapeEntryFromTopologyManifestJsonb(topologyJsonbText);
+        if (shapeEntry is null) return (null, null);
+        return (
+            ScreenDataShapeTopologyReader.ExtractStringProperty(shapeEntry.Value, "topologySystemName"),
+            ScreenDataShapeTopologyReader.ExtractStringProperty(shapeEntry.Value, "userFacingTopologyLabel"));
     }
 
     public override async Task<IReadOnlyList<HubNavigationHubRelationItemDto>> ListHubRelationsByManifestAsync(

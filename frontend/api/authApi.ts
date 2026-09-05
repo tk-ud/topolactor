@@ -71,6 +71,27 @@ export function authErrorText(e: AuthError): string {
   return msg ?? code ?? "unknown auth error";
 }
 
+/**
+ * Friendly, normal-view Japanese text for a known auth error code. Raw backend `Message` text
+ * (e.g. "Invalid username or password.") and raw client-side diagnostic text (network failures,
+ * unexpected response shapes) are never returned here — those stay reachable only through
+ * `authErrorText` inside an explicit technical disclosure. Unmapped/codeless errors fall back to a
+ * single generic normal-view sentence rather than leaking their raw text.
+ */
+const AUTH_ERROR_FRIENDLY_TEXT: Record<string, string> = {
+  AUTH_INVALID_CREDENTIALS: "ユーザー名またはパスワードが正しくありません。",
+  AUTH_USER_NOT_APPROVED: "アカウントは承認待ちです。管理者の承認をお待ちください。",
+  AUTH_USER_USERNAME_CONFLICT: "このユーザー名はすでに使われています。",
+};
+
+const AUTH_ERROR_GENERIC_FALLBACK_TEXT = "ログインできませんでした。時間をおいて再度お試しください。";
+
+/** Normal-view friendly text for an AuthError; never the raw backend/client diagnostic text. */
+export function authErrorFriendlyText(e: AuthError): string {
+  const code = e.code ?? e.Code;
+  return (code && AUTH_ERROR_FRIENDLY_TEXT[code]) ?? AUTH_ERROR_GENERIC_FALLBACK_TEXT;
+}
+
 async function postLogin(path: string, req: LoginRequest): Promise<LoginResponse> {
   try {
     const response = await fetch(path, {

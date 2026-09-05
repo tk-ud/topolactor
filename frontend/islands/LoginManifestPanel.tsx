@@ -1,6 +1,7 @@
 import { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import {
+  authErrorFriendlyText,
   authErrorText,
   fetchUserLoginManifest,
   loginProjection,
@@ -92,7 +93,10 @@ export default function LoginManifestPanel(): JSX.Element {
     if (runtimeDest !== "auth_runtime" || binding?.action !== "login") {
       setState({
         status: "error",
-        errors: [{ message: "Login manifest auth_action_binding is invalid." }],
+        errors: [{
+          code: "AUTH_MANIFEST_BINDING_INVALID",
+          message: "Login manifest auth_action_binding is invalid.",
+        }],
       });
       return;
     }
@@ -230,9 +234,7 @@ export default function LoginManifestPanel(): JSX.Element {
         <div class="alert-error mt-4">
           <strong>ログインに失敗しました。</strong>
           <ul class="mt-2 list-inside list-disc text-sm">
-            {(state.errors ?? [{ message: "不明なエラー。" }]).map((e, i) => (
-              <li key={i}>{e.message ?? e.Message ?? "不明なエラー。"}</li>
-            ))}
+            {(state.errors ?? [{}]).map((e, i) => <li key={i}>{authErrorFriendlyText(e)}</li>)}
           </ul>
           <details class="mt-2 text-xs">
             <summary class="cursor-pointer text-red-800">技術情報（開発者向け）</summary>

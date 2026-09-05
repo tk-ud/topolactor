@@ -81,6 +81,26 @@ export type ScreenDataShapeSummary = {
   displayColumnMode: string | null;
 };
 
+/**
+ * Operator-visible identity for a hub-navigation manifest row, per
+ * docs/design/admin-console-workflow-ssot.yaml topology_naming_ssot.user_facing_topology_label
+ * display_rule: `visibleName = userFacingTopologyLabel ?? topologySystemName`. `manifestKey` is a
+ * distinct dispatcher-routing identity (role.target.layer.action shaped, or a raw hub_grouping
+ * key) and is never derived from or used to derive the naming SSOT fields; it is only the last
+ * resort when a row predates topology-label projection (no screen_data_shape entry at all).
+ */
+export function hubNavigationManifestVisibleLabel(
+  item: {
+    userFacingTopologyLabel?: string | null;
+    topologySystemName?: string | null;
+    manifestKey: string;
+  },
+): string {
+  return item.userFacingTopologyLabel?.trim() ||
+    item.topologySystemName?.trim() ||
+    item.manifestKey;
+}
+
 function parseTopologyEntries(raw: string): Record<string, unknown>[] {
   try {
     const parsed = JSON.parse(raw) as unknown;

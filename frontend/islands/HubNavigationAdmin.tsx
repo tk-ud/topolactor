@@ -24,6 +24,7 @@ import {
   hubDestinationOptionLabel,
   hubDestinationPickerOptions,
 } from "../lib/hubNavigationPicker.ts";
+import { hubNavigationManifestVisibleLabel } from "../lib/manifestTopologyExtensions.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 
 type PanelError = { code?: string; message: string };
@@ -243,12 +244,23 @@ export default function HubNavigationAdmin(): JSX.Element {
               <option value="">— 設定を選択 —</option>
               {manifests.map((m) => (
                 <option key={m.topologyManifestId} value={m.topologyManifestId}>
-                  {m.manifestKey}
+                  {hubNavigationManifestVisibleLabel(m)}
                   {m.hasHubRelations ? ` (${m.hubRelationCount} 件)` : " — 未登録"}
                 </option>
               ))}
             </select>
           )}
+        {selectedManifest && (
+          <details class="mt-1">
+            <summary class="cursor-pointer text-xs text-gray-400 hover:text-gray-600">技術情報</summary>
+            <dl class="mt-0.5 grid grid-cols-[auto_1fr] gap-x-2 font-mono text-xs text-gray-500">
+              <dt>manifest_key</dt>
+              <dd>{selectedManifest.manifestKey}</dd>
+              <dt>topology_manifest_id</dt>
+              <dd>{selectedManifest.topologyManifestId}</dd>
+            </dl>
+          </details>
+        )}
       </section>
 
       {selectedManifestId && (
@@ -257,7 +269,7 @@ export default function HubNavigationAdmin(): JSX.Element {
           <section class="rounded-lg border border-gray-200 bg-white p-4">
             <div class="mb-3 flex items-center justify-between">
               <h2 class="text-sm font-semibold text-gray-800">
-                2. ナビ順序一覧 — {selectedManifest?.manifestKey}
+                2. ナビ順序一覧 — {selectedManifest ? hubNavigationManifestVisibleLabel(selectedManifest) : ""}
               </h2>
               {editing.mode === "none" && (
                 <button
