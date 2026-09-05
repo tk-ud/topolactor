@@ -19,10 +19,17 @@ import {
   UX_RUNTIME_INTERACTION_ADD_INSTANCE_COMMIT,
   UX_RUNTIME_INTERACTION_ADD_EXTERNAL_COMMIT,
   UX_RUNTIME_INTERACTION_ADD_OVERLAY,
+  UX_RUNTIME_INTERACTION_ADD_STATE_UPDATE,
   UX_RUNTIME_INTERACTION_EXTERNAL_PORT_SELECT,
   UX_RUNTIME_INTERACTION_INSTANCE_OPERATION_SELECT,
+  UX_RUNTIME_INTERACTION_LOCAL_STATE_TARGET_LABEL,
   UX_RUNTIME_INTERACTION_NO_OVERLAY_TARGETS,
+  UX_RUNTIME_INTERACTION_NO_STATE_UPDATE_TARGETS,
   UX_RUNTIME_INTERACTION_SECTION_HINT,
+  UX_RUNTIME_INTERACTION_STATE_PATH_LABEL,
+  UX_RUNTIME_INTERACTION_STATE_UPDATE_ACTION_LABEL,
+  UX_RUNTIME_INTERACTION_STATE_UPDATE_ACTION_OPTIONS,
+  UX_RUNTIME_INTERACTION_STATE_VALUE_LABEL,
   UX_RUNTIME_INTERACTION_SECTION_TITLE,
   UX_RUNTIME_INTERACTION_STAGING_CANCEL,
   UX_RUNTIME_INTERACTION_TRIGGER_UI,
@@ -42,7 +49,6 @@ import {
   defaultOverlayOpenInteraction,
   isOverlayDisclosureAction,
   RUNTIME_INTERACTION_INTENT_OPTIONS,
-  runtimeInteractionCategory,
   runtimeInteractionTriggerOptions,
 } from "../lib/runtimeInteractionAuthoring.ts";
 import {
@@ -57,6 +63,7 @@ import {
   isLifecycleTrigger,
   LIFECYCLE_IDEMPOTENCY_POLICIES,
   selectableWriteTargets,
+  wiringSettingCategoryOf,
   type WiringNode,
 } from "../lib/uiBuilderWiringProjection.ts";
 import {
@@ -88,6 +95,14 @@ export type NodeEventWiring = {
   outputProp?: string;
   portTargetRef?: string;
   instanceTargetRef?: string;
+  /** SSOT: admin-console-workflow-ssot.yaml layout_node_props_contract descriptor.value (setState/setActiveKey literal). */
+  value?: unknown;
+  /**
+   * SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
+   * wiring_lane_contract.lanes.internal_instance_wiring targetRef_shape
+   * ("ui-local:<nodeId>.<stateKey>") — localStateMutation's UI-local-state target.
+   */
+  targetRef?: string;
   /** SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml high_frequency_policy */
   debounceMs?: number;
   /** SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml lifecycle_policy */
@@ -176,6 +191,18 @@ export default function NodeEventAuthoringPanel({
   const overlayTargets = listOverlayTargetNodes(targetNodes).filter((n) =>
     selectableTargetIds === null || selectableTargetIds.has(n.nodeId)
   );
+  // UI状態更新 (ui_state_update) generic mutation targets: any node in scope, not only
+  // disclosure-openable ones (setState/setActiveKey/localStateMutation may target a declared
+  // UI監視割当 state slot on any node, not just modal/drawer/dialog components).
+  const stateUpdateTargets = targetNodes.filter((n) =>
+    selectableTargetIds === null || selectableTargetIds.has(n.nodeId)
+  );
+  // UI監視割当 (declaration category) slots declared on THIS source node — surfaced here too so
+  // the ui_state_update mutation row below can pick a declared statePath, keeping the declaration
+  // (useState-like) and mutation (setState-like) categories linked without merging their models.
+  const declaredStateKeys = sourceNodeId
+    ? deriveUiWatchBindings({ nodeId: sourceNodeId, stateJson }).map((b) => b.stateKey)
+    : [];
   const [staging, setStaging] = useState<
     { kind: StagingKind; draft: NodeEventWiring } | null
   >(null);
@@ -633,6 +660,115 @@ export default function NodeEventAuthoringPanel({
     );
   };
 
+  /**
+   * UI状態更新 (ui_state_update) generic mutation row — setState / setActiveKey / localStateMutation
+   * outside the disclosure-open/close/toggle family renderOverlayRow already covers. Without this,
+   * these SSOT-vocabulary actionTypes (admin-console-workflow-ssot.yaml layout_node_props_contract
+   * descriptor.actionType) had no authoring UI at all: an authored/imported interaction using them
+   * rendered as nothing in this panel (invisible, unremovable) even though wiringSettingCategoryOf /
+   * WiringGraphPanel already classify and display them correctly as ui_state_update.
+   */
+  const renderStateUpdateRow = (w: NodeEventWiring, index: number) => {
+    const isLocalStateMutation = w.actionType === "localStateMutation";
+    return (
+      <div key={index} class="rounded border border-blue-100 bg-white p-2 space-y-2">
+        <p class="text-[0.6rem] font-medium text-blue-900">
+          {UX_RUNTIME_INTERACTION_TRIGGER_UI}: {selectedNodeLabel ?? "（選択中）"}
+        </p>
+        <div class="grid gap-2 md:grid-cols-3">
+          <label class="text-[0.65rem]">
+            {UX_TRIGGER_UI_LABEL}
+            <select
+              class="input mt-0.5 w-full px-1 py-0.5 text-xs"
+              value={w.trigger ?? w.eventType ?? "click"}
+              onChange={(e) => updateAt(index, { trigger: (e.target as HTMLSelectElement).value })}
+            >
+              {runtimeInteractionTriggerOptions(triggerOptions).map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </label>
+          <label class="text-[0.65rem]">
+            {UX_RUNTIME_INTERACTION_STATE_UPDATE_ACTION_LABEL}
+            <select
+              class="input mt-0.5 w-full px-1 py-0.5 text-xs"
+              value={w.actionType}
+              onChange={(e) =>
+                updateAt(index, { actionType: (e.target as HTMLSelectElement).value })}
+            >
+              {UX_RUNTIME_INTERACTION_STATE_UPDATE_ACTION_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </label>
+          {isLocalStateMutation
+            ? (
+              <label class="text-[0.65rem]">
+                {UX_RUNTIME_INTERACTION_LOCAL_STATE_TARGET_LABEL}
+                <input
+                  class="input-mono mt-0.5 w-full px-1 py-0.5 text-xs"
+                  value={w.targetRef ?? ""}
+                  placeholder="ui-local:<nodeId>.<stateKey>"
+                  onInput={(e) =>
+                    updateAt(index, { targetRef: (e.target as HTMLInputElement).value })}
+                />
+              </label>
+            )
+            : (
+              <label class="text-[0.65rem]">
+                {UX_TARGET_UI_LABEL}
+                <select
+                  class="input mt-0.5 w-full px-1 py-0.5 text-xs"
+                  value={w.targetNodeId ?? ""}
+                  onChange={(e) =>
+                    updateAt(index, {
+                      targetNodeId: (e.target as HTMLSelectElement).value || undefined,
+                    })}
+                >
+                  <option value="">選択してください</option>
+                  {stateUpdateTargets.map((node) => (
+                    <option key={node.nodeId} value={node.nodeId}>
+                      {node.componentKey || node.nodeId}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+        </div>
+        {!isLocalStateMutation && (
+          <div class="grid gap-2 md:grid-cols-2">
+            <label class="text-[0.65rem]">
+              {UX_RUNTIME_INTERACTION_STATE_PATH_LABEL}
+              <input
+                class="input-mono mt-0.5 w-full px-1 py-0.5 text-xs"
+                list={`state-path-candidates-${index}`}
+                value={w.statePath ?? ""}
+                onInput={(e) =>
+                  updateAt(index, { statePath: (e.target as HTMLInputElement).value || undefined })}
+              />
+              <datalist id={`state-path-candidates-${index}`}>
+                {declaredStateKeys.map((key) => <option key={key} value={key} />)}
+              </datalist>
+            </label>
+            <label class="text-[0.65rem]">
+              {UX_RUNTIME_INTERACTION_STATE_VALUE_LABEL}
+              <input
+                class="input-mono mt-0.5 w-full px-1 py-0.5 text-xs"
+                value={typeof w.value === "string" ? w.value : w.value !== undefined ? JSON.stringify(w.value) : ""}
+                onInput={(e) => updateAt(index, { value: (e.target as HTMLInputElement).value })}
+              />
+            </label>
+          </div>
+        )}
+        <div class="flex justify-end">
+          <button type="button" class="text-[0.6rem] text-red-500" onClick={() => removeAt(index)}>
+            削除
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   const renderExternalRow = (w: NodeEventWiring, index: number, isDraft = false) => {
     const onUpdate = isDraft
       ? (patch: Partial<NodeEventWiring>) =>
@@ -894,10 +1030,17 @@ export default function NodeEventAuthoringPanel({
           </p>
         )}
         {interactions.map((w, i) => {
-          const category = runtimeInteractionCategory(w.actionType);
-          if (category === "external_port") return renderExternalRow(w, i);
-          if (category === "instance_operation") return renderInstanceRow(w, i);
+          // Canonical taxonomy classification first (SSOT: setting_category_taxonomy) — the
+          // implementation-only overlay/external_port/instance_operation/legacy split from
+          // runtimeInteractionAuthoring.ts decides which SPECIALIZED editor to show, but must
+          // never decide whether an interaction is shown at all: any ui_state_update interaction
+          // (including non-overlay setState/setActiveKey/localStateMutation, previously dropped
+          // as "legacy") gets a real row here.
+          const category = wiringSettingCategoryOf(w);
+          if (category === "external_api_integration") return renderExternalRow(w, i);
+          if (category === "external_instance_integration") return renderInstanceRow(w, i);
           if (isOverlayDisclosureAction(w.actionType)) return renderOverlayRow(w, i);
+          if (category === "ui_state_update") return renderStateUpdateRow(w, i);
           return null;
         })}
         {staging?.kind === "external" && renderExternalRow(staging.draft, -1, true)}
@@ -914,6 +1057,23 @@ export default function NodeEventAuthoringPanel({
             }}
           >
             {UX_RUNTIME_INTERACTION_ADD_OVERLAY}
+          </button>
+          <button
+            type="button"
+            class="btn-secondary text-xs"
+            disabled={stateUpdateTargets.length === 0 || staging !== null}
+            title={stateUpdateTargets.length === 0 ? UX_RUNTIME_INTERACTION_NO_STATE_UPDATE_TARGETS : undefined}
+            onClick={() => {
+              const next: NodeEventWiring = {
+                trigger: "click",
+                actionType: "setState",
+                targetNodeId: stateUpdateTargets[0]?.nodeId,
+                statePath: declaredStateKeys[0],
+              };
+              onCommit([...interactions, next], "状態の更新を追加");
+            }}
+          >
+            {UX_RUNTIME_INTERACTION_ADD_STATE_UPDATE}
           </button>
           <button
             type="button"

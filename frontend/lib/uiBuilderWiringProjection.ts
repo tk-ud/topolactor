@@ -628,6 +628,11 @@ export function buildWiringGraphProjection(
       } else if (w.targetNodeId) {
         targetKind = "node";
         targetRef = w.targetNodeId;
+      } else if (category === "ui_state_update" && w.targetRef) {
+        // localStateMutation's ui-local:<nodeId>.<stateKey> shape carries no separate
+        // targetNodeId — still surface it as a resolved node-kind edge rather than "unset".
+        targetKind = "node";
+        targetRef = w.targetRef;
       }
       edges.push({
         sourceNodeId: node.nodeId,

@@ -1223,12 +1223,15 @@ Deno.test("canvas workspace drawer shell: inspector and wiring responsibility na
   assert(source.includes("パッケージ配線"));
 });
 
-Deno.test("canvas workspace drawer shell: canvas-first default keeps drawers closed", async () => {
+Deno.test("canvas workspace drawer shell: fixed/docked default keeps both panels open (SSOT: admin-console-workflow-ssot.yaml canvas_workspace_contract.screen_layout left_panel/right_panel position fixed+docked)", async () => {
   const source = await Deno.readTextFile(
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
   );
-  assert(source.includes("const [leftDrawerOpen, setLeftDrawerOpen] = useState(false)"));
-  assert(source.includes("const [rightDrawerOpen, setRightDrawerOpen] = useState(false)"));
+  // SSOT screen_layout.left_panel/right_panel position is "fixed left/right, docked" — the
+  // component bucket panel and layer/design inspector are load-bearing authoring surfaces, not
+  // optional utility drawers, so they must default open (visible) on every mount, not closed.
+  assert(source.includes("const [leftDrawerOpen, setLeftDrawerOpen] = useState(true)"));
+  assert(source.includes("const [rightDrawerOpen, setRightDrawerOpen] = useState(true)"));
   assert(source.includes("leftDrawerOpen"));
   assert(source.includes("rightDrawerOpen"));
   assert(source.includes("左パネルを開く"));

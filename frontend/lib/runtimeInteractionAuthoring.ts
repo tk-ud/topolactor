@@ -66,19 +66,6 @@ export function isOverlayDisclosureAction(actionType: string): boolean {
   return /^(open|close|toggle)(Modal|Drawer|Dialog)$/.test(actionType);
 }
 
-export type RuntimeInteractionCategory =
-  | "overlay"
-  | "external_port"
-  | "instance_operation"
-  | "legacy";
-
-export function runtimeInteractionCategory(actionType: string): RuntimeInteractionCategory {
-  if (isOverlayDisclosureAction(actionType)) return "overlay";
-  if (actionType === "dispatchExternalPort") return "external_port";
-  if (actionType === "dispatchInstanceOperation") return "instance_operation";
-  return "legacy";
-}
-
 export function defaultExternalPortInteraction(): {
   trigger: string;
   actionType: string;

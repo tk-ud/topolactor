@@ -88,6 +88,7 @@ import WiringGraphPanel from "../components/WiringGraphPanel.tsx";
 import {
   ALL_WIRING_TRIGGERS,
   findRuntimeInteractionPolicyErrors,
+  type InternalApiWiringInput,
 } from "../lib/uiBuilderWiringProjection.ts";
 import ManifestStep3EventWiringPreset from "../components/ManifestStep3EventWiringPreset.tsx";
 import { resolveCanvasRootPreviewClassName } from "../runtime/layoutClassPreviewUtils.ts";
@@ -580,6 +581,14 @@ export type ComponentEventWiring = {
   targetNodeId?: string;
   statePath?: string;
   value?: unknown;
+  /**
+   * Authoring-only: UI-local-state target for actionType localStateMutation
+   * ("ui-local:<nodeId>.<stateKey>"), resolved into targetNodeId/statePath by
+   * frontend/runtime/uiEventEffectRunner.ts resolveUiStateUpdateMutation / parseUiLocalTargetRef.
+   * SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
+   * wiring_lane_contract.lanes.internal_instance_wiring targetRef_shape.
+   */
+  targetRef?: string;
   /** @deprecated legacy propsJson.eventWirings compatibility only. */
   eventType?: string;
   /** @deprecated legacy state-key compatibility only. */
@@ -5033,12 +5042,34 @@ function LayoutBuilderSection({
   // SSOT: docs/design/admin-console-workflow-ssot.yaml ui_builder_canvas_workspace
   // Not persisted to layout_patch_json — transient draft interaction state only.
   const [selectedNodeIds, setSelectedNodeIds] = useState<ReadonlySet<string>>(emptySelectionSet());
-  const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
-  const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
+  // SSOT: admin-console-workflow-ssot.yaml ui_builder_canvas_workspace.canvas_workspace_contract
+  // screen_layout.left_panel / right_panel: "position: fixed left/right, docked" — the component
+  // bucket panel and the layer/design inspector are load-bearing authoring surfaces, not optional
+  // utility drawers, so they default open (visible) on every mount. The open/close affordance stays
+  // (UI_BUILDER_DRAWER_STATE_BOUNDARY: frontend-local display-density chrome only) for narrow
+  // viewports, but hiding both by default contradicted the fixed/docked contract.
+  const [leftDrawerOpen, setLeftDrawerOpen] = useState(true);
+  const [rightDrawerOpen, setRightDrawerOpen] = useState(true);
   // Layout / wiring canvas mode boundary. SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
   // wiring_mode — the wiring canvas is a switchable projection/edit mode over
   // draftNodes[].runtimeInteractions, never a separate persistence authority.
   const [canvasMode, setCanvasMode] = useState<"layout" | "wiring">("layout");
+  // 内部API (internal_api) wiring-inspector-taxonomy projection input: re-reads the SAME
+  // ui_topology:get_package_wiring row PackageWiringEditor/LayoutRightDock read (never a second,
+  // parallel persistence authority) so the "配線ビュー" wiring canvas can project the package's own
+  // internal-API/manifest wiring as an edge, per SSOT lane_storage_boundary.lanes.
+  // package_internal_api_wiring_lane. Re-fetches on scopedPackageId change; a save inside the
+  // sibling PackageConnectionPanel is reflected after the next packageId change or remount, the
+  // same staleness boundary useEffectivePackageWiringKind already documents for its wiringKind use.
+  const { targetSurface: packageWiringTargetSurface, targetRef: packageWiringTargetRef } =
+    useEffectivePackageWiringKind(scopedPackageId);
+  const internalApiWirings: InternalApiWiringInput[] = packageWiringTargetSurface === "manifest" &&
+      packageWiringTargetRef
+    ? [{
+      wiringKey: manifestWiringKeyFromTargetRef(packageWiringTargetRef, packageWiringTargetSurface),
+      targetRef: packageWiringTargetRef,
+    }]
+    : [];
   const [designHandoffKey, setDesignHandoffKey] = useState(0);
   // Gap 1: Lifecycle state machine
   const [lifecyclePhase, setLifecyclePhase] = useState<LifecyclePhase>("idle");
@@ -6859,6 +6890,7 @@ function LayoutBuilderSection({
                   pushHistory(nodes, label);
                   setLifecyclePhase("idle");
                 }}
+                internalApiWirings={internalApiWirings}
               />
             </div>
           )}

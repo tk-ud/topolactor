@@ -40,6 +40,21 @@ export const UX_RUNTIME_DESTINATION_LABELS: Record<string, string> = {
   sse_projection_runtime: "リアルタイム投影",
 };
 
+/**
+ * Step 1 派生識別子プレビュー（SSOT: admin-console-workflow-ssot.yaml
+ * canonical_sequential_authoring_pipeline steps[0].derived_on_step1 — route /
+ * primary physical table / ui_builder_key は auto-shown preview として常時表示が
+ * 要求されているため details 等で隠さない。ここではラベル文言のみ通常語彙にする）。
+ */
+export const UX_DERIVED_IDENTIFIER_ROUTE_LABEL = "ページのURL（自動生成）";
+export const UX_DERIVED_IDENTIFIER_PRIMARY_TABLE_LABEL = "保存先テーブル名（自動生成）";
+export const UX_DERIVED_IDENTIFIER_UI_BUILDER_KEY_LABEL = "画面づくり用キー（自動生成）";
+/** 複製元の証跡（読み取り専用）ラベル */
+export const UX_CLONE_SOURCE_EVIDENCE_TOPOLOGY_NAME_LABEL = "トポロジーID";
+export const UX_CLONE_SOURCE_EVIDENCE_STATUS_LABEL = "状態";
+export const UX_CLONE_SOURCE_EVIDENCE_DISPATCHER_LABEL = "実行先";
+export const UX_CLONE_SOURCE_EVIDENCE_UPDATED_AT_LABEL = "最終更新";
+
 /** 技術用語→業務語ヘルパー（詳細/debug のみで技術語を表示） */
 export function toFriendlyLabel(technicalKey: string): string {
   const map: Record<string, string> = {
@@ -454,6 +469,25 @@ export const UX_RUNTIME_INTERACTION_ADD_INSTANCE = "+ 外部インスタンス�
 export const UX_RUNTIME_INTERACTION_ADD_EXTERNAL_COMMIT = "外部API連携を確定";
 export const UX_RUNTIME_INTERACTION_ADD_INSTANCE_COMMIT = "外部インスタンス連携を確定";
 export const UX_RUNTIME_INTERACTION_STAGING_CANCEL = "キャンセル";
+/**
+ * UI状態更新（ui_state_update）汎用ミューテーション — SSOT:
+ * admin-console-workflow-ssot.yaml layout_node_props_contract.descriptor
+ * actionType vocabulary（setState / setActiveKey / localStateMutation）。
+ * モーダル／ドロワー等の開閉（overlay disclosure）以外の状態更新もここで
+ * 設定・編集できるようにする、開閉操作とは別の追加行。
+ */
+export const UX_RUNTIME_INTERACTION_ADD_STATE_UPDATE = "+ 状態の更新";
+export const UX_RUNTIME_INTERACTION_STATE_UPDATE_ACTION_LABEL = "更新の種類";
+export const UX_RUNTIME_INTERACTION_STATE_UPDATE_ACTION_OPTIONS: readonly { value: string; label: string }[] = [
+  { value: "setState", label: "値を設定（setState）" },
+  { value: "setActiveKey", label: "選択中キーを設定（setActiveKey）" },
+  { value: "localStateMutation", label: "ローカル状態を更新（localStateMutation）" },
+];
+export const UX_RUNTIME_INTERACTION_STATE_PATH_LABEL = "状態スロット（statePath）";
+export const UX_RUNTIME_INTERACTION_STATE_VALUE_LABEL = "値（value）";
+export const UX_RUNTIME_INTERACTION_LOCAL_STATE_TARGET_LABEL = "ローカル状態の対象（ui-local）";
+export const UX_RUNTIME_INTERACTION_NO_STATE_UPDATE_TARGETS =
+  "キャンバスに部品がありません。状態を更新する対象を先に配置してください。";
 /**
  * 配線インスペクタ分類語彙（正本: frontend-ui-audit-bundle-semantic-frame.md /
  * SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml setting_category_taxonomy）。

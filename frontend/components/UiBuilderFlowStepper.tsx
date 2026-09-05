@@ -58,6 +58,21 @@ export function getActiveFlowStepIds(stepId: UiBuilderFlowStepId): number[] {
   return [];
 }
 
+/**
+ * SSOT: admin-console-workflow-ssot.yaml ui_builder_canvas_workspace /
+ * canvas_workspace_contract prohibits "pipeline-step framing ... within this
+ * workspace" and "no sequential step framing" for the canvas workspace route
+ * itself. This guide surfaces contextual help for the author's current phase
+ * (route selection / canvas editing / persist) WITHOUT rendering it as a
+ * numbered multi-node stepper track (no step-N-of-3 circles, no connecting
+ * lines, no active/inactive step comparison) — that visual model is exactly
+ * the sequential pipeline framing the workspace contract prohibits. The
+ * underlying UiBuilderFlowStepId / UI_BUILDER_CANVAS_FLOW phase data stays a
+ * legitimate internal progress signal; only the stepper-shaped rendering is
+ * removed here. The "Step 4" whole-admin ordinal label wording itself is out
+ * of this surface's scope (docs/design/admin-console-workflow-ssot.yaml
+ * canonical_authoring_order boundary) and is left unchanged.
+ */
 export default function UiBuilderFlowStepper({
   activeStep,
 }: {
@@ -65,61 +80,36 @@ export default function UiBuilderFlowStepper({
 }): JSX.Element {
   const activeStepIds = getActiveFlowStepIds(activeStep);
   const activeLabel = UI_BUILDER_FLOW_LABELS[activeStep] ?? activeStep;
+  const activeSpec = UI_BUILDER_CANVAS_FLOW.find((s) => activeStepIds.includes(s.id));
 
   return (
     <div
       class="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3"
-      role="navigation"
-      aria-label="画面づくりの作業フロー"
+      role="note"
+      aria-label="canvas workspace ガイド"
     >
-      <div class="mb-2.5 flex items-center gap-2">
+      <div class="mb-2 flex items-center gap-2">
         <span class="text-xs font-semibold text-blue-900">Step 4 — 画面づくり（canvas workspace）</span>
         <span class="text-[0.65rem] text-blue-600">
           — 現在: <strong>{activeLabel}</strong>
         </span>
       </div>
 
-      <div class="flex items-start overflow-x-auto pb-1" role="list">
-        {UI_BUILDER_CANVAS_FLOW.map((step, i) => {
-          const isActive = activeStepIds.includes(step.id);
-          return (
-            <div key={step.id} class="flex items-center" role="listitem">
-              {i > 0 && <div class="mx-1 mt-3 h-px w-4 shrink-0 bg-blue-200" aria-hidden="true" />}
-              <div class="flex min-w-[120px] max-w-[180px] flex-col items-center">
-                <div
-                  class={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
-                    isActive
-                      ? "bg-blue-600 text-white ring-2 ring-blue-300 ring-offset-1"
-                      : "border-2 border-gray-300 bg-white text-gray-500"
-                  }`}
-                  aria-current={isActive ? "step" : undefined}
-                >
-                  {step.id}
-                </div>
-                <div class={`mt-1 text-center text-[0.63rem] font-medium ${isActive ? "text-blue-800" : "text-gray-500"}`}>
-                  {step.label}
-                </div>
-                {step.id === 2 && (
-                  <a
-                    href="#projection-inspection"
-                    class="mt-1 text-[0.58rem] text-blue-600 underline"
-                  >
-                    投影を確認 →
-                  </a>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {UI_BUILDER_CANVAS_FLOW.filter((s) => activeStepIds.includes(s.id)).map((step) => (
-        <div key={step.id} class="mt-3 rounded border border-blue-200 bg-white p-2 text-xs">
-          <p class="font-semibold text-blue-900">ステップ {step.id}: {step.label}</p>
-          <p class="text-gray-700">{step.detail}</p>
-          {step.note && <p class="text-amber-700">{step.note}</p>}
+      {activeSpec && (
+        <div class="rounded border border-blue-200 bg-white p-2 text-xs">
+          <p class="font-semibold text-blue-900">{activeSpec.label}</p>
+          <p class="text-gray-700">{activeSpec.detail}</p>
+          {activeSpec.note && <p class="text-amber-700">{activeSpec.note}</p>}
+          {activeSpec.stepId === "canvas_edit" && (
+            <a
+              href="#projection-inspection"
+              class="mt-1 inline-block text-[0.65rem] text-blue-600 underline"
+            >
+              投影を確認 →
+            </a>
+          )}
         </div>
-      ))}
+      )}
     </div>
   );
 }

@@ -139,6 +139,13 @@ import {
   UX_CLONE_BACKEND_MERGE_AUTHORITY_NOTICE,
   UX_CLONE_LINEAGE_ONLY_NOTICE,
   UX_CLONE_MERGE_BLOCKERS_HEADING,
+  UX_CLONE_SOURCE_EVIDENCE_TOPOLOGY_NAME_LABEL,
+  UX_CLONE_SOURCE_EVIDENCE_STATUS_LABEL,
+  UX_CLONE_SOURCE_EVIDENCE_DISPATCHER_LABEL,
+  UX_CLONE_SOURCE_EVIDENCE_UPDATED_AT_LABEL,
+  UX_DERIVED_IDENTIFIER_ROUTE_LABEL,
+  UX_DERIVED_IDENTIFIER_PRIMARY_TABLE_LABEL,
+  UX_DERIVED_IDENTIFIER_UI_BUILDER_KEY_LABEL,
 } from "../content/adminUxTerms.ts";
 
 type PanelError = { code?: string; message: string };
@@ -1660,17 +1667,17 @@ export default function ContentsScreenDesignPanel({
                 <div class="rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-600">
                   <p class="font-semibold mb-1">複製元の証跡（読み取り専用）</p>
                   <ul class="space-y-0.5 font-mono text-[11px]">
-                    <li>topologySystemName: {cloneSourceEvidence.topologySystemName ?? "—"}</li>
-                    <li>status: {cloneSourceEvidence.status}</li>
+                    <li>{UX_CLONE_SOURCE_EVIDENCE_TOPOLOGY_NAME_LABEL}: {cloneSourceEvidence.topologySystemName ?? "—"}</li>
+                    <li>{UX_CLONE_SOURCE_EVIDENCE_STATUS_LABEL}: {cloneSourceEvidence.status}</li>
                     {cloneSourceEvidence.dispatcherAxes && (
                       <li>
-                        dispatcher: {cloneSourceEvidence.dispatcherAxes.role}/
+                        {UX_CLONE_SOURCE_EVIDENCE_DISPATCHER_LABEL}: {cloneSourceEvidence.dispatcherAxes.role}/
                         {cloneSourceEvidence.dispatcherAxes.target}/
                         {cloneSourceEvidence.dispatcherAxes.layer}/
                         {cloneSourceEvidence.dispatcherAxes.action}
                       </li>
                     )}
-                    <li>updatedAt: {cloneSourceEvidence.sourceUpdatedAt}</li>
+                    <li>{UX_CLONE_SOURCE_EVIDENCE_UPDATED_AT_LABEL}: {cloneSourceEvidence.sourceUpdatedAt}</li>
                   </ul>
                   {entryMode === "clone_active_as_replacement_draft" && (
                     <p class="mt-1 text-[10px] text-purple-700">
@@ -1711,9 +1718,9 @@ export default function ContentsScreenDesignPanel({
             <div class="rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-600">
               <p class="font-semibold mb-1">生成される識別子（自動）</p>
               <ul class="space-y-0.5 font-mono text-[11px]">
-                <li>Route: {topologySystemNameToRoute(design.topologySystemName)}</li>
-                <li>Primary Table: {topologySystemNameToPhysicalTable(design.topologySystemName)}</li>
-                <li>UI Builder Key: {topologySystemNameToUiBuilderKey(design.topologySystemName)}</li>
+                <li>{UX_DERIVED_IDENTIFIER_ROUTE_LABEL}: {topologySystemNameToRoute(design.topologySystemName)}</li>
+                <li>{UX_DERIVED_IDENTIFIER_PRIMARY_TABLE_LABEL}: {topologySystemNameToPhysicalTable(design.topologySystemName)}</li>
+                <li>{UX_DERIVED_IDENTIFIER_UI_BUILDER_KEY_LABEL}: {topologySystemNameToUiBuilderKey(design.topologySystemName)}</li>
               </ul>
             </div>
           )}

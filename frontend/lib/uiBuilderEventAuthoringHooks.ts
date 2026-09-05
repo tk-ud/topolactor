@@ -108,13 +108,28 @@ export function useInstanceOperationAuthoringCandidates(active: boolean): {
  */
 export function useEffectivePackageWiringKind(packageId: string | undefined): {
   wiringKind: string | null;
+  /**
+   * 内部API (internal_api) wiring-inspector-taxonomy projection input: the
+   * SAME persisted ui_topology:get_package_wiring row's targetSurface/targetRef,
+   * re-exposed alongside wiringKind so callers building
+   * WiringGraphPanel.internalApiWirings read from this one existing fetch
+   * rather than a second, drifting source of truth.
+   * SSOT: docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
+   * lane_storage_boundary.lanes.package_internal_api_wiring_lane.
+   */
+  targetSurface: string | null;
+  targetRef: string | null;
   loading: boolean;
 } {
   const [wiringKind, setWiringKind] = useState<string | null>(null);
+  const [targetSurface, setTargetSurface] = useState<string | null>(null);
+  const [targetRef, setTargetRef] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   useEffect(() => {
     if (!packageId) {
       setWiringKind(null);
+      setTargetSurface(null);
+      setTargetRef(null);
       setLoading(false);
       return;
     }
@@ -123,13 +138,17 @@ export function useEffectivePackageWiringKind(packageId: string | undefined): {
     (async () => {
       const body = await dispatchAdminOp("ui_topology", "get_package_wiring", { packageId });
       if (cancelled) return;
-      const data = body?.emission?.data as { wiringKind?: string } | undefined;
+      const data = body?.emission?.data as
+        | { wiringKind?: string; targetSurface?: string; targetRef?: string }
+        | undefined;
       setWiringKind(typeof data?.wiringKind === "string" ? data.wiringKind : null);
+      setTargetSurface(typeof data?.targetSurface === "string" ? data.targetSurface : null);
+      setTargetRef(typeof data?.targetRef === "string" ? data.targetRef : null);
       setLoading(false);
     })();
     return () => { cancelled = true; };
   }, [packageId]);
-  return { wiringKind, loading };
+  return { wiringKind, targetSurface, targetRef, loading };
 }
 
 /**
