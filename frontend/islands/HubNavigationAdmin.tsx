@@ -24,6 +24,8 @@ import {
   hubDestinationOptionLabel,
   hubDestinationPickerOptions,
   hubNavigationErrorFriendlyText,
+  hubNavigationSuccessFriendlyText,
+  type HubNavigationLifecycleAction,
 } from "../lib/hubNavigationPicker.ts";
 import { hubNavigationManifestVisibleLabel } from "../lib/manifestTopologyExtensions.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";
@@ -44,6 +46,7 @@ export default function HubNavigationAdmin(): JSX.Element {
   const [draftRelatedHubId, setDraftRelatedHubId] = useState("");
   const [draftSequencePosition, setDraftSequencePosition] = useState(1);
   const [result, setResult] = useState<HubNavigationLifecycleResult | null>(null);
+  const [resultAction, setResultAction] = useState<HubNavigationLifecycleAction | null>(null);
   const [errors, setErrors] = useState<PanelError[]>([]);
   const [loading, setLoading] = useState(false);
   const [backendUnavailable, setBackendUnavailable] = useState(false);
@@ -98,6 +101,7 @@ export default function HubNavigationAdmin(): JSX.Element {
     setSelectedManifestId(id);
     setEditing({ mode: "none" });
     setResult(null);
+    setResultAction(null);
     setErrors([]);
     const manifest = manifests.find((m) => m.topologyManifestId === id);
     if (manifest && !manifest.hasHubRelations) {
@@ -120,6 +124,7 @@ export default function HubNavigationAdmin(): JSX.Element {
     try {
       const res = await createHubRelation(selectedManifestId, draftRelatedHubId, draftSequencePosition);
       setResult(res);
+      setResultAction("create");
       if (res.ok) {
         setEditing({ mode: "none" });
         await loadHubRelations(selectedManifestId);
@@ -144,6 +149,7 @@ export default function HubNavigationAdmin(): JSX.Element {
     try {
       const res = await updateHubRelation(editing.hubRelationId, draftRelatedHubId);
       setResult(res);
+      setResultAction("update");
       if (res.ok) {
         setEditing({ mode: "none" });
         await loadHubRelations(selectedManifestId);
@@ -169,6 +175,7 @@ export default function HubNavigationAdmin(): JSX.Element {
     try {
       const res = await deprecateHubRelation(hubRelationId);
       setResult(res);
+      setResultAction("deprecate");
       if (res.ok) {
         await loadHubRelations(selectedManifestId);
         await loadManifests();
@@ -209,6 +216,7 @@ export default function HubNavigationAdmin(): JSX.Element {
     setEditing({ mode: "edit", hubRelationId: hr.hubRelationId, relatedHubId: hr.relatedHubId });
     setDraftRelatedHubId(hr.relatedHubId);
     setResult(null);
+    setResultAction(null);
     setErrors([]);
   };
 
@@ -280,6 +288,7 @@ export default function HubNavigationAdmin(): JSX.Element {
                     setDraftRelatedHubId("");
                     setDraftSequencePosition((hubRelations.filter(hr => hr.status === "active").length) + 1);
                     setResult(null);
+                    setResultAction(null);
                     setErrors([]);
                   }}
                 >
@@ -418,7 +427,12 @@ export default function HubNavigationAdmin(): JSX.Element {
                   </button>
                   <button
                     class="btn-secondary"
-                    onClick={() => { setEditing({ mode: "none" }); setErrors([]); setResult(null); }}
+                    onClick={() => {
+                      setEditing({ mode: "none" });
+                      setErrors([]);
+                      setResult(null);
+                      setResultAction(null);
+                    }}
                   >
                     キャンセル
                   </button>
@@ -432,11 +446,20 @@ export default function HubNavigationAdmin(): JSX.Element {
       {/* Result / Error */}
       {result && result.ok && (
         <div class="alert-success rounded p-3 text-sm">
-          ✓ {result.message}
-          {result.hubRelationId && (
+          ✓ {resultAction ? hubNavigationSuccessFriendlyText(resultAction) : result.message}
+          {(result.hubRelationId || resultAction) && (
             <details class="mt-1">
               <summary class="cursor-pointer text-xs text-green-700 hover:text-green-900">技術情報</summary>
-              <code class="block mt-0.5 font-mono text-xs text-green-800">{result.hubRelationId}</code>
+              <dl class="mt-0.5 grid grid-cols-[auto_1fr] gap-x-2 font-mono text-xs text-green-800">
+                {result.hubRelationId && (
+                  <>
+                    <dt>hub_relation_id</dt>
+                    <dd>{result.hubRelationId}</dd>
+                  </>
+                )}
+                <dt>message</dt>
+                <dd>{result.message}</dd>
+              </dl>
             </details>
           )}
         </div>

@@ -43,3 +43,23 @@ const HUB_NAVIGATION_ERROR_GENERIC_FALLBACK_TEXT = "処理に失敗しました�
 export function hubNavigationErrorFriendlyText(e: HubNavigationErrorLike): string {
   return (e.code && HUB_NAVIGATION_ERROR_FRIENDLY_TEXT[e.code]) ?? HUB_NAVIGATION_ERROR_GENERIC_FALLBACK_TEXT;
 }
+
+export type HubNavigationLifecycleAction = "create" | "update" | "deprecate";
+
+/**
+ * Friendly, normal-view Japanese text for a hub_navigation lifecycle success (create / update /
+ * deprecate). The raw backend carrier message ("Hub relation created."/"updated."/"deprecated.")
+ * is untranslated English using the backend's own "hub relation" vocabulary, not this surface's
+ * user-facing "ナビ遷移" term -- callers already know which action just succeeded, so this maps
+ * directly from that action rather than pattern-matching the raw text. The raw message stays
+ * reachable via an explicit technical disclosure at the call site, never deleted.
+ */
+const HUB_NAVIGATION_SUCCESS_FRIENDLY_TEXT: Record<HubNavigationLifecycleAction, string> = {
+  create: "ナビ遷移を登録しました。",
+  update: "ナビ遷移を更新しました。",
+  deprecate: "ナビ遷移を無効化しました。",
+};
+
+export function hubNavigationSuccessFriendlyText(action: HubNavigationLifecycleAction): string {
+  return HUB_NAVIGATION_SUCCESS_FRIENDLY_TEXT[action];
+}

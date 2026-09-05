@@ -7,6 +7,13 @@
 // this same surface; this proof targets the SEPARATE `ValidationErrorPanel`-routed error path,
 // whose raw messages interpolate internal vocabulary (related_hub_id, source hub_id,
 // hub_relations, topology manifest) that must never be normal-view primary meaning.
+//
+// Round-6 extends this to the SUCCESS path: create/update/deprecate previously rendered the raw
+// backend carrier message ("Hub relation deprecated.") directly as primary text via `✓
+// {result.message}` -- untranslated English using the backend's own "hub relation" vocabulary
+// rather than this surface's own "ナビ遷移" term. The last test below proves the friendly
+// action-based primary text (hubNavigationSuccessFriendlyText) renders instead, with the raw
+// carrier message still reachable in a 技術情報 disclosure.
 
 import { assert, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { h, options, render } from "preact";
@@ -286,6 +293,60 @@ Deno.test(
 
       const technical = technicalDisclosureText(container);
       assert(technical.includes("topology_manifests join"));
+    } finally {
+      globalThis.fetch = originalFetch;
+      render(null, container);
+      cleanup();
+    }
+  },
+);
+
+Deno.test(
+  "HubNavigationAdmin (real mount): a successful deprecate renders this surface's own friendly '削除' vocabulary as primary, never the raw 'Hub relation' backend carrier text",
+  async () => {
+    const { container, cleanup } = setupDom();
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = buildFetchMock((body) => {
+      if (body.layer === "hub_navigation" && body.action === "deprecate") {
+        return lifecycleResponse(true, "Hub relation deprecated.");
+      }
+      return null;
+    });
+
+    try {
+      render(h(HubNavigationAdmin, {}), container);
+      await waitFor(() => container.querySelector("select") !== null);
+
+      const manifestSelect = container.querySelector("select") as HTMLSelectElement;
+      manifestSelect.value = MANIFEST_A.topologyManifestId;
+      fireEvent(manifestSelect, "change");
+      await waitFor(() =>
+        Array.from(container.querySelectorAll("button")).some((b) => b.textContent === "削除")
+      );
+
+      clickButtonByText(container, "削除");
+      await acceptConfirmDialog(container);
+      await waitFor(() => (container.textContent ?? "").includes("ナビ遷移を無効化しました"));
+
+      const primary = visibleText(container);
+      assert(
+        primary.includes("ナビ遷移を無効化しました"),
+        "the friendly action-based primary text must use this surface's own 'ナビ遷移' vocabulary",
+      );
+      assertFalse(
+        primary.includes("Hub relation deprecated."),
+        "the raw backend carrier message must never appear in always-visible primary text",
+      );
+      assertFalse(
+        primary.includes("Hub relation"),
+        "the raw backend 'hub relation' vocabulary must never leak into always-visible primary text",
+      );
+
+      const technical = technicalDisclosureText(container);
+      assert(
+        technical.includes("Hub relation deprecated."),
+        "the raw backend carrier message must still be reachable inside a 技術情報 disclosure",
+      );
     } finally {
       globalThis.fetch = originalFetch;
       render(null, container);
