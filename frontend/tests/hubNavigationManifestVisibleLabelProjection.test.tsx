@@ -67,7 +67,7 @@ const MOCK_MANIFESTS: MockManifestRow[] = [
   },
   {
     topologyManifestId: "33333333-3333-3333-3333-333333333333",
-    manifestKey: "—",
+    manifestKey: "unregistered.legacy.manifest",
     hubId: "h1",
     hasHubRelations: false,
     hubRelationCount: 0,
@@ -174,7 +174,7 @@ Deno.test(
 );
 
 Deno.test(
-  "ManifestsAdmin + HubNavigationAdmin (real mount): raw manifestKey remains the visible identity only when neither naming SSOT field exists at all",
+  "ManifestsAdmin + HubNavigationAdmin (real mount): a fail-close friendly placeholder is shown, never the raw manifestKey, when neither naming SSOT field exists at all",
   async () => {
     const { container, cleanup } = setupDom();
     const originalFetch = globalThis.fetch;
@@ -184,11 +184,25 @@ Deno.test(
       render(h(ManifestsAdmin, {}), container);
       await waitFor(() => container.textContent?.includes("受注一覧") ?? false);
 
-      // The row with neither topologySystemName nor userFacingTopologyLabel has no other identity
-      // to show; falling back to the raw manifestKey ("—") here is the legitimate last resort, not
-      // a label-boundary violation, and must not be hidden.
+      // SSOT topology_naming_ssot.user_facing_topology_label.display_rule defines exactly
+      // `userFacingTopologyLabel ?? topologySystemName` -- never a third `?? manifestKey` fallback.
+      // When both are absent, the friendly "unnamed" placeholder must show as primary, and the raw
+      // dispatcher manifestKey must stay reachable only inside a 技術情報 disclosure.
       const primary = visibleText(container);
-      assert(primary.includes("—"), "raw manifestKey must remain the visible identity as the final fallback");
+      assert(
+        primary.includes("名称未設定"),
+        "the fail-close friendly placeholder must be the primary text when neither naming field exists",
+      );
+      assertFalse(
+        primary.includes("unregistered.legacy.manifest"),
+        "the raw manifestKey must never be promoted to primary text just because naming fields are absent",
+      );
+
+      const technical = technicalDisclosureText(container);
+      assert(
+        technical.includes("unregistered.legacy.manifest"),
+        "the raw manifestKey must still be reachable for diagnostics inside a 技術情報 disclosure",
+      );
     } finally {
       globalThis.fetch = originalFetch;
       render(null, container);

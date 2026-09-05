@@ -23,6 +23,7 @@ import { UX_STATUS_LABELS, UX_HUB_NAV_DESTINATION_LABEL } from "../content/admin
 import {
   hubDestinationOptionLabel,
   hubDestinationPickerOptions,
+  hubNavigationErrorFriendlyText,
 } from "../lib/hubNavigationPicker.ts";
 import { hubNavigationManifestVisibleLabel } from "../lib/manifestTopologyExtensions.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";
@@ -440,7 +441,21 @@ export default function HubNavigationAdmin(): JSX.Element {
           )}
         </div>
       )}
-      {errors.length > 0 && <ValidationErrorPanel errors={errors} />}
+      {errors.length > 0 && (
+        <div>
+          <ValidationErrorPanel
+            errors={errors.map((e) => ({ code: e.code, message: hubNavigationErrorFriendlyText(e) }))}
+          />
+          <details class="mt-1">
+            <summary class="cursor-pointer text-xs text-gray-400 hover:text-gray-600">技術情報（開発者向け）</summary>
+            <ul class="mt-0.5 list-inside list-disc font-mono text-xs text-gray-500">
+              {errors.map((e, i) => (
+                <li key={i}>{e.code ? `[${e.code}] ${e.message}` : e.message}</li>
+              ))}
+            </ul>
+          </details>
+        </div>
+      )}
 
       <AdminHelpPanel {...ADMIN_HUB_NAVIGATION_GUIDE} />
       <ConfirmDialogHost />

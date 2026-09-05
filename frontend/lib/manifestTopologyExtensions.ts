@@ -1,5 +1,7 @@
 /** Parse manifest topology extension entries from AdminManifestDetail.topologyRawJson */
 
+import { UX_HUB_NAVIGATION_MANIFEST_UNNAMED_LABEL } from "../content/adminUxTerms.ts";
+
 export type AggregationMeasureShape = {
   column: string;
   function: string;
@@ -84,21 +86,24 @@ export type ScreenDataShapeSummary = {
 /**
  * Operator-visible identity for a hub-navigation manifest row, per
  * docs/design/admin-console-workflow-ssot.yaml topology_naming_ssot.user_facing_topology_label
- * display_rule: `visibleName = userFacingTopologyLabel ?? topologySystemName`. `manifestKey` is a
- * distinct dispatcher-routing identity (role.target.layer.action shaped, or a raw hub_grouping
- * key) and is never derived from or used to derive the naming SSOT fields; it is only the last
- * resort when a row predates topology-label projection (no screen_data_shape entry at all).
+ * display_rule: `visibleName = userFacingTopologyLabel ?? topologySystemName`. The SSOT defines
+ * exactly these two fields for normal-view identity — it is never extended with a third `??
+ * manifestKey` fallback. `manifestKey` is a distinct dispatcher-routing identity (role.target
+ * .layer.action shaped, or a raw hub_grouping key), not a naming-SSOT field; when a row predates
+ * topology-label projection (no screen_data_shape entry at all, so BOTH naming fields are
+ * absent), this returns the fail-close normal-view placeholder instead of promoting the raw
+ * dispatcher key to primary meaning. `manifestKey` stays reachable via 技術情報 disclosure in
+ * every caller — this function never deletes it, only declines to treat it as a name.
  */
 export function hubNavigationManifestVisibleLabel(
   item: {
     userFacingTopologyLabel?: string | null;
     topologySystemName?: string | null;
-    manifestKey: string;
   },
 ): string {
   return item.userFacingTopologyLabel?.trim() ||
     item.topologySystemName?.trim() ||
-    item.manifestKey;
+    UX_HUB_NAVIGATION_MANIFEST_UNNAMED_LABEL;
 }
 
 function parseTopologyEntries(raw: string): Record<string, unknown>[] {

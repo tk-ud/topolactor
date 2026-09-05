@@ -662,6 +662,15 @@ export const UX_MANIFEST_API_EVENT_WIRING_FIELD_LABELS: Record<string, string> =
 /** Hub navigation — destination screen picker */
 export const UX_HUB_NAV_DESTINATION_LABEL = "遷移先の画面";
 
+/**
+ * Fail-close normal-view placeholder for a hub-navigation manifest row whose naming SSOT fields
+ * (userFacingTopologyLabel, topologySystemName) are BOTH absent (topology_naming_ssot.
+ * display_rule has nothing to resolve — this is a distinct case from either field existing).
+ * The raw dispatcher-routing manifestKey stays reachable via 技術情報 disclosure, never here;
+ * mirrors LayoutPatchApplyModal.tsx's established "（名称未設定のレイアウト）" convention.
+ */
+export const UX_HUB_NAVIGATION_MANIFEST_UNNAMED_LABEL = "（名称未設定の画面）";
+
 /** 左 docked panel — 部品追加パネル見出し（SSOT: canvas_workspace_contract.left_panel）。 */
 export const UX_COMPONENT_ADD_PANEL_LABEL = "部品追加";
 
