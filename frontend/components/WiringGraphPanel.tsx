@@ -5,6 +5,7 @@ import {
   buildWiringGraphProjection,
   findRuntimeInteractionPolicyErrors,
   parseUiLocalTargetRef,
+  wiringNodeDisplayLabel,
   type InternalApiWiringInput,
   type WiringGraphEdge,
   type WiringNode,
@@ -72,7 +73,11 @@ function edgeTargetLabel(
     const local = parseUiLocalTargetRef(edge.targetRef);
     const resolvedNodeId = local?.targetNodeId ?? edge.targetRef;
     const target = nodes.find((n) => n.nodeId === resolvedNodeId);
-    return target?.componentKey || resolvedNodeId;
+    // Same friendly-label authority the Layer Tree/palette use for this node
+    // elsewhere in the SAME canvas workspace (wiringNodeDisplayLabel), never the
+    // raw resolvedNodeId — a stale/deleted target is its own distinct, meaningful
+    // state, not a name.
+    return target ? wiringNodeDisplayLabel(target) : "（参照先が見つかりません）";
   }
   if (edge.targetKind === "external_port") return "外部APIに接続済み";
   if (edge.targetKind === "instance_port") return "外部インスタンスに接続済み";
@@ -161,14 +166,22 @@ export default function WiringGraphPanel<T extends WiringNode>({
             {UX_WIRING_CATEGORY_UI_WATCH_BINDING}（宣言済み状態スロット）
           </p>
           <ul class="flex flex-wrap gap-1 text-[0.58rem] text-sky-800">
-            {projection.watchBindings.map((b) => (
-              <li
-                key={`${b.nodeId}-${b.stateKey}`}
-                class="rounded bg-white px-1 py-0.5"
-              >
-                {b.nodeId}.{b.stateKey}
-              </li>
-            ))}
+            {projection.watchBindings.map((b) => {
+              const owner = nodes.find((n) => n.nodeId === b.nodeId);
+              return (
+                <li
+                  key={`${b.nodeId}-${b.stateKey}`}
+                  class="rounded bg-white px-1 py-0.5"
+                >
+                  {owner ? wiringNodeDisplayLabel(owner) : "（参照先が見つかりません）"}
+                  .{b.stateKey}
+                  <details class="inline">
+                    <summary class="ml-1 inline cursor-pointer text-sky-500">技術情報</summary>
+                    <code class="font-mono">{b.nodeId}</code>
+                  </details>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
@@ -219,12 +232,19 @@ export default function WiringGraphPanel<T extends WiringNode>({
                 </span>
               )}
             </button>
-            {edge.targetRef && (
-              <details class="ml-2 text-[0.55rem] text-slate-500">
-                <summary class="cursor-pointer">技術情報</summary>
-                <code class="font-mono">{edge.targetRef}</code>
-              </details>
-            )}
+            <details class="ml-2 text-[0.55rem] text-slate-500">
+              <summary class="cursor-pointer">技術情報</summary>
+              <dl class="mt-0.5 grid grid-cols-[auto_1fr] gap-x-2 font-mono">
+                <dt>source</dt>
+                <dd>{edge.sourceNodeId}</dd>
+                {edge.targetRef && (
+                  <>
+                    <dt>target</dt>
+                    <dd>{edge.targetRef}</dd>
+                  </>
+                )}
+              </dl>
+            </details>
           </li>
         ))}
       </ul>
@@ -252,8 +272,12 @@ export default function WiringGraphPanel<T extends WiringNode>({
               onDrop={(e: DragEvent) => handleDrop(node.nodeId, e)}
               onClick={() => onSelectNode(node.nodeId)}
             >
-              {node.componentKey || node.nodeId}
+              {wiringNodeDisplayLabel(node)}
             </span>
+            <details class="inline text-[0.55rem] text-slate-400">
+              <summary class="cursor-pointer">技術情報</summary>
+              <code class="font-mono">{node.nodeId}</code>
+            </details>
           </li>
         ))}
       </ul>

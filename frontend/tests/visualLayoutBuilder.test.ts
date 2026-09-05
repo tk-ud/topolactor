@@ -570,15 +570,18 @@ Deno.test("layout canvas preview: unsupported component fails with explicit code
 });
 
 // ─── UX helper: friendly label extraction ────────────────────────────────────
+//
+// Calls the REAL friendlyComponentLabel (canonical definition now in
+// lib/uiBuilderWiringProjection.ts, re-used by both the Layer Tree/palette in this
+// island and WiringGraphPanel.tsx) rather than a synthetic re-implementation of its
+// logic — a copy could silently drift from what actually ships.
+
+import { friendlyComponentLabel as realFriendlyComponentLabel } from "../lib/uiBuilderWiringProjection.ts";
 
 Deno.test("friendlyComponentLabel: extracts last path segment", () => {
-  const extract = (key: string) => {
-    const parts = key.split("/");
-    return parts[parts.length - 1] ?? key;
-  };
-  assertEquals(extract("display/card"), "card");
-  assertEquals(extract("form/input/text"), "text");
-  assertEquals(extract("button"), "button");
+  assertEquals(realFriendlyComponentLabel("display/card"), "card");
+  assertEquals(realFriendlyComponentLabel("form/input/text"), "text");
+  assertEquals(realFriendlyComponentLabel("button"), "button");
 });
 
 // ─── Fix 1: keyboard resize delta ────────────────────────────────────────────

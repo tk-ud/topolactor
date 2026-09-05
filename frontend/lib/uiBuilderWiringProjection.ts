@@ -368,6 +368,44 @@ export function isPreviewInertInteraction(w: WiringInteraction): boolean {
     isBackendOrExternalDispatchAction(w.actionType);
 }
 
+/**
+ * Canonical per-node display-name resolver — moved here from islands/UiBuilderAdmin.tsx
+ * (re-exported from there for its own many call sites, never a second independently-
+ * maintained copy) so WiringGraphPanel.tsx and this module's own error/projection text
+ * can use the SAME operator-facing label authority the canvas workspace already uses
+ * pervasively for the identical DraftNode/WiringNode identity: the Layer Tree (the
+ * canonical way operators browse/select canvas nodes by name), panel section titles,
+ * undo-history labels, and accessibility announcements. componentKey is schema/catalog
+ * structural identity (e.g. "form_input/text"), not itself a display string; this is
+ * the one place that turns it into one, so a WiringGraph edge and a Layer Tree entry
+ * for the SAME node never disagree on what to call it.
+ */
+export function friendlyComponentLabel(componentKey: string): string {
+  const parts = componentKey.split("/");
+  return parts[parts.length - 1] || componentKey;
+}
+
+/**
+ * Fail-close normal-view placeholder for a node with no componentKey to resolve a
+ * label from (WiringNode.componentKey is optional in this module's type, though a
+ * real authored canvas node always carries one from catalog creation — this is a
+ * defensive path, not a rendering of the raw nodeId as if it were a name; mirrors
+ * hubNavigationManifestVisibleLabel's established UX_HUB_NAVIGATION_MANIFEST_UNNAMED_LABEL
+ * precedent). The raw nodeId stays reachable for diagnostics at each call site's own
+ * 技術情報 disclosure — this placeholder never removes that reachability, only declines
+ * to present nodeId as if it were an operator-meaningful name.
+ */
+const UNNAMED_WIRING_NODE_LABEL = "（名称未設定の部品）";
+
+/** friendlyComponentLabel with the fail-close placeholder for a node lacking componentKey. */
+export function wiringNodeDisplayLabel(
+  node: Pick<WiringNode, "componentKey">,
+): string {
+  return node.componentKey?.trim()
+    ? friendlyComponentLabel(node.componentKey)
+    : UNNAMED_WIRING_NODE_LABEL;
+}
+
 /** Value-reactive triggers that can re-fire when the source node's value changes. */
 const VALUE_REACTIVE_TRIGGERS = new Set(["input", "change", "select"]);
 
@@ -486,7 +524,7 @@ export function findSideEffectCycleErrors(
   const errors: string[] = [];
   // Direct self-loop.
   for (const node of nodes) {
-    const label = node.componentKey || node.nodeId;
+    const label = wiringNodeDisplayLabel(node);
     for (const [idx, w] of (node.runtimeInteractions ?? []).entries()) {
       if (!VALUE_REACTIVE_TRIGGERS.has(w.trigger)) continue;
       for (const target of interactionWriteTargets(w, node.nodeId)) {
@@ -494,7 +532,7 @@ export function findSideEffectCycleErrors(
           errors.push(
             `${label} #${
               idx + 1
-            }: SIDE_EFFECT_DIRECT_SELF_LOOP — 監視元 "${node.nodeId}" 自身への書き込み（${target.via}）は禁止です`,
+            }: SIDE_EFFECT_DIRECT_SELF_LOOP — 監視元 "${label}"（${node.nodeId}）自身への書き込み（${target.via}）は禁止です`,
           );
         }
       }
@@ -542,7 +580,7 @@ export function findRuntimeInteractionPolicyErrors(
 ): string[] {
   const errors: string[] = [];
   for (const node of nodes) {
-    const label = node.componentKey || node.nodeId;
+    const label = wiringNodeDisplayLabel(node);
     for (const [idx, w] of (node.runtimeInteractions ?? []).entries()) {
       const prefix = `${label} #${idx + 1}`;
       const group = classifyTrigger(w.trigger);
@@ -669,7 +707,7 @@ export function buildWiringGraphProjection(
       }
       edges.push({
         sourceNodeId: node.nodeId,
-        sourceLabel: node.componentKey || node.nodeId,
+        sourceLabel: wiringNodeDisplayLabel(node),
         interactionIndex: idx,
         trigger: w.trigger,
         triggerGroup: classifyTrigger(w.trigger),
@@ -740,7 +778,7 @@ export function applyWiringDropEdit<T extends WiringNode>(
     return {
       ok: false,
       error: `WIRING_DROP_TARGET_NOT_WIRABLE — ${
-        target.componentKey || target.nodeId
+        wiringNodeDisplayLabel(target)
       } は開閉対象部品（モーダル／ドロワー／ダイアログ）ではありません`,
     };
   }

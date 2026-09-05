@@ -7,6 +7,7 @@ import type { CalcBinding } from "./frontendLocalCalculationResolver.ts";
 import { isOverlayDisclosureAction, expectedDisclosureTargetKind } from "../lib/runtimeInteractionAuthoring.ts";
 import { parsePayloadFromSource } from "./payloadFromResolver.ts";
 import { parseUiLocalTargetRef } from "./uiEventEffectRunner.ts";
+import { wiringNodeDisplayLabel } from "../lib/uiBuilderWiringProjection.ts";
 
 export const RESPONSIVE_BREAKPOINTS = ["sm", "md", "lg", "xl"] as const;
 export type BreakpointKey = (typeof RESPONSIVE_BREAKPOINTS)[number];
@@ -844,7 +845,7 @@ export function findRuntimeInteractionPatchErrors(
   const nodeIds = new Set(nodes.map((n) => n.nodeId));
   const kindsByNodeId = new Map(nodes.map((n) => [n.nodeId, n.componentKind ?? ""]));
   for (const node of nodes) {
-    const label = node.componentKey || node.nodeId;
+    const label = wiringNodeDisplayLabel(node);
     for (const [idx, interaction] of (node.runtimeInteractions ?? []).entries()) {
       const prefix = `${label} #${idx + 1}`;
       if (interaction.actionType === "dispatchExternalPort") {

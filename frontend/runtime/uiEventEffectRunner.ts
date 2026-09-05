@@ -37,6 +37,7 @@ import {
   parseUiLocalTargetRef,
   type WiringInteraction,
   type WiringNode,
+  wiringNodeDisplayLabel,
   wiringSettingCategoryOf,
 } from "../lib/uiBuilderWiringProjection.ts";
 import type {
@@ -500,8 +501,12 @@ export function createUiEventEffectRunner(
         const fireKey = `${node.nodeId}#${idx}`;
         if (isBackendOrExternalDispatchAction(w.actionType)) {
           // Fail-close: unconfirmed / non-idempotent lifecycle dispatch never executes.
+          // Prefix must match findRuntimeInteractionPolicyErrors' own `${label} #${idx+1}:`
+          // construction exactly — both sides now resolve label via the same
+          // wiringNodeDisplayLabel authority, or this correlation silently finds
+          // zero matches and the fail-close guard is bypassed.
           const own = policyErrors.filter((e) =>
-            e.startsWith(`${node.componentKey || node.nodeId} #${idx + 1}:`)
+            e.startsWith(`${wiringNodeDisplayLabel(node)} #${idx + 1}:`)
           );
           if (own.length > 0) {
             errors.push(...own);
@@ -569,7 +574,7 @@ export function createUiEventEffectRunner(
         const result = executeStateUpdate(stateDispatcher, w);
         if (!result.ok) {
           errors.push(
-            `${node.componentKey || node.nodeId} #${idx + 1}: ${result.error}`,
+            `${wiringNodeDisplayLabel(node)} #${idx + 1}: ${result.error}`,
           );
           continue;
         }

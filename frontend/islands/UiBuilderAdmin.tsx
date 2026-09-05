@@ -88,6 +88,7 @@ import WiringGraphPanel from "../components/WiringGraphPanel.tsx";
 import {
   ALL_WIRING_TRIGGERS,
   findRuntimeInteractionPolicyErrors,
+  friendlyComponentLabel,
   type InternalApiWiringInput,
 } from "../lib/uiBuilderWiringProjection.ts";
 import ManifestStep3EventWiringPreset from "../components/ManifestStep3EventWiringPreset.tsx";
@@ -3765,11 +3766,6 @@ function LegacyManualRouteInput({
 }
 
 // ─── フローレイアウトキャンバス（FlowLayoutCanvas コンポーネント） ─────────────
-
-function friendlyComponentLabel(componentKey: string): string {
-  const parts = componentKey.split("/");
-  return parts[parts.length - 1] ?? componentKey;
-}
 
 function friendlyNodeLabel(
   node: Pick<DraftNode, "componentKey" | "nodeKind" | "htmlTag">,
