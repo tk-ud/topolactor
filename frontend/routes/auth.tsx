@@ -10,7 +10,14 @@ export default function AuthPage(): JSX.Element {
       <h1 class="page-title">topolactor — ログイン</h1>
 
       <div class="alert-info mb-6 text-sm">
-        画面定義は DB seed manifest から読み込みます。認証処理は auth 専用 DB 正本へ委譲されます。
+        アカウントでログインしてください。
+        <details class="mt-2 text-xs">
+          <summary class="cursor-pointer text-slate-500">技術情報（開発者向け）</summary>
+          <div class="mt-1 space-y-0.5 text-slate-600">
+            <p>画面定義: DB seed manifest 駆動</p>
+            <p>認証正本: auth 専用 DB 正本</p>
+          </div>
+        </details>
       </div>
 
       <LoginManifestPanel />

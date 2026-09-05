@@ -22,6 +22,7 @@ import {
   UX_RUNTIME_INTERACTION_ADD_STATE_UPDATE,
   UX_RUNTIME_INTERACTION_EXTERNAL_PORT_SELECT,
   UX_RUNTIME_INTERACTION_INSTANCE_OPERATION_SELECT,
+  UX_RUNTIME_INTERACTION_LOCAL_STATE_MUTATION_TECHNICAL_HEADING,
   UX_RUNTIME_INTERACTION_LOCAL_STATE_TARGET_LABEL,
   UX_RUNTIME_INTERACTION_NO_OVERLAY_TARGETS,
   UX_RUNTIME_INTERACTION_NO_STATE_UPDATE_TARGETS,
@@ -78,6 +79,7 @@ import {
   UX_WIRING_POLICY_LIFECYCLE_CONFIRM_LABEL,
   UX_WIRING_POLICY_LIFECYCLE_WARNING,
   UX_WIRING_SIDE_EFFECT_NONE_LABEL,
+  uxRuntimeInteractionTriggerLabel,
   UX_WIRING_SIDE_EFFECT_SECTION_HINT,
   UX_WIRING_WATCH_BINDING_ADD,
   UX_WIRING_WATCH_BINDING_EMPTY,
@@ -192,17 +194,14 @@ export default function NodeEventAuthoringPanel({
     selectableTargetIds === null || selectableTargetIds.has(n.nodeId)
   );
   // UI状態更新 (ui_state_update) generic mutation targets: any node in scope, not only
-  // disclosure-openable ones (setState/setActiveKey/localStateMutation may target a declared
-  // UI監視割当 state slot on any node, not just modal/drawer/dialog components).
+  // disclosure-openable ones — setState/setActiveKey (the canonical action_types this list
+  // authors) may target a declared UI監視割当 state slot on any node, not just modal/drawer/dialog
+  // components. Already filtered by selectableTargetIds (side_effect_cycle_policy dependency
+  // closure) — this is the ONLY target list ever offered for these actionTypes, so that policy
+  // can never be bypassed via a raw/free-text target field.
   const stateUpdateTargets = targetNodes.filter((n) =>
     selectableTargetIds === null || selectableTargetIds.has(n.nodeId)
   );
-  // UI監視割当 (declaration category) slots declared on THIS source node — surfaced here too so
-  // the ui_state_update mutation row below can pick a declared statePath, keeping the declaration
-  // (useState-like) and mutation (setState-like) categories linked without merging their models.
-  const declaredStateKeys = sourceNodeId
-    ? deriveUiWatchBindings({ nodeId: sourceNodeId, stateJson }).map((b) => b.stateKey)
-    : [];
   const [staging, setStaging] = useState<
     { kind: StagingKind; draft: NodeEventWiring } | null
   >(null);
@@ -661,15 +660,28 @@ export default function NodeEventAuthoringPanel({
   };
 
   /**
-   * UI状態更新 (ui_state_update) generic mutation row — setState / setActiveKey / localStateMutation
-   * outside the disclosure-open/close/toggle family renderOverlayRow already covers. Without this,
-   * these SSOT-vocabulary actionTypes (admin-console-workflow-ssot.yaml layout_node_props_contract
-   * descriptor.actionType) had no authoring UI at all: an authored/imported interaction using them
-   * rendered as nothing in this panel (invisible, unremovable) even though wiringSettingCategoryOf /
+   * UI状態更新 (ui_state_update) generic mutation row — setState / setActiveKey, the canonical
+   * SSOT action_types (admin-uibuilder-ui-structure-wiring-ssot.yaml ui_event_settings.
+   * setting_category_taxonomy.frontend_side.ui_state_update.action_types) outside the
+   * disclosure-open/close/toggle family renderOverlayRow already covers. Without this, these
+   * actionTypes had no authoring UI at all: an authored/imported interaction using them rendered
+   * as nothing in this panel (invisible, unremovable) even though wiringSettingCategoryOf /
    * WiringGraphPanel already classify and display them correctly as ui_state_update.
+   *
+   * localStateMutation is a SEPARATE case, handled by renderLocalStateMutationTechnicalRow below:
+   * it is not a member of this SSOT's own action_types list (a different SSOT's seed-authored
+   * internal_instance_wiring carrier), so it must never appear in this row's add/edit dropdown —
+   * doing so would fake it into the canonical vocabulary.
    */
   const renderStateUpdateRow = (w: NodeEventWiring, index: number) => {
-    const isLocalStateMutation = w.actionType === "localStateMutation";
+    // The state-path candidate list must come from the SELECTED TARGET node's own declared
+    // UI監視割当 slots, never the source/trigger node's — a mutation writes to the target's
+    // declared state, not the source's. Falls back to an empty candidate list (free text still
+    // works) when the target hasn't been chosen yet or its declaration can't be resolved.
+    const targetNode = w.targetNodeId ? allNodes?.find((n) => n.nodeId === w.targetNodeId) : undefined;
+    const targetDeclaredStateKeys = targetNode
+      ? deriveUiWatchBindings(targetNode).map((b) => b.stateKey)
+      : [];
     return (
       <div key={index} class="rounded border border-blue-100 bg-white p-2 space-y-2">
         <p class="text-[0.6rem] font-medium text-blue-900">
@@ -701,65 +713,56 @@ export default function NodeEventAuthoringPanel({
               ))}
             </select>
           </label>
-          {isLocalStateMutation
-            ? (
-              <label class="text-[0.65rem]">
-                {UX_RUNTIME_INTERACTION_LOCAL_STATE_TARGET_LABEL}
-                <input
-                  class="input-mono mt-0.5 w-full px-1 py-0.5 text-xs"
-                  value={w.targetRef ?? ""}
-                  placeholder="ui-local:<nodeId>.<stateKey>"
-                  onInput={(e) =>
-                    updateAt(index, { targetRef: (e.target as HTMLInputElement).value })}
-                />
-              </label>
-            )
-            : (
-              <label class="text-[0.65rem]">
-                {UX_TARGET_UI_LABEL}
-                <select
-                  class="input mt-0.5 w-full px-1 py-0.5 text-xs"
-                  value={w.targetNodeId ?? ""}
-                  onChange={(e) =>
-                    updateAt(index, {
-                      targetNodeId: (e.target as HTMLSelectElement).value || undefined,
-                    })}
-                >
-                  <option value="">選択してください</option>
-                  {stateUpdateTargets.map((node) => (
-                    <option key={node.nodeId} value={node.nodeId}>
-                      {node.componentKey || node.nodeId}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
+          <label class="text-[0.65rem]">
+            {UX_TARGET_UI_LABEL}
+            <select
+              class="input mt-0.5 w-full px-1 py-0.5 text-xs"
+              value={w.targetNodeId ?? ""}
+              onChange={(e) =>
+                updateAt(index, {
+                  // Changing the target invalidates any statePath chosen against the PREVIOUS
+                  // target's own declared slots — never carry it over onto a different node.
+                  targetNodeId: (e.target as HTMLSelectElement).value || undefined,
+                  statePath: undefined,
+                })}
+            >
+              <option value="">選択してください</option>
+              {/* stateUpdateTargets is already filtered by selectableWriteTargets (side_effect_cycle_policy
+                  dependency closure) — this is the ONLY target list ever offered here; no raw/free-text
+                  target entry exists for setState/setActiveKey, so that policy can't be bypassed. */}
+              {stateUpdateTargets.map((node) => (
+                <option key={node.nodeId} value={node.nodeId}>
+                  {node.componentKey || node.nodeId}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
-        {!isLocalStateMutation && (
-          <div class="grid gap-2 md:grid-cols-2">
-            <label class="text-[0.65rem]">
-              {UX_RUNTIME_INTERACTION_STATE_PATH_LABEL}
-              <input
-                class="input-mono mt-0.5 w-full px-1 py-0.5 text-xs"
-                list={`state-path-candidates-${index}`}
-                value={w.statePath ?? ""}
-                onInput={(e) =>
-                  updateAt(index, { statePath: (e.target as HTMLInputElement).value || undefined })}
-              />
-              <datalist id={`state-path-candidates-${index}`}>
-                {declaredStateKeys.map((key) => <option key={key} value={key} />)}
-              </datalist>
-            </label>
-            <label class="text-[0.65rem]">
-              {UX_RUNTIME_INTERACTION_STATE_VALUE_LABEL}
-              <input
-                class="input-mono mt-0.5 w-full px-1 py-0.5 text-xs"
-                value={typeof w.value === "string" ? w.value : w.value !== undefined ? JSON.stringify(w.value) : ""}
-                onInput={(e) => updateAt(index, { value: (e.target as HTMLInputElement).value })}
-              />
-            </label>
-          </div>
-        )}
+        <div class="grid gap-2 md:grid-cols-2">
+          <label class="text-[0.65rem]">
+            {UX_RUNTIME_INTERACTION_STATE_PATH_LABEL}
+            <input
+              class="input-mono mt-0.5 w-full px-1 py-0.5 text-xs"
+              list={`state-path-candidates-${index}`}
+              value={w.statePath ?? ""}
+              disabled={!w.targetNodeId}
+              placeholder={w.targetNodeId ? undefined : UX_TARGET_UI_LABEL}
+              onInput={(e) =>
+                updateAt(index, { statePath: (e.target as HTMLInputElement).value || undefined })}
+            />
+            <datalist id={`state-path-candidates-${index}`}>
+              {targetDeclaredStateKeys.map((key) => <option key={key} value={key} />)}
+            </datalist>
+          </label>
+          <label class="text-[0.65rem]">
+            {UX_RUNTIME_INTERACTION_STATE_VALUE_LABEL}
+            <input
+              class="input-mono mt-0.5 w-full px-1 py-0.5 text-xs"
+              value={typeof w.value === "string" ? w.value : w.value !== undefined ? JSON.stringify(w.value) : ""}
+              onInput={(e) => updateAt(index, { value: (e.target as HTMLInputElement).value })}
+            />
+          </label>
+        </div>
         <div class="flex justify-end">
           <button type="button" class="text-[0.6rem] text-red-500" onClick={() => removeAt(index)}>
             削除
@@ -768,6 +771,41 @@ export default function NodeEventAuthoringPanel({
       </div>
     );
   };
+
+  /**
+   * localStateMutation technical/read-only row. SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
+   * ui_event_settings.setting_category_taxonomy.frontend_side.ui_state_update.action_types does NOT
+   * list localStateMutation — it is a separate, seed-authored internal_instance_wiring carrier
+   * (react-schema-topology-seed-translator-ssot.yaml wiring_lane_contract), never a normal UI
+   * Builder authoring choice. An existing/imported localStateMutation interaction must stay
+   * manageable (visible, deletable — never silently dropped back to invisible "legacy") WITHOUT a
+   * new authoring authority: no actionType switch away from it here, and no raw free-text targetRef
+   * editor (a free-text "ui-local:<nodeId>.<stateKey>" field would let an author hand-write a target
+   * outside stateUpdateTargets, bypassing selectableWriteTargets / side_effect_cycle_policy's
+   * dependency-closure filtering entirely). Read-only technical disclosure + delete only.
+   */
+  const renderLocalStateMutationTechnicalRow = (w: NodeEventWiring, index: number) => (
+    <div key={index} class="rounded border border-slate-200 bg-slate-50 p-2 space-y-1">
+      <p class="text-[0.6rem] font-medium text-slate-700">
+        {UX_RUNTIME_INTERACTION_TRIGGER_UI}: {selectedNodeLabel ?? "（選択中）"}
+      </p>
+      <details class="text-[0.6rem] text-slate-600">
+        <summary class="cursor-pointer">{UX_RUNTIME_INTERACTION_LOCAL_STATE_MUTATION_TECHNICAL_HEADING}</summary>
+        <p class="mt-1">
+          {UX_TRIGGER_UI_LABEL}: {uxRuntimeInteractionTriggerLabel(w.trigger ?? w.eventType ?? "click")}
+        </p>
+        <p>actionType: localStateMutation</p>
+        <p>
+          {UX_RUNTIME_INTERACTION_LOCAL_STATE_TARGET_LABEL}: {w.targetRef ?? "（未設定）"}
+        </p>
+      </details>
+      <div class="flex justify-end">
+        <button type="button" class="text-[0.6rem] text-red-500" onClick={() => removeAt(index)}>
+          削除
+        </button>
+      </div>
+    </div>
+  );
 
   const renderExternalRow = (w: NodeEventWiring, index: number, isDraft = false) => {
     const onUpdate = isDraft
@@ -1040,7 +1078,11 @@ export default function NodeEventAuthoringPanel({
           if (category === "external_api_integration") return renderExternalRow(w, i);
           if (category === "external_instance_integration") return renderInstanceRow(w, i);
           if (isOverlayDisclosureAction(w.actionType)) return renderOverlayRow(w, i);
-          if (category === "ui_state_update") return renderStateUpdateRow(w, i);
+          if (category === "ui_state_update") {
+            return w.actionType === "localStateMutation"
+              ? renderLocalStateMutationTechnicalRow(w, i)
+              : renderStateUpdateRow(w, i);
+          }
           return null;
         })}
         {staging?.kind === "external" && renderExternalRow(staging.draft, -1, true)}
@@ -1064,11 +1106,17 @@ export default function NodeEventAuthoringPanel({
             disabled={stateUpdateTargets.length === 0 || staging !== null}
             title={stateUpdateTargets.length === 0 ? UX_RUNTIME_INTERACTION_NO_STATE_UPDATE_TARGETS : undefined}
             onClick={() => {
+              const firstTargetId = stateUpdateTargets[0]?.nodeId;
+              // Default statePath (if any) must come from the DEFAULT TARGET's own declared
+              // UI監視割当 slots, never the source node's — see renderStateUpdateRow's own note.
+              const firstTargetNode = firstTargetId
+                ? allNodes?.find((n) => n.nodeId === firstTargetId)
+                : undefined;
               const next: NodeEventWiring = {
                 trigger: "click",
                 actionType: "setState",
-                targetNodeId: stateUpdateTargets[0]?.nodeId,
-                statePath: declaredStateKeys[0],
+                targetNodeId: firstTargetId,
+                statePath: firstTargetNode ? deriveUiWatchBindings(firstTargetNode)[0]?.stateKey : undefined,
               };
               onCommit([...interactions, next], "状態の更新を追加");
             }}

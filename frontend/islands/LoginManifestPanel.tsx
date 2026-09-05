@@ -117,8 +117,11 @@ export default function LoginManifestPanel(): JSX.Element {
   if (manifestError) {
     return (
       <div class="alert-error">
-        <strong>ログイン画面を読み込めませんでした。</strong>
-        <p class="text-sm mt-2">{manifestError}</p>
+        <strong>ログイン画面を読み込めませんでした。時間をおいて再度お試しください。</strong>
+        <details class="mt-2 text-xs">
+          <summary class="cursor-pointer text-red-800">技術情報（開発者向け）</summary>
+          <p class="mt-1 text-red-900">{manifestError}</p>
+        </details>
       </div>
     );
   }
@@ -206,9 +209,14 @@ export default function LoginManifestPanel(): JSX.Element {
         <div class="alert-success mt-4">
           <strong>登録を受け付けました。</strong>
           <p class="mt-1 text-sm">
-            {state.username} は通常ユーザー realm に承認待ちで登録されました
-            （approve={String(state.approve)}, status={state.statusText ?? "active"}）。
+            {state.username} さんの登録は承認待ちです。管理者の承認後にログインできます。
           </p>
+          <details class="mt-2 text-xs">
+            <summary class="cursor-pointer text-emerald-800">技術情報（開発者向け）</summary>
+            <p class="mt-1 text-emerald-900">
+              realm=user, approve={String(state.approve)}, status={state.statusText ?? "active"}
+            </p>
+          </details>
         </div>
       )}
 
@@ -217,9 +225,15 @@ export default function LoginManifestPanel(): JSX.Element {
           <strong>ログインに失敗しました。</strong>
           <ul class="mt-2 list-inside list-disc text-sm">
             {(state.errors ?? [{ message: "不明なエラー。" }]).map((e, i) => (
-              <li key={i}>{authErrorText(e)}</li>
+              <li key={i}>{e.message ?? e.Message ?? "不明なエラー。"}</li>
             ))}
           </ul>
+          <details class="mt-2 text-xs">
+            <summary class="cursor-pointer text-red-800">技術情報（開発者向け）</summary>
+            <ul class="mt-1 list-inside list-disc text-red-900">
+              {(state.errors ?? []).map((e, i) => <li key={i}>{authErrorText(e)}</li>)}
+            </ul>
+          </details>
         </div>
       )}
 

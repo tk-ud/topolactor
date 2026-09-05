@@ -1872,6 +1872,7 @@ export function LayoutRightDock({
   onBatchApplyNodes,
   suggestShape,
   designHandoffKey = 0,
+  onPackageWiringSaved,
 }: {
   draftNodes: DraftNode[];
   selectedNodeId: string | null;
@@ -1904,6 +1905,13 @@ export function LayoutRightDock({
   suggestShape?: ManifestSuggestShape | null;
   /** Increment to open design inspector accordion after layout apply handoff. */
   designHandoffKey?: number;
+  /**
+   * Round: bubbles PackageConnectionPanel's own real save result up to the caller so the
+   * "配線ビュー" wiring canvas's internalApiWirings projection can reflect a same-package save
+   * immediately, without a second, drifting fetch of the SAME ui_topology:get_package_wiring
+   * authority this component already re-fetches for its own admin_runtime gate.
+   */
+  onPackageWiringSaved?: (wiring: AdminPackageWiringRow) => void;
 }): JSX.Element {
   // Round 18: the admin_runtime operation-override authoring section (NodeEventAuthoringPanel)
   // must only be offered when this layout's OWN package wiring is actually
@@ -1922,6 +1930,7 @@ export function LayoutRightDock({
   >(null);
   const onSiblingWiringSaved = (wiring: AdminPackageWiringRow) => {
     setWiringSaveOverride({ packageId, wiringKind: wiring.wiringKind });
+    onPackageWiringSaved?.(wiring);
   };
   const effectiveWiringKind = wiringSaveOverride?.packageId === packageId
     ? wiringSaveOverride.wiringKind
@@ -2775,12 +2784,14 @@ function ApplyReadinessPanel({
   canPatch,
   effectiveRouteKey,
   effectiveLayoutId,
+  effectiveLayoutKey,
   draftNodes,
   layoutClassRefError,
 }: {
   canPatch: boolean;
   effectiveRouteKey: string;
   effectiveLayoutId: string;
+  effectiveLayoutKey?: string;
   draftNodes: DraftNode[];
   layoutClassRefError: string | null;
 }): JSX.Element {
@@ -2817,7 +2828,14 @@ function ApplyReadinessPanel({
               ? (
                 <>
                   <code class="text-xs">{effectiveRouteKey}</code> /{" "}
-                  <code class="text-xs">{shortId(effectiveLayoutId)}</code>
+                  {effectiveLayoutKey
+                    ? <code class="text-xs">{effectiveLayoutKey}</code>
+                    : (
+                      <details class="inline text-xs">
+                        <summary class="inline cursor-pointer">技術情報</summary>
+                        <code class="ml-1">{effectiveLayoutId}</code>
+                      </details>
+                    )}
                 </>
               )
               : "未選択 — ルートとレイアウトを選択してください"}
@@ -2933,13 +2951,12 @@ function _LayoutPatchSummaryPanel(
           ルート: <code>{summary.routeKey || "—"}</code>
         </li>
         <li>
-          レイアウト: {summary.layoutKey
-            ? <code>{summary.layoutKey}</code>
-            : <code>{shortId(summary.layoutId) || "—"}</code>}
+          レイアウト: {summary.layoutKey ? <code>{summary.layoutKey}</code> : "—"}
           {summary.layoutId && (
-            <span class="ml-1 font-mono text-xs text-slate-600">
-              (layoutId: {summary.layoutId})
-            </span>
+            <details class="ml-1 inline text-xs text-slate-600">
+              <summary class="inline cursor-pointer">技術情報</summary>
+              <span class="ml-1 font-mono">layoutId: {summary.layoutId}</span>
+            </details>
           )}
         </li>
         <li>CSS トークン: {summary.cssTokenCount} 件</li>
@@ -3004,7 +3021,7 @@ function RouteLayoutSelector({
           <option value="">— レイアウトを選択 —</option>
           {layouts.map((l) => (
             <option key={l.layoutId} value={l.layoutId}>
-              {l.layoutKey} ({shortId(l.layoutId)})
+              {l.layoutKey}
             </option>
           ))}
         </select>
@@ -5058,11 +5075,34 @@ function LayoutBuilderSection({
   // ui_topology:get_package_wiring row PackageWiringEditor/LayoutRightDock read (never a second,
   // parallel persistence authority) so the "配線ビュー" wiring canvas can project the package's own
   // internal-API/manifest wiring as an edge, per SSOT lane_storage_boundary.lanes.
-  // package_internal_api_wiring_lane. Re-fetches on scopedPackageId change; a save inside the
-  // sibling PackageConnectionPanel is reflected after the next packageId change or remount, the
-  // same staleness boundary useEffectivePackageWiringKind already documents for its wiringKind use.
-  const { targetSurface: packageWiringTargetSurface, targetRef: packageWiringTargetRef } =
+  // package_internal_api_wiring_lane. Re-fetches on scopedPackageId change; a same-package save
+  // inside the sibling PackageConnectionPanel is reflected immediately via
+  // packageWiringSaveOverride (LayoutRightDock's onPackageWiringSaved bubbles up
+  // PackageWiringEditor's own real save result), the SAME pattern LayoutRightDock's own
+  // wiringSaveOverride already uses for its admin_runtime gate — never a second poll/fetch.
+  const { targetSurface: fetchedPackageWiringTargetSurface, targetRef: fetchedPackageWiringTargetRef } =
     useEffectivePackageWiringKind(scopedPackageId);
+  const [packageWiringSaveOverride, setPackageWiringSaveOverride] = useState<
+    { packageId: string; targetSurface: string; targetRef?: string | null } | null
+  >(null);
+  const onPackageWiringSaved = (wiring: { targetSurface: string; targetRef?: string | null }) => {
+    if (!scopedPackageId) return;
+    setPackageWiringSaveOverride({
+      packageId: scopedPackageId,
+      targetSurface: wiring.targetSurface,
+      targetRef: wiring.targetRef,
+    });
+  };
+  const activePackageWiringOverride = packageWiringSaveOverride &&
+      packageWiringSaveOverride.packageId === scopedPackageId
+    ? packageWiringSaveOverride
+    : null;
+  const packageWiringTargetSurface = activePackageWiringOverride
+    ? activePackageWiringOverride.targetSurface
+    : fetchedPackageWiringTargetSurface;
+  const packageWiringTargetRef = activePackageWiringOverride
+    ? activePackageWiringOverride.targetRef ?? null
+    : fetchedPackageWiringTargetRef;
   const internalApiWirings: InternalApiWiringInput[] = packageWiringTargetSurface === "manifest" &&
       packageWiringTargetRef
     ? [{
@@ -6991,6 +7031,7 @@ function LayoutBuilderSection({
               onEmissionDataJsonChange={setEmissionDataJson}
               suggestShape={suggestShape}
               designHandoffKey={designHandoffKey}
+              onPackageWiringSaved={onPackageWiringSaved}
             />
             </div>
           </div>
@@ -7038,6 +7079,7 @@ function LayoutBuilderSection({
               canPatch={canPatch}
               effectiveRouteKey={effectiveRouteKey}
               effectiveLayoutId={effectiveLayoutId}
+              effectiveLayoutKey={selectedLayout?.layoutKey}
               draftNodes={draftNodes}
               layoutClassRefError={layoutClassRefError}
             />

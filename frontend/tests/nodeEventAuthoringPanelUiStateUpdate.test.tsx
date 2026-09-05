@@ -71,7 +71,14 @@ Deno.test("NodeEventAuthoringPanel ui_state_update: a non-overlay setState inter
   }
 });
 
-Deno.test("NodeEventAuthoringPanel ui_state_update: a localStateMutation interaction renders its ui-local targetRef field", async () => {
+Deno.test("NodeEventAuthoringPanel ui_state_update: a localStateMutation interaction stays visible/deletable as a READ-ONLY technical row — no raw free-text target editor", async () => {
+  // SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml ui_event_settings.setting_category_taxonomy
+  // .frontend_side.ui_state_update.action_types does NOT include localStateMutation (a separate,
+  // seed-authored internal_instance_wiring carrier from a different SSOT). Promoting it to a
+  // normally-editable row with a free-text targetRef input would let an author hand-write a target
+  // outside stateUpdateTargets, bypassing selectableWriteTargets / side_effect_cycle_policy's
+  // dependency-closure filtering entirely — so it must render read-only (technical disclosure),
+  // never as an editable <input>.
   const { container, cleanup } = setupDom();
   try {
     const interactions: NodeEventWiring[] = [
@@ -84,10 +91,35 @@ Deno.test("NodeEventAuthoringPanel ui_state_update: a localStateMutation interac
     await flushUpdates();
     const html = container.innerHTML;
     assert(html.includes(UX_RUNTIME_INTERACTION_LOCAL_STATE_TARGET_LABEL));
+    assert(html.includes("ui-local:filter_panel.selectedCategory"), "the target must remain visible");
     const inputs = Array.from(container.querySelectorAll("input")) as HTMLInputElement[];
-    assert(
+    assertFalse(
       inputs.some((el) => el.value === "ui-local:filter_panel.selectedCategory"),
-      "the ui-local targetRef must be rendered as the local-state-target input's value",
+      "the ui-local target must NOT be a raw free-text editable input (bypasses dependency-closure policy)",
+    );
+    const deleteButtons = Array.from(container.querySelectorAll("button")).filter((b) =>
+      b.textContent?.includes("削除")
+    );
+    assert(deleteButtons.length > 0, "must still be deletable — never silently invisible again");
+  } finally {
+    cleanup();
+  }
+});
+
+Deno.test("NodeEventAuthoringPanel ui_state_update: localStateMutation is never a selectable option in the add/edit actionType dropdown", async () => {
+  const { container, cleanup } = setupDom();
+  try {
+    // An existing, freely-editable setState interaction — its actionType <select> must offer
+    // only the canonical SSOT action_types (setState/setActiveKey), never localStateMutation.
+    const interactions: NodeEventWiring[] = [
+      { trigger: "click", actionType: "setState", targetNodeId: "n-target", statePath: "selectedKey" },
+    ];
+    render(h(NodeEventAuthoringPanel, baseProps({ interactions })), container);
+    await flushUpdates();
+    const options = Array.from(container.querySelectorAll("option")).map((o) => o.getAttribute("value"));
+    assertFalse(
+      options.includes("localStateMutation"),
+      "localStateMutation must never appear as a choosable actionType option",
     );
   } finally {
     cleanup();
@@ -125,6 +157,98 @@ Deno.test("NodeEventAuthoringPanel ui_state_update: '+ 状態の更新' commits 
       result[0].actionType.includes("Modal") || result[0].actionType.includes("Drawer") ||
         result[0].actionType.includes("Dialog"),
       "the generic state-update add path must not produce an overlay disclosure actionType",
+    );
+  } finally {
+    cleanup();
+  }
+});
+
+Deno.test("NodeEventAuthoringPanel ui_state_update: statePath candidates are derived from the SELECTED TARGET node's own declared state, never the source node's", async () => {
+  // The source node ("n-source") declares a slot the mutation must NOT offer; the target node
+  // ("n-target") declares a different slot that IS the correct candidate for this mutation's
+  // statePath, since a mutation writes to the TARGET's declared state, not the source's.
+  const { container, cleanup } = setupDom();
+  try {
+    const interactions: NodeEventWiring[] = [
+      { trigger: "click", actionType: "setState", targetNodeId: "n-target" },
+    ];
+    render(
+      h(NodeEventAuthoringPanel, baseProps({
+        interactions,
+        sourceNodeId: "n-source",
+        stateJson: JSON.stringify({ sourceOnlySlot: null }),
+        allNodes: [
+          { nodeId: "n-source", stateJson: JSON.stringify({ sourceOnlySlot: null }) },
+          { nodeId: "n-target", stateJson: JSON.stringify({ targetOnlySlot: null }) },
+        ],
+      })),
+      container,
+    );
+    await flushUpdates();
+    const datalistOptions = Array.from(container.querySelectorAll("datalist option")).map((o) =>
+      o.getAttribute("value")
+    );
+    assert(datalistOptions.includes("targetOnlySlot"), "the target node's own declared slot must be offered");
+    assertFalse(
+      datalistOptions.includes("sourceOnlySlot"),
+      "the source node's declared slot must NOT leak into the target's statePath candidates",
+    );
+  } finally {
+    cleanup();
+  }
+});
+
+Deno.test("NodeEventAuthoringPanel ui_state_update: the target dropdown excludes a node inside the dependency closure (side_effect_cycle_policy negative case)", async () => {
+  // A (source) already has a value-reactive "change" interaction writing to B (A -> B). B ALSO
+  // has a value-reactive "change" interaction writing back to A (B -> A) — a real authored
+  // indirect cycle. dependencyClosureOfTriggerSource(nodes, "A") is therefore {A, B}, and
+  // selectableWriteTargets must exclude both, leaving only C selectable as a NEW write target
+  // for a trigger sourced on A.
+  const { container, cleanup } = setupDom();
+  try {
+    const allNodes = [
+      {
+        nodeId: "A",
+        componentKey: "form_input/select",
+        runtimeInteractions: [{ trigger: "change", actionType: "setState", targetNodeId: "B" }],
+      },
+      {
+        nodeId: "B",
+        componentKey: "form_input/select",
+        runtimeInteractions: [{ trigger: "change", actionType: "setState", targetNodeId: "A" }],
+      },
+      { nodeId: "C", componentKey: "form_input/select", runtimeInteractions: [] },
+    ];
+    const interactions: NodeEventWiring[] = [
+      { trigger: "click", actionType: "setState", targetNodeId: "C" },
+    ];
+    render(
+      h(NodeEventAuthoringPanel, baseProps({
+        interactions,
+        sourceNodeId: "A",
+        allNodes,
+        targetNodes: [
+          { nodeId: "A", componentKey: "form_input/select", componentKind: "form_input/select" },
+          { nodeId: "B", componentKey: "form_input/select", componentKind: "form_input/select" },
+          { nodeId: "C", componentKey: "form_input/select", componentKind: "form_input/select" },
+        ],
+      })),
+      container,
+    );
+    await flushUpdates();
+    // The target <select> is the second <select> in the row (trigger, actionType, target).
+    const selects = Array.from(container.querySelectorAll("select"));
+    const targetSelect = selects.find((s) =>
+      Array.from(s.querySelectorAll("option")).some((o) => o.getAttribute("value") === "C")
+    );
+    assertExists(targetSelect, "the target select for this row must exist");
+    const targetOptionValues = Array.from(targetSelect!.querySelectorAll("option")).map((o) =>
+      o.getAttribute("value")
+    );
+    assert(targetOptionValues.includes("C"), "C is outside the dependency closure and must remain selectable");
+    assertFalse(
+      targetOptionValues.includes("B"),
+      "B is inside the dependency closure of A (B -> A reaches the trigger source) and must be excluded",
     );
   } finally {
     cleanup();

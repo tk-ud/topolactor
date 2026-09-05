@@ -146,6 +146,7 @@ import {
   UX_DERIVED_IDENTIFIER_ROUTE_LABEL,
   UX_DERIVED_IDENTIFIER_PRIMARY_TABLE_LABEL,
   UX_DERIVED_IDENTIFIER_UI_BUILDER_KEY_LABEL,
+  UX_TOPOLOGY_SYSTEM_NAME_LABEL,
 } from "../content/adminUxTerms.ts";
 
 type PanelError = { code?: string; message: string };
@@ -1696,7 +1697,7 @@ export default function ContentsScreenDesignPanel({
 
           {!isResumeMode && entryMode !== "clone_active_as_replacement_draft" && (
             <label class="block text-xs">
-              <span class="font-semibold">トポロジーID <span class="text-red-500">*</span></span>
+              <span class="font-semibold">{UX_TOPOLOGY_SYSTEM_NAME_LABEL} <span class="text-red-500">*</span></span>
               <span class="ml-1 text-slate-500">（英小文字・数字・ハイフンのみ、例: customer-management）</span>
               <input
                 class="mt-1 w-full rounded border px-2 py-1 font-mono"
@@ -1829,7 +1830,11 @@ export default function ContentsScreenDesignPanel({
             <div class="mb-2 text-xs">
               <p class="font-semibold">テーブル名（プライマリ・自動生成）</p>
               <p class="mt-1 rounded border border-slate-100 bg-slate-50 px-2 py-1 font-mono text-slate-700">
-                {derivedPrimaryName || <span class="italic text-slate-400">Step 1 でトポロジーIDを入力してください</span>}
+                {derivedPrimaryName || (
+                  <span class="italic text-slate-400">
+                    Step 1 で{UX_TOPOLOGY_SYSTEM_NAME_LABEL}を入力してください
+                  </span>
+                )}
               </p>
             </div>
           ) : (

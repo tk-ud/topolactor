@@ -46,6 +46,14 @@ export const UX_RUNTIME_DESTINATION_LABELS: Record<string, string> = {
  * primary physical table / ui_builder_key は auto-shown preview として常時表示が
  * 要求されているため details 等で隠さない。ここではラベル文言のみ通常語彙にする）。
  */
+/**
+ * topologySystemName field label (SSOT: admin-console-workflow-ssot.yaml
+ * topology_naming_ssot.topology_system_name — "system identifier" in the SSOT's own
+ * meaning field, no mandated user-facing label). "トポロジーID" read as raw internal
+ * vocabulary to a normal operator; this is the actual input field the derived Route /
+ * Primary Table / UI Builder Key preview below is computed from.
+ */
+export const UX_TOPOLOGY_SYSTEM_NAME_LABEL = "ページの識別子";
 export const UX_DERIVED_IDENTIFIER_ROUTE_LABEL = "ページのURL（自動生成）";
 export const UX_DERIVED_IDENTIFIER_PRIMARY_TABLE_LABEL = "保存先テーブル名（自動生成）";
 export const UX_DERIVED_IDENTIFIER_UI_BUILDER_KEY_LABEL = "画面づくり用キー（自動生成）";
@@ -478,14 +486,23 @@ export const UX_RUNTIME_INTERACTION_STAGING_CANCEL = "キャンセル";
  */
 export const UX_RUNTIME_INTERACTION_ADD_STATE_UPDATE = "+ 状態の更新";
 export const UX_RUNTIME_INTERACTION_STATE_UPDATE_ACTION_LABEL = "更新の種類";
+/**
+ * SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml ui_event_settings.setting_category_taxonomy
+ * .frontend_side.ui_state_update.action_types — the canonical, normally-authorable vocabulary.
+ * localStateMutation is DELIBERATELY excluded here: it is not a member of this SSOT's own
+ * action_types list, but a separate seed-authored internal_instance_wiring carrier (a different
+ * SSOT: react-schema-topology-seed-translator-ssot.yaml wiring_lane_contract). Promoting it into
+ * this normal add/edit dropdown would fake it into the canonical vocabulary rather than handling
+ * it as the existing, technical-only carrier it actually is.
+ */
 export const UX_RUNTIME_INTERACTION_STATE_UPDATE_ACTION_OPTIONS: readonly { value: string; label: string }[] = [
   { value: "setState", label: "値を設定（setState）" },
   { value: "setActiveKey", label: "選択中キーを設定（setActiveKey）" },
-  { value: "localStateMutation", label: "ローカル状態を更新（localStateMutation）" },
 ];
 export const UX_RUNTIME_INTERACTION_STATE_PATH_LABEL = "状態スロット（statePath）";
 export const UX_RUNTIME_INTERACTION_STATE_VALUE_LABEL = "値（value）";
 export const UX_RUNTIME_INTERACTION_LOCAL_STATE_TARGET_LABEL = "ローカル状態の対象（ui-local）";
+export const UX_RUNTIME_INTERACTION_LOCAL_STATE_MUTATION_TECHNICAL_HEADING = "技術情報（既存の内部連携設定）";
 export const UX_RUNTIME_INTERACTION_NO_STATE_UPDATE_TARGETS =
   "キャンバスに部品がありません。状態を更新する対象を先に配置してください。";
 /**
