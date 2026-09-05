@@ -576,6 +576,97 @@ Deno.test("side-effect cycle policy: selectable_write_targets excludes dependenc
   assertEquals(selectableWriteTargets(nodes, "n-a"), ["n-c"]);
 });
 
+// ─── side-effect cycle policy: localStateMutation targetRef writes (round-7 gap) ──
+//
+// A localStateMutation entry authors its write target via `targetRef`
+// ("ui-local:<nodeId>.<stateKey>"), never a separate `targetNodeId` field (SSOT
+// wiring_lane_contract.lanes.internal_instance_wiring / react-schema-topology-seed-
+// translator-ssot.yaml). The dependency graph this policy derives from
+// runtimeInteractions must see a targetRef write exactly as it sees a
+// targetNodeId write — the SAME resolved target node either way — since
+// resolveUiStateUpdateMutation (runtime/uiEventEffectRunner.ts) treats them
+// identically at write time. Before this fix, interactionWriteTargets only
+// recognized targetNodeId-shaped writes, so a direct or indirect loop authored
+// entirely through targetRef went undetected by both the authoring candidate
+// filter and this fail-close gate.
+
+Deno.test("side-effect cycle policy: a localStateMutation targetRef direct self-loop (watched A -> targetRef ui-local:A.x) fails close", () => {
+  const nodes: WiringNode[] = [{
+    nodeId: "n-a",
+    componentKey: "form_input/text",
+    runtimeInteractions: [{
+      trigger: "change",
+      actionType: "localStateMutation",
+      targetRef: "ui-local:n-a.flag",
+    }],
+  }];
+  const cycleErrors = findSideEffectCycleErrors(nodes);
+  assertEquals(cycleErrors.length, 1);
+  assert(cycleErrors[0].includes("SIDE_EFFECT_DIRECT_SELF_LOOP"));
+  assert(
+    findRuntimeInteractionPolicyErrors(nodes).some((e) =>
+      e.includes("SIDE_EFFECT_DIRECT_SELF_LOOP")
+    ),
+    "cycle errors must block the same validate/apply path",
+  );
+});
+
+Deno.test("side-effect cycle policy: an indirect loop through a targetRef write (A -> B via targetRef, B -> A via targetNodeId) fails close", () => {
+  const nodes: WiringNode[] = [
+    {
+      nodeId: "n-a",
+      componentKey: "form_input/text",
+      runtimeInteractions: [{
+        trigger: "change",
+        actionType: "localStateMutation",
+        targetRef: "ui-local:n-b.flag",
+      }],
+    },
+    {
+      nodeId: "n-b",
+      componentKey: "form_input/text",
+      runtimeInteractions: [{
+        trigger: "change",
+        actionType: "setState",
+        targetNodeId: "n-a",
+        statePath: "open",
+      }],
+    },
+  ];
+  const errors = findSideEffectCycleErrors(nodes);
+  assertEquals(errors.length, 1);
+  assert(errors[0].includes("SIDE_EFFECT_INDIRECT_LOOP"));
+});
+
+Deno.test("side-effect cycle policy: selectable_write_targets excludes dependency_closure derived through a targetRef write edge", () => {
+  const nodes: WiringNode[] = [
+    // n-b writes into n-a via a localStateMutation targetRef (not targetNodeId) on
+    // value change: writing to n-b from an n-a-triggered effect would loop, so n-b
+    // must be inside dependency_closure(n-a) exactly as a targetNodeId write would be.
+    {
+      nodeId: "n-b",
+      componentKey: "form_input/text",
+      runtimeInteractions: [{
+        trigger: "change",
+        actionType: "localStateMutation",
+        targetRef: "ui-local:n-a.open",
+      }],
+    },
+    { nodeId: "n-a", componentKey: "form_input/text" },
+    {
+      nodeId: "n-c",
+      componentKey: "disclosure/modal",
+      componentKind: "disclosure/modal",
+    },
+  ];
+  const closure = dependencyClosureOfTriggerSource(nodes, "n-a");
+  assert(
+    closure.has("n-b"),
+    "node writing into trigger source via targetRef is in the closure, same as a targetNodeId write",
+  );
+  assertEquals(selectableWriteTargets(nodes, "n-a"), ["n-c"]);
+});
+
 // ─── preview inert boundary ──────────────────────────────────────────────────
 
 Deno.test("preview inert: lifecycle triggers and dispatch actions are inert in preview", () => {

@@ -4,6 +4,7 @@ import {
   applyWiringDropEdit,
   buildWiringGraphProjection,
   findRuntimeInteractionPolicyErrors,
+  parseUiLocalTargetRef,
   type InternalApiWiringInput,
   type WiringGraphEdge,
   type WiringNode,
@@ -47,15 +48,35 @@ const CATEGORY_LABELS: Record<WiringSettingCategory, string> = {
   external_instance_integration: UX_WIRING_CATEGORY_EXTERNAL_INSTANCE,
 };
 
+/**
+ * Normal-view friendly target text for an edge. Never the raw edge.targetRef
+ * string: for external_port/instance_port/internal_api this panel has no
+ * candidate-registry data (WiringGraphPanel receives only nodes/internalApiWirings,
+ * never the ui_topology:list_external_port_authoring_candidates /
+ * list_instance_operation_authoring_candidates rows NodeEventAuthoringPanel's
+ * authoring UI uses) to resolve a real friendly name from — inventing one here
+ * would promote a frontend-local guess to display authority it doesn't have, so
+ * this uses only the already-SSOT-classified targetKind for friendly primary
+ * text. The raw dispatcher-shaped reference (external-port:.../instance-port:.../
+ * a package targetRef manifest UUID) stays reachable via a 技術情報 disclosure
+ * at the call site — never deleted, never shown as primary meaning.
+ */
 function edgeTargetLabel(
   edge: WiringGraphEdge,
   nodes: readonly WiringNode[],
 ): string {
   if (edge.targetKind === "node" && edge.targetRef) {
-    const target = nodes.find((n) => n.nodeId === edge.targetRef);
-    return target?.componentKey || edge.targetRef;
+    // A localStateMutation edge's targetRef is the full "ui-local:<nodeId>.<stateKey>"
+    // carrier, not a bare nodeId — must be parsed before node lookup, or this always
+    // misses and falls through to the raw carrier string itself.
+    const local = parseUiLocalTargetRef(edge.targetRef);
+    const resolvedNodeId = local?.targetNodeId ?? edge.targetRef;
+    const target = nodes.find((n) => n.nodeId === resolvedNodeId);
+    return target?.componentKey || resolvedNodeId;
   }
-  if (edge.targetRef) return edge.targetRef;
+  if (edge.targetKind === "external_port") return "外部APIに接続済み";
+  if (edge.targetKind === "instance_port") return "外部インスタンスに接続済み";
+  if (edge.targetKind === "internal_api") return "内部APIパッケージに接続済み";
   return "（未設定）";
 }
 
@@ -198,6 +219,12 @@ export default function WiringGraphPanel<T extends WiringNode>({
                 </span>
               )}
             </button>
+            {edge.targetRef && (
+              <details class="ml-2 text-[0.55rem] text-slate-500">
+                <summary class="cursor-pointer">技術情報</summary>
+                <code class="font-mono">{edge.targetRef}</code>
+              </details>
+            )}
           </li>
         ))}
       </ul>

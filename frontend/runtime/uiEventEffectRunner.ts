@@ -34,6 +34,7 @@ import {
   findSideEffectCycleErrors,
   isBackendOrExternalDispatchAction,
   isLifecycleTrigger,
+  parseUiLocalTargetRef,
   type WiringInteraction,
   type WiringNode,
   wiringSettingCategoryOf,
@@ -51,6 +52,17 @@ import {
   parsePayloadFromSource,
   resolvePayloadFromSource,
 } from "./payloadFromResolver.ts";
+
+/**
+ * Re-exported here (canonical definition now in uiBuilderWiringProjection.ts) so
+ * existing callers of this module (visualLayoutUtils.ts, tests) keep working
+ * unchanged. The side_effect_cycle_policy dependency-graph derivation
+ * (interactionWriteTargets, same module as the canonical definition) and this
+ * module's own resolveUiStateUpdateMutation below resolve a localStateMutation
+ * targetRef through the exact same parser — never two independently-maintained
+ * copies that could drift apart.
+ */
+export { parseUiLocalTargetRef };
 
 /**
  * Runtime local state store with change notification — the projection rerender
@@ -144,27 +156,6 @@ const UI_STATE_UPDATE_OPEN_ACTIONS: Record<string, boolean | "toggle"> = {
   // semantic as open* — never a business-data value the seed record does not carry.
   localStateMutation: true,
 };
-
-/**
- * SSOT wiring_lane_contract.lanes.internal_instance_wiring targetRef_shape:
- * "ui-local:<nodeId>.<stateKey>". Parses the targetRef into the same
- * {targetNodeId, statePath} shape UI_STATE_UPDATE_ACTIONS entries carry
- * directly — used as a fallback when an interaction has no separate
- * targetNodeId/statePath fields (localStateMutation entries only carry
- * targetRef). Malformed/non-matching targetRef resolves to undefined —
- * never guessed.
- */
-const UI_LOCAL_TARGET_REF_RE = /^ui-local:([^.]+)\.(.+)$/;
-
-export function parseUiLocalTargetRef(
-  targetRef: string | undefined,
-): { targetNodeId: string; statePath: string } | undefined {
-  const trimmed = targetRef?.trim();
-  if (!trimmed) return undefined;
-  const match = UI_LOCAL_TARGET_REF_RE.exec(trimmed);
-  if (!match) return undefined;
-  return { targetNodeId: match[1], statePath: match[2] };
-}
 
 export type ResolvedUiStateUpdateMutation = {
   targetNodeId: string;

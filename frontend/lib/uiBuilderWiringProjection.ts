@@ -371,6 +371,28 @@ export function isPreviewInertInteraction(w: WiringInteraction): boolean {
 /** Value-reactive triggers that can re-fire when the source node's value changes. */
 const VALUE_REACTIVE_TRIGGERS = new Set(["input", "change", "select"]);
 
+/**
+ * SSOT wiring_lane_contract.lanes.internal_instance_wiring targetRef_shape:
+ * "ui-local:<nodeId>.<stateKey>". The canonical parser for this shape — runtime/
+ * uiEventEffectRunner.ts's resolveUiStateUpdateMutation and this module's own
+ * interactionWriteTargets both resolve a localStateMutation entry's write target
+ * through this single function, so authoring-time dependency-graph derivation
+ * (side_effect_cycle_policy) and runtime mutation resolution can never see a
+ * different target node for the identical authored interaction. Malformed/
+ * non-matching targetRef resolves to undefined — never guessed.
+ */
+const UI_LOCAL_TARGET_REF_RE = /^ui-local:([^.]+)\.(.+)$/;
+
+export function parseUiLocalTargetRef(
+  targetRef: string | undefined,
+): { targetNodeId: string; statePath: string } | undefined {
+  const trimmed = targetRef?.trim();
+  if (!trimmed) return undefined;
+  const match = UI_LOCAL_TARGET_REF_RE.exec(trimmed);
+  if (!match) return undefined;
+  return { targetNodeId: match[1], statePath: match[2] };
+}
+
 type WriteTarget = { nodeId: string; via: "outputProp" | "state" };
 
 function interactionWriteTargets(
@@ -381,8 +403,19 @@ function interactionWriteTargets(
   if (w.outputProp?.trim()) {
     targets.push({ nodeId: sourceNodeId, via: "outputProp" });
   }
-  if (w.targetNodeId?.trim() && UI_STATE_UPDATE_ACTIONS.has(w.actionType)) {
-    targets.push({ nodeId: w.targetNodeId, via: "state" });
+  if (UI_STATE_UPDATE_ACTIONS.has(w.actionType)) {
+    // SSOT side_effect_cycle_policy's dependency graph must see the SAME resolved
+    // write target resolveUiStateUpdateMutation uses at runtime — a localStateMutation
+    // (or any ui_state_update action authored via targetRef instead of a separate
+    // targetNodeId field) writes a real node just as much as a targetNodeId-carrying
+    // entry does; skipping it here would let a direct/indirect loop through a
+    // targetRef write go undetected by both the authoring candidate filter and the
+    // findSideEffectCycleErrors runtime/pre-save guard.
+    const targetNodeId = w.targetNodeId?.trim() ||
+      parseUiLocalTargetRef(w.targetRef)?.targetNodeId;
+    if (targetNodeId) {
+      targets.push({ nodeId: targetNodeId, via: "state" });
+    }
   }
   return targets;
 }
