@@ -2472,10 +2472,6 @@ function buildSlotKeyCandidates(
   return [...new Set(["", ...dbSlotKeys, ...fromCanvas, ...GENERIC_SLOT_KEYS])];
 }
 
-function shortId(id: string): string {
-  return id.length > 8 ? id.slice(0, 8) : id;
-}
-
 async function loadLayoutCandidatesFromBackend(): Promise<{
   candidates: LayoutRouteCandidate[];
   errors: UiValidationError[];
@@ -2648,7 +2644,7 @@ function LifecycleStepIndicator(
           role="status"
           class="mt-2 rounded border border-green-300 bg-green-50 px-2 py-1.5 text-xs font-medium text-green-800"
         >
-          配置（layout_patch）は DB に保存済みです。下の「次のステップ」からデザイン永続化へ進めます。
+          配置は保存済みです。下の「次のステップ」からデザインの保存へ進めます。
         </p>
       )}
     </div>
@@ -2691,9 +2687,12 @@ function LayoutPersistHandoffBanner({
         </a>
       </div>
       {routeKey && (
-        <p class="mb-0 mt-2 text-[0.65rem] text-green-700">
-          route: <code class="font-mono">{routeKey}</code>
-        </p>
+        <details class="mb-0 mt-2 text-[0.65rem] text-green-700">
+          <summary class="cursor-pointer">技術情報（開発者向け）</summary>
+          <p class="mt-0.5">
+            route: <code class="font-mono">{routeKey}</code>
+          </p>
+        </details>
       )}
     </div>
   );
@@ -7130,7 +7129,7 @@ function LayoutBuilderSection({
           : null}
         routeKey={effectiveRouteKey}
         layoutId={effectiveLayoutId}
-        layoutLabel={selectedLayout?.layoutKey ?? shortId(effectiveLayoutId)}
+        layoutLabel={selectedLayout?.layoutKey ?? ""}
         loading={loading}
         onClose={() => {
           setLayoutApplyModalOpen(false);

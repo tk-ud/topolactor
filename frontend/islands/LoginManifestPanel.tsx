@@ -161,9 +161,15 @@ export default function LoginManifestPanel(): JSX.Element {
       <section id="register" class="rounded-lg border border-blue-100 bg-blue-50 p-4">
         <h2 class="text-base font-semibold text-gray-900">新規登録（通常ユーザー）</h2>
         <p class="mt-1 text-sm text-gray-600">
-          登録直後のアカウントは承認待ちです。管理者が承認するまでログインは
-          <code class="mx-1 rounded bg-white px-1">AUTH_USER_NOT_APPROVED</code>で明示的に拒否されます。
+          登録直後のアカウントは承認待ちです。管理者が承認するまでログインできません。
         </p>
+        <details class="mt-1 text-xs text-gray-500">
+          <summary class="cursor-pointer">技術情報（開発者向け）</summary>
+          <p class="mt-1">
+            承認待ちアカウントのログインは <code class="rounded bg-white px-1">AUTH_USER_NOT_APPROVED</code>{" "}
+            で明示的に拒否されます。
+          </p>
+        </details>
         <form onSubmit={handleRegister} class="mt-3 flex max-w-xs flex-col gap-3">
           <label class="text-sm font-medium text-gray-700">
             ユーザー名

@@ -48,7 +48,10 @@ function ValidationList({
           <li key={`${err.code ?? "err"}-${i}`}>
             {err.message}
             {err.code && (
-              <span class="ml-1 font-mono text-xs text-red-600">({err.code})</span>
+              <details class="ml-1 inline text-xs text-red-600">
+                <summary class="inline cursor-pointer">技術情報</summary>
+                <span class="ml-1 font-mono">{err.code}</span>
+              </details>
             )}
           </li>
         ))}
@@ -58,7 +61,12 @@ function ValidationList({
 }
 
 /**
- * Apply flow: validate inside modal → confirm DB write → post-apply handoff (no canvas).
+ * Apply flow: validate inside modal → confirm save → post-apply handoff (no canvas).
+ * Normal-view label boundary: this modal is the primary, routinely-used Apply confirmation
+ * surface for /admin/ui-builder — raw property names (routeKey/layoutId/layoutKey），internal
+ * table/module names (layout_patch_json/component_style_design/renderEmission), and internal
+ * field names (inlineText/cssTokenRefs/initialDataRows) must never be the PRIMARY visible text;
+ * they stay reachable behind explicit 技術情報 disclosures for diagnostics.
  */
 export function LayoutPatchApplyModal({
   open,
@@ -78,14 +86,15 @@ export function LayoutPatchApplyModal({
   const inspectionHref = "#projection-inspection";
   const isSuccess = phase === "success";
   const canConfirm = phase === "validated" && summary?.valid === true && !loading;
+  const friendlyTarget = layoutLabel.trim() || "（名称未設定のレイアウト）";
 
   return (
     <Modal
       open={open}
-      title={isSuccess ? "配置を保存しました" : "配置を DB に反映"}
+      title={isSuccess ? "配置を保存しました" : "配置を保存"}
       description={isSuccess
-        ? "layout_patch の Apply が完了しました。配置は DB 正本（layout_patch_json）に反映されています。"
-        : "保存前にバリデーションを実行します。問題がなければ DB へ反映できます。"}
+        ? "配置の保存が完了しました。"
+        : "保存前に内容を確認します。問題がなければそのまま保存できます。"}
       onClose={onClose}
       design={{ style: "max-width:640px;width:100%;font-family:inherit" }}
       footer={
@@ -108,30 +117,36 @@ export function LayoutPatchApplyModal({
                 disabled={!canConfirm}
                 class="btn-success text-sm"
               >
-                {phase === "applying" ? "反映中..." : "DB に反映する"}
+                {phase === "applying" ? "保存中..." : "保存する"}
               </button>
             )}
         </div>
       }
     >
       <div class="space-y-4 text-sm text-slate-800">
-        <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-mono">
-          routeKey <code>{routeKey || "—"}</code>
-          {" · "}
-          layoutId <code>{layoutId || "—"}</code>
-          {layoutLabel && (
-            <>
+        <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
+          対象: <span class="font-medium">{friendlyTarget}</span>
+          <details class="mt-1 text-[0.7rem] text-slate-500">
+            <summary class="cursor-pointer">技術情報（開発者向け）</summary>
+            <p class="mt-1 font-mono">
+              routeKey <code>{routeKey || "—"}</code>
               {" · "}
-              layoutKey <code>{layoutLabel}</code>
-            </>
-          )}
+              layoutId <code>{layoutId || "—"}</code>
+              {layoutLabel && (
+                <>
+                  {" · "}
+                  layoutKey <code>{layoutLabel}</code>
+                </>
+              )}
+            </p>
+          </details>
         </div>
 
         {!isSuccess && (
           <>
             {phase === "validating" && (
               <p class="m-0 text-slate-600" aria-live="polite">
-                バリデーションを実行中...
+                内容を確認中...
               </p>
             )}
 
@@ -148,12 +163,12 @@ export function LayoutPatchApplyModal({
                     summary.valid ? "text-green-900" : "text-red-900"
                   }`}
                 >
-                  {summary.valid ? "✓ バリデーション通過" : "✗ バリデーションエラー"}
+                  {summary.valid ? "✓ 確認完了" : "✗ 修正が必要です"}
                 </p>
                 <p class="mb-0 mt-1 text-xs text-slate-700">
-                  ノード {summary.nodeCount} 件
+                  部品 {summary.nodeCount} 件
                   {summary.draftOnlyCount > 0
-                    ? ` · 未登録部品 ${summary.draftOnlyCount} 件`
+                    ? ` · まだ使えない部品 ${summary.draftOnlyCount} 件`
                     : ""}
                   {" · "}
                   {summary.message}
@@ -167,10 +182,17 @@ export function LayoutPatchApplyModal({
             />
 
             {summary?.valid && phase === "validated" && (
-              <p class="m-0 text-xs text-slate-500">
-                canvas の配置はそのまま DB（layout_patch_json）へ昇格します。
-                デザイン（inlineText / cssTokenRefs）は別途右パネルから保存してください。
-              </p>
+              <div class="text-xs text-slate-500">
+                <p class="m-0">
+                  この配置は保存するとすぐに公開されます。デザイン（色・文言など）は別途右パネルから保存してください。
+                </p>
+                <details class="mt-1">
+                  <summary class="cursor-pointer">技術情報（開発者向け）</summary>
+                  <p class="mt-1">
+                    canvas の配置はそのまま layout_patch_json へ昇格します。デザイン（inlineText / cssTokenRefs）は別途保存が必要です。
+                  </p>
+                </details>
+              </div>
             )}
           </>
         )}
@@ -179,7 +201,7 @@ export function LayoutPatchApplyModal({
           <>
             <div class="rounded-lg border border-green-300 bg-green-50 px-4 py-3">
               <p class="m-0 font-semibold text-green-900">
-                ✓ DB に配置を反映しました（{summary.nodeCount} ノード）
+                ✓ 配置を保存しました（{summary.nodeCount} 件）
               </p>
             </div>
 
@@ -194,7 +216,7 @@ export function LayoutPatchApplyModal({
                   >
                     <span class="block font-semibold">1. デザインを保存（右パネル）</span>
                     <span class="block text-xs font-normal opacity-90 mt-0.5">
-                      inlineText / cssTokenRefs は component_style_design として別保存
+                      色・文言などの見た目を別途保存します
                     </span>
                   </button>
                 </li>
@@ -205,10 +227,10 @@ export function LayoutPatchApplyModal({
                     class="btn-secondary block w-full text-left px-4 py-3 no-underline"
                   >
                     <span class="block font-semibold">
-                      2. 投影インスペクションで確認（読み取り専用）
+                      2. 表示を確認（読み取り専用）
                     </span>
                     <span class="block text-xs font-normal text-slate-600 mt-0.5">
-                      renderEmission 経路で canvas プレビューと applied projection を比較確認（このページ下部）
+                      canvas のプレビューと実際の表示を見比べて確認します（このページ下部）
                     </span>
                   </a>
                 </li>
@@ -219,11 +241,19 @@ export function LayoutPatchApplyModal({
                   >
                     <span class="block font-semibold">3. サンプルデータを追加（任意）</span>
                     <span class="block text-xs font-normal text-slate-600 mt-0.5">
-                      Contents Step 3 の initialDataRows がインスペクションのコンテンツ投影に使われます
+                      確認画面に表示するデータを追加できます
                     </span>
                   </a>
                 </li>
               </ol>
+              <details class="mt-2 text-xs text-slate-500">
+                <summary class="cursor-pointer">技術情報（開発者向け）</summary>
+                <p class="mt-1">
+                  デザイン保存は component_style_design として別保存されます。表示確認は renderEmission
+                  経路で canvas プレビューと applied projection を比較します。サンプルデータは Contents
+                  Step 3 の initialDataRows がインスペクションのコンテンツ投影に使われます。
+                </p>
+              </details>
             </section>
           </>
         )}

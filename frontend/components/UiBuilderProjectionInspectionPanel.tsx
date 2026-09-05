@@ -243,12 +243,13 @@ export default function UiBuilderProjectionInspectionPanel({
 
       {inspection.status === "error" && (
         <div class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <p class="m-0">{inspection.message}</p>
           {inspection.code && (
-            <p class="m-0 font-mono text-xs text-red-500">
-              コード: {inspection.code}
-            </p>
+            <details class="mt-1 text-xs text-red-500">
+              <summary class="cursor-pointer">技術情報（開発者向け）</summary>
+              <p class="mt-0.5 font-mono">{inspection.code}</p>
+            </details>
           )}
-          <p class="m-0 mt-1">{inspection.message}</p>
         </div>
       )}
 

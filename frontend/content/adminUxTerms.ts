@@ -57,11 +57,6 @@ export const UX_TOPOLOGY_SYSTEM_NAME_LABEL = "ページの識別子";
 export const UX_DERIVED_IDENTIFIER_ROUTE_LABEL = "ページのURL（自動生成）";
 export const UX_DERIVED_IDENTIFIER_PRIMARY_TABLE_LABEL = "保存先テーブル名（自動生成）";
 export const UX_DERIVED_IDENTIFIER_UI_BUILDER_KEY_LABEL = "画面づくり用キー（自動生成）";
-/** 複製元の証跡（読み取り専用）ラベル */
-export const UX_CLONE_SOURCE_EVIDENCE_TOPOLOGY_NAME_LABEL = "トポロジーID";
-export const UX_CLONE_SOURCE_EVIDENCE_STATUS_LABEL = "状態";
-export const UX_CLONE_SOURCE_EVIDENCE_DISPATCHER_LABEL = "実行先";
-export const UX_CLONE_SOURCE_EVIDENCE_UPDATED_AT_LABEL = "最終更新";
 
 /** 技術用語→業務語ヘルパー（詳細/debug のみで技術語を表示） */
 export function toFriendlyLabel(technicalKey: string): string {
@@ -687,7 +682,7 @@ export const UX_DESIGN_NODE_SAVE_LABEL = "選択ノードのデザインを保�
 /** layout_patch apply 成功後の次アクション案内 */
 export const UX_LAYOUT_APPLIED_HANDOFF_TITLE = "配置の保存が完了しました";
 export const UX_LAYOUT_APPLIED_HANDOFF_HINT =
-  "配置（layout_patch）は DB に反映済みです。色・文言などのデザインは別途永続化が必要です。";
+  "配置は保存されました。色・文言などのデザインは別途保存が必要です。";
 export const UX_LAYOUT_APPLIED_GO_DESIGN_SAVE = "デザインを永続化（右パネル）";
 export const UX_LAYOUT_APPLIED_GO_INSPECTION =
   "投影インスペクションで確認（読み取り専用）";

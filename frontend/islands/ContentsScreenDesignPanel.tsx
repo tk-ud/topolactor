@@ -139,10 +139,6 @@ import {
   UX_CLONE_BACKEND_MERGE_AUTHORITY_NOTICE,
   UX_CLONE_LINEAGE_ONLY_NOTICE,
   UX_CLONE_MERGE_BLOCKERS_HEADING,
-  UX_CLONE_SOURCE_EVIDENCE_TOPOLOGY_NAME_LABEL,
-  UX_CLONE_SOURCE_EVIDENCE_STATUS_LABEL,
-  UX_CLONE_SOURCE_EVIDENCE_DISPATCHER_LABEL,
-  UX_CLONE_SOURCE_EVIDENCE_UPDATED_AT_LABEL,
   UX_DERIVED_IDENTIFIER_ROUTE_LABEL,
   UX_DERIVED_IDENTIFIER_PRIMARY_TABLE_LABEL,
   UX_DERIVED_IDENTIFIER_UI_BUILDER_KEY_LABEL,
@@ -1514,14 +1510,18 @@ export default function ContentsScreenDesignPanel({
           {replacementReadiness.mergeReady
             ? (
               <p class="mt-1 text-green-700">
-                バックエンドの事前判定: 置き換え可能（変更点 {replacementReadiness.changeCount} 件）。
+                事前確認: 置き換え可能です（変更点 {replacementReadiness.changeCount} 件）。
               </p>
             )
             : (
               <ul class="mt-1 list-disc pl-4">
                 {replacementReadiness.mergeBlockers.map((b) => (
                   <li key={b.code}>
-                    <span class="font-mono text-[10px]">{b.code}</span>: {b.message}
+                    {b.message}
+                    <details class="ml-1 inline text-[10px] text-purple-700">
+                      <summary class="inline cursor-pointer">技術情報</summary>
+                      <span class="ml-1 font-mono">{b.code}</span>
+                    </details>
                   </li>
                 ))}
               </ul>
@@ -1666,20 +1666,23 @@ export default function ContentsScreenDesignPanel({
               </label>
               {cloneSourceEvidence && (
                 <div class="rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-600">
-                  <p class="font-semibold mb-1">複製元の証跡（読み取り専用）</p>
-                  <ul class="space-y-0.5 font-mono text-[11px]">
-                    <li>{UX_CLONE_SOURCE_EVIDENCE_TOPOLOGY_NAME_LABEL}: {cloneSourceEvidence.topologySystemName ?? "—"}</li>
-                    <li>{UX_CLONE_SOURCE_EVIDENCE_STATUS_LABEL}: {cloneSourceEvidence.status}</li>
-                    {cloneSourceEvidence.dispatcherAxes && (
-                      <li>
-                        {UX_CLONE_SOURCE_EVIDENCE_DISPATCHER_LABEL}: {cloneSourceEvidence.dispatcherAxes.role}/
-                        {cloneSourceEvidence.dispatcherAxes.target}/
-                        {cloneSourceEvidence.dispatcherAxes.layer}/
-                        {cloneSourceEvidence.dispatcherAxes.action}
-                      </li>
-                    )}
-                    <li>{UX_CLONE_SOURCE_EVIDENCE_UPDATED_AT_LABEL}: {cloneSourceEvidence.sourceUpdatedAt}</li>
-                  </ul>
+                  <p class="font-semibold mb-1">複製元は選択済みです（読み取り専用）</p>
+                  <details class="text-[11px]">
+                    <summary class="cursor-pointer">技術情報（開発者向け）</summary>
+                    <ul class="mt-1 space-y-0.5 font-mono">
+                      <li>topologySystemName: {cloneSourceEvidence.topologySystemName ?? "—"}</li>
+                      <li>status: {UX_STATUS_LABELS[cloneSourceEvidence.status] ?? cloneSourceEvidence.status}</li>
+                      {cloneSourceEvidence.dispatcherAxes && (
+                        <li>
+                          dispatcher: {cloneSourceEvidence.dispatcherAxes.role}/
+                          {cloneSourceEvidence.dispatcherAxes.target}/
+                          {cloneSourceEvidence.dispatcherAxes.layer}/
+                          {cloneSourceEvidence.dispatcherAxes.action}
+                        </li>
+                      )}
+                      <li>updatedAt: {cloneSourceEvidence.sourceUpdatedAt}</li>
+                    </ul>
+                  </details>
                   {entryMode === "clone_active_as_replacement_draft" && (
                     <p class="mt-1 text-[10px] text-purple-700">
                       {UX_CLONE_BACKEND_MERGE_AUTHORITY_NOTICE}
