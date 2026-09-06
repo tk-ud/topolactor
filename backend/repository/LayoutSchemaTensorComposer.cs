@@ -22,13 +22,19 @@ namespace Topolactor.Repository;
 /// that never resolve to a component and always fail explicit at frontend render time, carrying
 /// their authored knownGapRefs.
 ///
-/// Tensor runtimeInteractions merge: authored tensor nodes (layout_patch_json.nodes[]) key their
-/// runtimeInteractions array at the FORM level, with each entry individually tagged by
+/// Tensor runtimeInteractions merge: authored/adopted tensor nodes (layout_patch_json.nodes[]) key
+/// their runtimeInteractions array at the resolved OWNING STRUCTURAL PARENT's own tensor NodeId —
+/// whichever record type legally owns the Action per the schema's authoring-legality gate (Form,
+/// Workflow, Modal, or a lane/pairing-eligible Section; never restricted to Form — see
+/// react-schema-topology-seed-translator-ssot.yaml structural_authority_precedence_contract.
+/// interaction_ownership_and_addressing_contract), with each entry individually tagged by
 /// sourceActionKey identifying which specific Action/Field leaf it belongs to — the merge groups
 /// tensor interaction entries by sourceActionKey (BuildInteractionsBySourceActionKey) and attaches
 /// each leaf's own matching entries by leaf key == sourceActionKey, not by a naive
-/// tensor-nodeId == record-key match (the tensor nodeId is the FORM's key, a structural node, which
-/// never receives runtimeInteractions).
+/// tensor-nodeId == record-key match (the tensor nodeId here is the owning PARENT's resolved key, a
+/// structural identity, not the leaf's own key — the composed structural_node LayoutNodeRecord for
+/// that same parent never itself receives runtimeInteractions in Compose's output; only catalog
+/// leaves do, via this by-sourceActionKey lookup).
 ///
 /// Layouts whose layout_schema_json has no records[] (most UI-Builder-authored layouts, where
 /// componentId/componentKind already live directly on the tensor nodes) are unaffected — callers
@@ -384,17 +390,19 @@ public static class LayoutSchemaTensorComposer
 
     /// <summary>
     /// Groups tensor nodes' (layout_patch_json.nodes[]) runtimeInteractions entries by
-    /// "{formTensorNodeId}::{sourceActionKey}" — each tensor node carries its child Action/Field
-    /// leaves' entries at the FORM level, individually tagged by which leaf they belong to.
-    /// Scoping the map key by the OWNING FORM's own tensor NodeId (not sourceActionKey alone)
-    /// prevents cross-contamination when two different Forms happen to author the same leaf key
-    /// (e.g. two Forms both authoring an Action named "validate") — each Form's entries stay
-    /// attributed only to its own children, never merged across Forms. Malformed JSON, a
-    /// non-array runtimeInteractions value, a non-object entry, or an entry missing a non-empty
-    /// sourceActionKey is a real authoring defect — never silently skipped — and returns Invalid.
-    /// Valid returns a map from "{formTensorNodeId}::{sourceActionKey}" to the JSON array text of
-    /// that key's own entries (usually one) — see Compose's ResolveInteractionsMergeKey for the
-    /// matching leaf-side key construction.
+    /// "{ownerTensorNodeId}::{sourceActionKey}" — each tensor node carries its own owned child
+    /// Action/Field leaves' entries, individually tagged by which leaf they belong to. Scoping
+    /// the map key by the OWNING PARENT's own tensor NodeId (not sourceActionKey alone) —
+    /// whichever record type legally owns the Action per the schema's authoring-legality gate
+    /// (Form, Workflow, Modal, or a lane/pairing-eligible Section; never restricted to Form) —
+    /// prevents cross-contamination when two different owning parents happen to author the same
+    /// leaf key (e.g. two Sections both authoring an Action named "validate") — each owner's
+    /// entries stay attributed only to its own children, never merged across owners. Malformed
+    /// JSON, a non-array runtimeInteractions value, a non-object entry, or an entry missing a
+    /// non-empty sourceActionKey is a real authoring defect — never silently skipped — and
+    /// returns Invalid. Valid returns a map from "{ownerTensorNodeId}::{sourceActionKey}" to the
+    /// JSON array text of that key's own entries (usually one) — see Compose's own inline
+    /// "{parentNodeId}::{row.Key}" lookup below for the matching leaf-side key construction.
     /// </summary>
     public static InteractionsParseResult BuildInteractionsBySourceActionKey(
         IReadOnlyList<LayoutNodeRecord> tensorNodes)
@@ -512,9 +520,11 @@ public static class LayoutSchemaTensorComposer
     /// componentId/componentKind, never merged with runtimeInteractions. Each catalog_component
     /// leaf's runtimeInteractions are merged from interactionsBySourceActionKey (see
     /// BuildInteractionsBySourceActionKey) by "{parentKey}::{key}" — scoped to the leaf's OWNING
-    /// FORM, never by leaf key alone, so two different Forms authoring the same leaf key never
-    /// cross-contaminate each other's interactions. Order follows the authored document order
-    /// (already parent-before-child).
+    /// PARENT (whichever record type legally owns the Action per the schema's authoring-legality
+    /// gate: Form, Workflow, Modal, or a lane/pairing-eligible Section; never restricted to
+    /// Form), never by leaf key alone, so two different owning parents authoring the same leaf
+    /// key never cross-contaminate each other's interactions. Order follows the authored document
+    /// order (already parent-before-child).
     ///
     /// NodeId is normally the record's own authored key; when two records anywhere in the tree
     /// share the same key (an authoring collision — the record tree's key is only guaranteed
@@ -746,11 +756,13 @@ public static class LayoutSchemaTensorComposer
             }
 
             // Merge target is a catalog_component leaf only, keyed by "{resolvedParentNodeId}::{key}"
-            // — scoped to the leaf's owning FORM's RESOLVED identity (see
+            // — scoped to the leaf's OWNING PARENT's RESOLVED identity (whichever record type
+            // legally owns the Action per the schema's authoring-legality gate: Form, Workflow,
+            // Modal, or a lane/pairing-eligible Section; never restricted to Form — see
             // BuildInteractionsBySourceActionKey, whose tensor-side key uses the same resolved
-            // owning_form_key the translator emits) — never the leaf's raw authored parentKey
-            // alone. A raw-parentKey key would collide when the OWNING FORM's key is itself
-            // duplicated across branches (e.g. two Forms both keyed "shared_section", each with
+            // owning-parent key the translator emits) — never the leaf's raw authored parentKey
+            // alone. A raw-parentKey key would collide when the OWNING PARENT's key is itself
+            // duplicated across branches (e.g. two Sections both keyed "shared_section", each with
             // its own Action keyed "shared_action") — using the resolved parent identity keeps
             // each duplicate branch's interactions attributed only to its own leaf. structural_node
             // and unresolved_gap nodes never receive runtimeInteractions.

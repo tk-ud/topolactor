@@ -971,12 +971,16 @@ admin_normal_surface_projection_seed_ssot:
             governing_contract_ref: >-
               react-schema-topology-seed-translator-ssot.yaml
               storage_adoption_contract.structural_authority_precedence_contract (Owner
-              "Judgment B"). This block is the acceptance criteria the NEXT
-              implementation_change closing team_dashboard.admin.projection's own
+              "Judgment B"). This block was the acceptance criteria the
+              team-dashboard-physical-layout-adoption implementation_change (2026-09-06) closing
+              team_dashboard.admin.projection's own
               team_dashboard_admin_layout_schema_json_records_not_yet_physically_adopted
-              known_gaps entry (and team_dashboard.normal.projection's equivalent entry) must
-              satisfy — it is a gap-closure record for a named, already-identified surface, not
-              a team-dashboard-specific design exception: the rule being applied
+              known_gaps entry (and team_dashboard.normal.projection's equivalent entry) had to
+              satisfy, and did (see this block's own closure_note above and each entry's
+              historical_known_gaps_closed_2026_09_06_physical_layout_schema_adoption record in
+              react-schema-topology-seed-translator-ssot.yaml) — it was a gap-closure record for a
+              named, already-identified surface, not a team-dashboard-specific design exception:
+              the rule being applied
               (layoutAdoptionCandidates is PRIMARY, tensorAdoptionCandidates is DERIVED) is the
               SAME generic rule every other schema-composed surface already follows. Team
               Dashboard's own Category > Section > Field/Action/Modal tree (no Form anywhere)
@@ -1295,12 +1299,17 @@ admin_normal_surface_projection_seed_ssot:
                   source_ref: emission.data.bodyMarkdown (team_dashboard:get, same action + same physical row surface_axes.admin.surfaces.team_dashboard's own viewer reads)
               loading_empty_error_projection: [loading_team_dashboard, empty_team_dashboard_note, team_dashboard_error_fail_close]
             physical_layout_schema_adoption_acceptance_criteria_ref: >-
-              This axis shares the identical structural_authority_precedence_contract gap and
+              This axis shared the identical structural_authority_precedence_contract gap and
               acceptance criteria as surface_axes.admin.surfaces.team_dashboard's own
-              physical_layout_schema_adoption_acceptance_criteria above (dd023's
-              layout_schema_json.records[] is likewise not yet physically adopted from this
-              axis's own team-dashboard-normal.topology-seed.input.json fixture output) — see
-              that block for the full criteria, not duplicated here.
+              physical_layout_schema_adoption_acceptance_criteria above — see that block's own
+              closure_note (status: implemented_2026_09_06_team_dashboard_physical_layout_adoption)
+              for the current state: dd023's layout_schema_json.records[] is now physically
+              adopted verbatim from this axis's own team-dashboard-normal.topology-seed.input.json
+              fixture output (3 records: Category > Section > Field, zero Form/Action/Modal), and
+              dd025's tensor row is reshaped into the DERIVED runtime carrier, proven by that same
+              closure_note's DispatchAsync_NormalManifest_ProjectionEntry_
+              ComposedFromPhysicallyAdoptedSchema_MatchesCheckedInFixtureSnapshot test — not
+              duplicated here.
             hub_relation_navigation_binding_ref: >-
               Reachable directly at a normal-facing route (frontend/routes/dashboard/index.tsx, a thin
               ProjectionShell wrapper, no AdminAuthGate) — the same route-mount pattern

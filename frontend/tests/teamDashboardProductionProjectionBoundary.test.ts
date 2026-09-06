@@ -109,10 +109,15 @@
  * label, DOM-asserted), "Cancel"->"キャンセル" (DOM-asserted), "Save confirmation dialog"->
  * "保存確認" (the Modal's own rendered title, DOM-asserted), and the Modal's body naturally
  * embeds "チームダッシュボード" (DOM-asserted). Category/Section labels ("Team Dashboard"/
- * "Team dashboard note") were translated at the source too for authoring consistency, but stay
- * metadata-only under this surface's own tensor-only architecture (Category/Section never
- * become tensor nodes at all here, schema-composed or not) -- this file does not assert they
- * reach the DOM, and does not claim they do.
+ * "Team dashboard note") were translated at the source too for authoring consistency; AT THE TIME
+ * of Round 2, this surface was still tensor-only (Category/Section never became tensor nodes at
+ * all), so those labels stayed metadata-only and this file did not assert they reached the DOM.
+ * SUPERSEDED by the team-dashboard-physical-layout-adoption round (see the UPDATED note above):
+ * once dd013/dd023's schema tree became the PRIMARY structural authority, Category/Section compose
+ * as real structural_node LayoutNode entries and DO render their (Japanese, source-translated)
+ * labels in the DOM -- this file now asserts exactly that (the `structuralLabels` checks in both
+ * the Admin and Normal Deno.test blocks below), the same generic structural_node rendering every
+ * other schema-composed manifest already exhibits, not new team-dashboard-specific behavior.
  */
 import { assert, assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { h, render } from "preact";

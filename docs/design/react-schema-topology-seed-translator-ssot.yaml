@@ -1015,8 +1015,7 @@ react_schema_topology_seed_translator_ssot:
         interaction_ownership_and_addressing_contract:
           note: >-
             Corrected 2026-09-06 (follow-up audit): runtime-orchestration-ssot.yaml's own
-            tensor_runtime_interactions_merge section and backend/repository/
-            LayoutSchemaTensorComposer.cs's class-level doc comments describe
+            tensor_runtime_interactions_merge section previously described
             BuildInteractionsBySourceActionKey's grouping key as "the FORM level" / "the
             OWNING FORM's own tensor NodeId". Read against the actual code
             (BuildInteractionsBySourceActionKey iterates every tensorNodes entry
@@ -1024,8 +1023,17 @@ react_schema_topology_seed_translator_ssot:
             sourceActionKey -- no StructuralRecordTypes/Form-type check anywhere in that
             function or its caller) and against real, already-adopted, already-live-DB-proven
             production content, "FORM" is a descriptive label for the historically common case,
-            never an enforced restriction. This is a documentation correction only -- the
-            mechanism itself is unchanged and needs no code edit.
+            never an enforced restriction. This was a documentation correction only -- the
+            mechanism itself was unchanged and needed no code edit; runtime-orchestration-
+            ssot.yaml was corrected the same day this note was added.
+            UPDATED (team-dashboard-physical-layout-adoption round, 2026-09-06): backend/
+            repository/LayoutSchemaTensorComposer.cs's own class-level and method-level doc
+            comments had NOT yet received the matching correction this note called for -- they
+            still said "the FORM level" / "the FORM's key" / "OWNING FORM" in four places. Fixed
+            in the same round that closed team_dashboard.{admin,normal}.projection's physical
+            adoption gap, using the same generic "owning structural parent" language this
+            contract and runtime-orchestration-ssot.yaml already use; no runtime logic changed,
+            comment text only.
           real_precedent: >-
             Three already-adopted schema-composed layouts prove the OWNING PARENT may be a
             Section (or a Modal) with NO Form anywhere in the branch, not only a Form: (1)
