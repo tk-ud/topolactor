@@ -952,11 +952,73 @@ react_schema_topology_seed_translator_ssot:
               persistence -- see the aggregate shape below.
             - DERIVED bucket 2: tensorAdoptionCandidates. A narrower projection of the same
               record's runtimeInteractions for topology.ui_topology_tensor persistence.
+          topology_ui_modal records follow the SAME primary/derived split, but only across
+          TWO buckets, not three (a Modal record never contributes to
+          wiringAdoptionCandidates -- it authors no eventBinding/authorityMarker of its own,
+          only a self-close toggle interaction):
+            - PRIMARY bucket: layoutAdoptionCandidates. A Modal's full record content
+              (modalKey, componentKind, children) is structural layout-tree content exactly
+              like every other layoutAdoptionCandidates record type, stored in full inside
+              layoutAdoptionCandidates.layoutSchemaJson.records.
+            - DERIVED bucket: tensorAdoptionCandidates. A narrower projection carrying only
+              the Modal's own toggle->closeModal runtimeInteraction and (for a tensor-only
+              adoption path -- see structural_authority_precedence_contract below) the
+              parentNodeId linkage its own tensor-adopted Confirm/Cancel children need to stay
+              DOM-contained.
           Derived candidates are additional projections built FROM the primary record, not
           a second full storage of it, and do not violate "exactly one" at the primary-bucket
           level. tool_ref: split_flat_records_into_adoption_candidates's module-level and
           inline comments implement and document this relationship directly (see
           "primary_and_derived_candidate_relationship" docstring reference in that function).
+      structural_authority_precedence_contract:
+        owner_ruling_ref: >-
+          Owner design_change ruling ("Judgment B", 2026-09-06), stated generically here --
+          this is a repository-wide rule for EVERY surface, never a team-dashboard-specific
+          exception. It restates, as a binding precedence rule rather than only a bucket-
+          separation clarification, what primary_and_derived_candidate_relationship above
+          already established for individual record types.
+        rule: >-
+          For any surface whose react_schema authors real structural content (Category /
+          Section / Form / Workflow / Validation / Field / Table / Action / WorkflowStep /
+          Modal / Unresolved), layoutAdoptionCandidates is the PRIMARY structural authority:
+          it alone owns parent/child containment, sibling ordering, and slot structure once
+          physically adopted into topology.components_layout_design.layout_schema_json.
+          records[] (runtime-orchestration-ssot.yaml layout_schema_structural_render_
+          contract composes FROM this tree). tensorAdoptionCandidates /
+          topology.ui_topology_tensor.layout_patch_json.nodes[] is always and only a DERIVED
+          runtime carrier: a narrower projection of the same primary record's own
+          runtimeInteractions/display props for surfaces the tensor-only path still serves
+          (layout_schema_json absent or empty -- absent_vs_invalid_records.absent_or_empty,
+          runtime-orchestration-ssot.yaml). A tensor-only carrier's own internal
+          containment/ordering repairs (e.g. this contract's own modal_derived_payload
+          parentNodeId stamp) are legitimate ONLY as tensor-carrier-internal fixes for a
+          surface that has not yet undergone physical layoutAdoptionCandidates adoption --
+          they are never a substitute for that adoption, and never evidence that the
+          surface's structural authority question has been settled.
+        known_gap_governance: >-
+          A surface whose generate-topology-seed output produces real, non-empty
+          layoutAdoptionCandidates content (Category/Section/Form/Field/Action/Modal/etc.
+          actually authored) while its OWN persisted components_layout_design.
+          layout_schema_json.records[] stays [] is a tracked, named known_gap against THIS
+          contract, not an accepted alternate architecture -- it must be recorded in that
+          surface's own declared_seed_surface_catalog entry's known_gaps (never left silently
+          implied by an empty records[] with no matching known_gaps entry), and a
+          generation_evidence_ref/continuous_proof_chain describing that surface may
+          document the TENSOR path's own proof chain but must not describe the tensor-only
+          state itself as the surface's completed or proven structural-authority shape --
+          only as a still-open known_gap pending physical layoutAdoptionCandidates adoption.
+          Working correctly at the tensor-only layer (translator gateStatus=pass, a real
+          live-DB layout_patch:preview/validate/apply round trip, a passing frontend DOM
+          proof) is necessary evidence that the DERIVED carrier itself is not broken; it is
+          never sufficient evidence that the surface satisfies this contract's PRIMARY-bucket
+          rule, and must never be cited as though it were.
+        prohibited:
+          - treating_ui_topology_tensor_layout_patch_json_nodes_as_a_substitute_for_physically_adopting_real_layoutAdoptionCandidates_content_into_layout_schema_json_records
+          - describing_a_surfaces_tensor_only_layout_patch_content_as_a_proven_or_completed_structural_authority_shape_in_its_own_declared_seed_surface_catalog_entry
+          - leaving_a_surfaces_layout_schema_json_records_empty_while_its_own_generated_layoutAdoptionCandidates_content_is_real_and_non_empty_without_a_named_known_gaps_entry_tracking_it
+          - justifying_a_tensor_only_deviation_for_one_surface_by_that_surfaces_own_current_working_behavior_alone_without_a_documented_technical_blocker_that_still_applies_today
+          - adding_a_surface_route_nodeId_manifestKey_or_componentKey_scoped_conditional_anywhere_in_the_translator_or_runtime_composer_to_reproduce_this_contracts_precedence_rule_instead_of_applying_it_generically
+          - treating_this_contracts_own_tensor_carrier_internal_containment_repairs_such_as_modal_derived_payloads_parentNodeId_stamp_as_the_final_design_for_a_surface_rather_than_a_transitional_fix_pending_physical_adoption
       package_authority_boundary:
         note: >-
           docs/design/db-schema.yaml draws two DISTINCT "package" table identities that must
@@ -1001,13 +1063,20 @@ react_schema_topology_seed_translator_ssot:
             against; not itself a manifest.packageIds target.
         layoutAdoptionCandidates:
           target_table: topology.components_layout_design
-          source_record_types: [topology_ui_category, topology_ui_section, topology_ui_form, topology_ui_field, topology_ui_table, topology_ui_workflow, topology_ui_action, topology_ui_workflow_step, topology_ui_validation, topology_ui_unresolved]
+          source_record_types: [topology_ui_category, topology_ui_section, topology_ui_form, topology_ui_field, topology_ui_table, topology_ui_workflow, topology_ui_action, topology_ui_workflow_step, topology_ui_validation, topology_ui_unresolved, topology_ui_modal]
           primary_bucket_note: >-
-            The PRIMARY storage bucket for topology_ui_action / topology_ui_workflow_step
-            too (see primary_and_derived_candidate_relationship above) -- their full record
-            content lives here, same as every other structural layout-tree record type.
-            wiringAdoptionCandidates / tensorAdoptionCandidates below are derived
-            projections of the same record, not a second primary assignment.
+            The PRIMARY storage bucket for topology_ui_action / topology_ui_workflow_step /
+            topology_ui_modal too (see primary_and_derived_candidate_relationship above) --
+            their full record content lives here, same as every other structural layout-tree
+            record type, INCLUDING a Modal's own authored Confirm/Cancel Action children,
+            which are separate layoutAdoptionCandidates records in their own right (each
+            with its own recordType/parentKey), never inlined into the Modal's record. This
+            is the PHYSICAL structural authority a surface's real containment/ordering must
+            resolve from once adopted (see structural_authority_precedence_contract below) --
+            wiringAdoptionCandidates / tensorAdoptionCandidates below are derived projections
+            of the same records, not a second primary assignment and never a substitute for
+            adopting this bucket's own content into topology.components_layout_design.
+            layout_schema_json.records[].
           shape: >-
             one candidate per Projection record: {layoutKey, layoutKind,
             layoutSchemaJson: {records: <the same topology_ui_seed_record[] wrapper list
@@ -1046,7 +1115,7 @@ react_schema_topology_seed_translator_ssot:
             implementation was the out-of-sync side, not the seed or top SSOT.
         tensorAdoptionCandidates:
           target_table: topology.ui_topology_tensor
-          source_record_types: [topology_ui_action, topology_ui_workflow_step]
+          source_record_types: [topology_ui_action, topology_ui_workflow_step, topology_ui_modal]
           shape: >-
             one layout_patch_json candidate per Projection, plus the packageId reference the
             persisted tensor row's own package_id FK needs: {tensorKey, packageIdRef:
@@ -1060,6 +1129,29 @@ react_schema_topology_seed_translator_ssot:
             eventBinding with a dispatch-shaped wiringLane (external_integration_wiring /
             external_instance_wiring) must appear inside some tensor candidate's
             nodes[].runtimeInteractions[], never dropped silently.
+          modal_derived_payload: >-
+            A Modal record's own tensorAdoptionCandidates projection carries at most its own
+            toggle->closeModal runtimeInteraction (sourceActionKey'd to the Modal's own
+            resolved key, per modal_self_close_invariant / tensor_container_parent_contract
+            in split_flat_records_into_adoption_candidates) plus display props (open/title/
+            body) an already-tensor-adopted rendering of the same Modal needs -- never
+            structural fields (children, containment, ordering), which live ONLY in the
+            PRIMARY layoutAdoptionCandidates record per primary_and_derived_candidate_
+            relationship above. The parentNodeId this generator additionally stamps onto a
+            Modal's OWN tensor-adopted Confirm/Cancel Action children (so they stay
+            DOM-contained rather than surviving as permanent root-level siblings) is a
+            tensor-carrier-internal containment repair for a surface that has NOT YET
+            undergone physical layoutAdoptionCandidates adoption (see
+            structural_authority_precedence_contract below) -- once a surface's
+            layoutAdoptionCandidates content is physically adopted into
+            layout_schema_json.records[], backend LayoutSchemaTensorComposer.Compose derives
+            every leaf's ParentNodeId directly from that PRIMARY tree (parent_scoped_identity_
+            reconstruction, runtime-orchestration-ssot.yaml), making this tensor-side
+            parentNodeId stamp redundant for that surface's own tensor projection from that
+            point on -- the mechanism itself stays generic and is never removed from the
+            translator (it remains correct and necessary for any OTHER surface still
+            authored tensor-only), but a surface that has completed physical adoption must
+            not keep relying on it as its containment source of truth.
         manifestRefsCandidate:
           target_table: manifest
           shape: >-
@@ -2463,12 +2555,16 @@ react_schema_topology_seed_translator_ssot:
           verbatim) -- both runs report gateStatus=pass with zero validationErrors, mirroring
           admin.enum.management.projection's own two-fixture generation evidence shape. UPDATED
           (2026-08-17, UIBuilder-lineage closure round 3): both fixtures now regenerate CLEAN --
-          zero post-generation patches, zero hand-authored tensor content, zero knownGapRefs --
-          and the resulting adoptionCandidates.tensorAdoptionCandidates content IS db/seed_empty.sql's
-          dd015 tensor row verbatim (not a re-derived approximation), proven end to end through the
-          REAL live-DB layout_patch:preview -> layout_patch:validate -> layout_patch:apply pipeline
-          (backend/tests/Topolactor.Integration.Tests/
-          TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs).
+          zero post-generation patches, zero hand-authored tensor content, zero knownGapRefs at
+          the GENERATION layer -- and the resulting adoptionCandidates.tensorAdoptionCandidates
+          content IS db/seed_empty.sql's dd015 tensor row verbatim (not a re-derived
+          approximation), proven end to end through the REAL live-DB layout_patch:preview ->
+          layout_patch:validate -> layout_patch:apply pipeline (backend/tests/
+          Topolactor.Integration.Tests/TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs).
+          This proves the DERIVED tensorAdoptionCandidates carrier is correct and not broken --
+          see structural_authority_precedence_contract.known_gap_governance above for why this
+          is necessary but not sufficient evidence of PRIMARY-bucket adoption, and known_gaps
+          below for the still-open gap this generation evidence does not close.
         component_catalog_refs:
           catalog_ref: ui_catalog_boundary_contract.frontend_component_catalog
           componentKinds:
@@ -2489,7 +2585,29 @@ react_schema_topology_seed_translator_ssot:
           - lane: disclosure_state_wiring
             catalog_ref: wiring_lane_contract.lanes.disclosure_state_wiring
             targetRefs: ["ui-local:team_dashboard_admin_save_confirm_modal.open"]
-        known_gaps: []
+        known_gaps:
+          - gap: team_dashboard_admin_layout_schema_json_records_not_yet_physically_adopted
+            classification: structural_authority_precedence_contract_deviation
+            status: open_pending_next_implementation_change
+            note: >-
+              db/seed_empty.sql's dd013 (topology.components_layout_design row for this
+              surface) persists layout_schema_json={"records":[]} even though this surface's
+              own generate-topology-seed output produces real, non-empty
+              layoutAdoptionCandidates content (Category/Section/Form/Field/textarea/Action/
+              Modal). Per structural_authority_precedence_contract above, layoutAdoptionCandidates
+              is the PRIMARY structural authority for this content; dd015's tensor-only content
+              (this entry's own generation_evidence_ref) is a DERIVED carrier this surface has
+              relied on exclusively since PR#604 introduced Team Dashboard, never a legitimate
+              substitute for physical adoption. Owner design_change investigation (2026-09-06,
+              git history of db/seed_empty.sql / PR#604's own commit-message lineage / PR#580's
+              chronologically-earlier manifest 092 schema-composed precedent, all real
+              topology_ui_modal-bearing schema-composed layouts already proven in production)
+              found no documented technical blocker against schema composition ever cited for
+              this surface at any point in its history -- the deviation is scope/convenience
+              drift, not a load-bearing constraint, and is not ratified as this surface's
+              design authority by this entry. See admin-normal-surface-projection-seed-ssot.yaml
+              surface_axes.admin.surfaces.team_dashboard for the acceptance criteria the next
+              implementation_change closing this gap must satisfy.
         historical_known_gaps_closed_2026_08_17_uibuilder_lineage_closure_round_3:
           - gap: team_dashboard_emission_data_prop_binding_not_yet_translator_expressible
             classification: translator_grammar_gap
@@ -2574,7 +2692,13 @@ react_schema_topology_seed_translator_ssot:
           content -> dd010/dd020 Manifest -> ProjectionShell Admin edit / Normal read-only runtime
           proof (TeamDashboardHubRelationUiProjectionLiveDbTests.cs,
           AdminRuntimeTeamDashboardTests.cs, ManifestDispatcherManifestKeyTargetRefTests.cs, all
-          passing unchanged).
+          passing unchanged). This chain proves the DERIVED tensorAdoptionCandidates carrier end
+          to end; it currently STOPS there and does not yet include
+          adoptionCandidates.layoutAdoptionCandidates' own physical adoption into dd013's
+          layout_schema_json.records[] (known_gaps above) -- closing that gap extends this same
+          chain with a layoutAdoptionCandidates -> layout_schema_json.records[] -> backend
+          LayoutSchemaTensorComposer.Compose link, it does not replace any step already proven
+          here.
 
       - seed_surface_key: team_dashboard.normal.projection
         declared_by_yaml_ref: docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.normal.surfaces.dashboard.team_dashboard_canonical_shared_contract
@@ -2587,11 +2711,14 @@ react_schema_topology_seed_translator_ssot:
           (generate-react-schema) -> team-dashboard-normal.topology-seed.input.json
           (generate-topology-seed) -- both runs report gateStatus=pass with zero validationErrors.
           UPDATED (2026-08-17, UIBuilder-lineage closure round 3): regenerates CLEAN -- zero
-          post-generation patches, zero knownGapRefs -- producing a ONE-node
-          tensorAdoptionCandidates identical to db/seed_empty.sql's dd025 tensor row, proven end to
-          end through the real live-DB layout_patch:preview -> layout_patch:validate ->
-          layout_patch:apply pipeline (TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs,
-          surface="normal").
+          post-generation patches, zero knownGapRefs at the GENERATION layer -- producing a
+          ONE-node tensorAdoptionCandidates identical to db/seed_empty.sql's dd025 tensor row,
+          proven end to end through the real live-DB layout_patch:preview -> layout_patch:validate
+          -> layout_patch:apply pipeline (TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs,
+          surface="normal"). This proves the DERIVED tensorAdoptionCandidates carrier is correct
+          and not broken -- see structural_authority_precedence_contract.known_gap_governance
+          above for why this is necessary but not sufficient evidence of PRIMARY-bucket adoption,
+          and known_gaps below for the still-open gap this generation evidence does not close.
         component_catalog_refs:
           catalog_ref: ui_catalog_boundary_contract.frontend_component_catalog
           componentKinds:
@@ -2603,7 +2730,19 @@ react_schema_topology_seed_translator_ssot:
           catalog_ref: ui_catalog_boundary_contract.html_tag_catalog
           refs: []
         wiring_lane_refs: []
-        known_gaps: []
+        known_gaps:
+          - gap: team_dashboard_normal_layout_schema_json_records_not_yet_physically_adopted
+            classification: structural_authority_precedence_contract_deviation
+            status: open_pending_next_implementation_change
+            note: >-
+              Same root cause and same lineage finding as team_dashboard.admin.projection's own
+              team_dashboard_admin_layout_schema_json_records_not_yet_physically_adopted
+              known_gaps entry above (dd023 persists layout_schema_json={"records":[]} while
+              this surface's own generated layoutAdoptionCandidates content -- Category/Section/
+              Form/Field -- is real and non-empty) -- see that entry for the full note, not
+              duplicated here. Both surfaces share the identical
+              admin-normal-surface-projection-seed-ssot.yaml
+              team_dashboard_canonical_shared_contract acceptance criteria for closing this gap.
         historical_known_gaps_closed_2026_08_17_uibuilder_lineage_closure_round_3: >-
           Same two gaps, same generic translator-level closure, as
           team_dashboard.admin.projection's own historical_known_gaps_closed_2026_08_17_

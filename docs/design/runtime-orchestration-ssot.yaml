@@ -760,6 +760,7 @@ runtime_orchestration_ssot:
           - topology_ui_action
           - topology_ui_table
           - topology_ui_workflow_step
+          - topology_ui_modal
         unresolved_gap_record_types:
           - topology_ui_unresolved
         rule: >-
@@ -769,10 +770,22 @@ runtime_orchestration_ssot:
           "catalog_component" entries whose componentId/componentKind are resolved from the
           existing topology.ui_component_registry preset catalog (see field_control_resolution
           and table_display_resolution below) -- never invented, never a structural-node-shaped
-          catalog entry. Unresolved (topology_ui_unresolved) is neither: it composes into
-          NodeKind="unresolved_gap" and always renders as an explicit error carrying its
-          knownGapRefs (see unresolved_gap_resolution below) -- it is a terminal known-gap marker,
-          not a resolvable leaf and not a container.
+          catalog entry. Modal also composes into NodeKind="catalog_component" (it renders a
+          real, built-in runtime primitive, backend/repository/LayoutSchemaTensorComposer.cs
+          round 24/25) but resolves differently from every other catalog leaf: its componentKind
+          is the record's own authored literal value (validated as exactly "disclosure/modal",
+          never a control/display convention lookup) and its componentId is its own resolved
+          NodeId (a built-in runtime primitive, not a topology.ui_component_registry-backed
+          preset) -- never a componentKeyToId registry resolution. Uniquely among catalog leaves,
+          a Modal record may itself be the parent of further catalog leaves (its authored
+          Confirm/Cancel Action children); catalog_component_record_types membership governs
+          leaf-vs-container RESOLUTION convention, not containment eligibility -- the generic
+          ParentNodeId/lastResolvedNodeIdByKey walk already supports any record type acting as a
+          parent regardless of which of the three vocabulary buckets it belongs to. Unresolved
+          (topology_ui_unresolved) is neither: it composes into NodeKind="unresolved_gap" and
+          always renders as an explicit error carrying its knownGapRefs (see
+          unresolved_gap_resolution below) -- it is a terminal known-gap marker, not a resolvable
+          leaf and not a container.
         field_control_resolution: >-
           A Field record's authored control value (e.g. form_input/select) maps to an existing
           ui_component_registry.component_key by fixed convention
