@@ -5,6 +5,7 @@ import {
   type HubNavigationManifestItem,
   listHubNavigationManifests,
 } from "../api/adminApi.ts";
+import { hubNavigationManifestVisibleLabel } from "../lib/manifestTopologyExtensions.ts";
 import AdminHowTo from "../components/AdminHowTo.tsx";
 import AdminHelpPanel from "../components/AdminHelpPanel.tsx";
 import { ValidationErrorPanel } from "../components/ValidationErrorPanel.tsx";
@@ -122,7 +123,7 @@ export default function ManifestsAdmin(): JSX.Element {
                 <tbody>
                   {topologyManifests.map((manifest) => (
                     <tr key={manifest.topologyManifestId} class="border-b">
-                      <td class="px-2 py-1">{manifest.manifestKey}</td>
+                      <td class="px-2 py-1">{hubNavigationManifestVisibleLabel(manifest)}</td>
                       <td class="px-2 py-1">{manifest.hubRelationCount}</td>
                       <td class="px-2 py-1">
                         <details class="text-muted-xs">
@@ -130,6 +131,8 @@ export default function ManifestsAdmin(): JSX.Element {
                             内部 ID を表示
                           </summary>
                           <dl class="mt-1 grid grid-cols-[auto_1fr] gap-x-2 font-mono">
+                            <dt>manifest_key</dt>
+                            <dd>{manifest.manifestKey}</dd>
                             <dt>topology_manifest_id</dt>
                             <dd>{manifest.topologyManifestId}</dd>
                             <dt>hub_id</dt>

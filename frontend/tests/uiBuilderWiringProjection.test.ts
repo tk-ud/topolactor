@@ -30,6 +30,7 @@ import {
   dependencyClosureOfTriggerSource,
   deriveUiWatchBindings,
   findRuntimeInteractionPolicyErrors,
+  findRuntimeInteractionPolicyViolations,
   findSideEffectCycleErrors,
   HIGH_FREQUENCY_TRIGGERS,
   isBackendOrExternalDispatchAction,
@@ -238,6 +239,77 @@ Deno.test("policy: bindRuntimeDispatchPayload (a stray leftover actionType, no l
   const errors = findRuntimeInteractionPolicyErrors(nodes);
   assertEquals(errors.length, 1);
   assert(errors[0].includes("ACTION_OUTSIDE_VOCABULARY"));
+});
+
+Deno.test("findRuntimeInteractionPolicyViolations: identifies each violation by nodeId+interactionIndex, never by display label — two nodes with the identical componentKey (hence identical wiringNodeDisplayLabel) at the same interaction index resolve to distinct, correctly-owned violations", () => {
+  const nodes: WiringNode[] = [
+    {
+      nodeId: "n-a",
+      componentKey: "layout/box",
+      runtimeInteractions: [{
+        trigger: "initial_mount",
+        actionType: "dispatchExternalPort",
+        portTargetRef: "external-port:access_port:port-a",
+        sideEffectNone: true,
+      }],
+    },
+    {
+      nodeId: "n-b",
+      componentKey: "layout/box",
+      runtimeInteractions: [{
+        trigger: "initial_mount",
+        actionType: "dispatchExternalPort",
+        portTargetRef: "external-port:access_port:port-b",
+        sideEffectNone: true,
+      }],
+    },
+  ];
+  const violations = findRuntimeInteractionPolicyViolations(nodes);
+  // Each node's own violation set (confirmation + idempotency), attributed to
+  // its own nodeId — never merged or cross-assigned despite the identical
+  // display label ("box") and identical interactionIndex (0) on both nodes.
+  assertEquals(violations.length, 4);
+  const forA = violations.filter((v) => v.nodeId === "n-a");
+  const forB = violations.filter((v) => v.nodeId === "n-b");
+  assertEquals(forA.length, 2);
+  assertEquals(forB.length, 2);
+  assert(forA.every((v) => v.interactionIndex === 0));
+  assert(forB.every((v) => v.interactionIndex === 0));
+  // The human-facing message text is identical between the two (same label,
+  // same index) — proving nodeId is the ONLY thing that distinguishes them,
+  // exactly the field a string-prefix correlation would have discarded.
+  assertEquals(
+    forA.map((v) => v.message).sort(),
+    forB.map((v) => v.message).sort(),
+  );
+});
+
+Deno.test("findRuntimeInteractionPolicyViolations: message text matches findRuntimeInteractionPolicyErrors' own string[] exactly (single source, no drift)", () => {
+  const nodes: WiringNode[] = [{
+    nodeId: "n1",
+    componentKey: "form_input/text",
+    runtimeInteractions: [
+      {
+        trigger: "load",
+        actionType: "dispatchExternalPort",
+        portTargetRef: "external-port:access_port:port-1",
+      },
+      {
+        trigger: "initial_mount",
+        actionType: "dispatchExternalPort",
+        portTargetRef: "external-port:access_port:port-2",
+        sideEffectNone: true,
+      },
+    ],
+  }];
+  const violationMessages = findRuntimeInteractionPolicyViolations(nodes).map((v) =>
+    v.message
+  );
+  const errorStrings = findRuntimeInteractionPolicyErrors(nodes);
+  // findRuntimeInteractionPolicyErrors appends findSideEffectCycleErrors after
+  // the per-interaction messages — none fire here (no value-reactive write), so
+  // the two arrays must be identical, not merely overlapping.
+  assertEquals(violationMessages, errorStrings);
 });
 
 // ─── UI監視割当（宣言）と UI状態更新（更新）の分離 ───────────────────────────
@@ -572,6 +644,97 @@ Deno.test("side-effect cycle policy: selectable_write_targets excludes dependenc
   assert(
     closure.has("n-b"),
     "node writing into trigger source is in the closure",
+  );
+  assertEquals(selectableWriteTargets(nodes, "n-a"), ["n-c"]);
+});
+
+// ─── side-effect cycle policy: localStateMutation targetRef writes (round-7 gap) ──
+//
+// A localStateMutation entry authors its write target via `targetRef`
+// ("ui-local:<nodeId>.<stateKey>"), never a separate `targetNodeId` field (SSOT
+// wiring_lane_contract.lanes.internal_instance_wiring / react-schema-topology-seed-
+// translator-ssot.yaml). The dependency graph this policy derives from
+// runtimeInteractions must see a targetRef write exactly as it sees a
+// targetNodeId write — the SAME resolved target node either way — since
+// resolveUiStateUpdateMutation (runtime/uiEventEffectRunner.ts) treats them
+// identically at write time. Before this fix, interactionWriteTargets only
+// recognized targetNodeId-shaped writes, so a direct or indirect loop authored
+// entirely through targetRef went undetected by both the authoring candidate
+// filter and this fail-close gate.
+
+Deno.test("side-effect cycle policy: a localStateMutation targetRef direct self-loop (watched A -> targetRef ui-local:A.x) fails close", () => {
+  const nodes: WiringNode[] = [{
+    nodeId: "n-a",
+    componentKey: "form_input/text",
+    runtimeInteractions: [{
+      trigger: "change",
+      actionType: "localStateMutation",
+      targetRef: "ui-local:n-a.flag",
+    }],
+  }];
+  const cycleErrors = findSideEffectCycleErrors(nodes);
+  assertEquals(cycleErrors.length, 1);
+  assert(cycleErrors[0].includes("SIDE_EFFECT_DIRECT_SELF_LOOP"));
+  assert(
+    findRuntimeInteractionPolicyErrors(nodes).some((e) =>
+      e.includes("SIDE_EFFECT_DIRECT_SELF_LOOP")
+    ),
+    "cycle errors must block the same validate/apply path",
+  );
+});
+
+Deno.test("side-effect cycle policy: an indirect loop through a targetRef write (A -> B via targetRef, B -> A via targetNodeId) fails close", () => {
+  const nodes: WiringNode[] = [
+    {
+      nodeId: "n-a",
+      componentKey: "form_input/text",
+      runtimeInteractions: [{
+        trigger: "change",
+        actionType: "localStateMutation",
+        targetRef: "ui-local:n-b.flag",
+      }],
+    },
+    {
+      nodeId: "n-b",
+      componentKey: "form_input/text",
+      runtimeInteractions: [{
+        trigger: "change",
+        actionType: "setState",
+        targetNodeId: "n-a",
+        statePath: "open",
+      }],
+    },
+  ];
+  const errors = findSideEffectCycleErrors(nodes);
+  assertEquals(errors.length, 1);
+  assert(errors[0].includes("SIDE_EFFECT_INDIRECT_LOOP"));
+});
+
+Deno.test("side-effect cycle policy: selectable_write_targets excludes dependency_closure derived through a targetRef write edge", () => {
+  const nodes: WiringNode[] = [
+    // n-b writes into n-a via a localStateMutation targetRef (not targetNodeId) on
+    // value change: writing to n-b from an n-a-triggered effect would loop, so n-b
+    // must be inside dependency_closure(n-a) exactly as a targetNodeId write would be.
+    {
+      nodeId: "n-b",
+      componentKey: "form_input/text",
+      runtimeInteractions: [{
+        trigger: "change",
+        actionType: "localStateMutation",
+        targetRef: "ui-local:n-a.open",
+      }],
+    },
+    { nodeId: "n-a", componentKey: "form_input/text" },
+    {
+      nodeId: "n-c",
+      componentKey: "disclosure/modal",
+      componentKind: "disclosure/modal",
+    },
+  ];
+  const closure = dependencyClosureOfTriggerSource(nodes, "n-a");
+  assert(
+    closure.has("n-b"),
+    "node writing into trigger source via targetRef is in the closure, same as a targetNodeId write",
   );
   assertEquals(selectableWriteTargets(nodes, "n-a"), ["n-c"]);
 });

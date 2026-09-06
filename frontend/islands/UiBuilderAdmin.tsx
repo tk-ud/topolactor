@@ -88,6 +88,8 @@ import WiringGraphPanel from "../components/WiringGraphPanel.tsx";
 import {
   ALL_WIRING_TRIGGERS,
   findRuntimeInteractionPolicyErrors,
+  friendlyComponentLabel,
+  type InternalApiWiringInput,
 } from "../lib/uiBuilderWiringProjection.ts";
 import ManifestStep3EventWiringPreset from "../components/ManifestStep3EventWiringPreset.tsx";
 import { resolveCanvasRootPreviewClassName } from "../runtime/layoutClassPreviewUtils.ts";
@@ -580,6 +582,14 @@ export type ComponentEventWiring = {
   targetNodeId?: string;
   statePath?: string;
   value?: unknown;
+  /**
+   * Authoring-only: UI-local-state target for actionType localStateMutation
+   * ("ui-local:<nodeId>.<stateKey>"), resolved into targetNodeId/statePath by
+   * frontend/runtime/uiEventEffectRunner.ts resolveUiStateUpdateMutation / parseUiLocalTargetRef.
+   * SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
+   * wiring_lane_contract.lanes.internal_instance_wiring targetRef_shape.
+   */
+  targetRef?: string;
   /** @deprecated legacy propsJson.eventWirings compatibility only. */
   eventType?: string;
   /** @deprecated legacy state-key compatibility only. */
@@ -1863,6 +1873,7 @@ export function LayoutRightDock({
   onBatchApplyNodes,
   suggestShape,
   designHandoffKey = 0,
+  onPackageWiringSaved,
 }: {
   draftNodes: DraftNode[];
   selectedNodeId: string | null;
@@ -1895,6 +1906,13 @@ export function LayoutRightDock({
   suggestShape?: ManifestSuggestShape | null;
   /** Increment to open design inspector accordion after layout apply handoff. */
   designHandoffKey?: number;
+  /**
+   * Round: bubbles PackageConnectionPanel's own real save result up to the caller so the
+   * "配線ビュー" wiring canvas's internalApiWirings projection can reflect a same-package save
+   * immediately, without a second, drifting fetch of the SAME ui_topology:get_package_wiring
+   * authority this component already re-fetches for its own admin_runtime gate.
+   */
+  onPackageWiringSaved?: (wiring: AdminPackageWiringRow) => void;
 }): JSX.Element {
   // Round 18: the admin_runtime operation-override authoring section (NodeEventAuthoringPanel)
   // must only be offered when this layout's OWN package wiring is actually
@@ -1913,6 +1931,7 @@ export function LayoutRightDock({
   >(null);
   const onSiblingWiringSaved = (wiring: AdminPackageWiringRow) => {
     setWiringSaveOverride({ packageId, wiringKind: wiring.wiringKind });
+    onPackageWiringSaved?.(wiring);
   };
   const effectiveWiringKind = wiringSaveOverride?.packageId === packageId
     ? wiringSaveOverride.wiringKind
@@ -2454,10 +2473,6 @@ function buildSlotKeyCandidates(
   return [...new Set(["", ...dbSlotKeys, ...fromCanvas, ...GENERIC_SLOT_KEYS])];
 }
 
-function shortId(id: string): string {
-  return id.length > 8 ? id.slice(0, 8) : id;
-}
-
 async function loadLayoutCandidatesFromBackend(): Promise<{
   candidates: LayoutRouteCandidate[];
   errors: UiValidationError[];
@@ -2630,7 +2645,7 @@ function LifecycleStepIndicator(
           role="status"
           class="mt-2 rounded border border-green-300 bg-green-50 px-2 py-1.5 text-xs font-medium text-green-800"
         >
-          配置（layout_patch）は DB に保存済みです。下の「次のステップ」からデザイン永続化へ進めます。
+          配置は保存済みです。下の「次のステップ」からデザインの保存へ進めます。
         </p>
       )}
     </div>
@@ -2673,9 +2688,12 @@ function LayoutPersistHandoffBanner({
         </a>
       </div>
       {routeKey && (
-        <p class="mb-0 mt-2 text-[0.65rem] text-green-700">
-          route: <code class="font-mono">{routeKey}</code>
-        </p>
+        <details class="mb-0 mt-2 text-[0.65rem] text-green-700">
+          <summary class="cursor-pointer">技術情報（開発者向け）</summary>
+          <p class="mt-0.5">
+            route: <code class="font-mono">{routeKey}</code>
+          </p>
+        </details>
       )}
     </div>
   );
@@ -2766,12 +2784,14 @@ function ApplyReadinessPanel({
   canPatch,
   effectiveRouteKey,
   effectiveLayoutId,
+  effectiveLayoutKey,
   draftNodes,
   layoutClassRefError,
 }: {
   canPatch: boolean;
   effectiveRouteKey: string;
   effectiveLayoutId: string;
+  effectiveLayoutKey?: string;
   draftNodes: DraftNode[];
   layoutClassRefError: string | null;
 }): JSX.Element {
@@ -2808,7 +2828,14 @@ function ApplyReadinessPanel({
               ? (
                 <>
                   <code class="text-xs">{effectiveRouteKey}</code> /{" "}
-                  <code class="text-xs">{shortId(effectiveLayoutId)}</code>
+                  {effectiveLayoutKey
+                    ? <code class="text-xs">{effectiveLayoutKey}</code>
+                    : (
+                      <details class="inline text-xs">
+                        <summary class="inline cursor-pointer">技術情報</summary>
+                        <code class="ml-1">{effectiveLayoutId}</code>
+                      </details>
+                    )}
                 </>
               )
               : "未選択 — ルートとレイアウトを選択してください"}
@@ -2924,13 +2951,12 @@ function _LayoutPatchSummaryPanel(
           ルート: <code>{summary.routeKey || "—"}</code>
         </li>
         <li>
-          レイアウト: {summary.layoutKey
-            ? <code>{summary.layoutKey}</code>
-            : <code>{shortId(summary.layoutId) || "—"}</code>}
+          レイアウト: {summary.layoutKey ? <code>{summary.layoutKey}</code> : "—"}
           {summary.layoutId && (
-            <span class="ml-1 font-mono text-xs text-slate-600">
-              (layoutId: {summary.layoutId})
-            </span>
+            <details class="ml-1 inline text-xs text-slate-600">
+              <summary class="inline cursor-pointer">技術情報</summary>
+              <span class="ml-1 font-mono">layoutId: {summary.layoutId}</span>
+            </details>
           )}
         </li>
         <li>CSS トークン: {summary.cssTokenCount} 件</li>
@@ -2995,7 +3021,7 @@ function RouteLayoutSelector({
           <option value="">— レイアウトを選択 —</option>
           {layouts.map((l) => (
             <option key={l.layoutId} value={l.layoutId}>
-              {l.layoutKey} ({shortId(l.layoutId)})
+              {l.layoutKey}
             </option>
           ))}
         </select>
@@ -3740,11 +3766,6 @@ function LegacyManualRouteInput({
 }
 
 // ─── フローレイアウトキャンバス（FlowLayoutCanvas コンポーネント） ─────────────
-
-function friendlyComponentLabel(componentKey: string): string {
-  const parts = componentKey.split("/");
-  return parts[parts.length - 1] ?? componentKey;
-}
 
 function friendlyNodeLabel(
   node: Pick<DraftNode, "componentKey" | "nodeKind" | "htmlTag">,
@@ -5033,12 +5054,57 @@ function LayoutBuilderSection({
   // SSOT: docs/design/admin-console-workflow-ssot.yaml ui_builder_canvas_workspace
   // Not persisted to layout_patch_json — transient draft interaction state only.
   const [selectedNodeIds, setSelectedNodeIds] = useState<ReadonlySet<string>>(emptySelectionSet());
-  const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
-  const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
+  // SSOT: admin-console-workflow-ssot.yaml ui_builder_canvas_workspace.canvas_workspace_contract
+  // screen_layout.left_panel / right_panel: "position: fixed left/right, docked" — the component
+  // bucket panel and the layer/design inspector are load-bearing authoring surfaces, not optional
+  // utility drawers, so they default open (visible) on every mount. The open/close affordance stays
+  // (UI_BUILDER_DRAWER_STATE_BOUNDARY: frontend-local display-density chrome only) for narrow
+  // viewports, but hiding both by default contradicted the fixed/docked contract.
+  const [leftDrawerOpen, setLeftDrawerOpen] = useState(true);
+  const [rightDrawerOpen, setRightDrawerOpen] = useState(true);
   // Layout / wiring canvas mode boundary. SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
   // wiring_mode — the wiring canvas is a switchable projection/edit mode over
   // draftNodes[].runtimeInteractions, never a separate persistence authority.
   const [canvasMode, setCanvasMode] = useState<"layout" | "wiring">("layout");
+  // 内部API (internal_api) wiring-inspector-taxonomy projection input: re-reads the SAME
+  // ui_topology:get_package_wiring row PackageWiringEditor/LayoutRightDock read (never a second,
+  // parallel persistence authority) so the "配線ビュー" wiring canvas can project the package's own
+  // internal-API/manifest wiring as an edge, per SSOT lane_storage_boundary.lanes.
+  // package_internal_api_wiring_lane. Re-fetches on scopedPackageId change; a same-package save
+  // inside the sibling PackageConnectionPanel is reflected immediately via
+  // packageWiringSaveOverride (LayoutRightDock's onPackageWiringSaved bubbles up
+  // PackageWiringEditor's own real save result), the SAME pattern LayoutRightDock's own
+  // wiringSaveOverride already uses for its admin_runtime gate — never a second poll/fetch.
+  const { targetSurface: fetchedPackageWiringTargetSurface, targetRef: fetchedPackageWiringTargetRef } =
+    useEffectivePackageWiringKind(scopedPackageId);
+  const [packageWiringSaveOverride, setPackageWiringSaveOverride] = useState<
+    { packageId: string; targetSurface: string; targetRef?: string | null } | null
+  >(null);
+  const onPackageWiringSaved = (wiring: { targetSurface: string; targetRef?: string | null }) => {
+    if (!scopedPackageId) return;
+    setPackageWiringSaveOverride({
+      packageId: scopedPackageId,
+      targetSurface: wiring.targetSurface,
+      targetRef: wiring.targetRef,
+    });
+  };
+  const activePackageWiringOverride = packageWiringSaveOverride &&
+      packageWiringSaveOverride.packageId === scopedPackageId
+    ? packageWiringSaveOverride
+    : null;
+  const packageWiringTargetSurface = activePackageWiringOverride
+    ? activePackageWiringOverride.targetSurface
+    : fetchedPackageWiringTargetSurface;
+  const packageWiringTargetRef = activePackageWiringOverride
+    ? activePackageWiringOverride.targetRef ?? null
+    : fetchedPackageWiringTargetRef;
+  const internalApiWirings: InternalApiWiringInput[] = packageWiringTargetSurface === "manifest" &&
+      packageWiringTargetRef
+    ? [{
+      wiringKey: manifestWiringKeyFromTargetRef(packageWiringTargetRef, packageWiringTargetSurface),
+      targetRef: packageWiringTargetRef,
+    }]
+    : [];
   const [designHandoffKey, setDesignHandoffKey] = useState(0);
   // Gap 1: Lifecycle state machine
   const [lifecyclePhase, setLifecyclePhase] = useState<LifecyclePhase>("idle");
@@ -6859,6 +6925,7 @@ function LayoutBuilderSection({
                   pushHistory(nodes, label);
                   setLifecyclePhase("idle");
                 }}
+                internalApiWirings={internalApiWirings}
               />
             </div>
           )}
@@ -6959,6 +7026,7 @@ function LayoutBuilderSection({
               onEmissionDataJsonChange={setEmissionDataJson}
               suggestShape={suggestShape}
               designHandoffKey={designHandoffKey}
+              onPackageWiringSaved={onPackageWiringSaved}
             />
             </div>
           </div>
@@ -7006,6 +7074,7 @@ function LayoutBuilderSection({
               canPatch={canPatch}
               effectiveRouteKey={effectiveRouteKey}
               effectiveLayoutId={effectiveLayoutId}
+              effectiveLayoutKey={selectedLayout?.layoutKey}
               draftNodes={draftNodes}
               layoutClassRefError={layoutClassRefError}
             />
@@ -7056,7 +7125,7 @@ function LayoutBuilderSection({
           : null}
         routeKey={effectiveRouteKey}
         layoutId={effectiveLayoutId}
-        layoutLabel={selectedLayout?.layoutKey ?? shortId(effectiveLayoutId)}
+        layoutLabel={selectedLayout?.layoutKey ?? ""}
         loading={loading}
         onClose={() => {
           setLayoutApplyModalOpen(false);

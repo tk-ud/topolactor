@@ -11,10 +11,12 @@
 | `helper-manual` | helper reference artifact / admin helper projection | not_started | 1 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 2 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 | `test-orchestration-review` | Seed conversion後の proof / test orchestration review | not_started | 1 | proof surface carry-over | `docs/design/pipeline-continuity-ssot.yaml` |
-| `frontend-canonical-surface-structure-label-boundary` | Seed conversion後の frontend canonical surface label boundary | not_started | 1 | frontend canonical UI structure/wiring surfaces | canonical surface UI structure/wiring SSOTs, `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml` |
 | `admin-console-workflow-step-wording-boundary` | Seed conversion後の admin console workflow wording boundary | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
+| `ui-builder-schema-composed-override-delta-reachability` | schema-composed override-delta nodeがUI-Builder再オープン時に消失するnode-loss gap | not_started | 1 | 未割当（`frontend-canonical-surface-structure-label-boundary` PR#610 9ラウンド目監査からの新規発見、別scope） | `docs/design/runtime-orchestration-ssot.yaml` / `docs/design/react-schema-topology-seed-translator-ssot.yaml` |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
+
+注: `frontend-canonical-surface-structure-label-boundary` は PR#610 により完了済み（wiring inspector canonical taxonomy統一・internal_api projection接続・canvas workspace sequential framing除去・panel fixed/docked化・normal label / technical disclosure boundary）。5ラウンドの監査を経て全SSOT scope整合を確認 — 3ラウンド目時点の完了宣言後、全体監査で `topology_naming_ssot.user_facing_topology_label.display_rule`（visibleName = userFacingTopologyLabel ?? topologySystemName）が `/admin/manifests` / hub_navigation production projectionへ届いていないcross-layer gapと、`/auth`・`/super_auth` normal error pathへraw diagnostic messageがprimary表示されるgapが見つかり、4ラウンド目で解消（新規DBカラムは追加せず、既存 `hubs.topology_manifests.topology_jsonb` の screen_data_shape entryを読む形で解決）。5ラウンド目の全体監査で、naming field双方欠落時にSSOT未定義の `?? manifestKey` をnormal primaryへ昇格していた残fallbackと、`HubNavigationAdmin` のlifecycle（create/update/deprecate/reorder）error pathがraw internal vocabulary（related_hub_id/hub_relations/topology manifest等）を含むbackend messageをそのままnormal primary表示していた残件を発見・解消（fail-close friendly placeholder採用、raw manifestKey/error code/messageは技術情報disclosureへ維持、SSOTのvisibleNameルール自体は変更なし）。6ラウンド目の全体監査で、同一surfaceのcreate/update/deprecate**成功時**のraw backend carrier message（"Hub relation created."等）がsurface自身のuser-facing語彙「ナビ遷移」と異なるままnormal primary表示されていた残件を発見・解消（action契機ベースのfriendly文へ置換、raw messageは技術情報disclosureへ維持。全repo success message翻訳への一般化はせず）。7ラウンド目のSSOT-first再監査で2件を発見・解消: (a) `side_effect_cycle_policy` の dependency graph derivation（`interactionWriteTargets`）が `targetNodeId` 型write のみを認識し `localStateMutation` の `targetRef`（`ui-local:<nodeId>.<stateKey>`）型writeを無視していたため、targetRef経由の direct/indirect self-loopがauthoring candidate filter・pre-save policy gate・runtime execution guardの全てで検出されなかった欠落を解消（`parseUiLocalTargetRef` をSSOT正本箇所 `uiBuilderWiringProjection.ts` へ集約し、3箇所の消費者全てに反映）。(b) canonical `WiringGraphPanel`（layout/wiringモード切替の第一級normal surface）のedge target表示が raw dispatcher-shaped targetRef文字列（`external-port:...`/`instance-port:...`/package-wiring manifest UUID）をそのままprimary表示していたのに加え、localStateMutationの `ui-local:` targetRef解決に parse不備があり常に生文字列へfallbackしていたbugを発見・解消（SSOT分類済みcategoryベースのfriendly文をprimaryとし、raw targetRefは技術情報disclosureへ維持）。componentKey||nodeIdフォールバックとUI監視割当の `nodeId.stateKey` 表示は、既存の一貫した規約かつauthor入力語彙であり本Bundleのraw internal vocabulary懸念に該当しないと判断し変更していない。1〜6ラウンドの既存closureは全体テストスイート再実行で回帰なしを確認。8ラウンド目で、7ラウンド目のこの判断（既存実装の一貫性をauthorityとして採用）自体を再監査し、`componentKey`/`nodeId`単独はcanonical schema/catalog identityではあるがuser-facing display label authorityではないと再整理。調査の結果、`UiBuilderAdmin.tsx`（同一canvas workspaceのLayer Tree・部品パレット・undo履歴・アクセシビリティannounce）に既に存在し広く使われていた `friendlyComponentLabel`/`friendlyNodeLabel`（componentKeyの末尾segmentを抽出する既存の正規表示名解決）を発見。これを `uiBuilderWiringProjection.ts` の `wiringNodeDisplayLabel()` としてcanonical化・共有化し、`WiringGraphPanel` のedge sourceLabel・部品パレット・target表示・UI監視割当表示を全てこのauthorityへ統一（componentKey欠如時はfail-close placeholder「（名称未設定の部品）」、raw nodeId/targetRefは技術情報disclosureへ維持）。新規のfixed label mapは追加していない。この変更により `findRuntimeInteractionPolicyErrors` のlabel文字列フォーマットが変わったため、`uiEventEffectRunner.ts`（fail-close guardのpolicyErrors prefix相関フィルタ、error message構築）と `visualLayoutUtils.ts`（`findRuntimeInteractionPatchErrors`）に残っていた同型 `componentKey || nodeId` の独立再構築2箇所が追従しておらず、fail-closeガードが黙って迂回される回帰が発生 — 全体テストスイートで検出し、両箇所を `wiringNodeDisplayLabel()` 参照へ同期し直して解消（再検証済み、回帰ゼロ）。`external_instance_integration` branchの未検証だったDOM proofも追加。9ラウンド目で、8ラウンド目の「既存frontendで広く使われている」という根拠を再度、既存実装非authorityの原則から監査し2点対応: (1) display authority — `runtime-orchestration-ssot.yaml` `authored_label_and_production_props` により schema-composed record の必須 `label` が `LayoutSchemaTensorComposer.Compose` を経て `LayoutNode.Label` としてproduction renderingへ届く実在のSSOT authorityを確認した上で、UI-Builder自身の読込経路（`ui_topology:get_layout_patch_draft` -> `GetLayoutPatchDraftAsync`）が `layout_patch_json`/`layout_draft_tmp_json` を直接読み `LayoutSchemaTensorComposer.Compose`・`layout_schema_json.records[]` を一切経由しないため、WiringNode/DraftNodeへこのLabelが到達不能であることを実装横断で確認・実証。`wiringNodeDisplayLabel`/`friendlyComponentLabel` はこのSSOT authorityとは無関係な、UI-Builder canvas自身のローカルな運用上fallback（他に到達可能な表示情報が無いために使われている）であるとdoc commentで訂正（8ラウンド目の「同一authority」という表現は誤解を招くため訂正）。調査の副産物として、schema-composed override-delta nodeの永続化済み `layout_patch_json` エントリがcomponentKey欠如を正当に許容する一方、frontend側 `readPatchNode`（`visualLayoutUtils.ts`）が非structural_htmlノードでcomponentKey欠如を検知すると当該ノードをnodes[]から完全除外（silent drop）する、本Bundle（表示ラベル境界）より重大な別種のnode-loss gapを新規発見 — UI-Builder再オープン時にノードが無名表示ではなく完全消失する不具合であり、修正にはbackend/frontend両方のDTO拡張を伴うOwner design_change判断が必要なため本Bundle scopeでは実装せず、doc comment + 専用test（`visualLayoutBuilder.test.ts` KNOWN GAP）で報告のみに留め、新規backlog `ui-builder-schema-composed-override-delta-reachability` として索引に追加した。(2) runtime identity coupling — `uiEventEffectRunner.ts` の `emitLifecycle` が `findRuntimeInteractionPolicyErrors` の人間可読文字列を `${label} #${idx+1}:` prefixで再検索してinteraction単位のfail-close可否を相関していた設計自体（8ラウンド目はlabel format同期のみで根本設計は温存）を、`admin-uibuilder-ui-structure-wiring-ssot.yaml` `projection_authority_runtime_interaction_identity`（runtimeInteractionId、nodeId+interactionIndexフォールバック）と同じ構造的identityで判定する方式へ再設計: `findRuntimeInteractionPolicyViolations()`（`{nodeId, interactionIndex, runtimeInteractionId, message}` 構造化配列、`findRuntimeInteractionPolicyErrors` の既存string[]はこれをラップするのみで shape 不変）を新設し、`uiEventEffectRunner.ts` の相関を nodeId+interactionIndex の構造一致へ置換。同一componentKey（同一表示label）を持つ2ノードが同一interactionIndexで異なる正当性を持つ場合に旧実装が正当な側の実行を誤ってblockする実バグを再現・確認した上で修正し、回帰proof（`uiEventEffectRunner.test.ts`・`uiBuilderWiringProjection.test.ts` 各1件）を追加。1〜8ラウンドの既存closureは全体テストスイート再実行（2102 passed / 83 failed、baseline一致）で回帰なしを確認。上位 Roadmap `product.admin_topology_authoring` はこのsubBundle単独では昇格しない。
 
 ---
 
@@ -23,7 +25,7 @@
 削除前 ref `018b80fa23949a67a7b03f1853cc9c3f2e45ce3c` の `.agent/reports/frontend-ui-audit-bundle-semantic-frame.md` と `.agent/reports/ui-projection-surface-gap-audit-2026-07-07.md` を全文確認した分類。report 由来 scope は finding 番号や route 名ではなく owning SSOT / Bundle / 意味要素単位で扱う。プロンプト発行者の scope が狭い可能性があるため、実装 Agent は関連箇所を追加調査し、SSOT / wiring / test-proof surface の不足を blocking として記録してから product 実装へ進む。
 
 - `test-orchestration-review`: **seed conversion 完了後の後段**。旧 `pipeline-continuity-frontend-route-seed-proof` は実装 Bundle ではなく、seed conversion 後に test tier / scenario harness / route-presence-test replacement を点検・見直す proof orchestration review として扱う。route absence 単独や hardcoded route presence test を canonical proof として残さない。
-- `frontend-canonical-surface-structure-label-boundary`: **seed conversion 後の後段**。語彙・label boundary 修正は seed conversion 実装に混ぜず、conversion 完了後に canonical surface label / technical disclosure scope として扱う。
+- `frontend-canonical-surface-structure-label-boundary`: **完了済み（PR#610）**。wiring inspector canonical taxonomy統一・internal_api projection接続・canvas workspace sequential framing除去・panel fixed/docked化・normal label / technical disclosure boundary、`/admin/manifests` / hub_navigation の visibleName SSOT projection、`/auth` / `/super_auth` normal error path label boundary、`HubNavigationAdmin` lifecycle error/成功messageのnormal語彙統一、`side_effect_cycle_policy` の targetRef dependency-graph gap解消、`WiringGraphPanel` edge target表示のnormal/technical分離、`WiringGraphPanel` node/edge/watch-binding表示の統一（`wiringNodeDisplayLabel`；componentKeyから派生するUI-Builder canvas自身のローカルな運用上fallbackであり、SSOT authored-label authorityではない — `runtime-orchestration-ssot.yaml` `authored_label_and_production_props` が定義する schema-composed record の `LayoutNode.Label` はproduction rendering経路にのみ存在し、UI-Builder自身の読込経路（`ui_topology:get_layout_patch_draft`）はこれへ到達しないため、9ラウンド目で当該authority判断を訂正済み）、および `uiEventEffectRunner.ts` fail-close guardの相関をhuman-facing label文字列からnodeId+interactionIndexの構造的identityへ分離した修正（`findRuntimeInteractionPolicyViolations()`）を9ラウンドの監査を経て実装。schema-composed override-delta nodeのnode-loss gapは本Bundle scope外の別種issueとして新規backlog `ui-builder-schema-composed-override-delta-reachability` へ切り出し済み。
 - `admin-console-workflow-step-wording-boundary`: **seed conversion 後の後段**。Step wording 修正は seed conversion 実装に混ぜず、conversion 完了後に admin console workflow wording scope として扱う。
 - `product-nocode-loop-acceptance`: **acceptance_pending 維持**。Agent が仕様確定や受入完了を代行せず、オーナーが統合 UX / manual acceptance scope を精査する。
 - `helper-manual`: **仕様確定後 scope 維持**。helper manual は仕様確定前に実装へ進めず、user-facing helper manual SSOT に従う後段 scope とする。
@@ -90,62 +92,6 @@ seed conversion 完了後に test tier / scenario harness / route-presence-test 
 - test tier / scenario harness / route-presence-test replacement の点検 scope として記述されている。
 - proof bundle を seed conversion 実装 Bundle として扱わない。
 - route absence 単独や hardcoded route presence test を canonical proof として残さない。
-
----
-
-## Bundle `frontend-canonical-surface-structure-label-boundary`
-
-**Status:** `not_started`
-**Primary SSOT:** canonical surface UI structure/wiring SSOTs, including `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`
-**Position:** `admin-surface-topology-seed-conversion` 完了後の後段語彙修正 scope。
-
-### 問題点
-
-normal view label boundary と technical disclosure boundary を seed conversion 実装前に混ぜると、seed conversion の route retirement / projection render wiring と語彙修正が同時変更になり、証明範囲が不明確になる。
-
-### 目的
-
-seed conversion 完了後に、canonical surfaces ごとの UI structure/wiring と表示 label boundary を owning SSOT へ戻す。
-
-### 改善方針
-
-- seed conversion 実装には混ぜず、後段 scope として実施する。
-- normal view label boundary では raw id / UUID / topology / manifest / screen_data_shape / DB / backend / Route / Primary Table / UI Builder Key 等を通常表示の意味にしない。
-- technical details は explicit technical disclosure として扱う。
-- operator visible labels は raw-first にしない。
-
-### 対応資料
-
-- canonical surface UI structure/wiring SSOTs
-- `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`
-- `docs/design/runtime-orchestration-ssot.yaml`
-- `docs/design/admin-console-workflow-ssot.yaml`
-- `.agent/tasks/todo.md`
-
-### 対象ファイル名
-
-- `.agent/tasks/todo.md`
-- `frontend/routes/index.tsx`
-- `frontend/routes/auth.tsx`
-- `frontend/routes/super_auth.tsx`
-- `frontend/routes/admin/index.tsx`
-- `frontend/routes/admin/contents.tsx`
-- `frontend/routes/admin/ui-builder.tsx`
-- `frontend/routes/admin/manifests.tsx`
-- frontend components / islands that render canonical surface labels and technical disclosure
-
-### 対象関数名
-
-- future normal label mapping functions
-- future technical disclosure rendering functions
-- future operator label mapping functions
-- future canonical surface view model builders
-
-### 受入条件
-
-- 語彙修正は seed conversion 実装後の後段 scope として扱われている。
-- normal user-facing views do not expose raw ids / UUIDs / internal vocabulary as primary meaning.
-- technical details, if needed, are behind explicit technical disclosure and not normal operation labels.
 
 ---
 

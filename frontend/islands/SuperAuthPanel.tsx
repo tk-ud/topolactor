@@ -1,6 +1,7 @@
 import { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import {
+  authErrorFriendlyText,
   authErrorText,
   loginSuper,
   probeAdminSessionToken,
@@ -111,10 +112,14 @@ export default function SuperAuthPanel(): JSX.Element {
         <div class="alert-error mt-4">
           <strong>ログインに失敗しました。</strong>
           <ul class="mt-2 list-inside list-disc text-sm">
-            {(state.errors ?? [{ message: "不明なエラー。" }]).map((e, i) => (
-              <li key={i}>{authErrorText(e)}</li>
-            ))}
+            {(state.errors ?? [{}]).map((e, i) => <li key={i}>{authErrorFriendlyText(e)}</li>)}
           </ul>
+          <details class="mt-2 text-xs">
+            <summary class="cursor-pointer text-red-800">技術情報（開発者向け）</summary>
+            <ul class="mt-1 list-inside list-disc text-red-900">
+              {(state.errors ?? []).map((e, i) => <li key={i}>{authErrorText(e)}</li>)}
+            </ul>
+          </details>
         </div>
       )}
     </section>

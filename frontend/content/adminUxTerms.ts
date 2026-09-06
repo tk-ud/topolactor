@@ -40,6 +40,24 @@ export const UX_RUNTIME_DESTINATION_LABELS: Record<string, string> = {
   sse_projection_runtime: "リアルタイム投影",
 };
 
+/**
+ * Step 1 派生識別子プレビュー（SSOT: admin-console-workflow-ssot.yaml
+ * canonical_sequential_authoring_pipeline steps[0].derived_on_step1 — route /
+ * primary physical table / ui_builder_key は auto-shown preview として常時表示が
+ * 要求されているため details 等で隠さない。ここではラベル文言のみ通常語彙にする）。
+ */
+/**
+ * topologySystemName field label (SSOT: admin-console-workflow-ssot.yaml
+ * topology_naming_ssot.topology_system_name — "system identifier" in the SSOT's own
+ * meaning field, no mandated user-facing label). "トポロジーID" read as raw internal
+ * vocabulary to a normal operator; this is the actual input field the derived Route /
+ * Primary Table / UI Builder Key preview below is computed from.
+ */
+export const UX_TOPOLOGY_SYSTEM_NAME_LABEL = "ページの識別子";
+export const UX_DERIVED_IDENTIFIER_ROUTE_LABEL = "ページのURL（自動生成）";
+export const UX_DERIVED_IDENTIFIER_PRIMARY_TABLE_LABEL = "保存先テーブル名（自動生成）";
+export const UX_DERIVED_IDENTIFIER_UI_BUILDER_KEY_LABEL = "画面づくり用キー（自動生成）";
+
 /** 技術用語→業務語ヘルパー（詳細/debug のみで技術語を表示） */
 export function toFriendlyLabel(technicalKey: string): string {
   const map: Record<string, string> = {
@@ -455,6 +473,34 @@ export const UX_RUNTIME_INTERACTION_ADD_EXTERNAL_COMMIT = "外部API連携を確
 export const UX_RUNTIME_INTERACTION_ADD_INSTANCE_COMMIT = "外部インスタンス連携を確定";
 export const UX_RUNTIME_INTERACTION_STAGING_CANCEL = "キャンセル";
 /**
+ * UI状態更新（ui_state_update）汎用ミューテーション — SSOT:
+ * admin-console-workflow-ssot.yaml layout_node_props_contract.descriptor
+ * actionType vocabulary（setState / setActiveKey / localStateMutation）。
+ * モーダル／ドロワー等の開閉（overlay disclosure）以外の状態更新もここで
+ * 設定・編集できるようにする、開閉操作とは別の追加行。
+ */
+export const UX_RUNTIME_INTERACTION_ADD_STATE_UPDATE = "+ 状態の更新";
+export const UX_RUNTIME_INTERACTION_STATE_UPDATE_ACTION_LABEL = "更新の種類";
+/**
+ * SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml ui_event_settings.setting_category_taxonomy
+ * .frontend_side.ui_state_update.action_types — the canonical, normally-authorable vocabulary.
+ * localStateMutation is DELIBERATELY excluded here: it is not a member of this SSOT's own
+ * action_types list, but a separate seed-authored internal_instance_wiring carrier (a different
+ * SSOT: react-schema-topology-seed-translator-ssot.yaml wiring_lane_contract). Promoting it into
+ * this normal add/edit dropdown would fake it into the canonical vocabulary rather than handling
+ * it as the existing, technical-only carrier it actually is.
+ */
+export const UX_RUNTIME_INTERACTION_STATE_UPDATE_ACTION_OPTIONS: readonly { value: string; label: string }[] = [
+  { value: "setState", label: "値を設定（setState）" },
+  { value: "setActiveKey", label: "選択中キーを設定（setActiveKey）" },
+];
+export const UX_RUNTIME_INTERACTION_STATE_PATH_LABEL = "状態スロット（statePath）";
+export const UX_RUNTIME_INTERACTION_STATE_VALUE_LABEL = "値（value）";
+export const UX_RUNTIME_INTERACTION_LOCAL_STATE_TARGET_LABEL = "ローカル状態の対象（ui-local）";
+export const UX_RUNTIME_INTERACTION_LOCAL_STATE_MUTATION_TECHNICAL_HEADING = "技術情報（既存の内部連携設定）";
+export const UX_RUNTIME_INTERACTION_NO_STATE_UPDATE_TARGETS =
+  "キャンバスに部品がありません。状態を更新する対象を先に配置してください。";
+/**
  * 配線インスペクタ分類語彙（正本: frontend-ui-audit-bundle-semantic-frame.md /
  * SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml setting_category_taxonomy）。
  * frontend側: UI監視割当 / UI状態更新 / 副作用設定、backend側: 内部API / 外部API連携 / 外部インスタンス連携。
@@ -616,6 +662,15 @@ export const UX_MANIFEST_API_EVENT_WIRING_FIELD_LABELS: Record<string, string> =
 /** Hub navigation — destination screen picker */
 export const UX_HUB_NAV_DESTINATION_LABEL = "遷移先の画面";
 
+/**
+ * Fail-close normal-view placeholder for a hub-navigation manifest row whose naming SSOT fields
+ * (userFacingTopologyLabel, topologySystemName) are BOTH absent (topology_naming_ssot.
+ * display_rule has nothing to resolve — this is a distinct case from either field existing).
+ * The raw dispatcher-routing manifestKey stays reachable via 技術情報 disclosure, never here;
+ * mirrors LayoutPatchApplyModal.tsx's established "（名称未設定のレイアウト）" convention.
+ */
+export const UX_HUB_NAVIGATION_MANIFEST_UNNAMED_LABEL = "（名称未設定の画面）";
+
 /** 左 docked panel — 部品追加パネル見出し（SSOT: canvas_workspace_contract.left_panel）。 */
 export const UX_COMPONENT_ADD_PANEL_LABEL = "部品追加";
 
@@ -636,7 +691,7 @@ export const UX_DESIGN_NODE_SAVE_LABEL = "選択ノードのデザインを保�
 /** layout_patch apply 成功後の次アクション案内 */
 export const UX_LAYOUT_APPLIED_HANDOFF_TITLE = "配置の保存が完了しました";
 export const UX_LAYOUT_APPLIED_HANDOFF_HINT =
-  "配置（layout_patch）は DB に反映済みです。色・文言などのデザインは別途永続化が必要です。";
+  "配置は保存されました。色・文言などのデザインは別途保存が必要です。";
 export const UX_LAYOUT_APPLIED_GO_DESIGN_SAVE = "デザインを永続化（右パネル）";
 export const UX_LAYOUT_APPLIED_GO_INSPECTION =
   "投影インスペクションで確認（読み取り専用）";

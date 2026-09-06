@@ -30,12 +30,14 @@
 import {
   computeDispatchIdempotencyKey,
   deriveUiWatchBindings,
-  findRuntimeInteractionPolicyErrors,
+  findRuntimeInteractionPolicyViolations,
   findSideEffectCycleErrors,
   isBackendOrExternalDispatchAction,
   isLifecycleTrigger,
+  parseUiLocalTargetRef,
   type WiringInteraction,
   type WiringNode,
+  wiringNodeDisplayLabel,
   wiringSettingCategoryOf,
 } from "../lib/uiBuilderWiringProjection.ts";
 import type {
@@ -51,6 +53,17 @@ import {
   parsePayloadFromSource,
   resolvePayloadFromSource,
 } from "./payloadFromResolver.ts";
+
+/**
+ * Re-exported here (canonical definition now in uiBuilderWiringProjection.ts) so
+ * existing callers of this module (visualLayoutUtils.ts, tests) keep working
+ * unchanged. The side_effect_cycle_policy dependency-graph derivation
+ * (interactionWriteTargets, same module as the canonical definition) and this
+ * module's own resolveUiStateUpdateMutation below resolve a localStateMutation
+ * targetRef through the exact same parser — never two independently-maintained
+ * copies that could drift apart.
+ */
+export { parseUiLocalTargetRef };
 
 /**
  * Runtime local state store with change notification — the projection rerender
@@ -144,27 +157,6 @@ const UI_STATE_UPDATE_OPEN_ACTIONS: Record<string, boolean | "toggle"> = {
   // semantic as open* — never a business-data value the seed record does not carry.
   localStateMutation: true,
 };
-
-/**
- * SSOT wiring_lane_contract.lanes.internal_instance_wiring targetRef_shape:
- * "ui-local:<nodeId>.<stateKey>". Parses the targetRef into the same
- * {targetNodeId, statePath} shape UI_STATE_UPDATE_ACTIONS entries carry
- * directly — used as a fallback when an interaction has no separate
- * targetNodeId/statePath fields (localStateMutation entries only carry
- * targetRef). Malformed/non-matching targetRef resolves to undefined —
- * never guessed.
- */
-const UI_LOCAL_TARGET_REF_RE = /^ui-local:([^.]+)\.(.+)$/;
-
-export function parseUiLocalTargetRef(
-  targetRef: string | undefined,
-): { targetNodeId: string; statePath: string } | undefined {
-  const trimmed = targetRef?.trim();
-  if (!trimmed) return undefined;
-  const match = UI_LOCAL_TARGET_REF_RE.exec(trimmed);
-  if (!match) return undefined;
-  return { targetNodeId: match[1], statePath: match[2] };
-}
 
 export type ResolvedUiStateUpdateMutation = {
   targetNodeId: string;
@@ -446,8 +438,8 @@ export function createUiEventEffectRunner(
 
   // UI監視割当 + UI状態更新-target → runtime connection: declare everything
   // (idempotent — a dispatcher reused across calls skips already-declared slots).
-  // currentNodes / cycleErrors / policyErrors / declaredSlots are mutable so
-  // updateNodes can reconcile the runner to a refreshed node list (e.g. SSE
+  // currentNodes / cycleErrors / policyViolations / declaredSlots are mutable
+  // so updateNodes can reconcile the runner to a refreshed node list (e.g. SSE
   // refresh) without recreating the runner, store, or fired-registry.
   let currentNodes: readonly WiringNode[] = options.nodes;
   const declaredSlots = predeclareProjectionState(
@@ -459,7 +451,10 @@ export function createUiEventEffectRunner(
   let cycleErrors = findSideEffectCycleErrors(currentNodes);
   // Policy guard: the same fail-close gate that blocks authoring apply also
   // blocks runtime execution (defense in depth against out-of-band persisted data).
-  let policyErrors = findRuntimeInteractionPolicyErrors(currentNodes);
+  // Structured (nodeId+interactionIndex), never findRuntimeInteractionPolicyErrors'
+  // display string[] — per-interaction correlation below must never depend on
+  // human-facing label text (see the fail-close filter's own comment).
+  let policyViolations = findRuntimeInteractionPolicyViolations(currentNodes);
 
   const fired = new Set<string>();
 
@@ -467,7 +462,7 @@ export function createUiEventEffectRunner(
     currentNodes = nodes;
     declaredSlots.push(...predeclareProjectionState(nodes, stateDispatcher));
     cycleErrors = findSideEffectCycleErrors(nodes);
-    policyErrors = findRuntimeInteractionPolicyErrors(nodes);
+    policyViolations = findRuntimeInteractionPolicyViolations(nodes);
   };
 
   const emitLifecycle = (
@@ -509,9 +504,18 @@ export function createUiEventEffectRunner(
         const fireKey = `${node.nodeId}#${idx}`;
         if (isBackendOrExternalDispatchAction(w.actionType)) {
           // Fail-close: unconfirmed / non-idempotent lifecycle dispatch never executes.
-          const own = policyErrors.filter((e) =>
-            e.startsWith(`${node.componentKey || node.nodeId} #${idx + 1}:`)
-          );
+          // Correlated structurally (nodeId+interactionIndex — the SAME identity
+          // fireKey above uses), never by matching human-facing label text: two
+          // nodes sharing the identical wiringNodeDisplayLabel (e.g. same
+          // componentKey) would otherwise collide on an identical string prefix,
+          // letting one node's violation wrongly block — or one node's clean
+          // record wrongly clear — a DIFFERENT node's interaction. See
+          // findRuntimeInteractionPolicyViolations' own doc for why this must be
+          // the correlation key, not findRuntimeInteractionPolicyErrors' display
+          // string[].
+          const own = policyViolations
+            .filter((v) => v.nodeId === node.nodeId && v.interactionIndex === idx)
+            .map((v) => v.message);
           if (own.length > 0) {
             errors.push(...own);
             continue;
@@ -578,7 +582,7 @@ export function createUiEventEffectRunner(
         const result = executeStateUpdate(stateDispatcher, w);
         if (!result.ok) {
           errors.push(
-            `${node.componentKey || node.nodeId} #${idx + 1}: ${result.error}`,
+            `${wiringNodeDisplayLabel(node)} #${idx + 1}: ${result.error}`,
           );
           continue;
         }

@@ -344,6 +344,69 @@ Deno.test("runner: unconfirmed / non-idempotent lifecycle dispatch fails close a
   );
 });
 
+Deno.test("runner: per-interaction fail-close correlation is by structural identity (nodeId+interactionIndex), never by display label — two nodes sharing the identical friendly label at the same interaction index never cross-contaminate", () => {
+  const calls: unknown[] = [];
+  // Both nodes resolve to the SAME wiringNodeDisplayLabel ("box", from
+  // componentKey "layout/box"'s last path segment) and both author their
+  // dispatch at runtimeInteractions index 0 — the exact shape a label-text
+  // string-prefix correlation (e.g. `${label} #${idx+1}:`) cannot distinguish
+  // between. n-invalid is missing confirmation/idempotency and must fail
+  // close; n-valid is fully confirmed and must execute untouched by n-invalid's
+  // violation.
+  const nodes: WiringNode[] = [
+    {
+      nodeId: "n-invalid",
+      componentKey: "layout/box",
+      runtimeInteractions: [{
+        trigger: "initial_mount",
+        actionType: "dispatchExternalPort",
+        portTargetRef: "external-port:access_port:port-invalid",
+        sideEffectNone: true,
+      }],
+    },
+    {
+      nodeId: "n-valid",
+      componentKey: "layout/box",
+      runtimeInteractions: [{
+        trigger: "initial_mount",
+        actionType: "dispatchExternalPort",
+        portTargetRef: "external-port:access_port:port-valid",
+        lifecycleDispatchConfirmed: true,
+        idempotencyPolicy: "once_per_mount",
+        sideEffectNone: true,
+      }],
+    },
+  ];
+  const runner = createUiEventEffectRunner({
+    nodes,
+    dispatchExternalPort: (spec) => calls.push(spec),
+  });
+  const result = runner.emitLifecycle("initial_mount");
+  assertEquals(result.ok, false);
+  // n-valid's dispatch executed despite sharing n-invalid's display label and
+  // interaction index — never blocked by a same-label neighbor's violation.
+  assertEquals(result.executed, ["n-valid#0"]);
+  assertEquals(calls.length, 1);
+  assertEquals(
+    (calls[0] as { portTargetRef: string }).portTargetRef,
+    "external-port:access_port:port-valid",
+  );
+  // Exactly n-invalid's two violations reported — not duplicated onto n-valid,
+  // and n-valid contributes none of its own.
+  assertEquals(result.errors.length, 2);
+  assert(
+    result.errors.every((e) => e.startsWith("box #1:")),
+  );
+  assert(
+    result.errors.some((e) => e.includes("LIFECYCLE_DISPATCH_REQUIRES_CONFIRMATION")),
+  );
+  assert(
+    result.errors.some((e) =>
+      e.includes("LIFECYCLE_DISPATCH_REQUIRES_IDEMPOTENCY_POLICY")
+    ),
+  );
+});
+
 Deno.test("runner: loop guard fails close at runtime — cyclic graph executes nothing (debounce is not proof)", () => {
   const calls: unknown[] = [];
   const nodes: WiringNode[] = [

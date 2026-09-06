@@ -1494,6 +1494,8 @@ export type HubNavigationManifestItem = {
   hubId: string;
   hasHubRelations: boolean;
   hubRelationCount: number;
+  topologySystemName?: string | null;
+  userFacingTopologyLabel?: string | null;
 };
 
 export type HubNavigationHubRelationItem = {

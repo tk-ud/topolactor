@@ -368,8 +368,112 @@ export function isPreviewInertInteraction(w: WiringInteraction): boolean {
     isBackendOrExternalDispatchAction(w.actionType);
 }
 
+/**
+ * NOT the SSOT authored display-name carrier. docs/design/runtime-orchestration-ssot.yaml
+ * ui_projection_render_reachability_contract.layout_schema_structural_render_contract
+ * .authored_label_and_production_props defines a REAL canonical authored label —
+ * every components_layout_design.layout_schema_json.records[] entry carries a
+ * required, non-empty "label", and LayoutSchemaTensorComposer.Compose carries it
+ * through onto the composed LayoutNode's Label field, reaching production rendering
+ * via LoadLayoutNodesAsync -> frontend/runtime/renderEmission.ts. That carrier is
+ * verified (2026-09-05 audit) UNREACHABLE from this module and from WiringNode/
+ * DraftNode generally: the UI-Builder canvas's own read path
+ * (backend ui_topology:get_layout_patch_draft ->
+ * NpgsqlUiTopologyRepository.GetLayoutPatchDraftAsync) loads
+ * topology.ui_topology_tensor.layout_patch_json / layout_draft_tmp_json directly —
+ * never LayoutSchemaTensorComposer.Compose, never layout_schema_json.records[] —
+ * so it never carries Label for any node, tensor-only or schema-composed
+ * override-delta alike (a schema-composed override-delta node's raw
+ * layout_patch_json entry frequently lacks even componentKey, per
+ * react-schema-topology-seed-translator-ssot.yaml storage_adoption_contract round
+ * 40/41/43 — componentKey there is resolved server-side ONLY for
+ * ValidateLayoutPatchAsync's save-time authority check, via
+ * ResolveCatalogComponentKeysByNodeId, and is never returned to the frontend as
+ * node enrichment). No frontend file outside the production-render pipeline
+ * (renderEmission.ts/structuralVisibility.ts/projectionConstructor.ts and their
+ * tests) references layout_schema_json at all.
+ *
+ * Given that, this is a LOCAL, UI-Builder-canvas-only operator convenience derived
+ * from componentKey (schema/catalog structural identity, e.g. "form_input/text" ->
+ * "text") — reused consistently across the canvas workspace (Layer Tree, palette,
+ * undo-history labels, accessibility announcements, and WiringGraphPanel) because
+ * it is the ONLY thing reachable on this editing DTO for any node, never because it
+ * is, or connects to, the SSOT authored-label concept above. If the Owner wants
+ * WiringGraphPanel/Layer Tree to show the real authored label for a schema-composed
+ * override-delta node, that requires extending the read DTO
+ * (LayoutPatchDraftDto -> VisualNodePayload) to carry Label through from the
+ * composed tree — SSOT does not currently define this for the authoring surface;
+ * proposing and scoping that extension is a separate design_change, not something
+ * to speculatively add here.
+ */
+export function friendlyComponentLabel(componentKey: string): string {
+  const parts = componentKey.split("/");
+  return parts[parts.length - 1] || componentKey;
+}
+
+/**
+ * Fail-close normal-view placeholder for a node with no componentKey to resolve a
+ * label from. WiringNode.componentKey is optional in this module's own type (a
+ * defensive, type-level allowance — this function must not assume every caller
+ * validated componentKey the way the canvas's own loader does); never a rendering
+ * of the raw nodeId as if it were a name; mirrors hubNavigationManifestVisibleLabel's
+ * established UX_HUB_NAVIGATION_MANIFEST_UNNAMED_LABEL precedent. The raw nodeId
+ * stays reachable for diagnostics at each call site's own 技術情報 disclosure — this
+ * placeholder never removes that reachability, only declines to present nodeId as
+ * if it were an operator-meaningful name, and never fabricates a componentKind- or
+ * position-derived substitute in its place.
+ *
+ * VERIFIED SEPARATE, MORE SEVERE GAP (2026-09-05 audit, out of this Bundle's
+ * proportionate scope — reported, not fixed here): a schema-composed override-delta
+ * node's persisted layout_patch_json entry, which frequently and legitimately omits
+ * componentKey (friendlyComponentLabel's doc above), never actually reaches THIS
+ * placeholder in the real UI-Builder canvas load path. frontend/runtime/
+ * visualLayoutUtils.ts readPatchNode requires a non-empty componentKey for any
+ * non-structural_html node and returns null (drops the entry) when absent — so on
+ * reopening /admin/ui-builder for such a layout, that node is silently absent from
+ * DraftNode[]/WiringNode[] entirely (Layer Tree, canvas, WiringGraphPanel alike),
+ * not merely unnamed. This is a node-reachability/data-loss gap in the patch
+ * parser, not a display-label gap — fixing it would mean deciding whether the
+ * authoring read path should resolve schema-tree componentKey the way
+ * ValidateLayoutPatchAsync's ResolveCatalogComponentKeysByNodeId already does for
+ * write-time validation (a coordinated backend+frontend change), which is Owner
+ * design_change scope, not a fallback-label fix.
+ */
+const UNNAMED_WIRING_NODE_LABEL = "（名称未設定の部品）";
+
+/** friendlyComponentLabel with the fail-close placeholder for a node lacking componentKey. */
+export function wiringNodeDisplayLabel(
+  node: Pick<WiringNode, "componentKey">,
+): string {
+  return node.componentKey?.trim()
+    ? friendlyComponentLabel(node.componentKey)
+    : UNNAMED_WIRING_NODE_LABEL;
+}
+
 /** Value-reactive triggers that can re-fire when the source node's value changes. */
 const VALUE_REACTIVE_TRIGGERS = new Set(["input", "change", "select"]);
+
+/**
+ * SSOT wiring_lane_contract.lanes.internal_instance_wiring targetRef_shape:
+ * "ui-local:<nodeId>.<stateKey>". The canonical parser for this shape — runtime/
+ * uiEventEffectRunner.ts's resolveUiStateUpdateMutation and this module's own
+ * interactionWriteTargets both resolve a localStateMutation entry's write target
+ * through this single function, so authoring-time dependency-graph derivation
+ * (side_effect_cycle_policy) and runtime mutation resolution can never see a
+ * different target node for the identical authored interaction. Malformed/
+ * non-matching targetRef resolves to undefined — never guessed.
+ */
+const UI_LOCAL_TARGET_REF_RE = /^ui-local:([^.]+)\.(.+)$/;
+
+export function parseUiLocalTargetRef(
+  targetRef: string | undefined,
+): { targetNodeId: string; statePath: string } | undefined {
+  const trimmed = targetRef?.trim();
+  if (!trimmed) return undefined;
+  const match = UI_LOCAL_TARGET_REF_RE.exec(trimmed);
+  if (!match) return undefined;
+  return { targetNodeId: match[1], statePath: match[2] };
+}
 
 type WriteTarget = { nodeId: string; via: "outputProp" | "state" };
 
@@ -381,8 +485,19 @@ function interactionWriteTargets(
   if (w.outputProp?.trim()) {
     targets.push({ nodeId: sourceNodeId, via: "outputProp" });
   }
-  if (w.targetNodeId?.trim() && UI_STATE_UPDATE_ACTIONS.has(w.actionType)) {
-    targets.push({ nodeId: w.targetNodeId, via: "state" });
+  if (UI_STATE_UPDATE_ACTIONS.has(w.actionType)) {
+    // SSOT side_effect_cycle_policy's dependency graph must see the SAME resolved
+    // write target resolveUiStateUpdateMutation uses at runtime — a localStateMutation
+    // (or any ui_state_update action authored via targetRef instead of a separate
+    // targetNodeId field) writes a real node just as much as a targetNodeId-carrying
+    // entry does; skipping it here would let a direct/indirect loop through a
+    // targetRef write go undetected by both the authoring candidate filter and the
+    // findSideEffectCycleErrors runtime/pre-save guard.
+    const targetNodeId = w.targetNodeId?.trim() ||
+      parseUiLocalTargetRef(w.targetRef)?.targetNodeId;
+    if (targetNodeId) {
+      targets.push({ nodeId: targetNodeId, via: "state" });
+    }
   }
   return targets;
 }
@@ -453,7 +568,7 @@ export function findSideEffectCycleErrors(
   const errors: string[] = [];
   // Direct self-loop.
   for (const node of nodes) {
-    const label = node.componentKey || node.nodeId;
+    const label = wiringNodeDisplayLabel(node);
     for (const [idx, w] of (node.runtimeInteractions ?? []).entries()) {
       if (!VALUE_REACTIVE_TRIGGERS.has(w.trigger)) continue;
       for (const target of interactionWriteTargets(w, node.nodeId)) {
@@ -461,7 +576,7 @@ export function findSideEffectCycleErrors(
           errors.push(
             `${label} #${
               idx + 1
-            }: SIDE_EFFECT_DIRECT_SELF_LOOP — 監視元 "${node.nodeId}" 自身への書き込み（${target.via}）は禁止です`,
+            }: SIDE_EFFECT_DIRECT_SELF_LOOP — 監視元 "${label}"（${node.nodeId}）自身への書き込み（${target.via}）は禁止です`,
           );
         }
       }
@@ -498,29 +613,60 @@ export function findSideEffectCycleErrors(
 }
 
 /**
- * Fail-close authoring policy errors per SSOT trigger_vocabulary /
- * lifecycle_policy / high_frequency_policy / setting_category_taxonomy /
- * side_effect_cycle_policy. Returned messages carry stable codes. These are
- * blocking on the validate/apply/readiness paths — a warning display alone
- * never passes.
+ * A single per-interaction policy violation, identified structurally (nodeId +
+ * interactionIndex — the SAME structural identity fireKey/computeDispatchIdempotencyKey's
+ * fallback already use, never a display label). runtimeInteractionId is carried
+ * through for callers that want the SSOT-assigned stable id
+ * (admin-uibuilder-ui-structure-wiring-ssot.yaml
+ * projection_authority_runtime_interaction_identity) when present; correlation
+ * itself uses nodeId+interactionIndex because both this function and any
+ * runtime consumer walk the identical nodes[] array in the identical order
+ * within one synchronous pass, so structural identity is always present and
+ * unambiguous there (unlike cross-reload dispatch idempotency, which needs the
+ * assigned id specifically because structural position is not stable across
+ * reloads).
  */
-export function findRuntimeInteractionPolicyErrors(
+export type RuntimeInteractionPolicyViolation = {
+  nodeId: string;
+  interactionIndex: number;
+  runtimeInteractionId?: string;
+  message: string;
+};
+
+/**
+ * Structured form of findRuntimeInteractionPolicyErrors' per-interaction checks
+ * (trigger/action vocabulary, high-frequency debounce, lifecycle confirmation +
+ * idempotency policy) — the single source both findRuntimeInteractionPolicyErrors'
+ * display string[] and a runtime consumer's per-interaction correlation build
+ * from, so the two can never see a different violation set. Never includes
+ * side_effect_cycle_policy findings (findSideEffectCycleErrors) — a cycle finding
+ * has no single owning interaction (an indirect loop spans multiple nodes) and is
+ * always a wholesale, not per-interaction, gate at every consumer.
+ */
+export function findRuntimeInteractionPolicyViolations(
   nodes: readonly WiringNode[],
-): string[] {
-  const errors: string[] = [];
+): RuntimeInteractionPolicyViolation[] {
+  const violations: RuntimeInteractionPolicyViolation[] = [];
   for (const node of nodes) {
-    const label = node.componentKey || node.nodeId;
+    const label = wiringNodeDisplayLabel(node);
     for (const [idx, w] of (node.runtimeInteractions ?? []).entries()) {
       const prefix = `${label} #${idx + 1}`;
+      const push = (message: string) =>
+        violations.push({
+          nodeId: node.nodeId,
+          interactionIndex: idx,
+          runtimeInteractionId: w.runtimeInteractionId,
+          message,
+        });
       const group = classifyTrigger(w.trigger);
       if (group === null) {
-        errors.push(
+        push(
           `${prefix}: TRIGGER_OUTSIDE_VOCABULARY — トリガ "${w.trigger}" はSSOT語彙外です`,
         );
         continue;
       }
       if (wiringSettingCategoryOf(w) === null) {
-        errors.push(
+        push(
           `${prefix}: ACTION_OUTSIDE_VOCABULARY — actionType "${w.actionType}" は分類語彙外です`,
         );
         continue;
@@ -528,14 +674,14 @@ export function findRuntimeInteractionPolicyErrors(
       if (!isBackendOrExternalDispatchAction(w.actionType)) continue;
       if (isHighFrequencyTrigger(w.trigger)) {
         if (!isValidDebounceMs(w.debounceMs)) {
-          errors.push(
+          push(
             `${prefix}: HIGH_FREQUENCY_DISPATCH_REQUIRES_DEBOUNCE — 高頻度トリガ "${w.trigger}" での外部/バックエンド送出には debounceMs（正の整数）が必要です`,
           );
         }
       }
       if (group === "lifecycle") {
         if (w.lifecycleDispatchConfirmed !== true) {
-          errors.push(
+          push(
             `${prefix}: LIFECYCLE_DISPATCH_REQUIRES_CONFIRMATION — ライフサイクルトリガ "${w.trigger}" での外部/バックエンド送出には明示的な確認が必要です`,
           );
         }
@@ -543,7 +689,7 @@ export function findRuntimeInteractionPolicyErrors(
           !w.idempotencyPolicy ||
           !LIFECYCLE_IDEMPOTENCY_POLICIES.includes(w.idempotencyPolicy)
         ) {
-          errors.push(
+          push(
             `${prefix}: LIFECYCLE_DISPATCH_REQUIRES_IDEMPOTENCY_POLICY — ライフサイクルトリガ "${w.trigger}" での送出には idempotency policy（${
               LIFECYCLE_IDEMPOTENCY_POLICIES.join(" / ")
             }）が必要です`,
@@ -552,6 +698,24 @@ export function findRuntimeInteractionPolicyErrors(
       }
     }
   }
+  return violations;
+}
+
+/**
+ * Fail-close authoring policy errors per SSOT trigger_vocabulary /
+ * lifecycle_policy / high_frequency_policy / setting_category_taxonomy /
+ * side_effect_cycle_policy. Returned messages carry stable codes. These are
+ * blocking on the validate/apply/readiness paths — a warning display alone
+ * never passes. Display-only string[] shape kept for existing consumers
+ * (WiringGraphPanel's authoring-time list, UiBuilderAdmin's pre-save gate); a
+ * runtime consumer that needs to know WHICH interaction a violation belongs to
+ * must use findRuntimeInteractionPolicyViolations instead of parsing this
+ * array's text — see that function's own doc for why.
+ */
+export function findRuntimeInteractionPolicyErrors(
+  nodes: readonly WiringNode[],
+): string[] {
+  const errors = findRuntimeInteractionPolicyViolations(nodes).map((v) => v.message);
   // Side-effect cycle policy is independent of debounce/throttle (loop safety is
   // never proven by debounce) and blocks the same validate/apply paths.
   errors.push(...findSideEffectCycleErrors(nodes));
@@ -628,10 +792,15 @@ export function buildWiringGraphProjection(
       } else if (w.targetNodeId) {
         targetKind = "node";
         targetRef = w.targetNodeId;
+      } else if (category === "ui_state_update" && w.targetRef) {
+        // localStateMutation's ui-local:<nodeId>.<stateKey> shape carries no separate
+        // targetNodeId — still surface it as a resolved node-kind edge rather than "unset".
+        targetKind = "node";
+        targetRef = w.targetRef;
       }
       edges.push({
         sourceNodeId: node.nodeId,
-        sourceLabel: node.componentKey || node.nodeId,
+        sourceLabel: wiringNodeDisplayLabel(node),
         interactionIndex: idx,
         trigger: w.trigger,
         triggerGroup: classifyTrigger(w.trigger),
@@ -702,7 +871,7 @@ export function applyWiringDropEdit<T extends WiringNode>(
     return {
       ok: false,
       error: `WIRING_DROP_TARGET_NOT_WIRABLE — ${
-        target.componentKey || target.nodeId
+        wiringNodeDisplayLabel(target)
       } は開閉対象部品（モーダル／ドロワー／ダイアログ）ではありません`,
     };
   }

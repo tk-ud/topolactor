@@ -147,7 +147,9 @@ public record HubNavigationManifestItemDto(
     [property: JsonPropertyName("manifestKey")] string ManifestKey,
     [property: JsonPropertyName("hubId")] string HubId,
     [property: JsonPropertyName("hasHubRelations")] bool HasHubRelations,
-    [property: JsonPropertyName("hubRelationCount")] int HubRelationCount
+    [property: JsonPropertyName("hubRelationCount")] int HubRelationCount,
+    [property: JsonPropertyName("topologySystemName")] string? TopologySystemName = null,
+    [property: JsonPropertyName("userFacingTopologyLabel")] string? UserFacingTopologyLabel = null
 );
 
 public record HubNavigationHubRelationItemDto(

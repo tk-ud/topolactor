@@ -1,6 +1,7 @@
 import { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import {
+  authErrorFriendlyText,
   authErrorText,
   fetchUserLoginManifest,
   loginProjection,
@@ -92,7 +93,10 @@ export default function LoginManifestPanel(): JSX.Element {
     if (runtimeDest !== "auth_runtime" || binding?.action !== "login") {
       setState({
         status: "error",
-        errors: [{ message: "Login manifest auth_action_binding is invalid." }],
+        errors: [{
+          code: "AUTH_MANIFEST_BINDING_INVALID",
+          message: "Login manifest auth_action_binding is invalid.",
+        }],
       });
       return;
     }
@@ -117,8 +121,11 @@ export default function LoginManifestPanel(): JSX.Element {
   if (manifestError) {
     return (
       <div class="alert-error">
-        <strong>ログイン画面を読み込めませんでした。</strong>
-        <p class="text-sm mt-2">{manifestError}</p>
+        <strong>ログイン画面を読み込めませんでした。時間をおいて再度お試しください。</strong>
+        <details class="mt-2 text-xs">
+          <summary class="cursor-pointer text-red-800">技術情報（開発者向け）</summary>
+          <p class="mt-1 text-red-900">{manifestError}</p>
+        </details>
       </div>
     );
   }
@@ -158,9 +165,15 @@ export default function LoginManifestPanel(): JSX.Element {
       <section id="register" class="rounded-lg border border-blue-100 bg-blue-50 p-4">
         <h2 class="text-base font-semibold text-gray-900">新規登録（通常ユーザー）</h2>
         <p class="mt-1 text-sm text-gray-600">
-          登録直後のアカウントは承認待ちです。管理者が承認するまでログインは
-          <code class="mx-1 rounded bg-white px-1">AUTH_USER_NOT_APPROVED</code>で明示的に拒否されます。
+          登録直後のアカウントは承認待ちです。管理者が承認するまでログインできません。
         </p>
+        <details class="mt-1 text-xs text-gray-500">
+          <summary class="cursor-pointer">技術情報（開発者向け）</summary>
+          <p class="mt-1">
+            承認待ちアカウントのログインは <code class="rounded bg-white px-1">AUTH_USER_NOT_APPROVED</code>{" "}
+            で明示的に拒否されます。
+          </p>
+        </details>
         <form onSubmit={handleRegister} class="mt-3 flex max-w-xs flex-col gap-3">
           <label class="text-sm font-medium text-gray-700">
             ユーザー名
@@ -206,9 +219,14 @@ export default function LoginManifestPanel(): JSX.Element {
         <div class="alert-success mt-4">
           <strong>登録を受け付けました。</strong>
           <p class="mt-1 text-sm">
-            {state.username} は通常ユーザー realm に承認待ちで登録されました
-            （approve={String(state.approve)}, status={state.statusText ?? "active"}）。
+            {state.username} さんの登録は承認待ちです。管理者の承認後にログインできます。
           </p>
+          <details class="mt-2 text-xs">
+            <summary class="cursor-pointer text-emerald-800">技術情報（開発者向け）</summary>
+            <p class="mt-1 text-emerald-900">
+              realm=user, approve={String(state.approve)}, status={state.statusText ?? "active"}
+            </p>
+          </details>
         </div>
       )}
 
@@ -216,10 +234,14 @@ export default function LoginManifestPanel(): JSX.Element {
         <div class="alert-error mt-4">
           <strong>ログインに失敗しました。</strong>
           <ul class="mt-2 list-inside list-disc text-sm">
-            {(state.errors ?? [{ message: "不明なエラー。" }]).map((e, i) => (
-              <li key={i}>{authErrorText(e)}</li>
-            ))}
+            {(state.errors ?? [{}]).map((e, i) => <li key={i}>{authErrorFriendlyText(e)}</li>)}
           </ul>
+          <details class="mt-2 text-xs">
+            <summary class="cursor-pointer text-red-800">技術情報（開発者向け）</summary>
+            <ul class="mt-1 list-inside list-disc text-red-900">
+              {(state.errors ?? []).map((e, i) => <li key={i}>{authErrorText(e)}</li>)}
+            </ul>
+          </details>
         </div>
       )}
 

@@ -6,6 +6,8 @@
 import type { CalcBinding } from "./frontendLocalCalculationResolver.ts";
 import { isOverlayDisclosureAction, expectedDisclosureTargetKind } from "../lib/runtimeInteractionAuthoring.ts";
 import { parsePayloadFromSource } from "./payloadFromResolver.ts";
+import { parseUiLocalTargetRef } from "./uiEventEffectRunner.ts";
+import { wiringNodeDisplayLabel } from "../lib/uiBuilderWiringProjection.ts";
 
 export const RESPONSIVE_BREAKPOINTS = ["sm", "md", "lg", "xl"] as const;
 export type BreakpointKey = (typeof RESPONSIVE_BREAKPOINTS)[number];
@@ -230,6 +232,12 @@ export interface VisualNodePayload {
     targetNodeId?: string;
     statePath?: string;
     value?: unknown;
+    /**
+     * Authoring-only: UI-local-state target for actionType localStateMutation
+     * ("ui-local:<nodeId>.<stateKey>"). SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
+     * wiring_lane_contract.lanes.internal_instance_wiring targetRef_shape.
+     */
+    targetRef?: string;
     /** Authoring-only payloadFrom field→source map. SSOT: ui-builder-preset-ecosystem-ssot.yaml payloadFrom_resolver_contract */
     payloadFrom?: Record<string, string>;
     /** Authoring-only output prop name for dispatchExternalPort result capture. */
@@ -837,7 +845,7 @@ export function findRuntimeInteractionPatchErrors(
   const nodeIds = new Set(nodes.map((n) => n.nodeId));
   const kindsByNodeId = new Map(nodes.map((n) => [n.nodeId, n.componentKind ?? ""]));
   for (const node of nodes) {
-    const label = node.componentKey || node.nodeId;
+    const label = wiringNodeDisplayLabel(node);
     for (const [idx, interaction] of (node.runtimeInteractions ?? []).entries()) {
       const prefix = `${label} #${idx + 1}`;
       if (interaction.actionType === "dispatchExternalPort") {
@@ -862,7 +870,16 @@ export function findRuntimeInteractionPatchErrors(
             );
           }
         }
-      } else if (!interaction.targetNodeId?.trim()) {
+      } else if (
+        !interaction.targetNodeId?.trim() &&
+        !parseUiLocalTargetRef(interaction.targetRef)
+      ) {
+        // setState / setActiveKey / localStateMutation (SSOT: ui_state_update) may target
+        // either an explicit targetNodeId+statePath OR a targetRef
+        // ("ui-local:<nodeId>.<stateKey>") — the SAME dual acceptance
+        // frontend/runtime/uiEventEffectRunner.ts resolveUiStateUpdateMutation applies at
+        // runtime. Requiring targetNodeId unconditionally here would reject a
+        // targetRef-only localStateMutation the runtime itself accepts.
         errors.push(`${prefix}: 対象ノードが未設定です`);
       }
       for (const [field, source] of Object.entries(interaction.payloadFrom ?? {})) {
