@@ -2329,7 +2329,23 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
         resolved_parent_key = last_resolved_key_by_raw_key.get(raw_parent_key, raw_parent_key)
         resolved_key = f"{resolved_parent_key}::{raw_key}" if raw_key in duplicate_keys else raw_key
         last_resolved_key_by_raw_key[raw_key] = resolved_key
-        return resolved_key
+        return resolved_key, resolved_parent_key
+
+    # tensor_container_parent_contract: a tensor-adopted node's parentNodeId must be set when
+    # (and only when) its OWN react_schema parent record ALSO becomes a real tensor node itself
+    # (today, only Modal does -- see the topology_ui_modal branch below) -- the SAME
+    # authoredChildren/footer-slot containment contract backend/repository/
+    # LayoutSchemaTensorComposer.cs already establishes for schema-composed layouts (proven live
+    # by manifest 092's own Confirm/Cancel-inside-Modal seed rows, frontend/tests/fixtures/
+    # manifest_0092_bare_entry_layout_nodes.json), applied here for the tensor-ONLY adoption path
+    # so a Modal's own Confirm/Cancel Actions stay reachable in the DOM only while their owning
+    # Modal's own `open` is true (Modal.tsx returns null entirely when closed, taking its whole
+    # subtree -- including footer -- with it), instead of surviving as permanent root-level
+    # siblings. A Category/Section/Projection/Form is never itself adopted as a tensor node in
+    # this path, so a record whose parent is one of those stays root-level (parentNodeId absent),
+    # unchanged from before this contract existed -- this is a generic record_type lookup, never a
+    # per-record_key or per-surface branch.
+    record_type_by_resolved_key = {}
 
     for wrapper in flat_records:
         record = wrapper.get("record") or {}
@@ -2338,7 +2354,16 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
         # Resolve (and record) THIS record's own disambiguated identity before looking at its
         # children below, so a child's parentKey lookup below sees the instance it is actually
         # nested under, in document order.
-        this_resolved_key = resolve_and_track_identity(wrapper)
+        this_resolved_key, this_resolved_parent_key = resolve_and_track_identity(wrapper)
+        record_type_by_resolved_key[this_resolved_key] = record_type
+        # None (never the string "None"/absent-lookup sentinel) when the parent's own record_type
+        # was not itself tensor-adopted as a container -- see tensor_container_parent_contract
+        # above.
+        tensor_parent_node_id = (
+            this_resolved_parent_key
+            if record_type_by_resolved_key.get(this_resolved_parent_key) == "topology_ui_modal"
+            else None
+        )
 
         if record_type == "topology_ui_projection":
             # components_package_design.layout shape: [{componentId?, layoutNodeId?,
@@ -2452,7 +2477,7 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                 "nodeId": this_resolved_key,
                 "nodeKind": "catalog_component",
                 "runtimeInteractions": [],
-                "propsJson": json.dumps({"data": modal_props_data}),
+                "propsJson": json.dumps({"data": modal_props_data}, ensure_ascii=False),
                 "componentKey": modal_component_key,
                 "componentKind": record.get("componentKind"),
             })
@@ -2496,7 +2521,7 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                 "nodeId": this_resolved_key,
                 "nodeKind": "catalog_component",
                 "runtimeInteractions": [],
-                "propsJson": json.dumps({"table": None, "columns": record["displayColumns"]}),
+                "propsJson": json.dumps({"table": None, "columns": record["displayColumns"]}, ensure_ascii=False),
                 "propBindings": {"rows": {"source": rows_source}},
             })
 
@@ -2534,13 +2559,18 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                 "runtimeInteractions": [],
                 "propBindings": {value_prop_name: {"source": record["valueFrom"]}},
                 "componentKey": COMPONENT_KIND_TO_COMPONENT_KEY.get(record.get("control")),
-                # propsJson.label (UIBuilder-lineage closure round): sourced from this SAME
-                # record's own already-authored `label`, same generic single-key convention as
-                # the Action branch's own propsJson.label below -- textareaTemplateFactory reads
-                # data.label as its own (optional but user-visible) field label;
-                # mdViewerPreviewFactory's bare-markdown mode never reads any propsJson field at
-                # all, so this key is simply inert there, not a control-specific special case.
-                "propsJson": json.dumps({"label": record.get("label")}),
+                # propsJson.data.label (UIBuilder-lineage closure round, nested-under-data fix):
+                # sourced from this SAME record's own already-authored `label`, same generic
+                # single-key convention as the Action branch's own propsJson.data.label below --
+                # textareaTemplateFactory/searchInputFactory read props.data.label (never a flat
+                # top-level props.label -- frontend/runtime/renderEmission.ts's mergeNodeLocalProps
+                # shallow-merges propsJson over the TOP LEVEL of defaultProps, so a flat
+                # {"label": ...} here would sit beside defaultProps' own nested `data` object,
+                # never inside it, and stay permanently unread) as its own (optional but
+                # user-visible) field label; mdViewerPreviewFactory's bare-markdown mode never
+                # reads any propsJson field at all, so this key is simply inert there, not a
+                # control-specific special case.
+                "propsJson": json.dumps({"data": {"label": record.get("label")}}, ensure_ascii=False),
             })
 
         if record_type == "topology_ui_field" and record.get("optionsSource"):
@@ -2634,21 +2664,35 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                 # LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED failure a real live-DB
                 # layout_patch:validate round trip surfaced for an owning-parent-keyed entry with
                 # no componentKey of its own -- the SAME reasoning applies here unchanged).
-                tensor_nodes.append({
+                action_tensor_node = {
                     "nodeId": this_resolved_key,
                     "nodeKind": "catalog_component",
                     "runtimeInteractions": list(interactions),
                     "componentKey": action_component_key,
-                    # propsJson.label (UIBuilder-lineage closure round): frontend/runtime/
-                    # runtimeComponentFactory.ts buttonFactory REQUIRES props.data.label to be
-                    # a string or the whole node fails to render
+                    # propsJson.data.label (UIBuilder-lineage closure round, nested-under-data
+                    # fix): frontend/runtime/runtimeComponentFactory.ts buttonFactory REQUIRES
+                    # props.data.label to be a string or the whole node fails to render
                     # (RUNTIME_PRIMITIVE_RENDERER_INVALID_BUTTON_PROPS) -- unlike Field's
-                    # optional label, a button's label is not cosmetic. Sourced from this
-                    # SAME record's own already-authored `label` (record_common_required_
-                    # fields -- every record type carries one), never a translator-invented
-                    # literal.
-                    "propsJson": json.dumps({"label": record.get("label")}),
-                })
+                    # optional label, a button's label is not cosmetic. A flat top-level
+                    # {"label": ...} here would never reach buttonFactory's own `data.label` read
+                    # (mergeNodeLocalProps shallow-merges propsJson over defaultProps' TOP level,
+                    # never into its nested `data` object), silently regressing every
+                    # tensor-adopted button's visible label to its shared componentKey string
+                    # ("button.primitive") -- the real, confirmed production defect this nesting
+                    # fix closes. Sourced from this SAME record's own already-authored `label`
+                    # (record_common_required_fields -- every record type carries one), never a
+                    # translator-invented literal.
+                    "propsJson": json.dumps({"data": {"label": record.get("label")}}, ensure_ascii=False),
+                }
+                if tensor_parent_node_id is not None:
+                    # tensor_container_parent_contract (see its own definition above the main
+                    # loop): this Action's owning react_schema parent is itself a tensor-adopted
+                    # Modal, so its rendered containment must match manifest 092's own already-
+                    # proven authoredChildren/footer-slot contract (LayoutProjectionTree.tsx /
+                    # runtimeComponentFactory.ts modalFactory) -- reachable in the DOM only while
+                    # the owning Modal's own `open` is true, never a permanent root-level sibling.
+                    action_tensor_node["parentNodeId"] = tensor_parent_node_id
+                tensor_nodes.append(action_tensor_node)
             if admin_runtime_override:
                 # Round 19 fix: dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger are NOT
                 # scoped by BuildInteractionsBySourceActionKey's sourceActionKey mechanism --
@@ -2668,17 +2712,26 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                 # (LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED); Action/WorkflowStep resolve
                 # generically to the shared button primitive (see ActionComponentKey's own C#
                 # mirror, backend/repository/LayoutSchemaTensorComposer.cs).
-                tensor_nodes.append({
+                override_action_tensor_node = {
                     "nodeId": this_resolved_key,
                     "nodeKind": "catalog_component",
                     "runtimeInteractions": [],
                     "adminRuntimeDispatchOverride": admin_runtime_override,
                     "componentKey": action_component_key,
-                    # propsJson.label: same requirement/source as the interactions branch above --
-                    # first-write-wins merge (see the merge step below) means it does not matter
-                    # which of this Action's own contributing entries carries it.
-                    "propsJson": json.dumps({"label": record.get("label")}),
-                })
+                    # propsJson.data.label: same requirement/source/nesting fix as the
+                    # interactions branch above -- first-write-wins merge (see the merge step
+                    # below) means it does not matter which of this Action's own contributing
+                    # entries carries it.
+                    "propsJson": json.dumps({"data": {"label": record.get("label")}}, ensure_ascii=False),
+                }
+                if tensor_parent_node_id is not None:
+                    # Same tensor_container_parent_contract as the interactions branch above --
+                    # this Action's runtimeInteractions/adminRuntimeDispatchOverride entries are
+                    # two SEPARATE tensor_nodes contributions for the same nodeId (merged below),
+                    # so parentNodeId must be attached to both, not only whichever one happens to
+                    # exist for a given Action.
+                    override_action_tensor_node["parentNodeId"] = tensor_parent_node_id
+                tensor_nodes.append(override_action_tensor_node)
 
     layout_candidates = []
     if layout_records:
@@ -2729,6 +2782,7 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                     "componentKey": None,
                     "componentKind": None,
                     "debounceMs": None,
+                    "parentNodeId": None,
                 }
                 order.append(nid)
                 override_source_action_keys_by_node[nid] = []
@@ -2763,6 +2817,11 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                 merged[nid]["componentKind"] = node["componentKind"]
             if node.get("debounceMs") is not None and merged[nid]["debounceMs"] is None:
                 merged[nid]["debounceMs"] = node["debounceMs"]
+            # parentNodeId (tensor_container_parent_contract): SAME first-write-wins policy --
+            # every tensor_nodes contribution for a given nodeId resolves parentNodeId from that
+            # SAME record's own tensor_parent_node_id, so two contributing entries never disagree.
+            if node.get("parentNodeId") is not None and merged[nid]["parentNodeId"] is None:
+                merged[nid]["parentNodeId"] = node["parentNodeId"]
 
         def _clean_tensor_node(n):
             out = {"nodeId": n["nodeId"], "nodeKind": n["nodeKind"], "runtimeInteractions": n["runtimeInteractions"]}
@@ -2793,6 +2852,8 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
                 out["propBindings"] = n["propBindings"]
             if n.get("debounceMs") is not None:
                 out["debounceMs"] = n["debounceMs"]
+            if n.get("parentNodeId") is not None:
+                out["parentNodeId"] = n["parentNodeId"]
             return out
 
         tensor_candidates.append({

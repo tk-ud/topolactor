@@ -9,56 +9,83 @@
  * involved), driven through the real renderEmission() -> LayoutProjectionTree ->
  * runtimeComponentFactory -> real DOM pipeline (happy-dom + Preact render(), real native
  * DOM events -- never renderToString or dispatcher.set() standing in for a real interaction).
+ * This content is regenerated verbatim from the canonical source (.agent/tests/fixtures/
+ * react-schema-topology-seed-translator/team-dashboard-admin.input.json's own [modal]...[/modal]
+ * DSL and team-dashboard-normal.input.json) through react_schema_topology_seed_translator.py's
+ * generate-react-schema -> generate-topology-seed pipeline -- zero post-generation
+ * hand-patches, matching db/seed_empty.sql's own dd015/dd025 tensor rows and the "verbatim
+ * copy" constants in backend/tests/Topolactor.Integration.Tests/
+ * TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs.
  *
- * This is the regression proof for the production-projection-boundary bug this Bundle fixes:
- * frontend/runtime/renderEmission.ts's buildProductionCatalogComponentProps() had no explicit
- * case for componentKind="data_display/md_viewer", so its default branch fell through to
+ * Round 1 fix (production-projection-boundary Bundle): frontend/runtime/renderEmission.ts's
+ * buildProductionCatalogComponentProps() had no explicit case for componentKind=
+ * "data_display/md_viewer", so its default branch fell through to
  * buildLayoutPreviewPlaceholderProps() (frontend/runtime/layoutComponentPreview.ts) -- the SAME
  * synthetic UI-Builder canvas-preview savedView (preview.sample_table / preview_record_001 /
  * preview_template / preview.v1) authoring/canvas preview legitimately uses -- even in
- * PRODUCTION (non-preview) rendering. Because runtimeComponentFactory.ts's mdViewerPreviewFactory
- * documented savedView>markdown priority is unchanged (and correct -- a REAL authored savedView
- * must still win over a bare markdown string), the synthetic placeholder savedView silently
- * outranked the real propBindings.markdown value (emission.data.bodyMarkdown), so both Team
- * Dashboard axes rendered UI-Builder Saved View preview chrome instead of the real note body.
+ * PRODUCTION (non-preview) rendering, silently outranking a real propBindings.markdown value
+ * under mdViewerPreviewFactory's documented (unchanged, correct) savedView>markdown priority.
  * Fixed generically by componentKind (never by team_dashboard/route/manifest/node-id) -- see the
- * third Deno.test below for the same-mechanism regression proof against UI-Builder canvas
+ * last Deno.test below for the same-mechanism regression proof against UI-Builder canvas
  * authoring preview (previewMode=true), which must keep the synthetic placeholder unchanged.
- * Team Markdown Dashboard Saved View (frontend/tests/
- * teamMarkdownSavedView.test.ts) renders MdViewer directly as a Preact component, entirely
- * outside this renderEmission/runtimeComponentFactory catalog-component pathway, so it is
- * structurally unaffected by either the bug or this fix.
+ * Team Markdown Dashboard Saved View (frontend/tests/teamMarkdownSavedView.test.ts) renders
+ * MdViewer directly as a Preact component, entirely outside this renderEmission/
+ * runtimeComponentFactory catalog-component pathway, so it is structurally unaffected.
  *
- * A second, independent production-completion gap surfaced and fixed alongside it (same Bundle,
- * same generic production-projection-boundary scope): frontend/runtime/propBindingResolver.ts's
- * resolvePropBindings() scalar branch (acceptsNonArrayResolvedValue -- form_input/search_input,
- * form_input/textarea_template, data_display/md_viewer) set only the top-level props[propName],
- * never mirroring into props.data[propName] the way the array branch already documented and did.
- * Concretely: team_dashboard_admin_body (textarea.template, which reads props.data.value, not
- * top-level props.value) had a real, successfully-resolving propBindings.value binding
- * (emission.data.bodyMarkdown) that was silently shadowed by the stale "" placeholder default --
- * the Admin textarea never actually displayed the real bodyMarkdown despite the binding
- * "succeeding" with zero error. Fixed by mirroring the scalar branch identically to the existing
- * array branch. The Admin Deno.test below (step 2) is the regression proof.
+ * Round 1 also fixed frontend/runtime/propBindingResolver.ts's resolvePropBindings() scalar
+ * branch (form_input/search_input, form_input/textarea_template, data_display/md_viewer),
+ * which set only the top-level props[propName], never mirroring into props.data[propName] the
+ * way the array branch already did -- so the Admin Textarea's real propBindings.value binding
+ * was silently shadowed by the stale "" placeholder default. renderEmission.ts additionally
+ * re-applies applyLiveNodeValueOverride after resolvePropBindings so an in-progress edit still
+ * wins over a same-render propBindings snapshot (preserving the existing settled-write-resets/
+ * passive-refresh-preserves contract, projectionShellAdminRuntimeWritePayloadCapture.test.ts
+ * round 28). Both proven below (Admin test, steps 2-3).
  *
- * KNOWN, OUT-OF-SCOPE gap intentionally NOT fixed by this Bundle (reported to the auditor, never
- * silently patched here or in db/seed_empty.sql): team_dashboard's Admin Save/Cancel/Confirm
- * buttons (componentKey=button.primitive) render their visible button LABEL as the literal
- * shared componentKey string ("button.primitive"), never their seed-authored propsJson
- * {"label": "..."} text. buildProductionCatalogComponentProps's action/button case reads
- * node.label (populated only for schema-composed leaves via layout_schema_json.records[] -- see
- * runtime-orchestration-ssot.yaml layout_schema_structural_render_contract), which stays absent
- * for a tensor-only node (team_dashboard's own layout_schema_json is {"records":[]}); the
- * tensor's own flat, top-level propsJson {"label": ...} convention (db/seed_empty.sql's own
- * authored shape for every button.primitive node in this seed, team_dashboard's included) is a
- * shape buttonFactory never reads (it reads props.data.label, which mergeNodeLocalProps' shallow
- * top-level merge never touches). This is a distinct, likely-generic, pre-existing authoring/
- * runtime-contract mismatch outside this Bundle's explicit scope (the Saved-View-chrome
- * production-projection-boundary) -- this file deliberately does NOT assert on the Save/Cancel/
- * Confirm buttons' visible label text, only on their real dispatch behavior via data-node-id
- * (machine identity, never a label string, the same principle
- * credentialManagementCategorySelectorProductionPath.test.ts's own doc comment states), so this
- * known gap neither silently fails this proof nor gets misrepresented as fixed by it.
+ * Round 2 fix (this Bundle -- structural hierarchy + authored-label + display-language
+ * boundary): a follow-up audit found TWO further generic gaps between the canonical
+ * react_schema source and the tensor-only production projection, both fixed in
+ * .agent/scripts/react_schema_topology_seed_translator.py (never in frontend runtime, and
+ * never as a team_dashboard-specific branch):
+ *
+ * 1. tensor_container_parent_contract: the canonical react_schema authors Confirm/Cancel as
+ *    Modal.children (see the [modal]...[/modal] DSL block), but split_flat_records_into_
+ *    adoption_candidates' tensorAdoptionCandidates builder never emitted parentNodeId at all,
+ *    so both Actions were flattened to permanent root-level siblings -- reachable in the DOM
+ *    even while their owning Modal's own `open` was false, unlike manifest 092's own
+ *    already-proven Confirm/Cancel-inside-Modal seed rows (frontend/tests/fixtures/
+ *    manifest_0092_bare_entry_layout_nodes.json), which DO carry parentNodeId. Fixed by
+ *    propagating parentNodeId generically whenever a tensor-adopted Action/WorkflowStep's own
+ *    react_schema parent record_type is itself tensor-adopted as a container (today, only
+ *    Modal) -- the SAME authoredChildren/footer-slot containment contract
+ *    LayoutProjectionTree.tsx / runtimeComponentFactory.ts modalFactory already established for
+ *    schema-composed layouts, now reachable from the tensor-only path too. Proven below (Admin
+ *    test, steps 1 and 4): Confirm/Cancel are entirely absent from the DOM while the modal is
+ *    closed, appear ONLY inside the modal's own subtree once it opens, and disappear again
+ *    (unmount, not merely hide) once it closes.
+ * 2. propsJson.data nesting: every Field/Action tensor_nodes.append() call site emitted a FLAT
+ *    {"label": ...} propsJson, but frontend/runtime/renderEmission.ts's mergeNodeLocalProps
+ *    shallow-merges propsJson over the TOP LEVEL of defaultProps, never into its nested `data`
+ *    object -- so buttonFactory/textareaTemplateFactory's own `props.data.label` read never saw
+ *    it, and every tensor-adopted button's visible label silently regressed to its shared
+ *    componentKey string ("button.primitive") in production. Fixed by nesting under
+ *    {"data": {"label": ...}} at generation time, matching what the factories actually read
+ *    (the Modal's own propsJson already used this nesting correctly -- unchanged). Proven below
+ *    (Admin test) via the real Japanese authored labels reaching the DOM.
+ *
+ * Round 2 also Japanese-ized Team Dashboard's user-facing authored content at its canonical
+ * source (the same two translator input DSL files) -- machine identity (nodeId/componentKey/
+ * manifest key/targetRef) is untouched throughout: "Rendered preview"->"プレビュー" (Field
+ * label -- inert for md_viewer's own bare-markdown mode per that Field's own generation
+ * comment, so intentionally not DOM-asserted here), "Markdown body"->"Markdown本文" (Textarea
+ * label, DOM-asserted), "Save"->"保存" (both the preview and the in-modal Confirm button's own
+ * label, DOM-asserted), "Cancel"->"キャンセル" (DOM-asserted), "Save confirmation dialog"->
+ * "保存確認" (the Modal's own rendered title, DOM-asserted), and the Modal's body naturally
+ * embeds "チームダッシュボード" (DOM-asserted). Category/Section labels ("Team Dashboard"/
+ * "Team dashboard note") were translated at the source too for authoring consistency, but stay
+ * metadata-only under this surface's own tensor-only architecture (Category/Section never
+ * become tensor nodes at all here, schema-composed or not) -- this file does not assert they
+ * reach the DOM, and does not claim they do.
  */
 import { assert, assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { h, render } from "preact";
@@ -80,6 +107,17 @@ import { __testOnly as schedulerTestOnly } from "../runtime/frontendScheduler.ts
 // default, not an arbitrary test string.
 const REAL_BODY_MARKDOWN = "# Team Dashboard\n\nShared notes go here.";
 
+// Real Japanese authored content, sourced from the canonical translator input DSL
+// (team-dashboard-admin.input.json) and reachable through generate-react-schema ->
+// generate-topology-seed with zero post-generation patches -- see this file's own header.
+const JA = {
+  save: "保存",
+  cancel: "キャンセル",
+  confirmTitle: "保存確認",
+  confirmBody: "編集したMarkdownをチームダッシュボードの共有本文として保存します。",
+  markdownBodyLabel: "Markdown本文",
+};
+
 // Verbatim from db/seed_empty.sql's dd015 tensor row (team_dashboard.admin.projection,
 // route_key "admin/team-dashboard#default"), with the wiring identity fields
 // (wiringId/wiringKey/wiringKind/targetSurface/targetRef, componentId, componentKind) every
@@ -96,6 +134,7 @@ const ADMIN_WIRING = {
 };
 const ADMIN_UPDATE_TARGET_REF =
   "manifest:00000000-0000-0000-0000-0000000dd010:team_dashboard:update";
+const CONFIRM_MODAL_ID = "team_dashboard_admin_save_confirm_modal";
 
 const ADMIN_LAYOUT_NODES: LayoutNode[] = [
   {
@@ -107,7 +146,7 @@ const ADMIN_LAYOUT_NODES: LayoutNode[] = [
     componentKind: "data_display/md_viewer",
     orderIndex: 0,
     runtimeInteractions: [],
-    propsJson: '{"label": "Rendered preview"}',
+    propsJson: '{"data": {"label": "プレビュー"}}',
     propBindings: { markdown: { source: "emission.data.bodyMarkdown" } },
   },
   {
@@ -119,7 +158,7 @@ const ADMIN_LAYOUT_NODES: LayoutNode[] = [
     componentKind: "form_input/textarea_template",
     orderIndex: 1,
     runtimeInteractions: [],
-    propsJson: '{"label": "Markdown body"}',
+    propsJson: `{"data": {"label": "${JA.markdownBodyLabel}"}}`,
     propBindings: { value: { source: "emission.data.bodyMarkdown" } },
   },
   {
@@ -134,7 +173,7 @@ const ADMIN_LAYOUT_NODES: LayoutNode[] = [
       {
         trigger: "click",
         actionType: "openModal",
-        targetNodeId: "team_dashboard_admin_save_confirm_modal",
+        targetNodeId: CONFIRM_MODAL_ID,
         statePath: "open",
       },
     ],
@@ -142,11 +181,11 @@ const ADMIN_LAYOUT_NODES: LayoutNode[] = [
     dispatchPayloadFromByTrigger: {
       click: { bodyMarkdown: "node:team_dashboard_admin_body.value", dryRun: "literal:true" },
     },
-    propsJson: '{"label": "Save"}',
+    propsJson: `{"data": {"label": "${JA.save}"}}`,
   },
   {
     ...ADMIN_WIRING,
-    nodeId: "team_dashboard_admin_save_confirm_modal",
+    nodeId: CONFIRM_MODAL_ID,
     nodeKind: "catalog_component",
     componentKey: "modal.template",
     componentId: "00000000-0000-0000-0001-000000000015",
@@ -156,15 +195,19 @@ const ADMIN_LAYOUT_NODES: LayoutNode[] = [
       {
         trigger: "toggle",
         actionType: "closeModal",
-        targetNodeId: "team_dashboard_admin_save_confirm_modal",
+        targetNodeId: CONFIRM_MODAL_ID,
         statePath: "open",
       },
     ],
-    propsJson:
-      '{"data": {"open": false, "title": "Save team dashboard", "body": "Save the edited Markdown as the team dashboard\'s shared content."}}',
+    propsJson: `{"data": {"open": false, "title": "${JA.confirmTitle}", "body": "${JA.confirmBody}"}}`,
   },
   {
     ...ADMIN_WIRING,
+    // tensor_container_parent_contract: canonical react_schema Modal.children authority,
+    // preserved through generate-topology-seed's own tensorAdoptionCandidates builder --
+    // reachable in the DOM only while team_dashboard_admin_save_confirm_modal's own `open` is
+    // true (Modal.tsx returns null entirely when closed, taking its whole subtree with it).
+    parentNodeId: CONFIRM_MODAL_ID,
     nodeId: "team_dashboard_admin_save_confirm_button",
     nodeKind: "catalog_component",
     componentKey: "button.primitive",
@@ -175,7 +218,7 @@ const ADMIN_LAYOUT_NODES: LayoutNode[] = [
       {
         trigger: "click",
         actionType: "closeModal",
-        targetNodeId: "team_dashboard_admin_save_confirm_modal",
+        targetNodeId: CONFIRM_MODAL_ID,
         statePath: "open",
       },
     ],
@@ -183,10 +226,11 @@ const ADMIN_LAYOUT_NODES: LayoutNode[] = [
     dispatchPayloadFromByTrigger: {
       click: { bodyMarkdown: "node:team_dashboard_admin_body.value", confirmed: "literal:true" },
     },
-    propsJson: '{"label": "Save"}',
+    propsJson: `{"data": {"label": "${JA.save}"}}`,
   },
   {
     ...ADMIN_WIRING,
+    parentNodeId: CONFIRM_MODAL_ID,
     nodeId: "team_dashboard_admin_save_cancel_button",
     nodeKind: "catalog_component",
     componentKey: "button.primitive",
@@ -197,11 +241,11 @@ const ADMIN_LAYOUT_NODES: LayoutNode[] = [
       {
         trigger: "click",
         actionType: "closeModal",
-        targetNodeId: "team_dashboard_admin_save_confirm_modal",
+        targetNodeId: CONFIRM_MODAL_ID,
         statePath: "open",
       },
     ],
-    propsJson: '{"label": "Cancel"}',
+    propsJson: `{"data": {"label": "${JA.cancel}"}}`,
   },
 ];
 
@@ -222,7 +266,7 @@ const NORMAL_LAYOUT_NODES: LayoutNode[] = [
     targetRef: "team_dashboard.normal.projection",
     orderIndex: 0,
     runtimeInteractions: [],
-    propsJson: '{"label": "Rendered preview"}',
+    propsJson: '{"data": {"label": "プレビュー"}}',
     propBindings: { markdown: { source: "emission.data.bodyMarkdown" } },
   },
 ];
@@ -242,6 +286,18 @@ const SYNTHETIC_SAVED_VIEW_MARKERS = [
   ">Refresh<",
   ">Clone<",
   ">Rebind<",
+];
+
+// Machine vocabulary that must never leak into a rendered visible label -- componentKey is the
+// exact regressed value round 2's propsJson.data nesting fix closes (buttonFactory falling back
+// to it when props.data.label was never actually reachable).
+const MACHINE_VOCABULARY_MARKERS = [
+  "button.primitive",
+  "md_viewer.projection",
+  "textarea.template",
+  "modal.template",
+  "team_dashboard.admin.projection",
+  "team_dashboard.normal.projection",
 ];
 
 function toRunnerWiringNodes(layoutNodes: readonly LayoutNode[]): WiringNode[] {
@@ -269,7 +325,16 @@ function assertNoSyntheticSavedViewChrome(html: string, context: string): void {
   }
 }
 
-Deno.test("production path: Admin /admin/team-dashboard (team_dashboard.admin.projection, dd010) renders the real bodyMarkdown bare-markdown + editable Textarea, zero synthetic Saved View chrome, and a full dryRun-preview -> explicit confirm -> confirmed team_dashboard:update dispatch chain (real DOM, real native events)", async () => {
+function assertNoMachineVocabularyAsVisibleText(html: string, context: string): void {
+  for (const marker of MACHINE_VOCABULARY_MARKERS) {
+    assert(
+      !html.includes(marker),
+      `expected no machine vocabulary ("${marker}") exposed as visible text in ${context}, got: ${html}`,
+    );
+  }
+}
+
+Deno.test("production path: Admin /admin/team-dashboard (team_dashboard.admin.projection, dd010) renders real Japanese authored content + real bodyMarkdown + editable Textarea, keeps Confirm/Cancel structurally contained inside the closed/open Modal (never a permanent root-level sibling), and completes a full dryRun-preview -> explicit confirm -> confirmed team_dashboard:update dispatch chain (real DOM, real native events)", async () => {
   const emission: Emission = {
     layoutId: "00000000-0000-0000-0000-0000000dd013",
     layoutNodes: ADMIN_LAYOUT_NODES,
@@ -330,8 +395,10 @@ Deno.test("production path: Admin /admin/team-dashboard (team_dashboard.admin.pr
     renderTree();
     await flushUpdates();
 
-    // 1. Real bodyMarkdown reaches the viewer as bare markdown (bug fixed by this Bundle:
-    // buildProductionCatalogComponentProps's new data_display/md_viewer case).
+    // 1. Real bodyMarkdown reaches the viewer as bare markdown (round 1 fix), and the Modal is
+    // closed by default -- WITH its Confirm/Cancel children entirely absent from the DOM (round
+    // 2 fix: tensor_container_parent_contract), not merely an invisible/disabled Modal shell
+    // with orphaned root-level action buttons sitting beside it.
     const viewerHtml = container.querySelector('[data-node-id="team_dashboard_admin_viewer"]')?.innerHTML ?? "";
     assert(
       viewerHtml.includes('class="md-viewer-bare-markdown-preview"'),
@@ -340,17 +407,30 @@ Deno.test("production path: Admin /admin/team-dashboard (team_dashboard.admin.pr
     assert(viewerHtml.includes("<h1>Team Dashboard</h1>"), "expected the real bodyMarkdown heading in the viewer");
     assert(viewerHtml.includes("Shared notes go here."), "expected the real bodyMarkdown body text in the viewer");
     assertNoSyntheticSavedViewChrome(container.innerHTML, "the initial Admin DOM");
+    assert(!container.querySelector('[role="dialog"]'), "expected no confirm modal in the DOM before the first Save click");
+    assert(
+      !container.querySelector('[data-node-id="team_dashboard_admin_save_confirm_button"]'),
+      "expected the Confirm button to be entirely absent from the DOM while its owning Modal is closed",
+    );
+    assert(
+      !container.querySelector('[data-node-id="team_dashboard_admin_save_cancel_button"]'),
+      "expected the Cancel button to be entirely absent from the DOM while its owning Modal is closed",
+    );
 
-    // 2. Real bodyMarkdown reaches the Textarea's own initial value (bug fixed by this Bundle:
-    // resolvePropBindings' scalar branch now mirrors into props.data like the array branch).
-    const textareaEl = container.querySelector(
-      '[data-node-id="team_dashboard_admin_body"] textarea',
+    // 2. Real bodyMarkdown reaches the Textarea's own initial value (round 1 fix:
+    // resolvePropBindings' scalar branch now mirrors into props.data like the array branch), and
+    // its real seed-authored Japanese label reaches the DOM (round 2 fix: propsJson.data
+    // nesting).
+    const textareaWrapper = container.querySelector('[data-node-id="team_dashboard_admin_body"]');
+    assert(
+      textareaWrapper?.querySelector("label")?.textContent === JA.markdownBodyLabel,
+      `expected the Textarea's own real authored Japanese label ("${JA.markdownBodyLabel}")`,
+    );
+    const textareaEl = textareaWrapper?.querySelector(
+      "textarea",
     ) as unknown as { value: string; dispatchEvent: (e: Event) => boolean } | null;
     assert(textareaEl, "expected a real <textarea> for team_dashboard_admin_body");
     assertEquals(textareaEl!.value, REAL_BODY_MARKDOWN, "expected the real bodyMarkdown as the Textarea's initial value");
-
-    // No confirm dialog before any Save click.
-    assert(!container.querySelector('[role="dialog"]'), "expected no confirm modal in the DOM before the first Save click");
 
     // 3. Real native "input" edit on the real <textarea> — never tracker.set() standing in for it.
     const editedMarkdown = "# Team Dashboard\n\nUpdated via a real DOM edit.";
@@ -359,17 +439,18 @@ Deno.test("production path: Admin /admin/team-dashboard (team_dashboard.admin.pr
     await flushUpdates();
     assertEquals(tracker.snapshot()["team_dashboard_admin_body"], editedMarkdown);
 
-    // 4. Real click on the real Save button: dryRun-preview dispatch + opens the confirm modal.
-    const saveButton = container.querySelector(
-      '[data-node-id="team_dashboard_admin_save_button"] button',
-    ) as unknown as { dispatchEvent: (e: Event) => boolean } | null;
+    // 4. Real click on the real Save button (its own real Japanese label, round 2 fix): dryRun
+    // preview dispatch + opens the confirm modal, mounting Confirm/Cancel ONLY inside it.
+    const saveButtonEl = container.querySelector('[data-node-id="team_dashboard_admin_save_button"] button');
+    assertEquals(saveButtonEl?.textContent, JA.save, "expected the Save button's own real authored Japanese label");
+    const saveButton = saveButtonEl as unknown as { dispatchEvent: (e: Event) => boolean } | null;
     assert(saveButton, "expected a real Save button for team_dashboard_admin_save_button");
     saveButton!.dispatchEvent(new Event("click", { bubbles: true }));
 
     let opened = false;
     for (let i = 0; i < 40 && !opened; i++) {
       await flushUpdates();
-      opened = dispatcher.get("team_dashboard_admin_save_confirm_modal", "open") === true;
+      opened = dispatcher.get(CONFIRM_MODAL_ID, "open") === true;
     }
     assert(opened, "expected the confirm modal's open state to become true after the real Save click's dryRun dispatch settles");
 
@@ -380,9 +461,33 @@ Deno.test("production path: Admin /admin/team-dashboard (team_dashboard.admin.pr
     assertEquals(dryRunPayload.dryRun, "true");
     assert(!("confirmed" in dryRunPayload), "expected the dryRun payload to carry no confirmed flag");
 
-    const dialogHtml = container.querySelector('[role="dialog"]')?.innerHTML ?? "";
-    assert(dialogHtml.includes("Save team dashboard"), "expected the real confirm modal to show its seed-authored title");
+    const dialogEl = container.querySelector('[role="dialog"]');
+    const dialogHtml = dialogEl?.innerHTML ?? "";
+    assert(dialogHtml.includes(JA.confirmTitle), `expected the real confirm modal to show its seed-authored Japanese title ("${JA.confirmTitle}")`);
+    assert(dialogHtml.includes(JA.confirmBody), "expected the real confirm modal to show its seed-authored Japanese body, naturally embedding \"チームダッシュボード\"");
     assertNoSyntheticSavedViewChrome(container.innerHTML, "the Admin DOM with the confirm modal open");
+    assertNoMachineVocabularyAsVisibleText(container.innerHTML, "the Admin DOM with the confirm modal open");
+
+    // Confirm/Cancel now exist ONLY inside the Modal's own subtree — never as a sibling
+    // elsewhere in the document (tensor_container_parent_contract's real containment guarantee,
+    // not merely "a node with this id exists somewhere").
+    assert(dialogEl, "expected a real open dialog");
+    const confirmInDialog = dialogEl!.querySelector('[data-node-id="team_dashboard_admin_save_confirm_button"] button');
+    const cancelInDialog = dialogEl!.querySelector('[data-node-id="team_dashboard_admin_save_cancel_button"] button');
+    assert(confirmInDialog, "expected the Confirm button to be mounted INSIDE the open dialog's own subtree");
+    assert(cancelInDialog, "expected the Cancel button to be mounted INSIDE the open dialog's own subtree");
+    assertEquals(confirmInDialog!.textContent, JA.save, "expected the in-modal Confirm button's own real authored Japanese label");
+    assertEquals(cancelInDialog!.textContent, JA.cancel, "expected the Cancel button's own real authored Japanese label");
+    assertEquals(
+      container.querySelectorAll('[data-node-id="team_dashboard_admin_save_confirm_button"]').length,
+      1,
+      "expected exactly one Confirm button in the whole document (inside the dialog, never also a root-level orphan)",
+    );
+    assertEquals(
+      container.querySelectorAll('[data-node-id="team_dashboard_admin_save_cancel_button"]').length,
+      1,
+      "expected exactly one Cancel button in the whole document (inside the dialog, never also a root-level orphan)",
+    );
 
     // The modal opening re-ran renderEmission() (via the localStateStore-subscribed
     // renderTree()) with the SAME unchanged emission.data.bodyMarkdown — the live-typed edit
@@ -397,20 +502,25 @@ Deno.test("production path: Admin /admin/team-dashboard (team_dashboard.admin.pr
       "expected the live-typed edit to survive the re-render triggered by opening the confirm modal",
     );
 
-    // 5. Real click on the real Confirm button: confirmed dispatch, modal closes.
-    const confirmButton = container.querySelector(
-      '[data-node-id="team_dashboard_admin_save_confirm_button"] button',
-    ) as unknown as { dispatchEvent: (e: Event) => boolean } | null;
-    assert(confirmButton, "expected a real Confirm button for team_dashboard_admin_save_confirm_button");
-    confirmButton!.dispatchEvent(new Event("click", { bubbles: true }));
+    // 5. Real click on the real (in-modal) Confirm button: confirmed dispatch, modal closes,
+    // and Confirm/Cancel unmount along with it (never left as orphaned root-level siblings).
+    confirmInDialog!.dispatchEvent(new Event("click", { bubbles: true }));
 
     let closed = false;
     for (let i = 0; i < 40 && !closed; i++) {
       await flushUpdates();
-      closed = dispatcher.get("team_dashboard_admin_save_confirm_modal", "open") === false;
+      closed = dispatcher.get(CONFIRM_MODAL_ID, "open") === false;
     }
     assert(closed, "expected the confirm modal to close once the real Confirm dispatch settles");
     assert(!container.querySelector('[role="dialog"]'), "expected the confirm modal to be gone from the DOM after closing");
+    assert(
+      !container.querySelector('[data-node-id="team_dashboard_admin_save_confirm_button"]'),
+      "expected the Confirm button to unmount (not merely hide) once its owning Modal closes",
+    );
+    assert(
+      !container.querySelector('[data-node-id="team_dashboard_admin_save_cancel_button"]'),
+      "expected the Cancel button to unmount (not merely hide) once its owning Modal closes",
+    );
 
     assertEquals(dispatchedBodies.length, 2, "expected exactly one new dispatch from the real Confirm click");
     const confirmPayload = dispatchedBodies[1].payload as Record<string, unknown>;
@@ -419,28 +529,34 @@ Deno.test("production path: Admin /admin/team-dashboard (team_dashboard.admin.pr
     assertEquals(confirmPayload.confirmed, "true");
     assert(!("dryRun" in confirmPayload), "expected the confirmed dispatch to carry no dryRun flag");
 
-    // 6. Reopen, then real Cancel click: closes the modal WITHOUT dispatching a third request.
+    // 6. Reopen, then real Cancel click (inside the reopened dialog): closes the modal WITHOUT
+    // dispatching a third request, and Confirm/Cancel unmount again.
     saveButton!.dispatchEvent(new Event("click", { bubbles: true }));
     opened = false;
     for (let i = 0; i < 40 && !opened; i++) {
       await flushUpdates();
-      opened = dispatcher.get("team_dashboard_admin_save_confirm_modal", "open") === true;
+      opened = dispatcher.get(CONFIRM_MODAL_ID, "open") === true;
     }
     assert(opened, "expected the confirm modal to reopen on a second real Save click");
     const dispatchedBeforeCancel = dispatchedBodies.length;
 
-    const cancelButton = container.querySelector(
+    const reopenedDialog = container.querySelector('[role="dialog"]');
+    const cancelButton = reopenedDialog?.querySelector(
       '[data-node-id="team_dashboard_admin_save_cancel_button"] button',
     ) as unknown as { dispatchEvent: (e: Event) => boolean } | null;
-    assert(cancelButton, "expected a real Cancel button for team_dashboard_admin_save_cancel_button");
+    assert(cancelButton, "expected a real Cancel button inside the reopened dialog");
     cancelButton!.dispatchEvent(new Event("click", { bubbles: true }));
     await flushUpdates();
     assertEquals(
-      dispatcher.get("team_dashboard_admin_save_confirm_modal", "open"),
+      dispatcher.get(CONFIRM_MODAL_ID, "open"),
       false,
       "expected a real Cancel click to close the confirm modal",
     );
     assertEquals(dispatchedBodies.length, dispatchedBeforeCancel, "expected Cancel to fire NO new /api/dispatch request");
+    assert(
+      !container.querySelector('[data-node-id="team_dashboard_admin_save_cancel_button"]'),
+      "expected the Cancel button to unmount once Cancel closes its own owning Modal",
+    );
   } finally {
     render(null, container as unknown as Element);
     cleanup();
@@ -449,7 +565,7 @@ Deno.test("production path: Admin /admin/team-dashboard (team_dashboard.admin.pr
   }
 });
 
-Deno.test("production path: Normal /dashboard (team_dashboard.normal.projection, dd020) renders ONLY the real bodyMarkdown as read-only bare markdown — zero synthetic Saved View chrome and zero editor/save/mutation controls in the DOM", async () => {
+Deno.test("production path: Normal /dashboard (team_dashboard.normal.projection, dd020) renders ONLY the real bodyMarkdown as read-only bare markdown — zero synthetic Saved View chrome, zero machine vocabulary as visible text, and zero editor/save/mutation controls in the DOM", async () => {
   const emission: Emission = {
     layoutId: "00000000-0000-0000-0000-0000000dd023",
     layoutNodes: NORMAL_LAYOUT_NODES,
@@ -473,12 +589,14 @@ Deno.test("production path: Normal /dashboard (team_dashboard.normal.projection,
     render(h(LayoutProjectionTree, { specs, layoutId: emission.layoutId, localStateStore: dispatcher }), container);
     await flushUpdates();
 
-    // Same shared physical row's real content, rendered read-only.
+    // Same shared physical row's real content, rendered read-only, with real Japanese
+    // human-facing content only.
     const viewerHtml = container.querySelector('[data-node-id="team_dashboard_normal_viewer"]')?.innerHTML ?? "";
     assert(viewerHtml.includes('class="md-viewer-bare-markdown-preview"'), "expected the real bare-markdown branch to render on the Normal axis too");
     assert(viewerHtml.includes("<h1>Team Dashboard</h1>"), "expected the SAME real bodyMarkdown heading as the Admin axis (shared physical row)");
     assert(viewerHtml.includes("Shared notes go here."), "expected the SAME real bodyMarkdown body text as the Admin axis (shared physical row)");
     assertNoSyntheticSavedViewChrome(container.innerHTML, "the Normal DOM");
+    assertNoMachineVocabularyAsVisibleText(container.innerHTML, "the Normal DOM");
 
     // Normal read-only boundary: no editor/save/mutation controls exist at all — not merely
     // hidden ones (surface_axes.normal.surfaces.dashboard.team_dashboard_canonical_shared_
@@ -497,7 +615,7 @@ Deno.test("production path: Normal /dashboard (team_dashboard.normal.projection,
   }
 });
 
-Deno.test("regression: UI-Builder canvas authoring preview (previewMode=true) still receives the synthetic Saved View placeholder for data_display/md_viewer, unchanged by this Bundle's production-only fix", () => {
+Deno.test("regression: UI-Builder canvas authoring preview (previewMode=true) still receives the synthetic Saved View placeholder for data_display/md_viewer, unchanged by this Bundle's production-only fixes", () => {
   const previewNode: LayoutNode = {
     nodeId: "preview_md_viewer_node",
     nodeKind: "catalog_component",
