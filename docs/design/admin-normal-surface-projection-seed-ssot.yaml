@@ -962,8 +962,15 @@ admin_normal_surface_projection_seed_ssot:
               satisfy — it is a gap-closure record for a named, already-identified surface, not
               a team-dashboard-specific design exception: the rule being applied
               (layoutAdoptionCandidates is PRIMARY, tensorAdoptionCandidates is DERIVED) is the
-              SAME generic rule every other schema-composed surface (e.g. manifest 092) already
-              follows.
+              SAME generic rule every other schema-composed surface already follows. Team
+              Dashboard's own Category > Section > Field/Action/Modal tree (no Form anywhere)
+              is likewise not a novel shape needing new design: auth.external.
+              credential_management.projection (manifest 092), admin.enum.management.projection,
+              and scheduler.settings.projection are three already-adopted, already-live-DB-
+              proven schema-composed surfaces whose own Action/Modal content is Section-owned
+              with zero Form ownership (react-schema-topology-seed-translator-ssot.yaml
+              structural_authority_precedence_contract.interaction_ownership_and_addressing_
+              contract.real_precedent) — the same generic mechanism applies unchanged.
             physical_seed_adoption:
               - dd013 (topology.components_layout_design row backing team_dashboard.admin.
                 projection) must persist layout_schema_json.records[] as the CLEAN, unmodified
@@ -998,12 +1005,25 @@ admin_normal_surface_projection_seed_ssot:
                 dd015/dd025's own persisted layout_patch_json.nodes[] must be reshaped, as part
                 of the SAME implementation_change that performs physical adoption, from the
                 current tensor-only LayoutNode shape (full componentKind/componentKey/label/
-                parentNodeId per leaf) to the FORM-level runtimeInteractions-keyed carrier
-                shape Compose actually consumes for a schema-composed layout ("{formTensorNodeId}
-                ::{sourceActionKey}", tensor_runtime_interactions_merge /
-                BuildInteractionsBySourceActionKey) — mirroring manifest 092's own tensor row
-                shape as the reference precedent (the same precedent already cited as proof
-                schema composition was available before Team Dashboard existed). The Round-2
+                parentNodeId per leaf) to the OWNING-STRUCTURAL-PARENT-keyed runtimeInteractions
+                carrier shape Compose actually consumes for a schema-composed layout
+                ("{parentTensorNodeId}::{sourceActionKey}", tensor_runtime_interactions_merge /
+                BuildInteractionsBySourceActionKey — corrected 2026-09-06 from this criterion's
+                own earlier, inaccurate "FORM-level" phrasing: the mechanism has no Form-type
+                check anywhere and is keyed generically by whichever record is the leaf's real
+                schema parent). For dd015 (admin), team_dashboard_admin_save_button's own
+                runtimeInteraction must be carried on a tensor node keyed at the owning SECTION's
+                resolved key (team_dashboard_admin_editor — this surface's tree has no Form at
+                all), and team_dashboard_admin_save_confirm_button's/_cancel_button's own
+                runtimeInteractions must be carried on a tensor node keyed at the owning MODAL's
+                resolved key (team_dashboard_admin_save_confirm_modal) — mirroring
+                admin.enum.management.projection's own already-proven tensor row shape (its
+                Section-owned preview Actions' entries live on its Section's own tensor node;
+                each Modal's own Confirm/Cancel Actions' entries live on that SAME Modal's own
+                tensor node) as the reference precedent, not manifest 092's Form-adjacent shape,
+                since Team Dashboard's own tree has no Form to mirror that against. dd025 (normal)
+                carries no Action/Modal at all (read_only_no_mutation_no_confirm authority
+                boundary) and needs no runtimeInteractions carrier reshape. The Round-2
                 parentNodeId stamps on team_dashboard_admin_save_confirm_button/_cancel_button's
                 tensor nodes must be removed as part of that reshape (they carry no meaning in
                 the Compose-consumed shape); this is a disposition of already-shipped Round-2
@@ -1017,17 +1037,39 @@ admin_normal_surface_projection_seed_ssot:
               not a re-derived approximation" proof discipline
               TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs already established for
               the tensor bucket, applied to the layout bucket.
+            required_field_control_component_identity_resolution: >-
+              A PREREQUISITE for the structural-composition proof below, not an independent nice-
+              to-have: backend/repository/LayoutSchemaTensorComposer.cs's
+              FieldControlToComponentKey dictionary must gain two entries —
+              "data_display/md_viewer" -> "md_viewer.projection" and "form_input/
+              textarea_template" -> "textarea.template" — mirroring react-schema-topology-seed-
+              translator-ssot.yaml's own COMPONENT_KIND_TO_COMPONENT_KEY exactly (per
+              field_control_component_identity_contract), reusing the already-real, already-
+              active topology.ui_component_registry rows for both (db/ui_component_registry_
+              preset_catalog_bootstrap.sql) — never a new registry row, never a new componentKind,
+              never a new runtime factory. Without this, dd013's two Fields
+              (team_dashboard_admin_viewer, team_dashboard_admin_body) would compose with a null
+              componentId/componentKind and fail CATALOG_COMPONENT_KIND_REQUIRED at render time —
+              this is the FIRST thing that must be verified true (or fixed) before the
+              structural-composition proof below is attempted, not a fallback to diagnose after
+              it fails.
             required_backend_live_db_structural_composition_proof: >-
               A live-DB test reading the adopted dd013/dd023 rows through the real repository
               read path and asserting LayoutSchemaTensorComposer.Compose produces the expected
               LayoutNode[] (correct NodeKind per record type including topology_ui_modal as
-              catalog_component, correct ParentNodeId for team_dashboard_admin_save_confirm_
-              button/_cancel_button nested under team_dashboard_admin_save_confirm_modal,
-              correct componentId/componentKind resolution for the Modal itself per
-              runtime-orchestration-ssot.yaml's now-corrected catalog_component_record_types
-              rule) — mirroring the SAME live-DB composed-read proof pattern manifest 092's own
-              structural_render_contract test_proof_contract already uses, not a new pattern
-              invented for this surface.
+              catalog_component, correct componentId/componentKind resolution for both Fields per
+              required_field_control_component_identity_resolution above, correct ParentNodeId
+              for team_dashboard_admin_save_confirm_button/_cancel_button nested under
+              team_dashboard_admin_save_confirm_modal, correct componentId/componentKind
+              resolution for the Modal itself per runtime-orchestration-ssot.yaml's
+              now-corrected catalog_component_record_types rule, and correct runtimeInteractions
+              attribution for team_dashboard_admin_save_button reached via the owning SECTION's
+              tensor node and for the Modal's own Confirm/Cancel Actions reached via the owning
+              MODAL's tensor node, per tensor_parentnodeid_disposition.required_disposition
+              above) — mirroring the SAME live-DB composed-read proof pattern
+              admin.enum.management.projection's own structural_render_contract
+              test_proof_contract already uses against its own Section-owned, Form-less Action/
+              Modal content, not a new pattern invented for this surface.
             required_admin_authoring_dom_proof: >-
               frontend/tests/teamDashboardProductionProjectionBoundary.test.ts's existing Admin
               production-composition assertions (Confirm/Cancel absent from the DOM while the

@@ -1012,6 +1012,96 @@ react_schema_topology_seed_translator_ssot:
           proof) is necessary evidence that the DERIVED carrier itself is not broken; it is
           never sufficient evidence that the surface satisfies this contract's PRIMARY-bucket
           rule, and must never be cited as though it were.
+        interaction_ownership_and_addressing_contract:
+          note: >-
+            Corrected 2026-09-06 (follow-up audit): runtime-orchestration-ssot.yaml's own
+            tensor_runtime_interactions_merge section and backend/repository/
+            LayoutSchemaTensorComposer.cs's class-level doc comments describe
+            BuildInteractionsBySourceActionKey's grouping key as "the FORM level" / "the
+            OWNING FORM's own tensor NodeId". Read against the actual code
+            (BuildInteractionsBySourceActionKey iterates every tensorNodes entry
+            unconditionally and keys purely on that node's own raw NodeId + each entry's own
+            sourceActionKey -- no StructuralRecordTypes/Form-type check anywhere in that
+            function or its caller) and against real, already-adopted, already-live-DB-proven
+            production content, "FORM" is a descriptive label for the historically common case,
+            never an enforced restriction. This is a documentation correction only -- the
+            mechanism itself is unchanged and needs no code edit.
+          real_precedent: >-
+            Three already-adopted schema-composed layouts prove the OWNING PARENT may be a
+            Section (or a Modal) with NO Form anywhere in the branch, not only a Form: (1)
+            admin.enum.management.projection (layout_id ...ae204) has ZERO topology_ui_form
+            records at all; its 21 topology_ui_action + 7 topology_ui_modal records are all
+            parented directly under one topology_ui_section (enum_dictionary_roster), and its
+            own tensor row (tensor_id ...ae206) carries that Section's runtimeInteractions
+            entries -- individually sourceActionKey-tagged for BOTH its 7 directly-owned
+            preview Actions AND its 7 owned Modals' own toggle entries -- on ONE tensor node
+            keyed at the Section's own NodeId, with each Modal's OWN Confirm/Cancel Action
+            children's entries carried on a SEPARATE tensor node keyed at that Modal's own
+            NodeId (proving the mechanism recurses through a Modal parent exactly like a
+            Form/Section parent). (2) scheduler.settings.projection (layout_id ...c104) has
+            ZERO topology_ui_form records; its 2 topology_ui_modal records are both parented
+            under one Section (scheduler_job_roster) with the identical shape. (3)
+            auth.external.credential_management.projection (manifest 092, layout_id ...cd002)
+            has topology_ui_form records for its own genuinely-form-shaped input surfaces
+            (instance_settings_import_form, instance_address_form, etc.) AND separately has
+            ALL 12 of its own topology_ui_modal records (and most of its topology_ui_action
+            records) parented directly under Sections, never under a Form -- Form-owned and
+            Section-owned Action/Modal ownership coexist in the SAME already-adopted manifest,
+            neither is the only supported shape. Corrected count (2026-09-06 re-verification):
+            db/seed_empty.sql carries 21 total topology_ui_modal records across these three
+            surfaces (12 + 7 + 2) -- not "19 in manifest 092" as an earlier round of this same
+            Bundle stated; that earlier figure was inaccurate on both the total and the
+            attribution, corrected here from a fresh grep/parse of the current seed content,
+            never left standing as a citation once shown wrong.
+          rule: >-
+            The tensor carrier's runtimeInteractions/sourceActionKey addressing scheme is
+            keyed generically by "the resolved OWNING STRUCTURAL PARENT's own tensor NodeId"
+            -- whatever record type that parent actually is (Form, Section, Category, or
+            Modal) -- never restricted to Form. A surface whose canonical react_schema has NO
+            Form anywhere (Team Dashboard's own Category > Section > Field/Action/Modal tree,
+            per team_dashboard.{admin,normal}.projection's own fixtures, is exactly this
+            shape) is not a special case requiring a new addressing mechanism or a
+            Team-Dashboard-scoped carve-out: its Section is the owning structural parent for
+            its own Field/Action children, and its Modal is the owning structural parent for
+            its own Confirm/Cancel Action children, using the SAME generic mechanism the three
+            real_precedent surfaces above already prove in production. Field/Table records are
+            addressed differently and are NEVER routed through this sourceActionKey/
+            owning-parent mechanism at all -- see tensorAdoptionCandidates.field_derived_payload
+            / table_derived_payload above: their own tensor node is looked up by exact NodeId
+            match (NodeLocalData), because their derived payload (propBindings, propsJson,
+            adminRuntimeDispatchOverride) describes that SAME leaf's own configuration, never a
+            parent's collection of child interaction entries.
+        field_control_component_identity_contract:
+          note: >-
+            Added 2026-09-06 (follow-up audit): a schema-composed Field's componentKey/
+            componentId resolution (runtime-orchestration-ssot.yaml
+            layout_schema_structural_render_contract.field_control_resolution,
+            backend/repository/LayoutSchemaTensorComposer.cs FieldControlToComponentKey) is a
+            SEPARATE dictionary from this translator's own COMPONENT_KIND_TO_COMPONENT_KEY --
+            the two must stay in agreement for every control value either side actually emits,
+            but today FieldControlToComponentKey (C#, schema-composed read path) is MISSING
+            two control values this translator's own COMPONENT_KIND_TO_COMPONENT_KEY (Python,
+            tensor-emission path) already resolves correctly: data_display/md_viewer ->
+            md_viewer.projection and form_input/textarea_template -> textarea.template. Both
+            componentKey identities already exist as real, active
+            topology.ui_component_registry rows (db/ui_component_registry_preset_catalog_
+            bootstrap.sql) and as real frontend/components/catalog.ts entries -- this is a
+            missing convention-table entry on the schema-composed side only, never a missing
+            identity, and never a case requiring a new registry row, a new componentKind, or a
+            new runtime factory. Team Dashboard's own two Fields (team_dashboard_admin_viewer,
+            control=data_display/md_viewer; team_dashboard_admin_body, control=form_input/
+            textarea_template) are the first schema-composed authoring to actually need this
+            pairing, but the fix is generic: add both control values to
+            FieldControlToComponentKey mirroring COMPONENT_KIND_TO_COMPONENT_KEY exactly, the
+            same reuse-not-invent discipline table_display_resolution and Modal's own
+            componentKind handling already establish.
+          rule: >-
+            FieldControlToComponentKey (schema-composed read path) must resolve every control
+            value COMPONENT_KIND_TO_COMPONENT_KEY (tensor-emission path) resolves, using the
+            IDENTICAL control -> componentKey pairing -- never a second, independently-curated
+            convention that could drift from the generation-side table. A control value present
+            in one table and absent from the other is itself a defect in whichever table is
+            missing it, never evidence that the control is unsupported for that path.
         prohibited:
           - treating_ui_topology_tensor_layout_patch_json_nodes_as_a_substitute_for_physically_adopting_real_layoutAdoptionCandidates_content_into_layout_schema_json_records
           - describing_a_surfaces_tensor_only_layout_patch_content_as_a_proven_or_completed_structural_authority_shape_in_its_own_declared_seed_surface_catalog_entry
@@ -1019,6 +1109,10 @@ react_schema_topology_seed_translator_ssot:
           - justifying_a_tensor_only_deviation_for_one_surface_by_that_surfaces_own_current_working_behavior_alone_without_a_documented_technical_blocker_that_still_applies_today
           - adding_a_surface_route_nodeId_manifestKey_or_componentKey_scoped_conditional_anywhere_in_the_translator_or_runtime_composer_to_reproduce_this_contracts_precedence_rule_instead_of_applying_it_generically
           - treating_this_contracts_own_tensor_carrier_internal_containment_repairs_such_as_modal_derived_payloads_parentNodeId_stamp_as_the_final_design_for_a_surface_rather_than_a_transitional_fix_pending_physical_adoption
+          - excluding_topology_ui_field_or_topology_ui_table_from_tensorAdoptionCandidates_source_record_types_while_the_generator_still_conditionally_emits_tensor_nodes_for_them
+          - inventing_a_new_form_owner_or_synthetic_form_wrapper_for_a_surface_whose_canonical_react_schema_has_no_form_solely_to_satisfy_FORM_level_language_read_too_literally
+          - deciding_the_owning_structural_parent_for_a_Section_or_Modal_owned_Action_by_secondaryDisclosureTargetNodeId_or_any_action_target_heuristic_instead_of_the_records_own_authored_parentKey_resolved_identity
+          - leaving_FieldControlToComponentKey_and_COMPONENT_KIND_TO_COMPONENT_KEY_divergent_for_a_control_value_either_side_actually_resolves
       package_authority_boundary:
         note: >-
           docs/design/db-schema.yaml draws two DISTINCT "package" table identities that must
@@ -1115,7 +1209,20 @@ react_schema_topology_seed_translator_ssot:
             implementation was the out-of-sync side, not the seed or top SSOT.
         tensorAdoptionCandidates:
           target_table: topology.ui_topology_tensor
-          source_record_types: [topology_ui_action, topology_ui_workflow_step, topology_ui_modal]
+          source_record_types: [topology_ui_action, topology_ui_workflow_step, topology_ui_modal, topology_ui_field, topology_ui_table]
+          source_record_types_note: >-
+            Corrected 2026-09-06 (structural_authority_precedence_contract follow-up audit):
+            topology_ui_field and topology_ui_table were REAL, already-generated
+            tensorAdoptionCandidates contributors (split_flat_records_into_adoption_candidates'
+            own conditional branches for a Field authoring valueFrom/optionsSource/
+            adminRuntimeDispatchOverride, and a Table authoring displayColumns) that this
+            enumeration omitted -- a documentation gap in this list, not a generator behavior
+            change; the generator's own conditional emission (below) is unchanged and predates
+            this correction. Every one of the five listed record types is conditional, not
+            unconditional -- see the per-record_type derived_payload notes below for the exact
+            emission gate and permitted payload each carries; a Field/Table/Action/WorkflowStep
+            record with none of its own gating attributes authored contributes NOTHING to this
+            bucket, which is correct (there is nothing DERIVED to carry), never a gap.
           shape: >-
             one layout_patch_json candidate per Projection, plus the packageId reference the
             persisted tensor row's own package_id FK needs: {tensorKey, packageIdRef:
@@ -1152,6 +1259,38 @@ react_schema_topology_seed_translator_ssot:
             translator (it remains correct and necessary for any OTHER surface still
             authored tensor-only), but a surface that has completed physical adoption must
             not keep relying on it as its containment source of truth.
+          field_derived_payload: >-
+            A Field record's tensorAdoptionCandidates projection is entirely conditional on
+            which of its own authored attributes are present -- never a structural field
+            (parentNodeId/containment; a Field is never itself a Form/Section/Modal owner) and
+            never routed through the sourceActionKey/owning-parent mechanism
+            field_derived_payload's sibling Action/Modal payloads use (a Field's own tensor
+            node is looked up by NodeLocalData at its OWN exact resolved NodeId, never
+            "{parent}::{key}" -- see structural_authority_precedence_contract's
+            interaction_ownership_and_addressing_contract below for why these are two distinct
+            mechanisms). Three independent, non-exclusive gates, each contributing its own
+            fields to that Field's single merged tensor node (first-write-wins on
+            componentKey/propsJson.data.label, per the merge step's own policy): (1)
+            valueFrom authored -> propBindings.<valueProp>.source (valueProp resolved from the
+            Field's own control via FIELD_CONTROL_TO_VALUE_PROP_NAME, "value" by default,
+            "markdown" for data_display/md_viewer) plus propsJson.data.label plus componentKey
+            (from control, per field_control_resolution); (2) optionsSource authored ->
+            propBindings.options.{source,transform,labelPath,valuePath} plus componentKey; (3)
+            adminRuntimeDispatchOverride authored -> that override plus componentKey plus
+            (when authored) debounceMs. A Field authoring none of the three contributes no
+            tensorAdoptionCandidates entry at all -- correct, not a gap, since there is no
+            DERIVED runtime carrier content to project.
+          table_derived_payload: >-
+            A Table record's tensorAdoptionCandidates projection is gated on displayColumns
+            being authored (never a structural field; a Table is never itself a Form/Section/
+            Modal owner; looked up by NodeLocalData at its own exact resolved NodeId, same
+            addressing family as Field's, never the sourceActionKey/owning-parent mechanism):
+            propsJson.{table:null,columns:<the authored displayColumns>} plus
+            propBindings.rows.source (the Table's own authored rowsSource verbatim -- the
+            generator fails the WHOLE run closed, never substitutes a hardcoded default, when
+            displayColumns is authored without rowsSource; see
+            validate_table_display_columns_and_rows_source). A Table authoring no
+            displayColumns contributes no tensorAdoptionCandidates entry -- correct, not a gap.
         manifestRefsCandidate:
           target_table: manifest
           shape: >-
@@ -2600,12 +2739,23 @@ react_schema_topology_seed_translator_ssot:
               relied on exclusively since PR#604 introduced Team Dashboard, never a legitimate
               substitute for physical adoption. Owner design_change investigation (2026-09-06,
               git history of db/seed_empty.sql / PR#604's own commit-message lineage / PR#580's
-              chronologically-earlier manifest 092 schema-composed precedent, all real
-              topology_ui_modal-bearing schema-composed layouts already proven in production)
-              found no documented technical blocker against schema composition ever cited for
-              this surface at any point in its history -- the deviation is scope/convenience
-              drift, not a load-bearing constraint, and is not ratified as this surface's
-              design authority by this entry. See admin-normal-surface-projection-seed-ssot.yaml
+              chronologically-earlier manifest 092 schema-composed precedent) found no
+              documented technical blocker against schema composition ever cited for this
+              surface at any point in its history -- the deviation is scope/convenience drift,
+              not a load-bearing constraint, and is not ratified as this surface's design
+              authority by this entry. Re-verified 2026-09-06 (follow-up audit, corrected count):
+              db/seed_empty.sql carries 21 real topology_ui_modal records already
+              schema-composed in production across THREE surfaces predating or contemporaneous
+              with Team Dashboard, all Section-owned with zero Form ownership in every case --
+              auth.external.credential_management.projection (manifest 092, PR#580, 12
+              records), admin.enum.management.projection (7 records), and
+              scheduler.settings.projection (2 records) -- see
+              structural_authority_precedence_contract.interaction_ownership_and_addressing_
+              contract.real_precedent above for the full per-surface breakdown; a Team
+              Dashboard-shaped Category>Section>Field/Action/Modal tree with no Form is
+              therefore not a novel shape needing new design, it is the SAME already-proven
+              shape three other manifests already run in production. See
+              admin-normal-surface-projection-seed-ssot.yaml
               surface_axes.admin.surfaces.team_dashboard for the acceptance criteria the next
               implementation_change closing this gap must satisfy.
         historical_known_gaps_closed_2026_08_17_uibuilder_lineage_closure_round_3:
@@ -2739,9 +2889,11 @@ react_schema_topology_seed_translator_ssot:
               team_dashboard_admin_layout_schema_json_records_not_yet_physically_adopted
               known_gaps entry above (dd023 persists layout_schema_json={"records":[]} while
               this surface's own generated layoutAdoptionCandidates content -- Category/Section/
-              Form/Field -- is real and non-empty) -- see that entry for the full note, not
-              duplicated here. Both surfaces share the identical
-              admin-normal-surface-projection-seed-ssot.yaml
+              Field only; this read-only axis's own fixture (team-dashboard-normal.input.json)
+              authors no Form and no Action/Modal at all, corrected here from an earlier,
+              inaccurate "Category/Section/Form/Field" citation -- is real and non-empty) -- see
+              that entry for the full note, not duplicated here. Both surfaces share the
+              identical admin-normal-surface-projection-seed-ssot.yaml
               team_dashboard_canonical_shared_contract acceptance criteria for closing this gap.
         historical_known_gaps_closed_2026_08_17_uibuilder_lineage_closure_round_3: >-
           Same two gaps, same generic translator-level closure, as
