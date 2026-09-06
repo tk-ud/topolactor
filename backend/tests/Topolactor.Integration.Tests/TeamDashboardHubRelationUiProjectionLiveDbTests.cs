@@ -671,4 +671,111 @@ public class TeamDashboardHubRelationUiProjectionLiveDbTests
             }
         }
     }
+
+    /// <summary>
+    /// team-dashboard-physical-layout-adoption round: dd013 is now physically adopted as the
+    /// PRIMARY structural authority (Owner "Judgment B") -- this is the required backend live-DB
+    /// structural-composition proof (docs/design/admin-normal-surface-projection-seed-ssot.yaml
+    /// physical_layout_schema_adoption_acceptance_criteria.
+    /// required_backend_live_db_structural_composition_proof), the SAME
+    /// checked-in-fixture-snapshot pattern CredentialManagementHubRelationUiProjectionLiveDbTests.
+    /// DispatchAsync_BareDefaultEntry_NoTargetRef_ResolvesManifest0092ViaCanonicalDefaultEntryRelation
+    /// already established for manifest 092: dispatch through the REAL production path (the exact
+    /// axes frontend/routes/admin/team-dashboard/index.tsx sends), camelCase-serialize
+    /// Emission.LayoutNodes (the same shape the frontend receives over HTTP), and assert it
+    /// equals a checked-in snapshot frontend/tests/teamDashboardProductionProjectionBoundary.
+    /// test.ts consumes through the real renderEmission() -&gt; LayoutProjectionTree -&gt;
+    /// runtimeComponentFactory -&gt; real DOM pipeline. If team-dashboard's seed content ever
+    /// drifts from this shape, this test fails HERE, not silently leaving the frontend fixture
+    /// stale against real data.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_AdminManifest_ProjectionEntry_ComposedFromPhysicallyAdoptedSchema_MatchesCheckedInFixtureSnapshot()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+        var payload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = "manifest_key:team_dashboard.admin.projection:projection_entry",
+        });
+        var request = new EndpointRequestDto(
+            "Search", "default", "screen_list", "Search",
+            IdOrHubId: null, Payload: payload, Context: null, TriggerKind: "client", Role: "admin");
+
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
+        Assert.NotNull(response.Emission);
+        Assert.Equal(AdminManifestId.ToString(), response.Emission!.ManifestId);
+        Assert.NotNull(response.Emission.LayoutNodes);
+        Assert.NotEmpty(response.Emission.LayoutNodes!);
+
+        var unresolvedLeaves = response.Emission.LayoutNodes!
+            .Where(n => n.NodeKind == "catalog_component" && n.ComponentId is null)
+            .ToList();
+        Assert.Empty(unresolvedLeaves);
+
+        var fixturePath = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "../../../../../../frontend/tests/fixtures/team_dashboard_admin_composed_layout_nodes.json"));
+        var expectedJson = await File.ReadAllTextAsync(fixturePath);
+        var actualJson = System.Text.Json.JsonSerializer.Serialize(
+            response.Emission.LayoutNodes,
+            new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+                WriteIndented = true,
+            });
+        Assert.Equal(expectedJson.Trim(), actualJson.Trim());
+    }
+
+    /// <summary>
+    /// Same proof, Normal read-only axis (dd023/dd025) -- zero Action/Modal content, Category >
+    /// Section > Field(viewer) only.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_NormalManifest_ProjectionEntry_ComposedFromPhysicallyAdoptedSchema_MatchesCheckedInFixtureSnapshot()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+        var payload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = "manifest_key:team_dashboard.normal.projection:projection_entry",
+        });
+        var request = new EndpointRequestDto(
+            "Search", "default", "screen_list", "Search",
+            IdOrHubId: null, Payload: payload, Context: null, TriggerKind: "client", Role: "normal");
+
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
+        Assert.NotNull(response.Emission);
+        Assert.Equal(NormalManifestId.ToString(), response.Emission!.ManifestId);
+        Assert.NotNull(response.Emission.LayoutNodes);
+        Assert.NotEmpty(response.Emission.LayoutNodes!);
+
+        var unresolvedLeaves = response.Emission.LayoutNodes!
+            .Where(n => n.NodeKind == "catalog_component" && n.ComponentId is null)
+            .ToList();
+        Assert.Empty(unresolvedLeaves);
+
+        var fixturePath = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "../../../../../../frontend/tests/fixtures/team_dashboard_normal_composed_layout_nodes.json"));
+        var expectedJson = await File.ReadAllTextAsync(fixturePath);
+        var actualJson = System.Text.Json.JsonSerializer.Serialize(
+            response.Emission.LayoutNodes,
+            new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+                WriteIndented = true,
+            });
+        Assert.Equal(expectedJson.Trim(), actualJson.Trim());
+    }
 }

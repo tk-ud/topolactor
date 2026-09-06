@@ -1053,55 +1053,93 @@ react_schema_topology_seed_translator_ssot:
             Bundle stated; that earlier figure was inaccurate on both the total and the
             attribution, corrected here from a fresh grep/parse of the current seed content,
             never left standing as a citation once shown wrong.
+          authoring_legality_is_a_separate_prior_gate: >-
+            Corrected 2026-09-06 (Owner review of this same note): the addressing mechanism
+            below describes HOW a tensor carrier key is computed for a record that is ALREADY
+            a legally-owned Action -- it is never itself the authority for WHICH record types
+            may own an Action. That authoring-legality question is answered upstream, at
+            react_schema validation time, by validate_structural_node's existing
+            VALID_ACTION_OWNER_NODE_KINDS = {Form, Workflow, Modal} plus
+            SECTION_OWNABLE_ACTION_LANES = {disclosure_state_wiring,
+            admin_runtime_dispatch_override_wiring} (a Section may own an Action ONLY when its
+            wiringLane is one of these two, and even then ONLY as a non-mutating dryRun preview
+            trigger paired per section_owned_dryrun_preview_pairing's
+            validate_admin_runtime_preview_action_pairing check -- never a bare ungated Section-
+            owned mutation) -- both unchanged by this contract and never restated or re-derived
+            here. Category is NOT and must never become a legal Action owner; this contract does
+            not relax, widen, or reinterpret that gate. Team Dashboard's own authored Actions
+            already satisfy this existing gate as authored, unchanged: team_dashboard_admin_
+            save_button is Section-owned via admin_runtime_dispatch_override_wiring, paired with
+            dryRun=true and a secondaryDisclosureActionType=openModal targeting
+            team_dashboard_admin_save_confirm_modal, exactly as section_owned_dryrun_preview_
+            pairing requires; team_dashboard_admin_save_confirm_button and _cancel_button are
+            Modal-owned, a VALID_ACTION_OWNER_NODE_KINDS member unconditionally. Nothing about
+            Team Dashboard's own authoring needed or needs to change against this gate.
           rule: >-
-            The tensor carrier's runtimeInteractions/sourceActionKey addressing scheme is
-            keyed generically by "the resolved OWNING STRUCTURAL PARENT's own tensor NodeId"
-            -- whatever record type that parent actually is (Form, Section, Category, or
-            Modal) -- never restricted to Form. A surface whose canonical react_schema has NO
-            Form anywhere (Team Dashboard's own Category > Section > Field/Action/Modal tree,
-            per team_dashboard.{admin,normal}.projection's own fixtures, is exactly this
-            shape) is not a special case requiring a new addressing mechanism or a
-            Team-Dashboard-scoped carve-out: its Section is the owning structural parent for
-            its own Field/Action children, and its Modal is the owning structural parent for
-            its own Confirm/Cancel Action children, using the SAME generic mechanism the three
-            real_precedent surfaces above already prove in production. Field/Table records are
-            addressed differently and are NEVER routed through this sourceActionKey/
-            owning-parent mechanism at all -- see tensorAdoptionCandidates.field_derived_payload
-            / table_derived_payload above: their own tensor node is looked up by exact NodeId
-            match (NodeLocalData), because their derived payload (propBindings, propsJson,
-            adminRuntimeDispatchOverride) describes that SAME leaf's own configuration, never a
-            parent's collection of child interaction entries.
+            For a record that is already a legally-owned Action per the prior gate above, the
+            tensor carrier's runtimeInteractions/sourceActionKey addressing scheme is keyed by
+            "the resolved OWNING PARENT's own tensor NodeId" -- i.e. the SAME authored
+            parentKey's resolved identity parent_scoped_identity_reconstruction /
+            resolve_and_track_identity already compute for every other purpose (ParentNodeId,
+            duplicate-key namespacing) -- whatever record type that legally-owning parent
+            actually is per the gate above (Form, Workflow, Modal, or a lane/pairing-eligible
+            Section), never restricted to Form specifically and never a second, independently-
+            invented identity. A surface whose canonical react_schema has no Form anywhere but
+            whose Actions are otherwise legally owned under the existing gate (Team Dashboard's
+            own Category > Section > Field/Action/Modal tree, per team_dashboard.{admin,normal}.
+            projection's own fixtures, is exactly this shape: its Section legally owns
+            team_dashboard_admin_save_button per the gate above, and its Modal legally owns
+            team_dashboard_admin_save_confirm_button/_cancel_button unconditionally) needs no new
+            addressing mechanism or Team-Dashboard-scoped carve-out -- the SAME resolved-parent-
+            identity keying the three real_precedent surfaces below already prove in production
+            applies unchanged. Field/Table records are addressed differently and are NEVER
+            routed through this sourceActionKey/owning-parent mechanism at all -- see
+            tensorAdoptionCandidates.field_derived_payload / table_derived_payload above: their
+            own tensor node is looked up by exact NodeId match (NodeLocalData), because their
+            derived payload (propBindings, propsJson, adminRuntimeDispatchOverride) describes
+            that SAME leaf's own configuration, never a parent's collection of child interaction
+            entries.
         field_control_component_identity_contract:
           note: >-
-            Added 2026-09-06 (follow-up audit): a schema-composed Field's componentKey/
-            componentId resolution (runtime-orchestration-ssot.yaml
-            layout_schema_structural_render_contract.field_control_resolution,
-            backend/repository/LayoutSchemaTensorComposer.cs FieldControlToComponentKey) is a
-            SEPARATE dictionary from this translator's own COMPONENT_KIND_TO_COMPONENT_KEY --
-            the two must stay in agreement for every control value either side actually emits,
-            but today FieldControlToComponentKey (C#, schema-composed read path) is MISSING
-            two control values this translator's own COMPONENT_KIND_TO_COMPONENT_KEY (Python,
-            tensor-emission path) already resolves correctly: data_display/md_viewer ->
-            md_viewer.projection and form_input/textarea_template -> textarea.template. Both
-            componentKey identities already exist as real, active
+            Corrected 2026-09-06 (Owner review of this same note): COMPONENT_KIND_TO_COMPONENT_
+            KEY (Python) is a SHARED table across three independent consumers -- a Field's own
+            `control` attribute, Action's fixed "action/button" literal-key lookup
+            (action_component_key = COMPONENT_KIND_TO_COMPONENT_KEY["action/button"]), and
+            Modal's own `componentKind` literal ("disclosure/modal") -- never a Field-only
+            vocabulary. FieldControlToComponentKey (C#, schema-composed read path,
+            backend/repository/LayoutSchemaTensorComposer.cs) is this SAME table's counterpart
+            for exactly ONE of those three consumers: ResolveComponentKey explicitly branches
+            Action/WorkflowStep to the separate hardcoded ActionComponentKey constant and Modal
+            to its own literal componentKind (never calling FieldControlToComponentKey for
+            either), and falls through to FieldControlToComponentKey ONLY for a genuine Field
+            catalog leaf. Requiring FieldControlToComponentKey to also carry "action/button" or
+            "disclosure/modal" entries would therefore not close a real gap -- neither is ever
+            looked up there -- it would only add dead, never-consulted entries mirroring a
+            non-Field identity into a Field-only table. The REAL, narrow gap is that
+            FieldControlToComponentKey is missing two controls a Field CAN actually author and
+            that COMPONENT_KIND_TO_COMPONENT_KEY's OWN Field-facing subset already resolves:
+            data_display/md_viewer -> md_viewer.projection and form_input/textarea_template ->
+            textarea.template. Both componentKey identities already exist as real, active
             topology.ui_component_registry rows (db/ui_component_registry_preset_catalog_
-            bootstrap.sql) and as real frontend/components/catalog.ts entries -- this is a
-            missing convention-table entry on the schema-composed side only, never a missing
-            identity, and never a case requiring a new registry row, a new componentKind, or a
-            new runtime factory. Team Dashboard's own two Fields (team_dashboard_admin_viewer,
+            bootstrap.sql) and as real frontend/components/catalog.ts entries -- a missing
+            convention-table entry on the schema-composed side only, never a missing identity,
+            and never a case requiring a new registry row, a new componentKind, or a new
+            runtime factory. Team Dashboard's own two Fields (team_dashboard_admin_viewer,
             control=data_display/md_viewer; team_dashboard_admin_body, control=form_input/
             textarea_template) are the first schema-composed authoring to actually need this
-            pairing, but the fix is generic: add both control values to
-            FieldControlToComponentKey mirroring COMPONENT_KIND_TO_COMPONENT_KEY exactly, the
-            same reuse-not-invent discipline table_display_resolution and Modal's own
-            componentKind handling already establish.
+            pairing.
           rule: >-
             FieldControlToComponentKey (schema-composed read path) must resolve every control
-            value COMPONENT_KIND_TO_COMPONENT_KEY (tensor-emission path) resolves, using the
-            IDENTICAL control -> componentKey pairing -- never a second, independently-curated
-            convention that could drift from the generation-side table. A control value present
-            in one table and absent from the other is itself a defect in whichever table is
-            missing it, never evidence that the control is unsupported for that path.
+            value a react_schema Field record may legally author as its own `control` attribute
+            that COMPONENT_KIND_TO_COMPONENT_KEY's Field-facing subset (every key there EXCEPT
+            the two non-Field literal-key entries "action/button" and "disclosure/modal", which
+            Action/Modal resolve through their own separate, unrelated mechanisms) already
+            resolves -- using the IDENTICAL control -> componentKey pairing, never a second,
+            independently-curated convention that could drift from the generation-side table.
+            A Field-authorable control value present in one table's Field-facing subset and
+            absent from the other is a defect in whichever table is missing it, never evidence
+            the control is unsupported for that path; a non-Field entry's absence from
+            FieldControlToComponentKey is correct and required, never a gap to close.
         prohibited:
           - treating_ui_topology_tensor_layout_patch_json_nodes_as_a_substitute_for_physically_adopting_real_layoutAdoptionCandidates_content_into_layout_schema_json_records
           - describing_a_surfaces_tensor_only_layout_patch_content_as_a_proven_or_completed_structural_authority_shape_in_its_own_declared_seed_surface_catalog_entry
@@ -2693,17 +2731,25 @@ react_schema_topology_seed_translator_ssot:
           (generate-topology-seed, inputText is the FIRST stage's own reactSchemaCandidate output
           verbatim) -- both runs report gateStatus=pass with zero validationErrors, mirroring
           admin.enum.management.projection's own two-fixture generation evidence shape. UPDATED
-          (2026-08-17, UIBuilder-lineage closure round 3): both fixtures now regenerate CLEAN --
-          zero post-generation patches, zero hand-authored tensor content, zero knownGapRefs at
-          the GENERATION layer -- and the resulting adoptionCandidates.tensorAdoptionCandidates
-          content IS db/seed_empty.sql's dd015 tensor row verbatim (not a re-derived
-          approximation), proven end to end through the REAL live-DB layout_patch:preview ->
-          layout_patch:validate -> layout_patch:apply pipeline (backend/tests/
-          Topolactor.Integration.Tests/TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs).
-          This proves the DERIVED tensorAdoptionCandidates carrier is correct and not broken --
-          see structural_authority_precedence_contract.known_gap_governance above for why this
-          is necessary but not sufficient evidence of PRIMARY-bucket adoption, and known_gaps
-          below for the still-open gap this generation evidence does not close.
+          (2026-09-06, team-dashboard-physical-layout-adoption implementation_change): the
+          resulting adoptionCandidates.layoutAdoptionCandidates content IS db/seed_empty.sql's
+          dd013 layout_schema_json.records[] verbatim (the PRIMARY structural authority per
+          structural_authority_precedence_contract above, physically adopted this round) -- not
+          a re-derived approximation, proven end to end through a real live-DB dispatch
+          (backend/tests/Topolactor.Integration.Tests/TeamDashboardHubRelationUiProjectionLiveDb
+          Tests.cs DispatchAsync_AdminManifest_ProjectionEntry_ComposedFromPhysicallyAdoptedSchema_
+          MatchesCheckedInFixtureSnapshot) that composes it through the real
+          LayoutSchemaTensorComposer.Compose path and matches a checked-in Emission.LayoutNodes
+          snapshot the frontend DOM proof also consumes. dd015's own tensor row is separately
+          reshaped into the DERIVED runtime carrier this same contract requires (see
+          admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.
+          team_dashboard.physical_layout_schema_adoption_acceptance_criteria for the full closure
+          record against every required criterion) and independently proven through the real
+          live-DB layout_patch:preview -> layout_patch:validate -> layout_patch:apply pipeline
+          (backend/tests/Topolactor.Integration.Tests/
+          TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs, now scaffolded WITH the
+          matching AdminLayoutSchemaJson so this proof reflects the actual schema-composed
+          shape, not a bare tensor-only one).
         component_catalog_refs:
           catalog_ref: ui_catalog_boundary_contract.frontend_component_catalog
           componentKinds:
@@ -2724,40 +2770,47 @@ react_schema_topology_seed_translator_ssot:
           - lane: disclosure_state_wiring
             catalog_ref: wiring_lane_contract.lanes.disclosure_state_wiring
             targetRefs: ["ui-local:team_dashboard_admin_save_confirm_modal.open"]
-        known_gaps:
+        known_gaps: []
+        historical_known_gaps_closed_2026_09_06_physical_layout_schema_adoption:
           - gap: team_dashboard_admin_layout_schema_json_records_not_yet_physically_adopted
             classification: structural_authority_precedence_contract_deviation
-            status: open_pending_next_implementation_change
+            status: resolved_physically_adopted
             note: >-
-              db/seed_empty.sql's dd013 (topology.components_layout_design row for this
-              surface) persists layout_schema_json={"records":[]} even though this surface's
-              own generate-topology-seed output produces real, non-empty
-              layoutAdoptionCandidates content (Category/Section/Form/Field/textarea/Action/
-              Modal). Per structural_authority_precedence_contract above, layoutAdoptionCandidates
-              is the PRIMARY structural authority for this content; dd015's tensor-only content
-              (this entry's own generation_evidence_ref) is a DERIVED carrier this surface has
-              relied on exclusively since PR#604 introduced Team Dashboard, never a legitimate
-              substitute for physical adoption. Owner design_change investigation (2026-09-06,
-              git history of db/seed_empty.sql / PR#604's own commit-message lineage / PR#580's
-              chronologically-earlier manifest 092 schema-composed precedent) found no
-              documented technical blocker against schema composition ever cited for this
-              surface at any point in its history -- the deviation is scope/convenience drift,
-              not a load-bearing constraint, and is not ratified as this surface's design
-              authority by this entry. Re-verified 2026-09-06 (follow-up audit, corrected count):
-              db/seed_empty.sql carries 21 real topology_ui_modal records already
-              schema-composed in production across THREE surfaces predating or contemporaneous
-              with Team Dashboard, all Section-owned with zero Form ownership in every case --
-              auth.external.credential_management.projection (manifest 092, PR#580, 12
-              records), admin.enum.management.projection (7 records), and
-              scheduler.settings.projection (2 records) -- see
-              structural_authority_precedence_contract.interaction_ownership_and_addressing_
-              contract.real_precedent above for the full per-surface breakdown; a Team
-              Dashboard-shaped Category>Section>Field/Action/Modal tree with no Form is
-              therefore not a novel shape needing new design, it is the SAME already-proven
-              shape three other manifests already run in production. See
-              admin-normal-surface-projection-seed-ssot.yaml
-              surface_axes.admin.surfaces.team_dashboard for the acceptance criteria the next
-              implementation_change closing this gap must satisfy.
+              CLOSED (team-dashboard-physical-layout-adoption implementation_change, 2026-09-06).
+              db/seed_empty.sql's dd013 (topology.components_layout_design row for this surface)
+              previously persisted layout_schema_json={"records":[]} even though this surface's
+              own generate-topology-seed output produces real, non-empty layoutAdoptionCandidates
+              content (Category/Section/Field/Action/Modal -- corrected here from an earlier,
+              inaccurate "Category/Section/Form/Field/textarea/Action/Modal" citation; this
+              surface's own tree has no Form and "textarea" is not a record type name). dd013 now
+              persists that SAME clean generator output verbatim as the PRIMARY structural
+              authority (structural_authority_precedence_contract above); dd015 is reshaped into
+              the DERIVED runtime carrier that same contract requires (componentKey/componentKind/
+              label no longer live there; runtimeInteractions are keyed by each Action/Modal's own
+              resolved schema parent). Owner design_change investigation (2026-09-06, git history
+              of db/seed_empty.sql / PR#604's own commit-message lineage / PR#580's
+              chronologically-earlier manifest 092 schema-composed precedent) found no documented
+              technical blocker against schema composition ever cited for this surface at any
+              point in its history -- the deviation was scope/convenience drift, not a
+              load-bearing constraint. Re-verified 2026-09-06 (follow-up audit, corrected count):
+              db/seed_empty.sql carries 21 real topology_ui_modal records already schema-composed
+              in production across THREE surfaces predating or contemporaneous with Team
+              Dashboard, all Section-owned with zero Form ownership in every case -- auth.
+              external.credential_management.projection (manifest 092, PR#580, 12 records), admin.
+              enum.management.projection (7 records), and scheduler.settings.projection (2
+              records) -- see structural_authority_precedence_contract.interaction_ownership_and_
+              addressing_contract.real_precedent above for the full per-surface breakdown; Team
+              Dashboard's own Category>Section>Field/Action/Modal tree with no Form was therefore
+              not a novel shape needing new design, it is the SAME already-proven shape three
+              other manifests already ran in production before this closure. Proof: backend/tests/
+              Topolactor.Integration.Tests/TeamDashboardHubRelationUiProjectionLiveDbTests.cs's own
+              DispatchAsync_AdminManifest_ProjectionEntry_ComposedFromPhysicallyAdoptedSchema_
+              MatchesCheckedInFixtureSnapshot (live-DB structural-composition proof) and
+              frontend/tests/teamDashboardProductionProjectionBoundary.test.ts (Admin authoring/
+              write DOM proof, unchanged final DOM shape). See admin-normal-surface-projection-
+              seed-ssot.yaml surface_axes.admin.surfaces.team_dashboard.
+              physical_layout_schema_adoption_acceptance_criteria for the full closure record
+              against every required criterion.
         historical_known_gaps_closed_2026_08_17_uibuilder_lineage_closure_round_3:
           - gap: team_dashboard_emission_data_prop_binding_not_yet_translator_expressible
             classification: translator_grammar_gap
@@ -2835,20 +2888,26 @@ react_schema_topology_seed_translator_ssot:
           team-dashboard-admin.input.json/team-dashboard-normal.input.json (generate-react-schema,
           gateStatus=pass, zero unresolvedGaps) -> team-dashboard-admin/normal.topology-seed.
           input.json (generate-topology-seed, gateStatus=pass, zero validationErrors) ->
-          adoptionCandidates.tensorAdoptionCandidates (identical to db/seed_empty.sql's dd015/dd025
-          layout_patch_json) -> real live-DB layout_patch:preview -> layout_patch:validate ->
-          layout_patch:apply (TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs, both
-          surfaces) -> persisted row read back and asserted structurally identical to the authored
-          content -> dd010/dd020 Manifest -> ProjectionShell Admin edit / Normal read-only runtime
-          proof (TeamDashboardHubRelationUiProjectionLiveDbTests.cs,
-          AdminRuntimeTeamDashboardTests.cs, ManifestDispatcherManifestKeyTargetRefTests.cs, all
-          passing unchanged). This chain proves the DERIVED tensorAdoptionCandidates carrier end
-          to end; it currently STOPS there and does not yet include
-          adoptionCandidates.layoutAdoptionCandidates' own physical adoption into dd013's
-          layout_schema_json.records[] (known_gaps above) -- closing that gap extends this same
-          chain with a layoutAdoptionCandidates -> layout_schema_json.records[] -> backend
-          LayoutSchemaTensorComposer.Compose link, it does not replace any step already proven
-          here.
+          adoptionCandidates.layoutAdoptionCandidates (identical to db/seed_empty.sql's dd013/
+          dd023 layout_schema_json.records[], physically adopted 2026-09-06 as the PRIMARY
+          structural authority) AND adoptionCandidates.tensorAdoptionCandidates (reshaped into
+          dd015/dd025's own DERIVED carrier per structural_authority_precedence_contract) -> real
+          live-DB layout_patch:preview -> layout_patch:validate -> layout_patch:apply against a
+          scaffold seeded with BOTH the matching layoutSchemaJson and tensorPatchJson
+          (TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs, both surfaces) ->
+          persisted rows read back and asserted structurally identical to the authored content ->
+          dd010/dd020 Manifest -> a real dispatch through backend LayoutSchemaTensorComposer.
+          Compose, camelCase-serialized and asserted byte-identical to a checked-in
+          Emission.LayoutNodes snapshot (TeamDashboardHubRelationUiProjectionLiveDbTests.cs
+          DispatchAsync_{Admin,Normal}Manifest_ProjectionEntry_ComposedFromPhysicallyAdoptedSchema_
+          MatchesCheckedInFixtureSnapshot) -> that SAME checked-in snapshot consumed by
+          frontend/tests/teamDashboardProductionProjectionBoundary.test.ts through the real
+          renderEmission() -> LayoutProjectionTree -> runtimeComponentFactory -> real DOM chain,
+          proving Admin authoring/write and Normal read-only production DOM correctness sourced
+          from the PRIMARY schema tree, not the DERIVED tensor carrier. This chain now proves
+          BOTH the PRIMARY structural-authority adoption AND the DERIVED tensor carrier end to
+          end -- the known_gap this contract previously tracked is closed (see
+          historical_known_gaps_closed_2026_09_06_physical_layout_schema_adoption above).
 
       - seed_surface_key: team_dashboard.normal.projection
         declared_by_yaml_ref: docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.normal.surfaces.dashboard.team_dashboard_canonical_shared_contract
@@ -2860,15 +2919,17 @@ react_schema_topology_seed_translator_ssot:
           .agent/tests/fixtures/react-schema-topology-seed-translator/team-dashboard-normal.input.json
           (generate-react-schema) -> team-dashboard-normal.topology-seed.input.json
           (generate-topology-seed) -- both runs report gateStatus=pass with zero validationErrors.
-          UPDATED (2026-08-17, UIBuilder-lineage closure round 3): regenerates CLEAN -- zero
-          post-generation patches, zero knownGapRefs at the GENERATION layer -- producing a
-          ONE-node tensorAdoptionCandidates identical to db/seed_empty.sql's dd025 tensor row,
-          proven end to end through the real live-DB layout_patch:preview -> layout_patch:validate
-          -> layout_patch:apply pipeline (TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs,
-          surface="normal"). This proves the DERIVED tensorAdoptionCandidates carrier is correct
-          and not broken -- see structural_authority_precedence_contract.known_gap_governance
-          above for why this is necessary but not sufficient evidence of PRIMARY-bucket adoption,
-          and known_gaps below for the still-open gap this generation evidence does not close.
+          UPDATED (2026-09-06, team-dashboard-physical-layout-adoption implementation_change):
+          the resulting adoptionCandidates.layoutAdoptionCandidates content IS db/seed_empty.sql's
+          dd023 layout_schema_json.records[] verbatim (the PRIMARY structural authority,
+          physically adopted this round); dd025's own tensor row is separately reshaped into the
+          DERIVED runtime carrier. Proven end to end through a real live-DB dispatch composing it
+          through the real LayoutSchemaTensorComposer.Compose path (TeamDashboardHubRelationUi
+          ProjectionLiveDbTests.cs DispatchAsync_NormalManifest_ProjectionEntry_
+          ComposedFromPhysicallyAdoptedSchema_MatchesCheckedInFixtureSnapshot) and through the
+          real live-DB layout_patch:preview -> layout_patch:validate -> layout_patch:apply
+          pipeline, now scaffolded with the matching NormalLayoutSchemaJson
+          (TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs, surface="normal").
         component_catalog_refs:
           catalog_ref: ui_catalog_boundary_contract.frontend_component_catalog
           componentKinds:
@@ -2880,21 +2941,24 @@ react_schema_topology_seed_translator_ssot:
           catalog_ref: ui_catalog_boundary_contract.html_tag_catalog
           refs: []
         wiring_lane_refs: []
-        known_gaps:
+        known_gaps: []
+        historical_known_gaps_closed_2026_09_06_physical_layout_schema_adoption:
           - gap: team_dashboard_normal_layout_schema_json_records_not_yet_physically_adopted
             classification: structural_authority_precedence_contract_deviation
-            status: open_pending_next_implementation_change
+            status: resolved_physically_adopted
             note: >-
-              Same root cause and same lineage finding as team_dashboard.admin.projection's own
-              team_dashboard_admin_layout_schema_json_records_not_yet_physically_adopted
-              known_gaps entry above (dd023 persists layout_schema_json={"records":[]} while
-              this surface's own generated layoutAdoptionCandidates content -- Category/Section/
-              Field only; this read-only axis's own fixture (team-dashboard-normal.input.json)
-              authors no Form and no Action/Modal at all, corrected here from an earlier,
-              inaccurate "Category/Section/Form/Field" citation -- is real and non-empty) -- see
-              that entry for the full note, not duplicated here. Both surfaces share the
-              identical admin-normal-surface-projection-seed-ssot.yaml
-              team_dashboard_canonical_shared_contract acceptance criteria for closing this gap.
+              CLOSED (team-dashboard-physical-layout-adoption implementation_change, 2026-09-06).
+              Same root cause, same lineage finding, and same closure round as team_dashboard.
+              admin.projection's own team_dashboard_admin_layout_schema_json_records_not_yet_
+              physically_adopted entry above (dd023 now persists the SAME clean generator output
+              -- Category/Section/Field only; this read-only axis's own fixture authors no Form
+              and no Action/Modal at all -- as the PRIMARY structural authority; dd025 is
+              reshaped into the DERIVED runtime carrier) -- see that entry for the full note, not
+              duplicated here. Proof: backend/tests/Topolactor.Integration.Tests/
+              TeamDashboardHubRelationUiProjectionLiveDbTests.cs's own
+              DispatchAsync_NormalManifest_ProjectionEntry_ComposedFromPhysicallyAdoptedSchema_
+              MatchesCheckedInFixtureSnapshot and frontend/tests/
+              teamDashboardProductionProjectionBoundary.test.ts's Normal read-only DOM proof.
         historical_known_gaps_closed_2026_08_17_uibuilder_lineage_closure_round_3: >-
           Same two gaps, same generic translator-level closure, as
           team_dashboard.admin.projection's own historical_known_gaps_closed_2026_08_17_

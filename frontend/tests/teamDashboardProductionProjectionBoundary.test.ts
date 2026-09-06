@@ -2,20 +2,47 @@
  * Production-composition boundary proof for the Team Dashboard Admin/Normal canonical
  * shared-dashboard surfaces (docs/design/admin-normal-surface-projection-seed-ssot.yaml
  * surface_axes.admin.surfaces.team_dashboard / surface_axes.normal.surfaces.dashboard.
- * team_dashboard_canonical_shared_contract). The LayoutNode[] fixtures below are the real
- * production tensor shape verbatim from db/seed_empty.sql's dd010 (team_dashboard.admin.
- * projection) and dd020 (team_dashboard.normal.projection) rows (layout_schema_json is
- * {"records":[]} for both -- the tensor-only path, so no schema-record composition is
- * involved), driven through the real renderEmission() -> LayoutProjectionTree ->
- * runtimeComponentFactory -> real DOM pipeline (happy-dom + Preact render(), real native
- * DOM events -- never renderToString or dispatcher.set() standing in for a real interaction).
- * This content is regenerated verbatim from the canonical source (.agent/tests/fixtures/
- * react-schema-topology-seed-translator/team-dashboard-admin.input.json's own [modal]...[/modal]
- * DSL and team-dashboard-normal.input.json) through react_schema_topology_seed_translator.py's
- * generate-react-schema -> generate-topology-seed pipeline -- zero post-generation
- * hand-patches, matching db/seed_empty.sql's own dd015/dd025 tensor rows and the "verbatim
- * copy" constants in backend/tests/Topolactor.Integration.Tests/
- * TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs.
+ * team_dashboard_canonical_shared_contract). The LayoutNode[] fixtures below are a checked-in
+ * snapshot of the REAL Emission.LayoutNodes a live dispatch produces today, byte-identical to
+ * frontend/tests/fixtures/team_dashboard_admin_composed_layout_nodes.json /
+ * team_dashboard_normal_composed_layout_nodes.json, which backend/tests/
+ * Topolactor.Integration.Tests/TeamDashboardHubRelationUiProjectionLiveDbTests.cs's own
+ * DispatchAsync_{Admin,Normal}Manifest_ProjectionEntry_ComposedFromPhysicallyAdoptedSchema_
+ * MatchesCheckedInFixtureSnapshot tests independently assert against a real live-DB dispatch —
+ * the same paired-proof pattern (backend snapshot + frontend DOM consumption) manifest 092's own
+ * frontend/tests/fixtures/manifest_0092_bare_entry_layout_nodes.json already established. If
+ * team-dashboard's seed content ever drifts from this shape, the BACKEND test fails first, never
+ * leaving this frontend fixture silently stale.
+ *
+ * UPDATED (team-dashboard-physical-layout-adoption round, implementation_change): Owner
+ * "Judgment B" is now physically applied -- dd013 (admin.projection.layout) / dd023
+ * (normal.projection.layout) persist the CLEAN react_schema_topology_seed_translator.py
+ * layoutAdoptionCandidates output as components_layout_design.layout_schema_json.records[], the
+ * PRIMARY structural authority (docs/design/react-schema-topology-seed-translator-ssot.yaml
+ * storage_adoption_contract.structural_authority_precedence_contract); dd015/dd025's own tensor
+ * rows are reshaped into the DERIVED runtime carrier that same contract requires (componentKey/
+ * componentKind/label no longer live there -- LayoutSchemaTensorComposer.Compose resolves them
+ * from the schema tree directly; runtimeInteractions are keyed by each Action/Modal's own
+ * resolved schema parent -- the owning Section for team_dashboard_admin_save_button, the owning
+ * Modal for its Confirm/Cancel children -- never a per-leaf tensor-authored identity anymore).
+ * The composed LayoutNode[] below is therefore structurally different from the pre-adoption
+ * tensor-only shape in two visible ways this round's own tests newly cover: (1) Category
+ * ("team_dashboard"/"team_dashboard_normal") and Section ("team_dashboard_admin_editor"/
+ * "team_dashboard_normal_viewer_section") now exist as real structural_node LayoutNode entries
+ * and DO render a visible label (LayoutProjectionTree.tsx's own generic structural_node branch,
+ * `<p class="structural-node-label">{label}</p>`) -- not a team-dashboard-specific behavior, the
+ * same generic rendering every other schema-composed manifest (092, admin-enum) already uses for
+ * its own Category/Section headers; (2) every leaf now carries a real ParentNodeId resolved from
+ * the schema tree (Field/Action/Modal -> their owning Section; Confirm/Cancel -> their owning
+ * Modal), where the pre-adoption tensor-only shape had every leaf at the DOM root except
+ * Confirm/Cancel (Round 2's own tensor_container_parent_contract patch). The FINAL rendered DOM
+ * shape for every assertion this file already made -- real bodyMarkdown, real Japanese labels, a
+ * fully non-mutating read-only Normal axis, Confirm/Cancel absent while closed, contained inside
+ * the open Modal's own subtree, machine vocabulary never visible -- is unchanged; only the
+ * INTERNAL composition source changed, driven through the real renderEmission() ->
+ * LayoutProjectionTree -> runtimeComponentFactory -> real DOM pipeline (happy-dom + Preact
+ * render(), real native DOM events -- never renderToString or dispatcher.set() standing in for a
+ * real interaction) exactly as before.
  *
  * Round 1 fix (production-projection-boundary Bundle): frontend/runtime/renderEmission.ts's
  * buildProductionCatalogComponentProps() had no explicit case for componentKind=
@@ -111,6 +138,10 @@ const REAL_BODY_MARKDOWN = "# Team Dashboard\n\nShared notes go here.";
 // (team-dashboard-admin.input.json) and reachable through generate-react-schema ->
 // generate-topology-seed with zero post-generation patches -- see this file's own header.
 const JA = {
+  categoryLabel: "チームダッシュボード",
+  adminSectionLabel: "チームダッシュボード本文",
+  normalSectionLabel: "チームダッシュボード本文",
+  viewerLabel: "プレビュー",
   save: "保存",
   cancel: "キャンセル",
   confirmTitle: "保存確認",
@@ -118,13 +149,10 @@ const JA = {
   markdownBodyLabel: "Markdown本文",
 };
 
-// Verbatim from db/seed_empty.sql's dd015 tensor row (team_dashboard.admin.projection,
-// route_key "admin/team-dashboard#default"), with the wiring identity fields
-// (wiringId/wiringKey/wiringKind/targetSurface/targetRef, componentId, componentKind) every
-// node in this layout inherits uniformly from its single ui_wiring_registry row (dd014) and
-// ui_component_registry (db/ui_component_registry_preset_catalog_bootstrap.sql) added
-// explicitly, the same way NpgsqlTopologyRepository.LoadLayoutNodesAsync composes them onto
-// the real Emission.LayoutNodes this test stands in for.
+// Wiring identity fields (wiringId/wiringKey/wiringKind/targetSurface/targetRef) every
+// catalog_component node in this layout inherits uniformly from its single ui_wiring_registry
+// row (dd014) -- structural_node entries (Category/Section) never carry these at all, matching
+// the real composed shape exactly (see the fixture referenced below).
 const ADMIN_WIRING = {
   wiringId: "00000000-0000-0000-0000-0000000dd014",
   wiringKey: "team_dashboard.admin.projection.wiring",
@@ -135,40 +163,63 @@ const ADMIN_WIRING = {
 const ADMIN_UPDATE_TARGET_REF =
   "manifest:00000000-0000-0000-0000-0000000dd010:team_dashboard:update";
 const CONFIRM_MODAL_ID = "team_dashboard_admin_save_confirm_modal";
+const ADMIN_SECTION_ID = "team_dashboard_admin_editor";
 
+// Byte-identical to frontend/tests/fixtures/team_dashboard_admin_composed_layout_nodes.json --
+// a checked-in snapshot of the REAL Emission.LayoutNodes a live dispatch against the physically
+// adopted dd013 (PRIMARY schema) + dd015 (DERIVED tensor carrier) produces today, independently
+// asserted by backend/tests/Topolactor.Integration.Tests/TeamDashboardHubRelationUiProjection
+// LiveDbTests.cs's own DispatchAsync_AdminManifest_ProjectionEntry_ComposedFromPhysicallyAdopted
+// Schema_MatchesCheckedInFixtureSnapshot test -- see this file's own header for the full
+// before/after shape explanation.
 const ADMIN_LAYOUT_NODES: LayoutNode[] = [
+  {
+    nodeId: "team_dashboard",
+    nodeKind: "structural_node",
+    orderIndex: 0,
+    recordType: "topology_ui_category",
+    label: JA.categoryLabel,
+  },
+  {
+    nodeId: ADMIN_SECTION_ID,
+    nodeKind: "structural_node",
+    parentNodeId: "team_dashboard",
+    orderIndex: 1,
+    recordType: "topology_ui_section",
+    label: JA.adminSectionLabel,
+  },
   {
     ...ADMIN_WIRING,
     nodeId: "team_dashboard_admin_viewer",
     nodeKind: "catalog_component",
-    componentKey: "md_viewer.projection",
     componentId: "00000000-0000-0000-0001-000000000021",
+    parentNodeId: ADMIN_SECTION_ID,
     componentKind: "data_display/md_viewer",
-    orderIndex: 0,
-    runtimeInteractions: [],
-    propsJson: '{"data": {"label": "プレビュー"}}',
+    orderIndex: 2,
+    propsJson: `{"data": {"label": "${JA.viewerLabel}"}}`,
     propBindings: { markdown: { source: "emission.data.bodyMarkdown" } },
+    label: JA.viewerLabel,
   },
   {
     ...ADMIN_WIRING,
     nodeId: "team_dashboard_admin_body",
     nodeKind: "catalog_component",
-    componentKey: "textarea.template",
     componentId: "00000000-0000-0000-0001-00000000001f",
+    parentNodeId: ADMIN_SECTION_ID,
     componentKind: "form_input/textarea_template",
-    orderIndex: 1,
-    runtimeInteractions: [],
+    orderIndex: 3,
     propsJson: `{"data": {"label": "${JA.markdownBodyLabel}"}}`,
     propBindings: { value: { source: "emission.data.bodyMarkdown" } },
+    label: JA.markdownBodyLabel,
   },
   {
     ...ADMIN_WIRING,
     nodeId: "team_dashboard_admin_save_button",
     nodeKind: "catalog_component",
-    componentKey: "button.primitive",
     componentId: "00000000-0000-0000-0001-000000000010",
+    parentNodeId: ADMIN_SECTION_ID,
     componentKind: "action/button",
-    orderIndex: 2,
+    orderIndex: 4,
     runtimeInteractions: [
       {
         trigger: "click",
@@ -181,16 +232,21 @@ const ADMIN_LAYOUT_NODES: LayoutNode[] = [
     dispatchPayloadFromByTrigger: {
       click: { bodyMarkdown: "node:team_dashboard_admin_body.value", dryRun: "literal:true" },
     },
-    propsJson: `{"data": {"label": "${JA.save}"}}`,
+    label: JA.save,
   },
   {
     ...ADMIN_WIRING,
+    // structural_authority_precedence_contract.interaction_ownership_and_addressing_contract:
+    // ParentNodeId is now resolved from the PRIMARY schema tree (dd013), not a tensor-side
+    // parentNodeId stamp -- reachable in the DOM only while team_dashboard_admin_save_confirm_
+    // modal's own `open` is true (Modal.tsx returns null entirely when closed, taking its whole
+    // subtree with it).
+    parentNodeId: ADMIN_SECTION_ID,
     nodeId: CONFIRM_MODAL_ID,
     nodeKind: "catalog_component",
-    componentKey: "modal.template",
-    componentId: "00000000-0000-0000-0001-000000000015",
+    componentId: CONFIRM_MODAL_ID,
     componentKind: "disclosure/modal",
-    orderIndex: 3,
+    orderIndex: 5,
     runtimeInteractions: [
       {
         trigger: "toggle",
@@ -200,20 +256,16 @@ const ADMIN_LAYOUT_NODES: LayoutNode[] = [
       },
     ],
     propsJson: `{"data": {"open": false, "title": "${JA.confirmTitle}", "body": "${JA.confirmBody}"}}`,
+    label: JA.confirmTitle,
   },
   {
     ...ADMIN_WIRING,
-    // tensor_container_parent_contract: canonical react_schema Modal.children authority,
-    // preserved through generate-topology-seed's own tensorAdoptionCandidates builder --
-    // reachable in the DOM only while team_dashboard_admin_save_confirm_modal's own `open` is
-    // true (Modal.tsx returns null entirely when closed, taking its whole subtree with it).
     parentNodeId: CONFIRM_MODAL_ID,
     nodeId: "team_dashboard_admin_save_confirm_button",
     nodeKind: "catalog_component",
-    componentKey: "button.primitive",
     componentId: "00000000-0000-0000-0001-000000000010",
     componentKind: "action/button",
-    orderIndex: 4,
+    orderIndex: 6,
     runtimeInteractions: [
       {
         trigger: "click",
@@ -226,17 +278,16 @@ const ADMIN_LAYOUT_NODES: LayoutNode[] = [
     dispatchPayloadFromByTrigger: {
       click: { bodyMarkdown: "node:team_dashboard_admin_body.value", confirmed: "literal:true" },
     },
-    propsJson: `{"data": {"label": "${JA.save}"}}`,
+    label: JA.save,
   },
   {
     ...ADMIN_WIRING,
     parentNodeId: CONFIRM_MODAL_ID,
     nodeId: "team_dashboard_admin_save_cancel_button",
     nodeKind: "catalog_component",
-    componentKey: "button.primitive",
     componentId: "00000000-0000-0000-0001-000000000010",
     componentKind: "action/button",
-    orderIndex: 5,
+    orderIndex: 7,
     runtimeInteractions: [
       {
         trigger: "click",
@@ -245,29 +296,48 @@ const ADMIN_LAYOUT_NODES: LayoutNode[] = [
         statePath: "open",
       },
     ],
-    propsJson: `{"data": {"label": "${JA.cancel}"}}`,
+    label: JA.cancel,
   },
 ];
 
-// Verbatim from db/seed_empty.sql's dd025 tensor row (team_dashboard.normal.projection,
-// route_key "dashboard#default") -- a single read-only viewer node, no editor/save/mutation
-// nodes at all (not merely hidden ones).
+const NORMAL_SECTION_ID = "team_dashboard_normal_viewer_section";
+
+// Byte-identical to frontend/tests/fixtures/team_dashboard_normal_composed_layout_nodes.json --
+// same checked-in-snapshot pattern as ADMIN_LAYOUT_NODES above, this axis's own
+// DispatchAsync_NormalManifest_ProjectionEntry_ComposedFromPhysicallyAdoptedSchema_
+// MatchesCheckedInFixtureSnapshot test. Category > Section > read-only viewer only -- no editor/
+// save/mutation nodes at all (not merely hidden ones).
 const NORMAL_LAYOUT_NODES: LayoutNode[] = [
+  {
+    nodeId: "team_dashboard_normal",
+    nodeKind: "structural_node",
+    orderIndex: 0,
+    recordType: "topology_ui_category",
+    label: JA.categoryLabel,
+  },
+  {
+    nodeId: NORMAL_SECTION_ID,
+    nodeKind: "structural_node",
+    parentNodeId: "team_dashboard_normal",
+    orderIndex: 1,
+    recordType: "topology_ui_section",
+    label: JA.normalSectionLabel,
+  },
   {
     nodeId: "team_dashboard_normal_viewer",
     nodeKind: "catalog_component",
-    componentKey: "md_viewer.projection",
     componentId: "00000000-0000-0000-0001-000000000021",
+    parentNodeId: NORMAL_SECTION_ID,
     componentKind: "data_display/md_viewer",
     wiringId: "00000000-0000-0000-0000-0000000dd024",
     wiringKey: "team_dashboard.normal.projection.wiring",
     wiringKind: "admin_runtime",
     targetSurface: "manifest",
     targetRef: "team_dashboard.normal.projection",
-    orderIndex: 0,
-    runtimeInteractions: [],
-    propsJson: '{"data": {"label": "プレビュー"}}',
+    orderIndex: 2,
+    propsJson: `{"data": {"label": "${JA.viewerLabel}"}}`,
     propBindings: { markdown: { source: "emission.data.bodyMarkdown" } },
+    label: JA.viewerLabel,
   },
 ];
 
@@ -384,7 +454,7 @@ Deno.test("production path: Admin /admin/team-dashboard (team_dashboard.admin.pr
       assertEquals(
         specs.filter((s) => s.componentType === "error"),
         [],
-        "expected zero error specs composing the real dd010 tensor shape",
+        "expected zero error specs composing the real, schema-composed dd013/dd015 shape",
       );
       render(
         h(LayoutProjectionTree, { specs, layoutId: emission.layoutId, localStateStore: dispatcher }),
@@ -415,6 +485,16 @@ Deno.test("production path: Admin /admin/team-dashboard (team_dashboard.admin.pr
     assert(
       !container.querySelector('[data-node-id="team_dashboard_admin_save_cancel_button"]'),
       "expected the Cancel button to be entirely absent from the DOM while its owning Modal is closed",
+    );
+
+    // Physical schema adoption round: Category/Section now compose as real structural_node
+    // LayoutNodes and DO render a visible label -- the same generic structural_node rendering
+    // every other schema-composed manifest already exhibits, not new team-dashboard-specific UI.
+    const structuralLabels = Array.from(container.querySelectorAll(".structural-node-label")).map((el) => el.textContent);
+    assertEquals(
+      structuralLabels,
+      [JA.categoryLabel, JA.adminSectionLabel],
+      "expected the real schema-authored Category/Section labels to render as the generic structural_node group headers",
     );
 
     // 2. Real bodyMarkdown reaches the Textarea's own initial value (round 1 fix:
@@ -585,7 +665,7 @@ Deno.test("production path: Normal /dashboard (team_dashboard.normal.projection,
       payloadFromNodeValues: tracker.snapshot(),
       onNodeValueChange: (nodeId, value) => tracker.set(nodeId, value),
     });
-    assertEquals(specs.filter((s) => s.componentType === "error"), [], "expected zero error specs composing the real dd020 tensor shape");
+    assertEquals(specs.filter((s) => s.componentType === "error"), [], "expected zero error specs composing the real, schema-composed dd023/dd025 shape");
     render(h(LayoutProjectionTree, { specs, layoutId: emission.layoutId, localStateStore: dispatcher }), container);
     await flushUpdates();
 
@@ -598,6 +678,17 @@ Deno.test("production path: Normal /dashboard (team_dashboard.normal.projection,
     assertNoSyntheticSavedViewChrome(container.innerHTML, "the Normal DOM");
     assertNoMachineVocabularyAsVisibleText(container.innerHTML, "the Normal DOM");
 
+    // Physical schema adoption round: Category/Section now compose as real structural_node
+    // LayoutNodes and DO render a visible label (LayoutProjectionTree.tsx's generic
+    // structural_node branch) -- the same generic behavior every other schema-composed manifest
+    // already exhibits for its own Category/Section headers, not new team-dashboard-specific UI.
+    const structuralLabels = Array.from(container.querySelectorAll(".structural-node-label")).map((el) => el.textContent);
+    assertEquals(
+      structuralLabels,
+      [JA.categoryLabel, JA.normalSectionLabel],
+      "expected the real schema-authored Category/Section labels to render as the generic structural_node group headers",
+    );
+
     // Normal read-only boundary: no editor/save/mutation controls exist at all — not merely
     // hidden ones (surface_axes.normal.surfaces.dashboard.team_dashboard_canonical_shared_
     // contract's own seed_contract never includes those nodes).
@@ -606,8 +697,8 @@ Deno.test("production path: Normal /dashboard (team_dashboard.normal.projection,
     assert(!container.querySelector('[role="dialog"]'), "expected zero confirm-modal dialogs in the Normal DOM");
     assertEquals(
       specs.length,
-      1,
-      "expected exactly one rendered leaf on the Normal axis (the read-only viewer) — no editor/save/mutation nodes at all",
+      3,
+      "expected exactly three composed nodes on the Normal axis (Category, Section, the read-only viewer) — no editor/save/mutation nodes at all",
     );
   } finally {
     render(null, container as unknown as Element);

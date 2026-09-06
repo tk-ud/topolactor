@@ -951,7 +951,23 @@ admin_normal_surface_projection_seed_ssot:
             below is reachable from anywhere ProjectionShell renders, per
             team_dashboard_canonical_shared_contract.hub_relation_navigation_binding_ref.
           physical_layout_schema_adoption_acceptance_criteria:
-            status: design_change_2026_09_06_owner_judgment_b_pending_implementation_change
+            status: implemented_2026_09_06_team_dashboard_physical_layout_adoption
+            closure_note: >-
+              CLOSED (team-dashboard-physical-layout-adoption implementation_change, 2026-09-06).
+              dd013/dd023 now physically persist the criteria below's required
+              layoutAdoptionCandidates content; dd015/dd025 are reshaped into the required
+              DERIVED carrier; LayoutSchemaTensorComposer.FieldControlToComponentKey gained the
+              two required entries; every proof criterion below (generator/fixture,
+              live-DB structural-composition, Admin authoring/write DOM, Normal read-only DOM,
+              Modal containment, non-regression) is satisfied by backend/tests/
+              Topolactor.Integration.Tests/TeamDashboardHubRelationUiProjectionLiveDbTests.cs's
+              own DispatchAsync_{Admin,Normal}Manifest_ProjectionEntry_
+              ComposedFromPhysicallyAdoptedSchema_MatchesCheckedInFixtureSnapshot tests, the
+              updated TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs, and frontend/
+              tests/teamDashboardProductionProjectionBoundary.test.ts. The criteria below are kept
+              verbatim as the record of what was required and how it was satisfied, per this
+              repo's own historical_known_gaps_closed convention -- not because any part remains
+              open.
             governing_contract_ref: >-
               react-schema-topology-seed-translator-ssot.yaml
               storage_adoption_contract.structural_authority_precedence_contract (Owner

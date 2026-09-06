@@ -797,10 +797,14 @@ runtime_orchestration_ssot:
           tensorAdoptionCandidates; runtime resolution follows the same pairing). An unresolvable
           control leaves componentId/componentKind null -> CATALOG_COMPONENT_KIND_REQUIRED at
           render time, never a silent guess. FieldControlToComponentKey's own convention pairs
-          must stay identical to react-schema-topology-seed-translator-ssot.yaml's
-          COMPONENT_KIND_TO_COMPONENT_KEY (the translator's own tensor-emission-path mirror of
-          this SAME convention, per that SSOT's field_control_component_identity_contract) --
-          including data_display/md_viewer -> md_viewer.projection and form_input/
+          must stay identical to the Field-facing subset of react-schema-topology-seed-
+          translator-ssot.yaml's COMPONENT_KIND_TO_COMPONENT_KEY (the translator's own
+          tensor-emission-path mirror of this SAME convention for every control a Field may
+          actually author -- never its two non-Field entries "action/button"/"disclosure/modal",
+          which Action/Modal resolve through their own separate mechanisms and which
+          FieldControlToComponentKey correctly never carries; per that SSOT's
+          field_control_component_identity_contract) -- including data_display/md_viewer ->
+          md_viewer.projection and form_input/
           textarea_template -> textarea.template, both already real, active
           ui_component_registry rows (db/ui_component_registry_preset_catalog_bootstrap.sql)
           the translator's own path already resolves; a control value the translator resolves

@@ -87,6 +87,18 @@ public static class LayoutSchemaTensorComposer
     // Round 41: widened from private to internal so NpgsqlUiTopologyRepository.
     // FieldFamilyComponentKeys can derive directly from this map's Values instead of
     // maintaining an independently hand-kept mirror of the same Field-family set.
+    // data_display/md_viewer and form_input/textarea_template (team-dashboard-physical-layout-
+    // adoption round): mirror .agent/scripts/react_schema_topology_seed_translator.py's own
+    // COMPONENT_KIND_TO_COMPONENT_KEY entries for these same two Field-authorable controls
+    // exactly (docs/design/react-schema-topology-seed-translator-ssot.yaml
+    // field_control_component_identity_contract) -- both already real, active
+    // topology.ui_component_registry rows (db/ui_component_registry_preset_catalog_bootstrap.sql)
+    // and real frontend/components/catalog.ts entries; this table was simply missing the
+    // convention-table entries a schema-composed Field authoring either control needs. Never add
+    // "action/button" or "disclosure/modal" here -- ResolveComponentKey below never looks either
+    // up through this table (Action/WorkflowStep resolve via the separate ActionComponentKey
+    // constant; Modal resolves via its own literal componentKind), so an entry for either would be
+    // dead, unreachable code, not a fix.
     internal static readonly IReadOnlyDictionary<string, string> FieldControlToComponentKey =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -96,6 +108,8 @@ public static class LayoutSchemaTensorComposer
             ["form_input/textarea"] = "textarea.alias",
             ["form_input/search_input"] = "search_input.alias",
             ["disclosure/tabs"] = "tabs.template",
+            ["data_display/md_viewer"] = "md_viewer.projection",
+            ["form_input/textarea_template"] = "textarea.template",
         };
 
     // Canonical display -> ui_component_registry.component_key convention for Table leaves.
@@ -624,6 +638,62 @@ public static class LayoutSchemaTensorComposer
         {
             if (identity.IsCatalogLeaf && identity.ComponentKey is not null)
                 result[identity.ResolvedNodeId] = identity.ComponentKey;
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// team-dashboard-physical-layout-adoption round: every resolved NodeId anywhere in the
+    /// schema tree -- structural_node, catalog_component (Field/Table/Action/WorkflowStep AND
+    /// Modal, unlike ResolveCatalogComponentKeysByNodeId above which excludes Modal), and
+    /// unresolved_gap alike. Used by NpgsqlUiTopologyRepository.ValidateLayoutPatchNodes to widen
+    /// its "does this raw tensor nodeId need its own componentKey" exemption beyond catalog
+    /// leaves: a tensor node whose nodeId matches a STRUCTURAL parent (Form/Section/Category/
+    /// Workflow/Validation) acting purely as an interaction carrier for its own owned children
+    /// (structural_authority_precedence_contract's interaction_ownership_and_addressing_contract
+    /// -- e.g. admin.enum.management.projection's own already-proven enum_dictionary_roster
+    /// tensor row) never carries a componentKey and never will -- it is not becoming a rendered
+    /// catalog leaf, so requiring one is a real, generic validation gap this round's own live-DB
+    /// proof surfaced (this exact shape was never previously pushed through the live validate
+    /// path for ANY surface, admin-enum included -- only through fresh-bootstrap SQL, which
+    /// bypasses this check entirely). A brand-new tensor nodeId absent from the schema tree
+    /// entirely still requires an explicit componentKey exactly as before -- this widens WHICH
+    /// known identities are exempt, it does not relax the rule that an unknown one still needs
+    /// one.
+    /// </summary>
+    public static IReadOnlySet<string> ResolveAllNodeIdsInSchemaTree(
+        IReadOnlyList<SchemaRecordRow> schemaRecords)
+    {
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var identity in ResolveNodeIdentities(schemaRecords))
+            result.Add(identity.ResolvedNodeId);
+        return result;
+    }
+
+    /// <summary>
+    /// team-dashboard-physical-layout-adoption round: resolved NodeId -&gt; componentKind for
+    /// every Modal record in the schema tree. Unlike Field/Table/Action's own componentKind
+    /// (registry-resolved at read time via componentIdToKind, not cheaply available to
+    /// ValidateRuntimeInteractions), a Modal's componentKind is always its own authored literal
+    /// value already present on the schema record itself (never a registry lookup -- see
+    /// ResolveNodeIdentities/Compose's own Modal branch) -- so it costs nothing extra to expose
+    /// here. Used by NpgsqlUiTopologyRepository.ValidateRuntimeInteractions' own
+    /// RUNTIME_INTERACTION_TARGET_KIND_MISMATCH check, which previously read componentKind ONLY
+    /// from the raw tensor node's own JSON -- correct for a tensor-only-authored Modal, but a
+    /// schema-composed Modal's own tensor-carrier entry (structural_authority_precedence_
+    /// contract) legitimately carries no componentKind of its own anymore (it is schema-resolved
+    /// at render time), so an openModal/closeModal/toggleModal interaction targeting it must
+    /// also accept this schema-resolved value, never only the raw tensor node's own (possibly
+    /// absent) field.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> ResolveModalComponentKindsByNodeId(
+        IReadOnlyList<SchemaRecordRow> schemaRecords)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var identity in ResolveNodeIdentities(schemaRecords))
+        {
+            if (identity.Row.RecordType == ModalRecordType && identity.Row.ComponentKind is not null)
+                result[identity.ResolvedNodeId] = identity.Row.ComponentKind;
         }
         return result;
     }
