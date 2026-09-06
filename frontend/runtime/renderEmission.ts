@@ -314,6 +314,15 @@ function buildProductionCatalogComponentProps(
           placeholder: authoredLabel || "",
         },
       };
+    case "data_display/md_viewer":
+      // No synthetic savedView here — the preview placeholder's savedView (preview.sample_table /
+      // preview_record_001 / preview_template / preview.v1) would outrank a real propBindings.markdown
+      // value under mdViewerPreviewFactory's documented savedView>markdown priority
+      // (runtimeComponentFactory.ts), making a bare-markdown production leaf render UI-Builder Saved
+      // View preview chrome instead of its real content. Real content arrives via propBindings
+      // (COMPONENT_ARRAY_PROP_CAPABILITIES["data_display/md_viewer"] = ["markdown"]) or an authored
+      // real savedView carried by node-local propsJson/design — this default stays empty either way.
+      return {};
     default:
       return buildLayoutPreviewPlaceholderProps(componentKind, componentKey);
   }
@@ -1610,6 +1619,24 @@ export function renderEmission(
             };
           }
           finalProps = bindingResult.props;
+          // Re-apply the live node-value override (already applied once above, BEFORE
+          // propBindings ran) so an in-progress edit still wins as the canonical displayed
+          // value even when this node's own propBindings.value/activeKey resolves fresh from
+          // emission.data on this same render pass (e.g. a sibling's setState-triggered
+          // re-render with unchanged emission.data) -- without this second pass, resolvePropBindings'
+          // own resolved value (now correctly mirrored into props.data, per its scalar-branch fix
+          // above) would silently clobber the tracked edit on every such re-render, not only on a
+          // genuine settled-write canonical reread. A settled write's own onRuntimeDispatchResult
+          // handler (ProjectionShell.tsx) clears the tracker entirely (liveNodeValueTracker.ts
+          // clear()) before that reread's re-render runs, so this second pass is then a no-op and
+          // the fresh propBindings-resolved value from the new emission.data is what actually
+          // displays -- preserving the existing settled-write-resets / passive-refresh-preserves
+          // contract (projectionShellAdminRuntimeWritePayloadCapture.test.ts round 28) unchanged.
+          finalProps = applyLiveNodeValueOverride(
+            finalProps,
+            node.nodeId,
+            options?.payloadFromNodeValues,
+          );
         }
         const hubDesign = design
           ? {
