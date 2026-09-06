@@ -1,0 +1,43 @@
+[
+  {
+    "nodeId": "team_dashboard_normal",
+    "nodeKind": "structural_node",
+    "orderIndex": 0,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_category",
+    "label": "\u30C1\u30FC\u30E0\u30C0\u30C3\u30B7\u30E5\u30DC\u30FC\u30C9"
+  },
+  {
+    "nodeId": "team_dashboard_normal_viewer_section",
+    "nodeKind": "structural_node",
+    "parentNodeId": "team_dashboard_normal",
+    "orderIndex": 1,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_section",
+    "label": "\u30C1\u30FC\u30E0\u30C0\u30C3\u30B7\u30E5\u30DC\u30FC\u30C9\u672C\u6587"
+  },
+  {
+    "nodeId": "team_dashboard_normal_viewer",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000021",
+    "parentNodeId": "team_dashboard_normal_viewer_section",
+    "orderIndex": 2,
+    "x": 0,
+    "y": 0,
+    "componentKind": "data_display/md_viewer",
+    "wiringId": "00000000-0000-0000-0000-0000000dd024",
+    "wiringKey": "team_dashboard.normal.projection.wiring",
+    "wiringKind": "admin_runtime",
+    "targetSurface": "manifest",
+    "targetRef": "team_dashboard.normal.projection",
+    "propsJson": "{\u0022data\u0022: {\u0022label\u0022: \u0022\u30D7\u30EC\u30D3\u30E5\u30FC\u0022}}",
+    "propBindings": {
+      "markdown": {
+        "source": "emission.data.bodyMarkdown"
+      }
+    },
+    "label": "\u30D7\u30EC\u30D3\u30E5\u30FC"
+  }
+]

@@ -683,10 +683,23 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     /// node. A brand-new tensor-only node absent from the schema tree still requires an explicit
     /// componentKey exactly as before this round — this is not a blanket exemption for "any node
     /// missing componentKey."
+    ///
+    /// <paramref name="schemaTreeNodeIds"/> (team-dashboard-physical-layout-adoption round):
+    /// widens that SAME exemption to a tensor nodeId that resolves to ANY schema-tree identity
+    /// (LayoutSchemaTensorComposer.ResolveAllNodeIdsInSchemaTree) — not only a catalog leaf with
+    /// a canonical componentKey. A STRUCTURAL parent (Form/Section/Category/Workflow/Validation)
+    /// or a Modal acting purely as this patch's interaction carrier for its own owned children
+    /// (structural_authority_precedence_contract's interaction_ownership_and_addressing_contract)
+    /// never carries and never needs a componentKey — it is not becoming a rendered catalog leaf
+    /// — so it must be exempted the same way a real catalog leaf is, never rejected as an
+    /// unrecognized raw tensor-only node. Only schemaComposedComponentKeysByNodeId (never this
+    /// broader set) feeds the identity-mismatch check below — a structural/Modal carrier node
+    /// has no canonical componentKey to mismatch against in the first place.
     /// </summary>
     private static string? ValidateLayoutPatchNodes(
         string tensorPatchJson,
-        IReadOnlyDictionary<string, string> schemaComposedComponentKeysByNodeId)
+        IReadOnlyDictionary<string, string> schemaComposedComponentKeysByNodeId,
+        IReadOnlySet<string>? schemaTreeNodeIds = null)
     {
         using var doc = JsonDocument.Parse(tensorPatchJson);
         if (!doc.RootElement.TryGetProperty("nodes", out var nodes) ||
@@ -750,7 +763,9 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                     : null;
                 var isSchemaComposedCatalogLeaf = schemaComposedComponentKeysByNodeId
                     .TryGetValue(nodeId!, out var canonicalComponentKey);
-                if (string.IsNullOrWhiteSpace(componentKey) && !isSchemaComposedCatalogLeaf)
+                var isKnownSchemaTreeIdentity = isSchemaComposedCatalogLeaf ||
+                    (schemaTreeNodeIds is not null && schemaTreeNodeIds.Contains(nodeId!));
+                if (string.IsNullOrWhiteSpace(componentKey) && !isKnownSchemaTreeIdentity)
                 {
                     return "LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED";
                 }
@@ -1418,7 +1433,8 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     private static string? ValidateRuntimeInteractions(
         JsonElement nodes,
         IReadOnlySet<string>? approvedInstanceTargetRefs = null,
-        string? instanceCandidateSourceError = null)
+        string? instanceCandidateSourceError = null,
+        IReadOnlyDictionary<string, string>? schemaComposedModalComponentKindsByNodeId = null)
     {
         var requiresApprovedInstanceCandidates = false;
         foreach (var sourceNode in nodes.EnumerateArray())
@@ -1453,6 +1469,18 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             var componentKind = node.TryGetProperty("componentKind", out var kindEl) && kindEl.ValueKind == JsonValueKind.String
                 ? kindEl.GetString()?.Trim()
                 : null;
+            // team-dashboard-physical-layout-adoption round: a schema-composed Modal's own
+            // tensor-carrier entry legitimately carries no componentKind of its own anymore (see
+            // LayoutSchemaTensorComposer.ResolveModalComponentKindsByNodeId's own doc comment) --
+            // fall back to the schema-resolved value only when the raw tensor node's own field is
+            // absent, never overriding a raw value that IS present (a tensor-only-authored Modal,
+            // or a legitimate raw override, keeps its own literal value as authoritative here).
+            if (string.IsNullOrWhiteSpace(componentKind) &&
+                schemaComposedModalComponentKindsByNodeId is not null &&
+                schemaComposedModalComponentKindsByNodeId.TryGetValue(nodeId!, out var schemaModalKind))
+            {
+                componentKind = schemaModalKind;
+            }
             componentKindsByNodeId[nodeId!] = componentKind;
         }
 
@@ -1969,6 +1997,8 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             // narrower round-42 guarantee "never even run the cheap check without a dispatch field"
             // is retired, because that guarantee is exactly what left the spoof open.
             var schemaComposedComponentKeysByNodeId = new Dictionary<string, string>(StringComparer.Ordinal);
+            IReadOnlySet<string>? schemaTreeNodeIds = null;
+            IReadOnlyDictionary<string, string>? schemaComposedModalComponentKindsByNodeId = null;
             var mayBeSchemaComposed = ContainsNodeMissingComponentKey(normalized.TensorPatchJson) ||
                 (ContainsNodeWithComponentKeyPresent(normalized.TensorPatchJson) &&
                     await LayoutHasSchemaComposedRecordsAsync(layoutId, ct));
@@ -1979,11 +2009,21 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                 if (schemaRecordsParseResult is LayoutSchemaTensorComposer.RecordsParseResult.Invalid invalidSchemaRecords)
                     return normalized with { Ok = false, Valid = false, Message = $"LAYOUT_SCHEMA_RECORDS_INVALID:{invalidSchemaRecords.Reason}" };
                 if (schemaRecordsParseResult is LayoutSchemaTensorComposer.RecordsParseResult.Valid { Rows: var schemaRows })
+                {
                     schemaComposedComponentKeysByNodeId = new Dictionary<string, string>(
                         LayoutSchemaTensorComposer.ResolveCatalogComponentKeysByNodeId(schemaRows), StringComparer.Ordinal);
+                    // team-dashboard-physical-layout-adoption round: a STRUCTURAL parent or Modal
+                    // acting purely as this patch's interaction carrier for its own owned children
+                    // (e.g. team_dashboard_admin_editor / team_dashboard_admin_save_confirm_modal)
+                    // is a real schema-tree identity too, just not a catalog leaf with a
+                    // componentKey -- see ValidateLayoutPatchNodes's own doc comment.
+                    schemaTreeNodeIds = LayoutSchemaTensorComposer.ResolveAllNodeIdsInSchemaTree(schemaRows);
+                    schemaComposedModalComponentKindsByNodeId =
+                        LayoutSchemaTensorComposer.ResolveModalComponentKindsByNodeId(schemaRows);
+                }
             }
 
-            var nodeError = ValidateLayoutPatchNodes(normalized.TensorPatchJson, schemaComposedComponentKeysByNodeId);
+            var nodeError = ValidateLayoutPatchNodes(normalized.TensorPatchJson, schemaComposedComponentKeysByNodeId, schemaTreeNodeIds);
             if (nodeError is not null)
                 return normalized with { Ok = false, Valid = false, Message = nodeError };
             using (var runtimeInteractionDoc = JsonDocument.Parse(normalized.TensorPatchJson))
@@ -2006,7 +2046,9 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                             instanceCandidateSourceError = "RUNTIME_INTERACTION_INSTANCE_CANDIDATE_SOURCE_UNAVAILABLE";
                         }
                     }
-                    var runtimeInteractionError = ValidateRuntimeInteractions(runtimeNodes, approvedInstanceTargetRefs, instanceCandidateSourceError);
+                    var runtimeInteractionError = ValidateRuntimeInteractions(
+                        runtimeNodes, approvedInstanceTargetRefs, instanceCandidateSourceError,
+                        schemaComposedModalComponentKindsByNodeId);
                     if (runtimeInteractionError is not null)
                         return normalized with { Ok = false, Valid = false, Message = runtimeInteractionError };
 

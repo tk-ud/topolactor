@@ -760,6 +760,7 @@ runtime_orchestration_ssot:
           - topology_ui_action
           - topology_ui_table
           - topology_ui_workflow_step
+          - topology_ui_modal
         unresolved_gap_record_types:
           - topology_ui_unresolved
         rule: >-
@@ -769,10 +770,22 @@ runtime_orchestration_ssot:
           "catalog_component" entries whose componentId/componentKind are resolved from the
           existing topology.ui_component_registry preset catalog (see field_control_resolution
           and table_display_resolution below) -- never invented, never a structural-node-shaped
-          catalog entry. Unresolved (topology_ui_unresolved) is neither: it composes into
-          NodeKind="unresolved_gap" and always renders as an explicit error carrying its
-          knownGapRefs (see unresolved_gap_resolution below) -- it is a terminal known-gap marker,
-          not a resolvable leaf and not a container.
+          catalog entry. Modal also composes into NodeKind="catalog_component" (it renders a
+          real, built-in runtime primitive, backend/repository/LayoutSchemaTensorComposer.cs
+          round 24/25) but resolves differently from every other catalog leaf: its componentKind
+          is the record's own authored literal value (validated as exactly "disclosure/modal",
+          never a control/display convention lookup) and its componentId is its own resolved
+          NodeId (a built-in runtime primitive, not a topology.ui_component_registry-backed
+          preset) -- never a componentKeyToId registry resolution. Uniquely among catalog leaves,
+          a Modal record may itself be the parent of further catalog leaves (its authored
+          Confirm/Cancel Action children); catalog_component_record_types membership governs
+          leaf-vs-container RESOLUTION convention, not containment eligibility -- the generic
+          ParentNodeId/lastResolvedNodeIdByKey walk already supports any record type acting as a
+          parent regardless of which of the three vocabulary buckets it belongs to. Unresolved
+          (topology_ui_unresolved) is neither: it composes into NodeKind="unresolved_gap" and
+          always renders as an explicit error carrying its knownGapRefs (see
+          unresolved_gap_resolution below) -- it is a terminal known-gap marker, not a resolvable
+          leaf and not a container.
         field_control_resolution: >-
           A Field record's authored control value (e.g. form_input/select) maps to an existing
           ui_component_registry.component_key by fixed convention
@@ -783,7 +796,20 @@ runtime_orchestration_ssot:
           already treats the two identically across wiringAdoptionCandidates/
           tensorAdoptionCandidates; runtime resolution follows the same pairing). An unresolvable
           control leaves componentId/componentKind null -> CATALOG_COMPONENT_KIND_REQUIRED at
-          render time, never a silent guess.
+          render time, never a silent guess. FieldControlToComponentKey's own convention pairs
+          must stay identical to the Field-facing subset of react-schema-topology-seed-
+          translator-ssot.yaml's COMPONENT_KIND_TO_COMPONENT_KEY (the translator's own
+          tensor-emission-path mirror of this SAME convention for every control a Field may
+          actually author -- never its two non-Field entries "action/button"/"disclosure/modal",
+          which Action/Modal resolve through their own separate mechanisms and which
+          FieldControlToComponentKey correctly never carries; per that SSOT's
+          field_control_component_identity_contract) -- including data_display/md_viewer ->
+          md_viewer.projection and form_input/
+          textarea_template -> textarea.template, both already real, active
+          ui_component_registry rows (db/ui_component_registry_preset_catalog_bootstrap.sql)
+          the translator's own path already resolves; a control value the translator resolves
+          but this table does not is a defect in this table, never evidence the control needs a
+          new registry row or is unsupported for schema-composed Fields.
         table_display_resolution: >-
           A Table record's authored display value (e.g. card_list, data_grid, list) maps to an
           existing ui_component_registry.component_key by fixed convention
@@ -804,18 +830,33 @@ runtime_orchestration_ssot:
           behavior, not a defect in this contract: render completion must not paper over a real
           unresolved authoring gap the translator itself flagged.
         tensor_runtime_interactions_merge: >-
-          topology.ui_topology_tensor nodes key their runtimeInteractions array at the FORM
-          level; each entry carries its own sourceActionKey identifying the specific Field/Action
-          leaf it belongs to. Composition groups entries by "{formTensorNodeId}::{sourceActionKey}"
-          (never sourceActionKey alone) and merges each leaf's own matching entries by
+          topology.ui_topology_tensor nodes key their runtimeInteractions array at the OWNING
+          STRUCTURAL PARENT's own tensor NodeId (corrected 2026-09-06, follow-up audit: this
+          section previously said "the FORM level" / "the form's key, a structural node" --
+          BuildInteractionsBySourceActionKey itself has no Form-type check anywhere; it groups
+          purely by each raw tensor node's own NodeId, whatever record type that node's schema
+          counterpart actually is, so "FORM" was a descriptive label for the historically common
+          case, never an enforced restriction -- see react-schema-topology-seed-translator-
+          ssot.yaml storage_adoption_contract.structural_authority_precedence_contract.
+          interaction_ownership_and_addressing_contract for the full real-precedent proof, a
+          documentation correction only, no code changed); each entry carries its own
+          sourceActionKey identifying the specific Field/Action/Modal leaf it belongs to.
+          Composition groups entries by "{parentTensorNodeId}::{sourceActionKey}" (never
+          sourceActionKey alone) and merges each leaf's own matching entries by
           "{parentKey}::{key}" -- never a naive tensor-nodeId==record-key match (the tensor
-          nodeId is the form's key, a structural node, which never receives runtimeInteractions)
-          and never a bare-sourceActionKey match, which would cross-contaminate two different
-          Forms that happen to author the same leaf key (Action/Field keys are only guaranteed
-          unique within their own owning Form, the same way record keys are only guaranteed
-          unique within their own branch -- see node_id_collision_handling). A malformed tensor
-          runtimeInteractions shape (invalid JSON, a non-array value, a non-object entry, or an
-          entry missing a non-empty sourceActionKey) is a real authoring defect ->
+          nodeId belongs to whichever record is the OWNING STRUCTURAL PARENT -- a Form/Section/
+          Category structural_node in the common case, but a Modal catalog_component exactly as
+          validly when a Modal is itself the owning parent of its own Confirm/Cancel Action
+          children, per catalog_component_record_types' rule above) and never a bare-
+          sourceActionKey match, which would cross-contaminate two different parents that happen
+          to author the same leaf key (Action/Field/Modal keys are only guaranteed unique within
+          their own owning parent, the same way record keys are only guaranteed unique within
+          their own branch -- see node_id_collision_handling). A canonical react_schema with NO
+          Form anywhere (e.g. a Category > Section > Field/Action/Modal tree) is not exempt from
+          or unsupported by this mechanism: its Section is the owning structural parent for its
+          own direct children exactly as a Form would be. A malformed tensor runtimeInteractions
+          shape (invalid JSON, a non-array value, a non-object entry, or an entry missing a
+          non-empty sourceActionKey) is a real authoring defect ->
           LAYOUT_SCHEMA_RUNTIME_INTERACTIONS_INVALID, never silently skipped
           (LayoutSchemaTensorComposer.BuildInteractionsBySourceActionKey).
         runtime_interaction_attributability: >-

@@ -950,6 +950,182 @@ admin_normal_surface_projection_seed_ssot:
             the hub_relations cross-navigation item above; it only guarantees the Normal surface
             below is reachable from anywhere ProjectionShell renders, per
             team_dashboard_canonical_shared_contract.hub_relation_navigation_binding_ref.
+          physical_layout_schema_adoption_acceptance_criteria:
+            status: implemented_2026_09_06_team_dashboard_physical_layout_adoption
+            closure_note: >-
+              CLOSED (team-dashboard-physical-layout-adoption implementation_change, 2026-09-06).
+              dd013/dd023 now physically persist the criteria below's required
+              layoutAdoptionCandidates content; dd015/dd025 are reshaped into the required
+              DERIVED carrier; LayoutSchemaTensorComposer.FieldControlToComponentKey gained the
+              two required entries; every proof criterion below (generator/fixture,
+              live-DB structural-composition, Admin authoring/write DOM, Normal read-only DOM,
+              Modal containment, non-regression) is satisfied by backend/tests/
+              Topolactor.Integration.Tests/TeamDashboardHubRelationUiProjectionLiveDbTests.cs's
+              own DispatchAsync_{Admin,Normal}Manifest_ProjectionEntry_
+              ComposedFromPhysicallyAdoptedSchema_MatchesCheckedInFixtureSnapshot tests, the
+              updated TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs, and frontend/
+              tests/teamDashboardProductionProjectionBoundary.test.ts. The criteria below are kept
+              verbatim as the record of what was required and how it was satisfied, per this
+              repo's own historical_known_gaps_closed convention -- not because any part remains
+              open.
+            governing_contract_ref: >-
+              react-schema-topology-seed-translator-ssot.yaml
+              storage_adoption_contract.structural_authority_precedence_contract (Owner
+              "Judgment B"). This block was the acceptance criteria the
+              team-dashboard-physical-layout-adoption implementation_change (2026-09-06) closing
+              team_dashboard.admin.projection's own
+              team_dashboard_admin_layout_schema_json_records_not_yet_physically_adopted
+              known_gaps entry (and team_dashboard.normal.projection's equivalent entry) had to
+              satisfy, and did (see this block's own closure_note above and each entry's
+              historical_known_gaps_closed_2026_09_06_physical_layout_schema_adoption record in
+              react-schema-topology-seed-translator-ssot.yaml) — it was a gap-closure record for a
+              named, already-identified surface, not a team-dashboard-specific design exception:
+              the rule being applied
+              (layoutAdoptionCandidates is PRIMARY, tensorAdoptionCandidates is DERIVED) is the
+              SAME generic rule every other schema-composed surface already follows. Team
+              Dashboard's own Category > Section > Field/Action/Modal tree (no Form anywhere)
+              is likewise not a novel shape needing new design: auth.external.
+              credential_management.projection (manifest 092), admin.enum.management.projection,
+              and scheduler.settings.projection are three already-adopted, already-live-DB-
+              proven schema-composed surfaces whose own Action/Modal content is Section-owned
+              with zero Form ownership (react-schema-topology-seed-translator-ssot.yaml
+              structural_authority_precedence_contract.interaction_ownership_and_addressing_
+              contract.real_precedent) — the same generic mechanism applies unchanged.
+            physical_seed_adoption:
+              - dd013 (topology.components_layout_design row backing team_dashboard.admin.
+                projection) must persist layout_schema_json.records[] as the CLEAN, unmodified
+                adoptionCandidates.layoutAdoptionCandidates.layoutSchemaJson.records output of
+                re-running generate-topology-seed over the existing, already-gateStatus=pass
+                team-dashboard-admin.topology-seed.input.json fixture — zero post-generation
+                hand-edits, the same "verbatim adoption" discipline dd015's own tensor row
+                previously used for tensorAdoptionCandidates (declared_seed_surface_catalog
+                generation_evidence_ref), applied here to the PRIMARY bucket instead.
+              - dd023 (team_dashboard.normal.projection) likewise adopts
+                team-dashboard-normal.topology-seed.input.json's own
+                adoptionCandidates.layoutAdoptionCandidates.layoutSchemaJson.records verbatim.
+              - Both fixtures already regenerate CLEAN today (zero validationErrors, zero
+                knownGapRefs) — this criterion requires no NEW fixture content, only physically
+                writing already-proven generator output into dd013/dd023 that was previously
+                discarded in favor of the tensor-only path.
+            tensor_parentnodeid_disposition:
+              rule: >-
+                Once dd013/dd023 carry non-empty layout_schema_json.records[], backend
+                LayoutSchemaTensorComposer.Compose derives every catalog leaf's ParentNodeId
+                from that PRIMARY tree directly (parent_scoped_identity_reconstruction,
+                runtime-orchestration-ssot.yaml) — it never reads a tensor node's own
+                parentNodeId field for containment. The Round-2 translator fix that stamps
+                parentNodeId onto a Modal's tensor-adopted Confirm/Cancel Action children
+                (tensor_container_parent_contract /
+                tensorAdoptionCandidates.modal_derived_payload above) therefore becomes
+                INERT for these two surfaces specifically once adopted — Compose will not
+                consult it — though the mechanism itself stays in the translator unchanged and
+                REMAINS the correct, necessary fix for any other surface still authored
+                tensor-only (it is a generic capability, not a per-surface toggle).
+              required_disposition: >-
+                dd015/dd025's own persisted layout_patch_json.nodes[] must be reshaped, as part
+                of the SAME implementation_change that performs physical adoption, from the
+                current tensor-only LayoutNode shape (full componentKind/componentKey/label/
+                parentNodeId per leaf) to the OWNING-STRUCTURAL-PARENT-keyed runtimeInteractions
+                carrier shape Compose actually consumes for a schema-composed layout
+                ("{parentTensorNodeId}::{sourceActionKey}", tensor_runtime_interactions_merge /
+                BuildInteractionsBySourceActionKey — corrected 2026-09-06 from this criterion's
+                own earlier, inaccurate "FORM-level" phrasing: the mechanism has no Form-type
+                check anywhere and is keyed generically by whichever record is the leaf's real
+                schema parent). For dd015 (admin), team_dashboard_admin_save_button's own
+                runtimeInteraction must be carried on a tensor node keyed at the owning SECTION's
+                resolved key (team_dashboard_admin_editor — this surface's tree has no Form at
+                all), and team_dashboard_admin_save_confirm_button's/_cancel_button's own
+                runtimeInteractions must be carried on a tensor node keyed at the owning MODAL's
+                resolved key (team_dashboard_admin_save_confirm_modal) — mirroring
+                admin.enum.management.projection's own already-proven tensor row shape (its
+                Section-owned preview Actions' entries live on its Section's own tensor node;
+                each Modal's own Confirm/Cancel Actions' entries live on that SAME Modal's own
+                tensor node) as the reference precedent, not manifest 092's Form-adjacent shape,
+                since Team Dashboard's own tree has no Form to mirror that against. dd025 (normal)
+                carries no Action/Modal at all (read_only_no_mutation_no_confirm authority
+                boundary) and needs no runtimeInteractions carrier reshape. The Round-2
+                parentNodeId stamps on team_dashboard_admin_save_confirm_button/_cancel_button's
+                tensor nodes must be removed as part of that reshape (they carry no meaning in
+                the Compose-consumed shape); this is a disposition of already-shipped Round-2
+                tensor content, not a re-opening of Round 2's own (already-merged) Modal
+                structural-containment fix, which this criterion does not touch or regress.
+            required_generator_fixture_proof: >-
+              A re-run of generate-topology-seed over both existing fixtures reporting
+              gateStatus=pass with zero validationErrors (already true today) AND an explicit
+              assertion that adoptionCandidates.layoutAdoptionCandidates.layoutSchemaJson.records
+              is byte-identical to what gets persisted into dd013/dd023 — the same "verbatim,
+              not a re-derived approximation" proof discipline
+              TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs already established for
+              the tensor bucket, applied to the layout bucket.
+            required_field_control_component_identity_resolution: >-
+              A PREREQUISITE for the structural-composition proof below, not an independent nice-
+              to-have: backend/repository/LayoutSchemaTensorComposer.cs's
+              FieldControlToComponentKey dictionary must gain two entries —
+              "data_display/md_viewer" -> "md_viewer.projection" and "form_input/
+              textarea_template" -> "textarea.template" — mirroring react-schema-topology-seed-
+              translator-ssot.yaml's own COMPONENT_KIND_TO_COMPONENT_KEY exactly (per
+              field_control_component_identity_contract), reusing the already-real, already-
+              active topology.ui_component_registry rows for both (db/ui_component_registry_
+              preset_catalog_bootstrap.sql) — never a new registry row, never a new componentKind,
+              never a new runtime factory. Without this, dd013's two Fields
+              (team_dashboard_admin_viewer, team_dashboard_admin_body) would compose with a null
+              componentId/componentKind and fail CATALOG_COMPONENT_KIND_REQUIRED at render time —
+              this is the FIRST thing that must be verified true (or fixed) before the
+              structural-composition proof below is attempted, not a fallback to diagnose after
+              it fails.
+            required_backend_live_db_structural_composition_proof: >-
+              A live-DB test reading the adopted dd013/dd023 rows through the real repository
+              read path and asserting LayoutSchemaTensorComposer.Compose produces the expected
+              LayoutNode[] (correct NodeKind per record type including topology_ui_modal as
+              catalog_component, correct componentId/componentKind resolution for both Fields per
+              required_field_control_component_identity_resolution above, correct ParentNodeId
+              for team_dashboard_admin_save_confirm_button/_cancel_button nested under
+              team_dashboard_admin_save_confirm_modal, correct componentId/componentKind
+              resolution for the Modal itself per runtime-orchestration-ssot.yaml's
+              now-corrected catalog_component_record_types rule, and correct runtimeInteractions
+              attribution for team_dashboard_admin_save_button reached via the owning SECTION's
+              tensor node and for the Modal's own Confirm/Cancel Actions reached via the owning
+              MODAL's tensor node, per tensor_parentnodeid_disposition.required_disposition
+              above) — mirroring the SAME live-DB composed-read proof pattern
+              admin.enum.management.projection's own structural_render_contract
+              test_proof_contract already uses against its own Section-owned, Form-less Action/
+              Modal content, not a new pattern invented for this surface.
+            required_admin_authoring_dom_proof: >-
+              frontend/tests/teamDashboardProductionProjectionBoundary.test.ts's existing Admin
+              production-composition assertions (Confirm/Cancel absent from the DOM while the
+              Modal is closed, present only inside [role="dialog"] once open, Japanese authored
+              labels, zero machine-vocabulary-as-visible-text) must continue to pass UNCHANGED
+              in assertion strength, now exercised against renderEmission() output sourced from
+              LayoutSchemaTensorComposer.Compose's schema-composed LayoutNode[] rather than the
+              tensor-only LayoutNode path — a change of INTERNAL composition source, never a
+              weakening of what the test asserts about the final DOM.
+            required_normal_readonly_dom_proof: >-
+              The same test file's Normal read-only production-composition assertions (real
+              bodyMarkdown reaches md_viewer, Japanese content, no Saved-View-chrome regression)
+              must likewise continue to pass unchanged, now sourced from dd023's adopted
+              layout_schema_json.records[].
+            required_modal_containment_proof: >-
+              Both the live-DB structural-composition proof and the frontend DOM proof above
+              must independently confirm Confirm/Cancel containment (backend: ParentNodeId
+              resolves to the Modal's own NodeId; frontend: DOM nesting inside [role="dialog"])
+              — combined evidence, neither alone sufficient, matching this Bundle's own
+              standing NG-axis requirement (Round 2) that DB acceptance alone is never
+              sufficient proof of frontend structural correctness.
+            required_non_regression:
+              - Round 1 (production-projection-boundary): /dashboard and /admin/team-dashboard
+                must keep rendering real Team Dashboard content, never UI-Builder preview
+                Saved View chrome, after the composition source changes.
+              - Round 2 (Japanese authored content, Modal structural containment, authored
+                button labels): all three must remain intact through the composition-source
+                change: Japanese label/body text must still reach the DOM (now via the
+                schema-composed leaf's authored `label`, per authored_label_and_production_props,
+                runtime-orchestration-ssot.yaml, rather than a tensor node's own propsJson.label),
+                and machine identity (nodeId/componentKey/manifestKey/targetRef) must stay
+                absent from visible text (assertNoMachineVocabularyAsVisibleText, unchanged).
+              - Team Markdown Dashboard Saved View / UI Builder preview (docs/design/
+                team-markdown-dashboard-saved-view-ssot.yaml) must remain unaffected — this
+                gap-closure touches only team_dashboard.{admin,normal}.projection's own
+                dd013/dd015/dd023/dd025 rows, never the Saved View feature's own tables/routes.
     normal:
       axis_kind: projection_surface_axis
       not_role_or_rbac: true
@@ -1122,6 +1298,18 @@ admin_normal_surface_projection_seed_ssot:
                   props: [markdown]
                   source_ref: emission.data.bodyMarkdown (team_dashboard:get, same action + same physical row surface_axes.admin.surfaces.team_dashboard's own viewer reads)
               loading_empty_error_projection: [loading_team_dashboard, empty_team_dashboard_note, team_dashboard_error_fail_close]
+            physical_layout_schema_adoption_acceptance_criteria_ref: >-
+              This axis shared the identical structural_authority_precedence_contract gap and
+              acceptance criteria as surface_axes.admin.surfaces.team_dashboard's own
+              physical_layout_schema_adoption_acceptance_criteria above — see that block's own
+              closure_note (status: implemented_2026_09_06_team_dashboard_physical_layout_adoption)
+              for the current state: dd023's layout_schema_json.records[] is now physically
+              adopted verbatim from this axis's own team-dashboard-normal.topology-seed.input.json
+              fixture output (3 records: Category > Section > Field, zero Form/Action/Modal), and
+              dd025's tensor row is reshaped into the DERIVED runtime carrier, proven by that same
+              closure_note's DispatchAsync_NormalManifest_ProjectionEntry_
+              ComposedFromPhysicallyAdoptedSchema_MatchesCheckedInFixtureSnapshot test — not
+              duplicated here.
             hub_relation_navigation_binding_ref: >-
               Reachable directly at a normal-facing route (frontend/routes/dashboard/index.tsx, a thin
               ProjectionShell wrapper, no AdminAuthGate) — the same route-mount pattern
