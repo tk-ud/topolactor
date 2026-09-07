@@ -1302,26 +1302,43 @@ def runtime_interaction_candidate_shape_facts(interaction):
     reuse-over-invention discipline (and this round's own NG axis) argues against absent a real
     reachable gap.
 
+    FIXED (proof-chain continuity round 4, 2026-09-07): missing_or_invalid_action_type's own
+    _is_nonempty_string(action_type) check previously ran AFTER `action_type in
+    DISCLOSURE_ACTION_TYPES` / `action_type in RUNTIME_DISPATCH_ACTION_TYPES` had already been
+    evaluated to compute is_disclosure/dispatch_action_type -- `in` on a set requires its operand
+    to be hashable, so an actionType that is itself a dict or list (a malformed-but-JSON-
+    compatible value, unlike an int/bool/None, which are hashable and were already correctly
+    caught) raised TypeError before this function's own explicit, non-raising
+    missing_or_invalid_action_type fail-close was ever reached -- silently violating this
+    function's own "never raises" contract for exactly the class of input it exists to report on.
+    Reordered: the non-empty-string check now runs FIRST, and the two set-membership checks only
+    run once action_type is already confirmed to be a hashable, non-empty string -- no new type
+    validator or actionType vocabulary, only an evaluation-order fix reusing the SAME
+    _is_nonempty_string judgment this file already established.
+
     Returns a dict: {"has_runtime_interaction_id": bool, "missing_source_action_key": bool,
     "missing_trigger": bool, "missing_or_invalid_action_type": bool, "dispatch_action_type": bool,
     "missing_dispatch_fields": list[str], "is_disclosure_action_type": bool,
     "missing_target_node_id": bool, "invalid_state_path": bool}. Never raises -- a non-dict
-    interaction is reported via the caller's own top-level type check, not here. Dispatch-field
-    completeness scope matches validate_adoption_candidates' own existing, narrower coverage
-    exactly: only RUNTIME_DISPATCH_ACTION_TYPES (dispatchExternalPort/dispatchInstanceOperation)
-    get idempotency-route-field checks -- localStateMutation/routeNavigation/contentsApiDispatch
-    actionTypes are not additionally gated here, matching this file's own already-established
-    validation boundary, never a newly-invented wider one.
+    interaction is reported via the caller's own top-level type check, not here, and an
+    unhashable actionType (dict/list) is reported via missing_or_invalid_action_type rather than
+    propagating a TypeError. Dispatch-field completeness scope matches validate_adoption_
+    candidates' own existing, narrower coverage exactly: only RUNTIME_DISPATCH_ACTION_TYPES
+    (dispatchExternalPort/dispatchInstanceOperation) get idempotency-route-field checks --
+    localStateMutation/routeNavigation/contentsApiDispatch actionTypes are not additionally gated
+    here, matching this file's own already-established validation boundary, never a newly-invented
+    wider one.
     """
     action_type = interaction.get("actionType")
-    is_disclosure = action_type in DISCLOSURE_ACTION_TYPES
+    action_type_is_valid_string = _is_nonempty_string(action_type)
+    is_disclosure = action_type_is_valid_string and action_type in DISCLOSURE_ACTION_TYPES
     state_path = interaction.get("statePath")
     facts = {
         "has_runtime_interaction_id": "runtimeInteractionId" in interaction,
         "missing_source_action_key": not interaction.get("sourceActionKey"),
         "missing_trigger": not _is_nonempty_string(interaction.get("trigger")),
-        "missing_or_invalid_action_type": not _is_nonempty_string(action_type),
-        "dispatch_action_type": action_type in RUNTIME_DISPATCH_ACTION_TYPES,
+        "missing_or_invalid_action_type": not action_type_is_valid_string,
+        "dispatch_action_type": action_type_is_valid_string and action_type in RUNTIME_DISPATCH_ACTION_TYPES,
         "missing_dispatch_fields": [],
         "is_disclosure_action_type": is_disclosure,
         "missing_target_node_id": is_disclosure and not _is_nonempty_string(interaction.get("targetNodeId")),

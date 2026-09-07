@@ -3656,6 +3656,39 @@ def main():
             ) == 4,
         )
 
+        # 156g (schema-composed proof-chain continuity round 4, 2026-09-07): NEGATIVE proof that
+        # an UNHASHABLE (dict/list) actionType -- not merely a hashable wrong-type one like the
+        # int 156f already covers -- is reported via missing_or_invalid_action_type, never
+        # propagated as a raw TypeError. Before this round, runtime_interaction_candidate_shape_
+        # facts computed `action_type in DISCLOSURE_ACTION_TYPES` (a set-membership test, which
+        # requires its operand to be hashable) BEFORE checking whether action_type was even a
+        # string at all -- a dict/list actionType raised TypeError: unhashable type at that line,
+        # never reaching this function's own explicit, non-raising fail-close contract. Uses
+        # team-dashboard-admin's own 2 real openModal/closeModal entries on the editor Section,
+        # each mutated with exactly one unhashable actionType (a dict, then a list) -- both other
+        # fields left otherwise real/clean.
+        unhashable_action_type_mutated_nodes = [dict(n) for n in td_admin_generated_carrier]
+        for index, node in enumerate(unhashable_action_type_mutated_nodes):
+            if node.get("nodeId") == "team_dashboard_admin_editor":
+                mutated = [dict(entry) for entry in node["runtimeInteractions"]]
+                mutated[0] = {**mutated[0], "actionType": {"malformed": "dict-typed actionType"}}
+                mutated[1] = {**mutated[1], "actionType": ["malformed", "list-typed", "actionType"]}
+                unhashable_action_type_mutated_nodes[index] = {**node, "runtimeInteractions": mutated}
+        unhashable_action_type_violations = None
+        unhashable_action_type_raised = None
+        try:
+            unhashable_action_type_violations = schema_composed_layout_patch_json_shape_violations(
+                {"nodes": unhashable_action_type_mutated_nodes}, translator_impl, admin_runtime_dispatch_override_lane_def,
+            )
+        except Exception as exc:  # noqa: BLE001 - the check below asserts this branch is NEVER taken
+            unhashable_action_type_raised = exc
+        expect(
+            "156g. schema_composed_layout_patch_json_shape_violations does NOT raise (returns a violation list) when a runtimeInteractions[] entry's actionType is itself an UNHASHABLE value (dict or list) -- proving the evaluation-order fix (non-empty-string check before any set-membership test) actually closes the TypeError path a hashable-only wrong-type mutation (156f's int case) could never have exercised, and that both the dict-typed and list-typed mutated entries are reported via missing_or_invalid_action_type, not silently dropped",
+            unhashable_action_type_raised is None
+            and unhashable_action_type_violations is not None
+            and sum(1 for v in unhashable_action_type_violations if "is missing a non-empty string actionType" in v) >= 2,
+        )
+
         # 157-158 (SSOT self-consistency + schema-composed carrier proof closure round,
         # 2026-09-07): fail-close proof for build_component_kind_to_component_key_pairs_fail_close
         # -- the shared duplicate-detection core BOTH catalog-authority extraction functions
