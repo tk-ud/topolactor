@@ -387,8 +387,19 @@ SCHEMA_COMPOSED_LAYOUT_PATCH_JSON_NODE_OPTIONAL_FIELDS = {
     "dispatchTargetRefByTrigger", "dispatchPayloadFromByTrigger", "propsJson", "propBindings", "debounceMs",
 }
 
+# Schema-composed proof-chain continuity closure round (2026-09-07): mirrors backend/repository/
+# NpgsqlUiTopologyRepository.cs's own AdminRuntimeTargetRefRe exactly -- the SAME
+# "manifest:<uuid>:<layer>:<action>" shape node.targetRef itself uses, the real save-time
+# authority for what a dispatchTargetRefByTrigger VALUE must look like (never re-derived
+# independently; this Python regex exists only because C# cannot be called in-process from this
+# checker -- same discipline as this file's own catalog-authority extraction functions, which
+# mirror real source data rather than inventing a parallel rule).
+SCHEMA_COMPOSED_ADMIN_RUNTIME_TARGET_REF_RE = re.compile(
+    r"^manifest:[0-9a-fA-F-]{36}:[^:]+:[^:]+$"
+)
 
-def schema_composed_layout_patch_json_shape_violations(payload):
+
+def schema_composed_layout_patch_json_shape_violations(payload, translator_impl=None):
     """Structural (fixture-INDEPENDENT) shape check for a tensorAdoptionCandidates[]
     entry's own schemaComposedLayoutPatchJson value, against
     react-schema-topology-seed-translator-ssot.yaml storage_adoption_contract.
@@ -400,6 +411,23 @@ def schema_composed_layout_patch_json_shape_violations(payload):
     function instead proves EVERY real fixture's generated output satisfies the
     general shape contract, independent of whether a matching physical seed row
     exists to compare against byte-for-byte).
+
+    EXTENDED (schema-composed proof-chain continuity closure round, 2026-09-07): the
+    original version of this function checked field NAMES only (required/forbidden/
+    optional presence) -- it never verified each field's own internal TYPE/shape, so
+    e.g. a propsJson authored as a dict instead of the SSOT-declared JSON-serialized
+    string, or a dispatchTargetRefByTrigger value that is not a real
+    "manifest:<uuid>:<layer>:<action>" ref, would silently pass. Now validates:
+    propsJson (str), propBindings (dict), debounceMs (int), dispatchTargetRefByTrigger
+    values (non-empty string matching the real AdminRuntimeTargetRefRe shape),
+    dispatchPayloadFromByTrigger values (dict of string values, mirroring backend's own
+    ValidatePayloadFromShape), and each runtimeInteractions[] entry's own shape via
+    translator_impl.runtime_interaction_candidate_shape_facts -- the SAME shared,
+    single-source judgment validate_adoption_candidates itself uses for authored
+    records, never a second, independently-reimplemented one. `translator_impl` is
+    optional (None skips the runtimeInteractions[] per-entry checks, degrading
+    gracefully rather than raising) so this function stays usable standalone; every
+    real call site in this file's own main() passes the already-imported module.
 
     Returns a list of human-readable violation strings; empty means the payload
     satisfies the contract. Never raises -- a malformed payload (not a dict, no
@@ -427,13 +455,54 @@ def schema_composed_layout_patch_json_shape_violations(payload):
             violations.append(f"node {node_id}: nodeId is not a string")
         if "nodeKind" in node and not isinstance(node["nodeKind"], str):
             violations.append(f"node {node_id}: nodeKind is not a string")
-        if "runtimeInteractions" in node and not isinstance(node["runtimeInteractions"], list):
-            violations.append(f"node {node_id}: runtimeInteractions is not a list")
+        if "propsJson" in node and not isinstance(node["propsJson"], str):
+            violations.append(f"node {node_id}: propsJson is not a JSON-serialized string (found {type(node['propsJson']).__name__})")
+        if "propBindings" in node and not isinstance(node["propBindings"], dict):
+            violations.append(f"node {node_id}: propBindings is not an object (found {type(node['propBindings']).__name__})")
+        if "debounceMs" in node and (isinstance(node["debounceMs"], bool) or not isinstance(node["debounceMs"], int)):
+            violations.append(f"node {node_id}: debounceMs is not an int (found {type(node['debounceMs']).__name__})")
+
+        dispatch_targets = node.get("dispatchTargetRefByTrigger")
+        if "dispatchTargetRefByTrigger" in node:
+            if not isinstance(dispatch_targets, dict):
+                violations.append(f"node {node_id}: dispatchTargetRefByTrigger is not an object (found {type(dispatch_targets).__name__})")
+            else:
+                for trigger, target_ref in dispatch_targets.items():
+                    if not isinstance(target_ref, str) or not SCHEMA_COMPOSED_ADMIN_RUNTIME_TARGET_REF_RE.match(target_ref):
+                        violations.append(f"node {node_id}: dispatchTargetRefByTrigger[{trigger!r}] is not a real 'manifest:<uuid>:<layer>:<action>' ref (found {target_ref!r})")
         if "dispatchPayloadFromByTrigger" in node:
-            dispatch_targets = node.get("dispatchTargetRefByTrigger") or {}
-            for trigger in node["dispatchPayloadFromByTrigger"]:
-                if trigger not in dispatch_targets:
-                    violations.append(f"node {node_id}: dispatchPayloadFromByTrigger has trigger {trigger!r} with no matching dispatchTargetRefByTrigger entry")
+            payload_from_by_trigger = node["dispatchPayloadFromByTrigger"]
+            if not isinstance(payload_from_by_trigger, dict):
+                violations.append(f"node {node_id}: dispatchPayloadFromByTrigger is not an object (found {type(payload_from_by_trigger).__name__})")
+            else:
+                dispatch_targets_dict = dispatch_targets if isinstance(dispatch_targets, dict) else {}
+                for trigger, payload_from in payload_from_by_trigger.items():
+                    if trigger not in dispatch_targets_dict:
+                        violations.append(f"node {node_id}: dispatchPayloadFromByTrigger has trigger {trigger!r} with no matching dispatchTargetRefByTrigger entry")
+                    if not isinstance(payload_from, dict):
+                        violations.append(f"node {node_id}: dispatchPayloadFromByTrigger[{trigger!r}] is not an object (found {type(payload_from).__name__})")
+                    else:
+                        for prop_name, source in payload_from.items():
+                            if not isinstance(source, str):
+                                violations.append(f"node {node_id}: dispatchPayloadFromByTrigger[{trigger!r}][{prop_name!r}] is not a string (found {type(source).__name__})")
+
+        if "runtimeInteractions" not in node or not isinstance(node["runtimeInteractions"], list):
+            if "runtimeInteractions" in node:
+                violations.append(f"node {node_id}: runtimeInteractions is not a list")
+            continue
+        for index, interaction in enumerate(node["runtimeInteractions"]):
+            if not isinstance(interaction, dict):
+                violations.append(f"node {node_id}: runtimeInteractions[{index}] is not an object: {interaction!r}")
+                continue
+            if translator_impl is None:
+                continue
+            facts = translator_impl.runtime_interaction_candidate_shape_facts(interaction)
+            if facts["has_runtime_interaction_id"]:
+                violations.append(f"node {node_id}: runtimeInteractions[{index}] must never carry runtimeInteractionId (backend-persist-time-only assignment authority)")
+            if facts["missing_source_action_key"]:
+                violations.append(f"node {node_id}: runtimeInteractions[{index}] is missing a non-empty sourceActionKey")
+            if facts["dispatch_action_type"] and facts["missing_dispatch_fields"]:
+                violations.append(f"node {node_id}: runtimeInteractions[{index}] ({interaction.get('actionType')}) is missing idempotency route field(s) {facts['missing_dispatch_fields']}")
     return violations
 
 
@@ -3209,7 +3278,7 @@ def main():
                     continue
                 schema_composed_shape_checked_fixture_count += 1
                 schema_composed_payload = tensor_candidate["schemaComposedLayoutPatchJson"]
-                violations = schema_composed_layout_patch_json_shape_violations(schema_composed_payload)
+                violations = schema_composed_layout_patch_json_shape_violations(schema_composed_payload, translator_impl)
                 if violations:
                     schema_composed_shape_violations_by_fixture[fixture_name] = violations
                 cardinality_violations = schema_composed_layout_patch_json_cardinality_violations(
@@ -3241,7 +3310,7 @@ def main():
         shape_mutated_nodes = [dict(n) for n in td_admin_generated_carrier]
         shape_mutated_nodes[0] = {**shape_mutated_nodes[0], "componentKey": "button.primitive"}
         shape_mutation_violations = schema_composed_layout_patch_json_shape_violations(
-            {"nodes": shape_mutated_nodes},
+            {"nodes": shape_mutated_nodes}, translator_impl,
         )
         expect(
             "155. schema_composed_layout_patch_json_shape_violations actually DETECTS a deliberately-injected forbidden componentKey field on an otherwise-real, already-clean node (team-dashboard-admin's own first generated node) -- proves 152 passing reflects a real, working fail-close check, never a checker that vacuously returns no violations regardless of input",
@@ -3260,6 +3329,64 @@ def main():
             "156. schema_composed_layout_patch_json_cardinality_violations actually DETECTS a deliberately-injected phantom nodeId absent from team-dashboard-admin's own real schema tree -- proves 154 passing reflects a real, working fail-close cardinality check, never a checker that vacuously returns no violations regardless of input",
             len(cardinality_mutation_violations) > 0
             and any("not_a_real_schema_tree_identity_at_all" in v for v in cardinality_mutation_violations),
+        )
+
+        # 156a-156b (schema-composed proof-chain continuity closure round, 2026-09-07):
+        # NEGATIVE, fail-close proof that the field-INTERNAL type/shape checks added to
+        # schema_composed_layout_patch_json_shape_violations this round (propsJson/propBindings/
+        # debounceMs types, dispatchTargetRefByTrigger's real manifest-ref shape,
+        # dispatchPayloadFromByTrigger's string-valued-object shape, and runtimeInteractions[]
+        # internal shape via the shared translator_impl.runtime_interaction_candidate_shape_facts)
+        # are not vacuously passing merely because every real fixture today happens to already be
+        # clean (which 152 alone would not distinguish from a checker that never actually looks
+        # inside these fields) -- same "deliberately mutate a real, already-proven-clean payload"
+        # discipline as 155-156, applied to the NEW type-level checks specifically.
+        field_shape_mutated_nodes = [dict(n) for n in td_admin_generated_carrier]
+        for index, node in enumerate(field_shape_mutated_nodes):
+            if node.get("nodeId") == "team_dashboard_admin_save_button":
+                field_shape_mutated_nodes[index] = {
+                    **node,
+                    "dispatchTargetRefByTrigger": {"click": "not_a_real_manifest_ref"},
+                    "dispatchPayloadFromByTrigger": {"click": {"bodyMarkdown": 42}},
+                    "debounceMs": "300",
+                }
+            elif node.get("nodeId") == "team_dashboard_admin_save_confirm_modal":
+                field_shape_mutated_nodes[index] = {
+                    **node,
+                    "propsJson": {"already": "a dict, not a JSON string"},
+                    "propBindings": ["not", "an", "object"],
+                }
+        field_shape_mutation_violations = schema_composed_layout_patch_json_shape_violations(
+            {"nodes": field_shape_mutated_nodes}, translator_impl,
+        )
+        expect(
+            "156a. schema_composed_layout_patch_json_shape_violations actually DETECTS each of 5 deliberately-injected field-internal type/shape defects on otherwise-real, already-clean nodes -- a malformed dispatchTargetRefByTrigger value (not the real manifest:<uuid>:<layer>:<action> shape), a non-string dispatchPayloadFromByTrigger source, a non-int debounceMs, a non-string propsJson, and a non-object propBindings -- proving these are real, working fail-close checks and not field-name-existence-only checking mistaken for a complete shape proof",
+            all(
+                any(needle in v for v in field_shape_mutation_violations)
+                for needle in (
+                    "dispatchTargetRefByTrigger['click'] is not a real",
+                    "dispatchPayloadFromByTrigger['click']['bodyMarkdown'] is not a string",
+                    "debounceMs is not an int",
+                    "propsJson is not a JSON-serialized string",
+                    "propBindings is not an object",
+                )
+            ),
+        )
+
+        runtime_interaction_shape_mutated_nodes = [dict(n) for n in td_admin_generated_carrier]
+        for index, node in enumerate(runtime_interaction_shape_mutated_nodes):
+            if node.get("nodeId") == "team_dashboard_admin_editor":
+                mutated_interactions = [dict(entry) for entry in node["runtimeInteractions"]]
+                mutated_interactions[0] = {**mutated_interactions[0], "runtimeInteractionId": "should-never-be-here"}
+                mutated_interactions[1] = {k: v for k, v in mutated_interactions[1].items() if k != "sourceActionKey"}
+                runtime_interaction_shape_mutated_nodes[index] = {**node, "runtimeInteractions": mutated_interactions}
+        runtime_interaction_shape_mutation_violations = schema_composed_layout_patch_json_shape_violations(
+            {"nodes": runtime_interaction_shape_mutated_nodes}, translator_impl,
+        )
+        expect(
+            "156b. schema_composed_layout_patch_json_shape_violations actually DETECTS a deliberately-injected forbidden runtimeInteractionId AND a deliberately-removed required sourceActionKey inside team-dashboard-admin's own real runtimeInteractions[] entries, via the SAME shared translator_impl.runtime_interaction_candidate_shape_facts judgment validate_adoption_candidates itself uses for authored records -- proving runtimeInteractions[] internal shape is actually verified, not merely presence-checked as a bare list",
+            any("must never carry runtimeInteractionId" in v for v in runtime_interaction_shape_mutation_violations)
+            and any("missing a non-empty sourceActionKey" in v for v in runtime_interaction_shape_mutation_violations),
         )
 
         # 157-158 (SSOT self-consistency + schema-composed carrier proof closure round,

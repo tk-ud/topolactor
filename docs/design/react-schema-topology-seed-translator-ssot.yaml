@@ -1107,6 +1107,47 @@ react_schema_topology_seed_translator_ssot:
             derived payload (propBindings, propsJson, adminRuntimeDispatchOverride) describes
             that SAME leaf's own configuration, never a parent's collection of child interaction
             entries.
+          save_time_carrier_eligibility_boundary_investigation: >-
+            INVESTIGATED, no code change needed (proof-chain continuity closure round,
+            2026-09-07): backend/repository/LayoutSchemaTensorComposer.cs's own
+            ResolveCarrierEligibleNodeIdsInSchemaTree (used by NpgsqlUiTopologyRepository's
+            layout_patch save-time componentKey exemption) includes topology_ui_section
+            UNCONDITIONALLY, by record type alone, never re-checking any specific child Action's
+            own wiringLane against SECTION_OWNABLE_ACTION_LANES at that save-time boundary. This
+            was investigated against the ACTUAL live write topology, not asserted: repo-wide
+            search finds exactly ONE code path in the entire live backend that ever writes
+            components_layout_design.layout_schema_json
+            (NpgsqlUiTopologyRepository.ApplyConfirmedLayoutPatchAsync's own `SET
+            layout_schema_json = CASE WHEN jsonb_typeof(layout_schema_json->'records')='array'
+            AND jsonb_array_length(...)>0 THEN layout_schema_json ELSE @schema::jsonb END`), and
+            that CASE guard PRESERVES layout_schema_json.records[] unchanged whenever it is
+            already non-empty -- it is write-once-then-immutable at this live boundary; the ELSE
+            branch that DOES write only fires for a layout whose records[] was still empty, and
+            writes valid.TensorPatchJson (a flat tensor nodes[] shape with no record_type/
+            wiringLane/Section-owns-Action structure at all -- structurally incapable of
+            expressing an Action-ownership relationship in the first place). Therefore the ONLY
+            way a Section-owns-Action relationship can ever exist in layout_schema_json.records[]
+            is via db bootstrap SQL authored to already match generate-react-schema/generate-
+            topology-seed's own output -- both VALID_ACTION_OWNER_NODE_KINDS/
+            SECTION_OWNABLE_ACTION_LANES (authoring_legality_is_a_separate_prior_gate above) AND
+            section_owned_dryrun_preview_pairing's own validate_admin_runtime_preview_action_
+            pairing check are enforced EXCLUSIVELY at that generation time, before physical
+            adoption -- there is no live, network-reachable code path that could inject a
+            Section-owns-Action relationship into layout_schema_json.records[] bypassing either
+            gate. Re-deriving per-Action wiringLane legality inside
+            ResolveCarrierEligibleNodeIdsInSchemaTree would therefore guard against a class of
+            input this live boundary cannot structurally receive -- redundant defense against an
+            unreachable path, not a closure of a real gap; adding it would also duplicate
+            authoring-legality judgment this repository already keeps as a single, generation-
+            time-only authority (validate_structural_node), which storage_adoption_contract's own
+            reuse-over-reinvention discipline argues against absent a real reachable gap. Category
+            and Validation remain correctly excluded from CarrierEligibleStructuralRecordTypes
+            (they are never a legal Action owner under ANY wiringLane, so their exclusion is
+            unconditional and needs no per-lane nuance). If a future change ever adds a live
+            write path that can create or mutate layout_schema_json.records[]' Section-owns-
+            Action relationships without going through generate-react-schema's own validation
+            first, this conclusion must be re-investigated -- it depends on the write-once
+            topology proven here, not on a general property of Sections.
         field_control_component_identity_contract:
           note: >-
             Corrected 2026-09-06 (Owner review of this same note): COMPONENT_KIND_TO_COMPONENT_
@@ -1483,7 +1524,20 @@ react_schema_topology_seed_translator_ssot:
               build_schema_composed_layout_patch_json(layout_records), a pure function of
               layoutAdoptionCandidates.layoutSchemaJson.records[] alone (never of tensor_nodes
               above -- a SEPARATE, generically-computed sibling projection, not a transform of
-              this same bucket's own layoutPatchJson).
+              this same bucket's own layoutPatchJson). CORRECTED 2026-09-07 (proof-chain
+              continuity closure round -- cardinality wording/implementation reconciliation):
+              split_flat_records_into_adoption_candidates only calls this function, and only
+              appends a tensorAdoptionCandidates[] entry carrying its result, INSIDE its own
+              `if tensor_nodes:` branch -- the SAME generic, content-based bucket-membership gate
+              every other candidate bucket in this same function already uses (wiring_candidates
+              gated by wiring_action_entries non-emptiness, package/layout/design candidates by
+              their own analogous content checks) -- never an additional seed_key/route/
+              manifestKey-SPECIFIC condition layered on top of that shared gate. A surface whose
+              tensor_nodes is empty (zero Field/Table/Action/WorkflowStep contributions of any
+              kind) has no tensorAdoptionCandidates entry to attach schemaComposedLayoutPatchJson
+              to at all -- there is no bucket for it to be "gated" out of, the same way a surface
+              with zero wiring_action_entries has no wiringAdoptionCandidates entry. The
+              required_rule below states this precisely.
             shape: >-
               {nodes: [{nodeId: <owning leaf's own resolved key, OR its resolved OWNING PARENT's
               key for a runtimeInteractions contribution -- interaction_ownership_and_addressing_
@@ -1508,7 +1562,7 @@ react_schema_topology_seed_translator_ssot:
               - every_node_carries_nodeId_nodeKind_runtimeInteractions
               - schemaComposedLayoutPatchJson_node_never_carries_componentKey_or_componentKind_or_parentNodeId
               - dispatchPayloadFromByTrigger_trigger_key_never_present_without_a_matching_dispatchTargetRefByTrigger_entry_for_the_same_trigger
-              - schemaComposedLayoutPatchJson_computed_for_every_surface_never_gated_by_seed_key_route_or_manifestKey
+              - schemaComposedLayoutPatchJson_computed_whenever_tensorAdoptionCandidates_bucket_is_non_empty_via_the_same_generic_tensor_nodes_content_gate_every_other_candidate_bucket_uses_never_gated_by_a_surface_identity_condition_such_as_seed_key_route_or_manifestKey
               - schemaComposedLayoutPatchJson_is_computed_from_layoutAdoptionCandidates_records_alone_never_from_tensor_nodes_output
               - every_generated_node_nodeId_resolves_to_a_genuine_catalog_leaf_or_a_carrier_eligible_structural_or_modal_parent_never_a_category_validation_or_unresolved_gap_identity_and_never_a_phantom_identity_absent_from_the_schema_tree
             prohibited:

@@ -707,6 +707,25 @@ public static class LayoutSchemaTensorComposer
     /// NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs's own positive (Section/Modal
     /// carrier) and negative (Category/Validation/unresolved_gap rejected) proof pair.
     ///
+    /// INVESTIGATED (proof-chain continuity closure round, 2026-09-07): Section is included here
+    /// by record type ALONE, never re-checking any specific child Action's own wiringLane against
+    /// SECTION_OWNABLE_ACTION_LANES at this save-time boundary -- confirmed sufficient, not merely
+    /// assumed: NpgsqlUiTopologyRepository.ApplyConfirmedLayoutPatchAsync is the ONLY code path in
+    /// the entire live backend that ever writes components_layout_design.layout_schema_json, and
+    /// its own CASE guard preserves layout_schema_json.records[] unchanged whenever already
+    /// non-empty (write-once-then-immutable at this boundary); its one write branch fires only
+    /// when records[] was still empty, and writes a flat tensor nodes[] shape structurally
+    /// incapable of expressing a Section-owns-Action relationship at all. So a Section-owns-Action
+    /// relationship can only ever originate from db bootstrap SQL authored to match
+    /// generate-react-schema/generate-topology-seed's own output, where VALID_ACTION_OWNER_
+    /// NODE_KINDS/SECTION_OWNABLE_ACTION_LANES and section_owned_dryrun_preview_pairing's own
+    /// validate_admin_runtime_preview_action_pairing are already enforced before adoption -- no
+    /// live, network-reachable path can inject a lane-illegal one here. See
+    /// react-schema-topology-seed-translator-ssot.yaml storage_adoption_contract.
+    /// adoption_candidate_separation_contract.structural_authority_precedence_contract.
+    /// interaction_ownership_and_addressing_contract.
+    /// save_time_carrier_eligibility_boundary_investigation for the full investigation.
+    ///
     /// Used by NpgsqlUiTopologyRepository.ValidateLayoutPatchNodes to widen its "does this raw
     /// tensor nodeId need its own componentKey" exemption beyond catalog leaves: a tensor node
     /// whose nodeId matches a carrier-eligible structural parent or a Modal, acting purely as an

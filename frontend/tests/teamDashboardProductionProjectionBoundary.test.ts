@@ -2,10 +2,16 @@
  * Production-composition boundary proof for the Team Dashboard Admin/Normal canonical
  * shared-dashboard surfaces (docs/design/admin-normal-surface-projection-seed-ssot.yaml
  * surface_axes.admin.surfaces.team_dashboard / surface_axes.normal.surfaces.dashboard.
- * team_dashboard_canonical_shared_contract). The LayoutNode[] fixtures below are a checked-in
- * snapshot of the REAL Emission.LayoutNodes a live dispatch produces today, byte-identical to
- * frontend/tests/fixtures/team_dashboard_admin_composed_layout_nodes.json /
- * team_dashboard_normal_composed_layout_nodes.json, which backend/tests/
+ * team_dashboard_canonical_shared_contract). Each Deno.test below LOADS its own LayoutNode[]
+ * input DIRECTLY from frontend/tests/fixtures/team_dashboard_admin_composed_layout_nodes.json /
+ * team_dashboard_normal_composed_layout_nodes.json (via loadFixtureLayoutNodes, near this file's
+ * ADMIN_UPDATE_TARGET_REF/CONFIRM_MODAL_ID constants below) rather than maintaining a separate
+ * hand-typed LayoutNode[] literal that merely claims equivalence in a comment (PROOF-CHAIN
+ * CONTINUITY closure round, 2026-09-07 -- see that function's own comment for why: an earlier
+ * hand-typed copy of this same content had already silently drifted, missing each node's own x/y
+ * fields and each runtimeInteractions[] entry's own sourceActionKey, undetected because nothing
+ * mechanically compared the two). This is the SAME checked-in snapshot of the REAL
+ * Emission.LayoutNodes a live dispatch produces today that backend/tests/
  * Topolactor.Integration.Tests/TeamDashboardHubRelationUiProjectionLiveDbTests.cs's own
  * DispatchAsync_{Admin,Normal}Manifest_ProjectionEntry_ComposedFromPhysicallyAdoptedSchema_
  * MatchesCheckedInFixtureSnapshot tests independently assert against a real live-DB dispatch —
@@ -154,197 +160,34 @@ const JA = {
   markdownBodyLabel: "Markdown本文",
 };
 
-// Wiring identity fields (wiringId/wiringKey/wiringKind/targetSurface/targetRef) every
-// catalog_component node in this layout inherits uniformly from its single ui_wiring_registry
-// row (dd014) -- structural_node entries (Category/Section) never carry these at all, matching
-// the real composed shape exactly (see the fixture referenced below).
-const ADMIN_WIRING = {
-  wiringId: "00000000-0000-0000-0000-0000000dd014",
-  wiringKey: "team_dashboard.admin.projection.wiring",
-  wiringKind: "admin_runtime",
-  targetSurface: "manifest",
-  targetRef: "team_dashboard.admin.projection",
-};
 const ADMIN_UPDATE_TARGET_REF =
   "manifest:00000000-0000-0000-0000-0000000dd010:team_dashboard:update";
 const CONFIRM_MODAL_ID = "team_dashboard_admin_save_confirm_modal";
 const ADMIN_SECTION_ID = "team_dashboard_admin_editor";
-
-// Byte-identical to frontend/tests/fixtures/team_dashboard_admin_composed_layout_nodes.json --
-// a checked-in snapshot of the REAL Emission.LayoutNodes a live dispatch against the physically
-// adopted dd013 (PRIMARY schema) + dd015 (DERIVED tensor carrier) produces today, independently
-// asserted by backend/tests/Topolactor.Integration.Tests/TeamDashboardHubRelationUiProjection
-// LiveDbTests.cs's own DispatchAsync_AdminManifest_ProjectionEntry_ComposedFromPhysicallyAdopted
-// Schema_MatchesCheckedInFixtureSnapshot test -- see this file's own header for the full
-// before/after shape explanation.
-const ADMIN_LAYOUT_NODES: LayoutNode[] = [
-  {
-    nodeId: "team_dashboard",
-    nodeKind: "structural_node",
-    orderIndex: 0,
-    recordType: "topology_ui_category",
-    label: JA.categoryLabel,
-  },
-  {
-    nodeId: ADMIN_SECTION_ID,
-    nodeKind: "structural_node",
-    parentNodeId: "team_dashboard",
-    orderIndex: 1,
-    recordType: "topology_ui_section",
-    label: JA.adminSectionLabel,
-  },
-  {
-    ...ADMIN_WIRING,
-    nodeId: "team_dashboard_admin_viewer",
-    nodeKind: "catalog_component",
-    componentId: "00000000-0000-0000-0001-000000000021",
-    parentNodeId: ADMIN_SECTION_ID,
-    componentKind: "data_display/md_viewer",
-    orderIndex: 2,
-    propsJson: `{"data": {"label": "${JA.viewerLabel}"}}`,
-    propBindings: { markdown: { source: "emission.data.bodyMarkdown" } },
-    label: JA.viewerLabel,
-  },
-  {
-    ...ADMIN_WIRING,
-    nodeId: "team_dashboard_admin_body",
-    nodeKind: "catalog_component",
-    componentId: "00000000-0000-0000-0001-00000000001f",
-    parentNodeId: ADMIN_SECTION_ID,
-    componentKind: "form_input/textarea_template",
-    orderIndex: 3,
-    propsJson: `{"data": {"label": "${JA.markdownBodyLabel}"}}`,
-    propBindings: { value: { source: "emission.data.bodyMarkdown" } },
-    label: JA.markdownBodyLabel,
-  },
-  {
-    ...ADMIN_WIRING,
-    nodeId: "team_dashboard_admin_save_button",
-    nodeKind: "catalog_component",
-    componentId: "00000000-0000-0000-0001-000000000010",
-    parentNodeId: ADMIN_SECTION_ID,
-    componentKind: "action/button",
-    orderIndex: 4,
-    runtimeInteractions: [
-      {
-        trigger: "click",
-        actionType: "openModal",
-        targetNodeId: CONFIRM_MODAL_ID,
-        statePath: "open",
-      },
-    ],
-    dispatchTargetRefByTrigger: { click: ADMIN_UPDATE_TARGET_REF },
-    dispatchPayloadFromByTrigger: {
-      click: { bodyMarkdown: "node:team_dashboard_admin_body.value", dryRun: "literal:true" },
-    },
-    label: JA.save,
-  },
-  {
-    ...ADMIN_WIRING,
-    // structural_authority_precedence_contract.interaction_ownership_and_addressing_contract:
-    // ParentNodeId is now resolved from the PRIMARY schema tree (dd013), not a tensor-side
-    // parentNodeId stamp -- reachable in the DOM only while team_dashboard_admin_save_confirm_
-    // modal's own `open` is true (Modal.tsx returns null entirely when closed, taking its whole
-    // subtree with it).
-    parentNodeId: ADMIN_SECTION_ID,
-    nodeId: CONFIRM_MODAL_ID,
-    nodeKind: "catalog_component",
-    componentId: CONFIRM_MODAL_ID,
-    componentKind: "disclosure/modal",
-    orderIndex: 5,
-    runtimeInteractions: [
-      {
-        trigger: "toggle",
-        actionType: "closeModal",
-        targetNodeId: CONFIRM_MODAL_ID,
-        statePath: "open",
-      },
-    ],
-    propsJson: `{"data": {"open": false, "title": "${JA.confirmTitle}", "body": "${JA.confirmBody}"}}`,
-    label: JA.confirmTitle,
-  },
-  {
-    ...ADMIN_WIRING,
-    parentNodeId: CONFIRM_MODAL_ID,
-    nodeId: "team_dashboard_admin_save_confirm_button",
-    nodeKind: "catalog_component",
-    componentId: "00000000-0000-0000-0001-000000000010",
-    componentKind: "action/button",
-    orderIndex: 6,
-    runtimeInteractions: [
-      {
-        trigger: "click",
-        actionType: "closeModal",
-        targetNodeId: CONFIRM_MODAL_ID,
-        statePath: "open",
-      },
-    ],
-    dispatchTargetRefByTrigger: { click: ADMIN_UPDATE_TARGET_REF },
-    dispatchPayloadFromByTrigger: {
-      click: { bodyMarkdown: "node:team_dashboard_admin_body.value", confirmed: "literal:true" },
-    },
-    label: JA.save,
-  },
-  {
-    ...ADMIN_WIRING,
-    parentNodeId: CONFIRM_MODAL_ID,
-    nodeId: "team_dashboard_admin_save_cancel_button",
-    nodeKind: "catalog_component",
-    componentId: "00000000-0000-0000-0001-000000000010",
-    componentKind: "action/button",
-    orderIndex: 7,
-    runtimeInteractions: [
-      {
-        trigger: "click",
-        actionType: "closeModal",
-        targetNodeId: CONFIRM_MODAL_ID,
-        statePath: "open",
-      },
-    ],
-    label: JA.cancel,
-  },
-];
-
 const NORMAL_SECTION_ID = "team_dashboard_normal_viewer_section";
 
-// Byte-identical to frontend/tests/fixtures/team_dashboard_normal_composed_layout_nodes.json --
-// same checked-in-snapshot pattern as ADMIN_LAYOUT_NODES above, this axis's own
-// DispatchAsync_NormalManifest_ProjectionEntry_ComposedFromPhysicallyAdoptedSchema_
-// MatchesCheckedInFixtureSnapshot test. Category > Section > read-only viewer only -- no editor/
-// save/mutation nodes at all (not merely hidden ones).
-const NORMAL_LAYOUT_NODES: LayoutNode[] = [
-  {
-    nodeId: "team_dashboard_normal",
-    nodeKind: "structural_node",
-    orderIndex: 0,
-    recordType: "topology_ui_category",
-    label: JA.categoryLabel,
-  },
-  {
-    nodeId: NORMAL_SECTION_ID,
-    nodeKind: "structural_node",
-    parentNodeId: "team_dashboard_normal",
-    orderIndex: 1,
-    recordType: "topology_ui_section",
-    label: JA.normalSectionLabel,
-  },
-  {
-    nodeId: "team_dashboard_normal_viewer",
-    nodeKind: "catalog_component",
-    componentId: "00000000-0000-0000-0001-000000000021",
-    parentNodeId: NORMAL_SECTION_ID,
-    componentKind: "data_display/md_viewer",
-    wiringId: "00000000-0000-0000-0000-0000000dd024",
-    wiringKey: "team_dashboard.normal.projection.wiring",
-    wiringKind: "admin_runtime",
-    targetSurface: "manifest",
-    targetRef: "team_dashboard.normal.projection",
-    orderIndex: 2,
-    propsJson: `{"data": {"label": "${JA.viewerLabel}"}}`,
-    propBindings: { markdown: { source: "emission.data.bodyMarkdown" } },
-    label: JA.viewerLabel,
-  },
-];
+// PROOF-CHAIN CONTINUITY (schema-composed proof-chain continuity closure round, 2026-09-07):
+// this test's own real input artifact is loaded DIRECTLY from frontend/tests/fixtures/
+// team_dashboard_{admin,normal}_composed_layout_nodes.json -- the SAME checked-in snapshot of the
+// REAL Emission.LayoutNodes a live dispatch against the physically adopted dd013/dd023 (PRIMARY
+// schema) + dd015/dd025 (DERIVED tensor carrier) produces today, independently asserted byte-for-
+// byte by backend/tests/Topolactor.Integration.Tests/TeamDashboardHubRelationUiProjectionLiveDbTests.cs's
+// own DispatchAsync_{Admin,Normal}Manifest_ProjectionEntry_ComposedFromPhysicallyAdoptedSchema_
+// MatchesCheckedInFixtureSnapshot tests -- via the SAME `Deno.readTextFile(new URL("./fixtures/...
+// json", import.meta.url))` + `JSON.parse` mechanism manifest 092's own paired proof
+// (layoutSchemaStructuralRender.test.ts, renderEmissionPropBindings.test.ts,
+// credentialManagementCategorySelectorProductionPath.test.ts) already established, never a
+// separately hand-typed LayoutNode[] literal that merely CLAIMED (in a comment) to be the same
+// content -- a previous hand-typed version of this fixture had already silently drifted from the
+// real snapshot (missing each node's own x/y canvas fields and each runtimeInteractions[] entry's
+// own sourceActionKey) while its own comment still asserted byte-identity, which is exactly the
+// proof-chain break this load-direct approach closes: a future drift in the checked-in fixture (or
+// in what the backend test proves it against) now reaches this frontend DOM test automatically,
+// rather than requiring a second, independent hand-edit that could silently fall out of sync.
+async function loadFixtureLayoutNodes(fileName: string): Promise<LayoutNode[]> {
+  const text = await Deno.readTextFile(new URL(`./fixtures/${fileName}`, import.meta.url));
+  return JSON.parse(text) as LayoutNode[];
+}
 
 // Synthetic UI-Builder canvas-preview placeholder content (layoutComponentPreview.ts's
 // data_display/md_viewer case) -- must never reach either axis's production DOM.
@@ -410,6 +253,8 @@ function assertNoMachineVocabularyAsVisibleText(html: string, context: string): 
 }
 
 Deno.test("production path: Admin /admin/team-dashboard (team_dashboard.admin.projection, dd010) renders real Japanese authored content + real bodyMarkdown + editable Textarea, keeps Confirm/Cancel structurally contained inside the closed/open Modal (never a permanent root-level sibling), and completes a full dryRun-preview -> explicit confirm -> confirmed team_dashboard:update dispatch chain (real DOM, real native events)", async () => {
+  const ADMIN_LAYOUT_NODES = await loadFixtureLayoutNodes("team_dashboard_admin_composed_layout_nodes.json");
+  assert(ADMIN_LAYOUT_NODES.length > 0, "fixture must contain the real composed Admin LayoutNodes");
   const emission: Emission = {
     layoutId: "00000000-0000-0000-0000-0000000dd013",
     layoutNodes: ADMIN_LAYOUT_NODES,
@@ -651,6 +496,8 @@ Deno.test("production path: Admin /admin/team-dashboard (team_dashboard.admin.pr
 });
 
 Deno.test("production path: Normal /dashboard (team_dashboard.normal.projection, dd020) renders ONLY the real bodyMarkdown as read-only bare markdown — zero synthetic Saved View chrome, zero machine vocabulary as visible text, and zero editor/save/mutation controls in the DOM", async () => {
+  const NORMAL_LAYOUT_NODES = await loadFixtureLayoutNodes("team_dashboard_normal_composed_layout_nodes.json");
+  assert(NORMAL_LAYOUT_NODES.length > 0, "fixture must contain the real composed Normal LayoutNodes");
   const emission: Emission = {
     layoutId: "00000000-0000-0000-0000-0000000dd023",
     layoutNodes: NORMAL_LAYOUT_NODES,

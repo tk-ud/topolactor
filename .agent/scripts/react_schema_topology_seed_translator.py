@@ -1229,6 +1229,47 @@ def build_runtime_interaction_candidate(node):
             candidate[field] = node[field]
     return candidate
 
+
+def runtime_interaction_candidate_shape_facts(interaction):
+    """Fail-close, single-source shape facts for ONE runtimeInteractions[] candidate entry --
+    ONE shared implementation of "what must this actionType's candidate carry", extracted
+    (schema-composed proof-chain continuity closure round, 2026-09-07) from
+    validate_adoption_candidates' own inline per-entry check below so that
+    check_react_schema_topology_seed_translator.py's schema_composed_layout_patch_json_shape_
+    violations can prove the SAME shape holds for build_schema_composed_layout_patch_json's own
+    generated carrier output (whose runtimeInteractions entries are these SAME
+    build_runtime_interaction_candidate objects, redirected to a parent nodeId, never rebuilt) --
+    never a second, independently-reimplemented judgment of which fields matter per actionType.
+
+    Returns a dict: {"has_runtime_interaction_id": bool, "missing_source_action_key": bool,
+    "dispatch_action_type": bool, "missing_dispatch_fields": list[str]}. Never raises -- a
+    non-dict interaction is reported via the caller's own top-level type check, not here.
+    Scope matches validate_adoption_candidates' own existing, narrower coverage exactly:
+    only RUNTIME_DISPATCH_ACTION_TYPES (dispatchExternalPort/dispatchInstanceOperation) get
+    idempotency-route-field checks -- localStateMutation/routeNavigation/contentsApiDispatch/
+    disclosure actionTypes are not additionally gated here, matching this file's own
+    already-established validation boundary, never a newly-invented wider one.
+    """
+    action_type = interaction.get("actionType")
+    facts = {
+        "has_runtime_interaction_id": "runtimeInteractionId" in interaction,
+        "missing_source_action_key": not interaction.get("sourceActionKey"),
+        "dispatch_action_type": action_type in RUNTIME_DISPATCH_ACTION_TYPES,
+        "missing_dispatch_fields": [],
+    }
+    if facts["dispatch_action_type"]:
+        missing = []
+        if not interaction.get("trigger"):
+            missing.append("trigger")
+        target_field = "instanceTargetRef" if action_type == "dispatchInstanceOperation" else "portTargetRef"
+        if not interaction.get(target_field):
+            missing.append(target_field)
+        if "payloadFrom" not in interaction:
+            missing.append("payloadFrom")
+        facts["missing_dispatch_fields"] = missing
+    return facts
+
+
 def build_admin_runtime_dispatch_override_candidate(node):
     """Build a dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger candidate entry from an
     Action/Step eventBinding whose wiringLane is admin_runtime_dispatch_override_wiring.
@@ -3058,9 +3099,15 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
         # layout_schema_json.records[] (structural_authority_precedence_contract), THIS field --
         # never layoutPatchJson -- is what belongs in ui_topology_tensor.layout_patch_json; a
         # surface that stays tensor-only keeps using layoutPatchJson unchanged and this field is
-        # simply additional information, never itself adopted. Computed generically for every
-        # surface (never gated by seed_key/route/manifestKey) so it never silently goes stale for
-        # a surface not yet physically adopted.
+        # simply additional information, never itself adopted. Computed whenever this SAME
+        # tensor_nodes-gated bucket is non-empty (the identical generic, content-based gate every
+        # other candidate bucket in this function already uses -- CORRECTED 2026-09-07, proof-
+        # chain continuity closure round: this comment previously said "for every surface (never
+        # gated by seed_key/route/manifestKey)", which was accurate about the absence of a
+        # surface-IDENTITY-specific condition but easy to misread as "unconditionally" -- it has
+        # always been, and remains, gated by this same tensor_nodes bucket-membership check, never
+        # by an additional seed_key/route/manifestKey condition layered on top of it) so it never
+        # silently goes stale for a surface not yet physically adopted.
         schema_composed_layout_patch_json = build_schema_composed_layout_patch_json(layout_records)
 
         tensor_candidates.append({
@@ -3297,23 +3344,17 @@ def validate_adoption_candidates(candidates, flat_records):
 
         for interaction in record.get("runtimeInteractions") or []:
             action_type = interaction.get("actionType")
-            if "runtimeInteractionId" in interaction:
+            facts = runtime_interaction_candidate_shape_facts(interaction)
+            if facts["has_runtime_interaction_id"]:
                 errors.append(err(
                     "IDEMPOTENCY_CARRIER_MISSING_FOR_RUNTIME_DISPATCH",
                     path,
                     "blocking",
                     f"Action/Step '{key}' runtimeInteractions candidate must never carry runtimeInteractionId (backend-persist-time-only assignment authority)",
                 ))
-            if action_type not in RUNTIME_DISPATCH_ACTION_TYPES:
+            if not facts["dispatch_action_type"]:
                 continue
-            missing = []
-            if not interaction.get("trigger"):
-                missing.append("trigger")
-            target_field = "instanceTargetRef" if action_type == "dispatchInstanceOperation" else "portTargetRef"
-            if not interaction.get(target_field):
-                missing.append(target_field)
-            if "payloadFrom" not in interaction:
-                missing.append("payloadFrom")
+            missing = facts["missing_dispatch_fields"]
             if missing:
                 errors.append(err(
                     "IDEMPOTENCY_CARRIER_MISSING_FOR_RUNTIME_DISPATCH",
