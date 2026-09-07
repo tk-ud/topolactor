@@ -121,7 +121,14 @@ public static class LayoutSchemaTensorComposer
     // Canonical display -> ui_component_registry.component_key convention for Table leaves.
     // Reuses the existing preset catalog rows declared for table-shaped surfaces
     // (ui-builder-preset-ecosystem-ssot.yaml) — does not invent new registry entries.
-    private static readonly IReadOnlyDictionary<string, string> TableDisplayToComponentKey =
+    // Widened from private to internal so LayoutSchemaStructuralCompositionTests can verify each
+    // entry's VALUE resolves to a real topology.ui_component_registry row whose component_kind
+    // suffix (after the family/ prefix) equals this table's own KEY -- e.g. "table" ->
+    // "table.primitive" here corresponds to the real "data_display/table" -> "table.primitive"
+    // registry row. This table's keys are "display" convention values, not componentKind
+    // strings, so the correspondence is checked by suffix, not by direct key lookup like
+    // FieldControlToComponentKey/ActionComponentKey above.
+    internal static readonly IReadOnlyDictionary<string, string> TableDisplayToComponentKey =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["card_list"] = "card_list.primitive",
@@ -136,7 +143,10 @@ public static class LayoutSchemaTensorComposer
     // docs/design/react-schema-topology-seed-translator-ssot.yaml
     // storage_adoption_contract.adoption_candidate_separation_contract, which already treats the
     // two identically across wiringAdoptionCandidates/tensorAdoptionCandidates.
-    private const string ActionComponentKey = "button.primitive";
+    // Widened from private to internal so LayoutSchemaStructuralCompositionTests can verify this
+    // constant directly against db/ui_component_registry_preset_catalog_bootstrap.sql's real
+    // action/button row, mirroring the same precedent already applied to FieldControlToComponentKey.
+    internal const string ActionComponentKey = "button.primitive";
 
     public record SchemaRecordRow(
         string RecordType,

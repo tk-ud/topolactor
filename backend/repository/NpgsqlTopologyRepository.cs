@@ -309,9 +309,11 @@ public class NpgsqlTopologyRepository : TopologyRepository
 
         if (parseResult is LayoutSchemaTensorComposer.RecordsParseResult.Valid { Rows: var schemaRecords })
         {
-            // Tensor nodes key their runtimeInteractions array at the FORM level; each entry is
-            // individually tagged by sourceActionKey identifying the Action/Field leaf it belongs
-            // to — grouping by that key is the correct merge join, not a tensor-nodeId match.
+            // Tensor nodes key their runtimeInteractions array at the resolved OWNING STRUCTURAL
+            // PARENT's own tensor NodeId (Form, Workflow, Modal, or a lane/pairing-eligible
+            // Section; never restricted to Form); each entry is individually tagged by
+            // sourceActionKey identifying the Action/Field leaf it belongs to — grouping by that
+            // key is the correct merge join, not a tensor-nodeId match.
             // baseNodes is empty when no tensor row exists — BuildInteractionsBySourceActionKey
             // returns an empty Valid map in that case, which is correct: a schema-only layout has
             // no runtimeInteractions to merge, not a broken one.

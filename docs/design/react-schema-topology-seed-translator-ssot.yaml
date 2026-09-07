@@ -1149,6 +1149,57 @@ react_schema_topology_seed_translator_ssot:
             the control is unsupported for that path; a non-Field entry's absence from
             FieldControlToComponentKey is correct and required, never a gap to close.
         tensor_derived_carrier_generation_lineage_status: >-
+          CLOSED (generic schema-composed physical-conversion round, 2026-09-07) -- the WRITE-
+          direction gap this finding originally flagged is now implemented as
+          .agent/scripts/react_schema_topology_seed_translator.py's build_schema_composed_
+          layout_patch_json(layout_records), a pure function deriving the DERIVED tensor carrier
+          shape directly from layoutAdoptionCandidates.layoutSchemaJson.records[] (the PRIMARY
+          tree) alone, reusing the SAME owning-parent addressing rule this contract's own
+          interaction_ownership_and_addressing_contract already specifies -- never a new runtime
+          lane, new persistence table, or new component identity authority, and never a surface-
+          route/manifestKey/nodeId/componentKey-scoped conditional. Its output is exposed
+          generically, for every surface, as tensorAdoptionCandidates[0].schemaComposedLayoutPatch
+          Json, a new sibling field alongside the pre-existing layoutPatchJson (representing what
+          SHOULD be persisted into ui_topology_tensor.layout_patch_json once a surface's
+          layoutAdoptionCandidates has been physically adopted, replacing layoutPatchJson's role
+          for that surface). componentKey/componentKind identity used nowhere new by this
+          transform (it is never emitted -- Compose still resolves both from the PRIMARY schema
+          tree at read time); the pre-existing FieldControlToComponentKey/ActionComponentKey
+          (backend/repository/LayoutSchemaTensorComposer.cs) and COMPONENT_KIND_TO_COMPONENT_KEY
+          (react_schema_topology_seed_translator.py) hand-typed convention tables are unchanged,
+          and are now each independently VERIFIED (not re-implemented) against db/ui_component_
+          registry_preset_catalog_bootstrap.sql's own real topology.ui_component_registry rows --
+          the canonical, already-existing component identity authority -- by
+          check_react_schema_topology_seed_translator.py's checks 148-149 (Python) and
+          LayoutSchemaStructuralCompositionTests.cs's FieldControlToComponentKey_/
+          ActionComponentKey_/TableDisplayToComponentKey_MatchesRealUiComponentRegistryBootstrap*
+          facts (C#), closing the OK-axis requirement that componentKey/componentKind identity be
+          derived/verified from the existing catalog authority rather than mirrored by a second,
+          independently-curated, drift-prone table. Representative proof (fail-close, permanent):
+          check_react_schema_topology_seed_translator.py's checks 142-143 assert the REAL
+          generated team_dashboard.admin/normal.projection output is byte-for-byte identical
+          (content AND document order) to db/seed_empty.sql's own already-in-production dd015/
+          dd025 rows; checks 144-147 cross-validate a second, independent, more complex real
+          surface (admin.enum.management.projection's ae206 -- 27 nodes, multiple Sections/
+          Modals), confirming exact node-set match, zero componentKey/componentKind leakage, and
+          content-exact match for 24/27 nodes -- the remaining 3 are pre-existing, unrelated
+          defects already present in ae206's OWN legacy seed content (two form_input/input Fields
+          missing propsJson.data.label in real production content; one Modal's authored body text
+          carries a literal doubled-apostrophe SQL-escaping artifact), confirmed out of this
+          round's scope per this round's own NG axis and left untouched. The known, separately-
+          tracked UI-Builder-side frontend readPatchNode node-loss gap for reopening a schema-
+          composed layout (.agent/tasks/todo.md's ui-builder-schema-composed-override-delta-
+          reachability, status not_started) is a distinct, unrelated defect on the READ/reopen
+          side of the UI Builder's own editing flow, confirmed NOT touched or depended upon by
+          this transform, and is NOT absorbed into this closure. Non-regression: the pre-existing
+          tensor-only generation path (tensorAdoptionCandidates[0].layoutPatchJson) is refactored
+          to share a single extracted merge/clean helper
+          (_merge_and_clean_tensor_node_contributions) with the new schema-composed path, verified
+          to produce byte-identical output to the prior inline implementation via the full
+          pre-existing translator assertion suite (unchanged, all passing) before any new checks
+          were added. Historical record below (originally filed as the open finding this closes)
+          is retained verbatim for lineage.
+        tensor_derived_carrier_generation_lineage_status_historical_open_finding_2026_09_07: >-
           OPEN FINDING (canonical-generation -> physical-adoption lineage closure round,
           2026-09-07) -- reported per this round's own instruction to flag, not invent, when a
           transform cannot be uniquely derived as an existing callable function. Re-confirmed: the

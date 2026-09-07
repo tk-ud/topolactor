@@ -40,6 +40,7 @@ CRUD_TOPOLOGY_SEED_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "reac
 AGENT_TMP_DIR = REPO_ROOT / ".agent" / "tmp"
 SEED_EMPTY_PATH = REPO_ROOT / "db" / "seed_empty.sql"
 CRUD_PRESET_SEED_SQL_PATH = REPO_ROOT / "db" / "physical_search_crud_aggregate_preset_seed.sql"
+UI_COMPONENT_REGISTRY_BOOTSTRAP_PATH = REPO_ROOT / "db" / "ui_component_registry_preset_catalog_bootstrap.sql"
 
 # Mirrors frontend/tests/presetSeedLineContract.test.ts REQUIRED_NODE_FIELDS,
 # so the seed-first connection checks below apply the same layout node shape
@@ -229,6 +230,78 @@ def extract_layout_schema_json_by_layout_id(sql_text, layout_id):
     if not m:
         raise AssertionError(f"layout_schema_json '{{...}}'::jsonb literal for layout_id={layout_id} not found")
     return json.loads(m.group(1))
+
+
+def extract_tensor_layout_patch_json_by_tensor_id(sql_text, tensor_id):
+    """Independently resolves a ui_topology_tensor row's own layout_patch_json
+    straight from db/seed_empty.sql (canonical-generation -> physical-adoption
+    lineage closure round, generic UI-Builder physical conversion) -- the
+    tensor-side counterpart of extract_layout_schema_json_by_layout_id above,
+    used to fail-close-prove build_schema_composed_layout_patch_json's own
+    generated output against a REAL already-in-production DERIVED carrier.
+    ui_topology_tensor.layout_patch_json is authored in EITHER SQL string-
+    literal shape across this file's own history -- a plain
+    '{"nodes":[...]}'::jsonb single-line literal (e.g. team_dashboard's own
+    dd015/dd025 rows) or a $$...$$::jsonb dollar-quoted block (e.g.
+    admin.enum.management.projection's ae206 row) -- so both are tried, never
+    assuming one shape is universal.
+    """
+    marker = f"'{tensor_id}',"
+    idx = sql_text.find(marker)
+    if idx == -1:
+        raise AssertionError(f"ui_topology_tensor VALUES for tensor_id={tensor_id} not found in db/seed_empty.sql")
+    window = sql_text[idx: idx + 80000]
+    m = COMPILE_SNAPSHOT_BLOCK_RE.search(window)
+    if m:
+        return json.loads(m.group(1))
+    m = LAYOUT_SCHEMA_JSON_LITERAL_RE.search(window)
+    if m:
+        return json.loads(m.group(1))
+    raise AssertionError(f"layout_patch_json literal (neither $$...$$ nor '{{...}}' shape) for tensor_id={tensor_id} not found")
+
+
+UI_COMPONENT_REGISTRY_ROW_RE = re.compile(
+    r"\('[0-9a-fA-F-]+',\s*'([^']+)',\s*'([^']+)',\s*'[^']*',\s*'[^']*'\)"
+)
+
+
+def extract_component_kind_to_component_key_from_registry_bootstrap():
+    """Independently resolves every REAL (component_kind -> component_key) pair
+    straight from db/ui_component_registry_preset_catalog_bootstrap.sql (generic
+    UI-Builder physical conversion round) -- the canonical, already-existing
+    component identity authority both react_schema_topology_seed_translator.py's
+    own COMPONENT_KIND_TO_COMPONENT_KEY and backend/repository/
+    LayoutSchemaTensorComposer.cs's own FieldControlToComponentKey/
+    TableDisplayToComponentKey/ActionComponentKey are hand-typed CONVENTION-TABLE
+    mirrors of -- never a new identity authority (this bootstrap SQL file already
+    exists, already seeds the real topology.ui_component_registry rows every
+    componentId resolution in production reads from). Used to VERIFY those
+    hand-typed mirrors stay a correct subset of this real data, rather than
+    trusting each language's own independently-maintained literal never to drift
+    -- per structural_authority_precedence_contract's
+    field_control_component_identity_contract, "a control value present in one
+    table and absent from the other is itself a defect in whichever table is
+    missing it, never evidence that the control is unsupported."
+    """
+    sql_text = UI_COMPONENT_REGISTRY_BOOTSTRAP_PATH.read_text(encoding="utf-8")
+    marker = "INSERT INTO topology.ui_component_registry"
+    idx = sql_text.find(marker)
+    if idx == -1:
+        raise AssertionError(f"{UI_COMPONENT_REGISTRY_BOOTSTRAP_PATH}: no INSERT INTO topology.ui_component_registry found")
+    # Bounded by the next "ON CONFLICT" clause, never a naive ";" search -- this file's own
+    # explanatory comments (e.g. "...PR #604); this is...") legitimately contain a bare ";"
+    # inside prose, which would truncate the VALUES list mid-way and silently miss later rows
+    # (data_display/md_viewer / form_input/textarea_template, added in a later comment block
+    # within this SAME statement) if used as the boundary instead.
+    end_marker = "ON CONFLICT"
+    end = sql_text.find(end_marker, idx)
+    section = sql_text[idx:end] if end != -1 else sql_text[idx:]
+    pairs = {}
+    for component_key, component_kind in UI_COMPONENT_REGISTRY_ROW_RE.findall(section):
+        pairs[component_kind] = component_key
+    if not pairs:
+        raise AssertionError(f"{UI_COMPONENT_REGISTRY_BOOTSTRAP_PATH}: matched zero (component_key, component_kind) rows -- extraction regex likely stale against this file's own current format")
+    return pairs
 
 
 FAILURES = []
@@ -2763,6 +2836,118 @@ def main():
             td_normal_generated_records is not None
             and len(td_normal_generated_records) > 0
             and td_normal_generated_records == dd023_physical_records,
+        )
+
+        # 142-147 (generic UI-Builder physical conversion round, 2026-09-07): permanent proof of
+        # build_schema_composed_layout_patch_json -- the GENERIC translator-side derivation of the
+        # schema-composed tensor DERIVED carrier FROM layoutAdoptionCandidates.layoutSchemaJson.
+        # records[] alone (structural_authority_precedence_contract's interaction_ownership_and_
+        # addressing_contract), closing the "no existing callable function derives the physical
+        # carrier from the raw candidate" open finding the previous round
+        # (tensor_derived_carrier_generation_lineage_status) reported rather than invented.
+        # Cross-checked against TWO independent, real, already-in-production DERIVED carriers read
+        # fresh from db/seed_empty.sql each run (never hand-typed constants): team_dashboard's own
+        # dd015/dd025 (exact byte-for-byte match, both content AND document order) and
+        # admin.enum.management.projection's own ae206 (structural match -- node set, zero
+        # componentKey/componentKind anywhere, and the owning-Section's own interaction-grouping
+        # count -- content-exact for every node except three PRE-EXISTING, UNRELATED quirks in
+        # ae206's own legacy hand-authored content this cross-check incidentally surfaced, not
+        # introduced or fixed by this round: two Fields (form_input/input controls
+        # enum_update_group_name_input/enum_set_group_items_input) are missing their own authored
+        # label as propsJson.data.label even though runtime-orchestration-ssot.yaml's own
+        # buildProductionCatalogComponentProps switch (frontend/runtime/renderEmission.ts) never
+        # special-cases form_input/input to read node.label directly, so it needs this SAME
+        # NodeLocalData mechanism data_display/md_viewer and form_input/textarea_template already
+        # rely on -- this generic function correctly includes it; and
+        # enum_set_group_items_confirm_modal's own authored body text carries a literal doubled
+        # apostrophe ('' instead of ') -- a SQL-escaping artifact leaked into the JSON text itself
+        # at some point in that row's own hand-authored history. Both are surface-specific defects
+        # in a DIFFERENT, already-shipped surface's own seed content, unrelated to Team Dashboard
+        # and this Bundle's own scope -- reported, not fixed, per this round's own instruction not
+        # to silently absorb an unrelated known gap.)
+        td_admin_generated_carrier = dig(
+            doc_td_admin, "adoptionCandidates", "tensorAdoptionCandidates",
+        )[0]["schemaComposedLayoutPatchJson"]["nodes"]
+        dd015_physical_nodes = extract_tensor_layout_patch_json_by_tensor_id(
+            seed_empty_text_for_team_dashboard, "00000000-0000-0000-0000-0000000dd015",
+        )["nodes"]
+        expect(
+            "142. build_schema_composed_layout_patch_json's REAL generated output for team-dashboard-admin is byte-for-byte identical (content AND document order) to db/seed_empty.sql's dd015 -- the actual already-in-production DERIVED carrier -- proving the generic translator-side derivation reproduces this surface's own physical adoption exactly, not merely a structurally-similar approximation",
+            td_admin_generated_carrier == dd015_physical_nodes,
+        )
+
+        td_normal_generated_carrier = dig(
+            doc_td_normal, "adoptionCandidates", "tensorAdoptionCandidates",
+        )[0]["schemaComposedLayoutPatchJson"]["nodes"]
+        dd025_physical_nodes = extract_tensor_layout_patch_json_by_tensor_id(
+            seed_empty_text_for_team_dashboard, "00000000-0000-0000-0000-0000000dd025",
+        )["nodes"]
+        expect(
+            "143. build_schema_composed_layout_patch_json's REAL generated output for team-dashboard-normal is byte-for-byte identical to db/seed_empty.sql's dd025, same discipline as 142",
+            td_normal_generated_carrier == dd025_physical_nodes,
+        )
+
+        ae206_generated_carrier = dig(
+            doc_ae200, "adoptionCandidates", "tensorAdoptionCandidates",
+        )[0]["schemaComposedLayoutPatchJson"]["nodes"]
+        ae206_seed_text = SEED_EMPTY_PATH.read_text(encoding="utf-8")
+        ae206_physical_nodes = extract_tensor_layout_patch_json_by_tensor_id(
+            ae206_seed_text, "00000000-0000-0000-0000-0000000ae206",
+        )["nodes"]
+        ae206_generated_by_id = {n["nodeId"]: n for n in ae206_generated_carrier}
+        ae206_physical_by_id = {n["nodeId"]: n for n in ae206_physical_nodes}
+        expect(
+            "144. build_schema_composed_layout_patch_json's REAL generated output for admin-enum-ae200 produces the EXACT SAME set of nodeIds (27) as db/seed_empty.sql's own already-in-production ae206 carrier -- proving the generic mechanism neither drops nor invents a node for a second, independent, more complex (multiple Sections/Modals) real surface",
+            set(ae206_generated_by_id) == set(ae206_physical_by_id) and len(ae206_physical_by_id) == 27,
+        )
+        expect(
+            "145. NO node in the generated ae206 carrier carries componentKey or componentKind -- generically true for every surface, since LayoutSchemaTensorComposer.Compose resolves both from the PRIMARY schema tree at read time once layout_schema_json.records[] is non-empty",
+            all("componentKey" not in n and "componentKind" not in n for n in ae206_generated_carrier),
+        )
+        expect(
+            "146. the owning Section's (enum_dictionary_roster) generated carrier node groups all 14 real interaction entries (7 buttons' own openModal + 7 modals' own toggle-closeModal) -- the SAME count and SAME sourceActionKey/targetNodeId pairs as the real ae206 row -- proving the OWNING-PARENT addressing rule generalizes correctly to a Section with many more owned Actions/Modals than team_dashboard's own Section ever exercises",
+            ae206_generated_by_id.get("enum_dictionary_roster", {}).get("runtimeInteractions")
+            == ae206_physical_by_id.get("enum_dictionary_roster", {}).get("runtimeInteractions"),
+        )
+        AE206_KNOWN_PRE_EXISTING_UNRELATED_QUIRK_NODE_IDS = {
+            "enum_update_group_name_input",
+            "enum_set_group_items_input",
+            "enum_set_group_items_confirm_modal",
+        }
+        ae206_mismatches_outside_known_quirks = [
+            nid for nid in ae206_physical_by_id
+            if nid not in AE206_KNOWN_PRE_EXISTING_UNRELATED_QUIRK_NODE_IDS
+            and ae206_generated_by_id.get(nid) != ae206_physical_by_id.get(nid)
+        ]
+        expect(
+            "147. every OTHER node (24 of 27, excluding the three pre-existing/unrelated ae206 quirks named above) in the generated ae206 carrier is content-identical to the real physical row -- proving the generic mechanism is not merely producing the right node SET (144) but the right per-node CONTENT for the overwhelming majority of a second real surface",
+            ae206_mismatches_outside_known_quirks == [],
+        )
+
+        # 148-149 (generic UI-Builder physical conversion round): component identity
+        # (componentKind -> componentKey) verification against the existing catalog authority --
+        # db/ui_component_registry_preset_catalog_bootstrap.sql's own real topology.
+        # ui_component_registry rows, the SAME table every componentId resolution in production
+        # ultimately reads from -- rather than trusting translator_impl.COMPONENT_KIND_TO_
+        # COMPONENT_KEY's own hand-typed literal never to drift from it. This is VERIFICATION of
+        # an existing convention-table mirror against its own already-existing source of truth,
+        # never a new identity authority and never a change to the hand-typed table itself (kept,
+        # per field_control_component_identity_contract, because Python cannot import a C#
+        # backend table or a live DB row across languages -- a permanent cross-check is the
+        # generic, sustainable substitute for literal code sharing).
+        real_registry_pairs = extract_component_kind_to_component_key_from_registry_bootstrap()
+        component_kind_to_component_key_mismatches = [
+            (kind, key, real_registry_pairs.get(kind))
+            for kind, key in translator_impl.COMPONENT_KIND_TO_COMPONENT_KEY.items()
+            if real_registry_pairs.get(kind) != key
+        ]
+        expect(
+            "148. every entry in react_schema_topology_seed_translator.py's own COMPONENT_KIND_TO_COMPONENT_KEY (9 control/componentKind -> componentKey pairs) matches a REAL row in db/ui_component_registry_preset_catalog_bootstrap.sql's own topology.ui_component_registry seed exactly -- proving this hand-typed convention table is a correct subset of the existing catalog authority, not an independently-invented mapping that could silently drift from the real registry",
+            component_kind_to_component_key_mismatches == [],
+        )
+        expect(
+            "149. COMPONENT_KIND_TO_COMPONENT_KEY is non-empty and the real registry extraction actually found real rows (positive control -- proves 148 passing is not a vacuous truth from an empty comparison on either side)",
+            len(translator_impl.COMPONENT_KIND_TO_COMPONENT_KEY) > 0 and len(real_registry_pairs) >= len(translator_impl.COMPONENT_KIND_TO_COMPONENT_KEY),
         )
 
     print()

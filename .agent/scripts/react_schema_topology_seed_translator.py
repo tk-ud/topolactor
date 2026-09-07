@@ -2269,6 +2269,259 @@ def validate_flat_seed_records(manifest_refs_candidate, budget_bytes=MANIFEST_TO
 # proposed for manifest.topology adoption.
 # ---------------------------------------------------------------------------
 
+def _merge_and_clean_tensor_node_contributions(node_contributions):
+    """Shared merge+clean pass: a flat list of per-record tensor node
+    CONTRIBUTIONS (several contributions may target the same nodeId; first
+    document-order contribution creates the node, later ones merge into it)
+    into the final deduplicated, ordered layout_patch_json.nodes[] shape.
+
+    Extracted (canonical-generation -> physical-adoption lineage closure
+    round, generic UI-Builder physical conversion) from the tensor-only
+    adoption path's own inline merge/clean logic, which this function now
+    implements identically (verified byte-for-byte unchanged against every
+    existing fixture's own tensorAdoptionCandidates output) -- and reused
+    by build_schema_composed_layout_patch_json below. The two call sites
+    differ ONLY in which nodeId each contribution targets (a record's own
+    resolved key for the tensor-only path; its resolved OWNING PARENT for
+    runtimeInteractions contributions in the schema-composed path, per
+    structural_authority_precedence_contract.interaction_ownership_and_
+    addressing_contract) -- the dedup/merge/clean semantics themselves are
+    identical, so one implementation now serves both, never two independently
+    maintained copies that could drift.
+
+    Returns (nodes, admin_runtime_override_source_action_keys_by_node) --
+    the second element is completeness-check-only (never adopted into the DB
+    row itself), same convention as wiring_action_entries' sourceRecordKey.
+    """
+    merged = {}
+    order = []
+    override_source_action_keys_by_node = {}
+    for node in node_contributions:
+        nid = node["nodeId"]
+        if nid not in merged:
+            merged[nid] = {
+                "nodeId": nid,
+                "nodeKind": node.get("nodeKind", "catalog_component"),
+                "runtimeInteractions": [],
+                "dispatchTargetRefByTrigger": {},
+                "dispatchPayloadFromByTrigger": {},
+                "propsJson": None,
+                "propBindings": None,
+                "componentKey": None,
+                "componentKind": None,
+                "debounceMs": None,
+                "parentNodeId": None,
+            }
+            order.append(nid)
+            override_source_action_keys_by_node[nid] = []
+        merged[nid]["runtimeInteractions"].extend(node["runtimeInteractions"])
+        override = node.get("adminRuntimeDispatchOverride")
+        if override:
+            trigger = override.get("trigger")
+            if trigger:
+                merged[nid]["dispatchTargetRefByTrigger"][trigger] = override.get("targetRef", "")
+                if override.get("payloadFrom"):
+                    merged[nid]["dispatchPayloadFromByTrigger"][trigger] = override["payloadFrom"]
+                override_source_action_keys_by_node[nid].append(override.get("sourceActionKey"))
+        if node.get("propsJson") is not None and merged[nid]["propsJson"] is None:
+            merged[nid]["propsJson"] = node["propsJson"]
+        if node.get("propBindings") is not None and merged[nid]["propBindings"] is None:
+            merged[nid]["propBindings"] = node["propBindings"]
+        if node.get("componentKey") is not None and merged[nid]["componentKey"] is None:
+            merged[nid]["componentKey"] = node["componentKey"]
+        if node.get("componentKind") is not None and merged[nid]["componentKind"] is None:
+            merged[nid]["componentKind"] = node["componentKind"]
+        if node.get("debounceMs") is not None and merged[nid]["debounceMs"] is None:
+            merged[nid]["debounceMs"] = node["debounceMs"]
+        if node.get("parentNodeId") is not None and merged[nid]["parentNodeId"] is None:
+            merged[nid]["parentNodeId"] = node["parentNodeId"]
+
+    def _clean(n):
+        out = {"nodeId": n["nodeId"], "nodeKind": n["nodeKind"], "runtimeInteractions": n["runtimeInteractions"]}
+        if n["componentKey"] is not None:
+            out["componentKey"] = n["componentKey"]
+        if n["componentKind"] is not None:
+            out["componentKind"] = n["componentKind"]
+        if n["dispatchTargetRefByTrigger"]:
+            out["dispatchTargetRefByTrigger"] = n["dispatchTargetRefByTrigger"]
+        if n["dispatchPayloadFromByTrigger"]:
+            out["dispatchPayloadFromByTrigger"] = n["dispatchPayloadFromByTrigger"]
+        if n["propsJson"] is not None:
+            out["propsJson"] = n["propsJson"]
+        if n["propBindings"] is not None:
+            out["propBindings"] = n["propBindings"]
+        if n.get("debounceMs") is not None:
+            out["debounceMs"] = n["debounceMs"]
+        if n.get("parentNodeId") is not None:
+            out["parentNodeId"] = n["parentNodeId"]
+        return out
+
+    return [_clean(merged[nid]) for nid in order], override_source_action_keys_by_node
+
+
+def build_schema_composed_layout_patch_json(layout_records):
+    """Derives the schema-composed tensor DERIVED-carrier shape
+    (ui_topology_tensor.layout_patch_json.nodes[]) generically FROM
+    layoutAdoptionCandidates.layoutSchemaJson.records[] alone -- the SAME
+    PRIMARY structural tree persisted into
+    components_layout_design.layout_schema_json, per
+    storage_adoption_contract.structural_authority_precedence_contract
+    (Owner "Judgment B"). No route/manifestKey/nodeId/componentKey-scoped
+    conditional anywhere below -- driven purely by recordType and each
+    record's own resolved parentKey chain, the SAME generic mechanism for
+    every surface.
+
+    Addressing rule (interaction_ownership_and_addressing_contract,
+    cross-checked against THREE independent already-in-production
+    schema-composed tensor rows this round -- auth.external.
+    credential_management.projection cd004, admin.enum.management.projection
+    ae206, and team_dashboard.{admin,normal}.projection dd015/dd025 -- not
+    invented for this round): a leaf record's OWN authored runtimeInteractions
+    (an Action/WorkflowStep's eventBinding-derived interactions, or a Modal's
+    own modal_self_close_invariant toggle entry) are carried on a tensor node
+    keyed at that record's own resolved PARENT identity (this_resolved_parent_
+    key) -- never its own key -- because Compose's BuildInteractionsBySourceActionKey
+    groups by "{resolvedParentNodeId}::{sourceActionKey}", not by the leaf's
+    own nodeId. This is a SEPARATE, PRIOR concern from Action-owner authoring
+    legality (VALID_ACTION_OWNER_NODE_KINDS / SECTION_OWNABLE_ACTION_LANES /
+    section_owned_dryrun_preview_pairing, enforced upstream at
+    generate-react-schema time, unchanged and unrelated to this function) --
+    this function only computes WHERE an already-legally-owned interaction's
+    tensor entry lives, never whether it is legally owned.
+
+    Every other per-leaf field (propsJson/propBindings/dispatchTargetRefByTrigger/
+    dispatchPayloadFromByTrigger/debounceMs -- NodeLocalData, matched by exact
+    nodeId, a mechanism entirely separate from the interaction-ownership
+    addressing above) stays keyed at the leaf's OWN resolved key, generically
+    excluding componentKey/componentKind (LayoutSchemaTensorComposer.Compose
+    resolves those from the PRIMARY schema tree at read time instead -- see
+    field_control_component_identity_contract) and excluding an Action's own
+    propsJson.data.label (a schema-composed Action's Label reaches production
+    via LayoutNode.Label directly, authored_label_and_production_props,
+    runtime-orchestration-ssot.yaml -- never via tensor NodeLocalData, unlike
+    a Field's data_display/md_viewer or form_input/textarea_template control,
+    which renderEmission.ts's buildProductionCatalogComponentProps never
+    special-cases to read node.label, so a Field's own propsJson.data.label
+    is kept). parentNodeId is never emitted for any node -- once
+    layout_schema_json.records[] is non-empty, Compose derives every catalog
+    leaf's ParentNodeId from that PRIMARY tree directly
+    (tensor_parentnodeid_disposition.rule) and never reads a tensor node's own
+    parentNodeId field for containment.
+    """
+    key_counts = {}
+    for wrapper in layout_records:
+        key_counts[(wrapper.get("record") or {}).get("key")] = \
+            key_counts.get((wrapper.get("record") or {}).get("key"), 0) + 1
+    duplicate_keys = {k for k, count in key_counts.items() if count > 1}
+    last_resolved_key_by_raw_key = {}
+
+    def resolve_and_track_identity(wrapper):
+        # SAME parent_scoped_identity_reconstruction algorithm as
+        # split_flat_records_into_adoption_candidates' own resolve_and_track_identity
+        # below -- deliberately re-implemented here (never imported across the two,
+        # since this function must stay a pure function of layout_records alone) but
+        # byte-identical in behavior; both walk the SAME document-order-parent-before-
+        # child guarantee flatten_topology_ui_seed_tree already provides.
+        record = wrapper.get("record") or {}
+        raw_key = record.get("key")
+        raw_parent_key = wrapper.get("parentKey")
+        resolved_parent_key = last_resolved_key_by_raw_key.get(raw_parent_key, raw_parent_key)
+        resolved_key = f"{resolved_parent_key}::{raw_key}" if raw_key in duplicate_keys else raw_key
+        last_resolved_key_by_raw_key[raw_key] = resolved_key
+        return resolved_key, resolved_parent_key
+
+    contributions = []
+
+    for wrapper in layout_records:
+        record = wrapper.get("record") or {}
+        record_type = record.get("recordType")
+        this_resolved_key, this_resolved_parent_key = resolve_and_track_identity(wrapper)
+
+        if record_type == "topology_ui_field":
+            control = record.get("control")
+            if record.get("valueFrom"):
+                value_prop_name = FIELD_CONTROL_TO_VALUE_PROP_NAME.get(control, "value")
+                contributions.append({
+                    "nodeId": this_resolved_key,
+                    "runtimeInteractions": [],
+                    "propBindings": {value_prop_name: {"source": record["valueFrom"]}},
+                    "propsJson": json.dumps({"data": {"label": record.get("label")}}, ensure_ascii=False),
+                })
+            if record.get("optionsSource"):
+                contributions.append({
+                    "nodeId": this_resolved_key,
+                    "runtimeInteractions": [],
+                    "propBindings": {
+                        "options": {
+                            "source": record["optionsSource"],
+                            "transform": "rowsToOptions",
+                            "labelPath": record.get("optionsLabelPath"),
+                            "valuePath": record.get("optionsValuePath"),
+                        },
+                    },
+                })
+            if record.get("adminRuntimeDispatchOverride"):
+                entry = {
+                    "nodeId": this_resolved_key,
+                    "runtimeInteractions": [],
+                    "adminRuntimeDispatchOverride": record["adminRuntimeDispatchOverride"],
+                }
+                if record.get("debounceMs") is not None:
+                    entry["debounceMs"] = record["debounceMs"]
+                contributions.append(entry)
+
+        elif record_type == "topology_ui_table" and record.get("displayColumns") and record.get("rowsSource"):
+            contributions.append({
+                "nodeId": this_resolved_key,
+                "runtimeInteractions": [],
+                "propsJson": json.dumps({"table": None, "columns": record["displayColumns"]}, ensure_ascii=False),
+                "propBindings": {"rows": {"source": record["rowsSource"]}},
+            })
+
+        elif record_type in ("topology_ui_action", "topology_ui_workflow_step"):
+            # Order matters here (matches every real already-in-production DERIVED carrier's own
+            # document order, e.g. admin.enum.management.projection's ae206 and
+            # team_dashboard.admin.projection's dd015): an Action's OWN NodeLocalData contribution
+            # (adminRuntimeDispatchOverride, keyed at this_resolved_key) is appended BEFORE its
+            # interactions contribution (keyed at this_resolved_parent_key) -- so when this Action
+            # is the FIRST record whose own owning parent gets any carrier contribution at all, its
+            # OWN node is created (and ordered) first, and the owning parent's carrier node is
+            # created immediately after, never the reverse.
+            if record.get("adminRuntimeDispatchOverride"):
+                contributions.append({
+                    "nodeId": this_resolved_key,
+                    "runtimeInteractions": [],
+                    "adminRuntimeDispatchOverride": record["adminRuntimeDispatchOverride"],
+                })
+            interactions = record.get("runtimeInteractions") or []
+            if interactions:
+                contributions.append({
+                    "nodeId": this_resolved_parent_key,
+                    "runtimeInteractions": list(interactions),
+                })
+
+        elif record_type == "topology_ui_modal":
+            modal_interactions = record.get("runtimeInteractions") or []
+            if modal_interactions:
+                contributions.append({
+                    "nodeId": this_resolved_parent_key,
+                    "runtimeInteractions": list(modal_interactions),
+                })
+            modal_props_data = {"open": False}
+            if record.get("title"):
+                modal_props_data["title"] = record["title"]
+            if record.get("body"):
+                modal_props_data["body"] = record["body"]
+            contributions.append({
+                "nodeId": this_resolved_key,
+                "runtimeInteractions": [],
+                "propsJson": json.dumps({"data": modal_props_data}, ensure_ascii=False),
+            })
+
+    nodes, _ = _merge_and_clean_tensor_node_contributions(contributions)
+    return {"nodes": nodes}
+
+
 def split_flat_records_into_adoption_candidates(flat_records, seed_key):
     """adoption_candidate_separation_contract.package_authority_boundary: two DISTINCT
     package identities, never conflated.
@@ -2770,102 +3023,35 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
 
     tensor_candidates = []
     if tensor_nodes:
-        merged = {}
-        order = []
         # Round 17: dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger are trigger-keyed
         # maps (not a list like runtimeInteractions), each entry a full override for that
         # trigger -- so per-nodeId source-action-key tracking for the completeness check below
         # is kept in a SIBLING dict, never inside the maps themselves (which must match the
         # exact Record<string,string> / Record<string,Record<string,string>> shape
         # frontend/backend both validate, with no room for extra metadata fields).
-        override_source_action_keys_by_node = {}
-        for node in tensor_nodes:
-            nid = node["nodeId"]
-            if nid not in merged:
-                merged[nid] = {
-                    "nodeId": nid,
-                    "nodeKind": node["nodeKind"],
-                    "runtimeInteractions": [],
-                    "dispatchTargetRefByTrigger": {},
-                    "dispatchPayloadFromByTrigger": {},
-                    "propsJson": None,
-                    "propBindings": None,
-                    "componentKey": None,
-                    "componentKind": None,
-                    "debounceMs": None,
-                    "parentNodeId": None,
-                }
-                order.append(nid)
-                override_source_action_keys_by_node[nid] = []
-            merged[nid]["runtimeInteractions"].extend(node["runtimeInteractions"])
-            override = node.get("adminRuntimeDispatchOverride")
-            if override:
-                trigger = override.get("trigger")
-                if trigger:
-                    merged[nid]["dispatchTargetRefByTrigger"][trigger] = override.get("targetRef", "")
-                    if override.get("payloadFrom"):
-                        merged[nid]["dispatchPayloadFromByTrigger"][trigger] = override["payloadFrom"]
-                    override_source_action_keys_by_node[nid].append(override.get("sourceActionKey"))
-            # propsJson/propBindings (Modal display state, Table columns/rows binding) are
-            # per-nodeId, single-owner content -- never contributed by more than one tensor_nodes
-            # entry for the same nodeId today (a Modal's own entry and a Table's own entry are
-            # always distinct nodeIds), so first-write-wins with no merge policy needed beyond
-            # "don't overwrite an already-set value with a later None".
-            if node.get("propsJson") is not None and merged[nid]["propsJson"] is None:
-                merged[nid]["propsJson"] = node["propsJson"]
-            if node.get("propBindings") is not None and merged[nid]["propBindings"] is None:
-                merged[nid]["propBindings"] = node["propBindings"]
-            # componentKey/componentKind (UIBuilder-lineage closure round): SAME first-write-wins
-            # policy as propsJson/propBindings above -- every branch that resolves a componentKey
-            # for a given nodeId resolves it from that SAME record's own control/componentKind, so
-            # two contributing entries for one nodeId never disagree in practice; this merge is
-            # purely about tolerating a later entry that legitimately carries none (e.g. the
-            # adminRuntimeDispatchOverride entry from a DIFFERENT record type never overwriting an
-            # already-resolved value with None).
-            if node.get("componentKey") is not None and merged[nid]["componentKey"] is None:
-                merged[nid]["componentKey"] = node["componentKey"]
-            if node.get("componentKind") is not None and merged[nid]["componentKind"] is None:
-                merged[nid]["componentKind"] = node["componentKind"]
-            if node.get("debounceMs") is not None and merged[nid]["debounceMs"] is None:
-                merged[nid]["debounceMs"] = node["debounceMs"]
-            # parentNodeId (tensor_container_parent_contract): SAME first-write-wins policy --
-            # every tensor_nodes contribution for a given nodeId resolves parentNodeId from that
-            # SAME record's own tensor_parent_node_id, so two contributing entries never disagree.
-            if node.get("parentNodeId") is not None and merged[nid]["parentNodeId"] is None:
-                merged[nid]["parentNodeId"] = node["parentNodeId"]
+        # UPDATED (canonical-generation -> physical-adoption lineage closure round): the merge/
+        # clean pass itself is now _merge_and_clean_tensor_node_contributions (shared with
+        # build_schema_composed_layout_patch_json below) -- verified byte-for-byte unchanged
+        # against every existing fixture's own tensorAdoptionCandidates output.
+        tensor_only_nodes, override_source_action_keys_by_node = \
+            _merge_and_clean_tensor_node_contributions(tensor_nodes)
 
-        def _clean_tensor_node(n):
-            out = {"nodeId": n["nodeId"], "nodeKind": n["nodeKind"], "runtimeInteractions": n["runtimeInteractions"]}
-            # componentKey/componentKind (UIBuilder-lineage closure round): componentKey is
-            # required for a tensor-only-authored catalog_component node
-            # (LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED,
-            # backend/repository/NpgsqlUiTopologyRepository.cs) -- absent only for a node kind
-            # this generator does not yet resolve one for (none exist among this file's own
-            # tensor_nodes.append call sites today -- every one sets componentKey).
-            # Deliberately no orderIndex here: it is optional (NpgsqlTopologyRepository.cs
-            # defaults an absent orderIndex to 0 at read time) and every consumer sorts with a
-            # stable sort, so an omitted orderIndex preserves this array's own document order
-            # identically to an explicit, monotonically-increasing one -- inventing a literal
-            # here would be pure cosmetic parity with a hand-authored shape, not a functional
-            # requirement, and every OTHER surface this generator already serves (e.g.
-            # admin.enum.management.projection's own tensor) has never carried one either.
-            if n["componentKey"] is not None:
-                out["componentKey"] = n["componentKey"]
-            if n["componentKind"] is not None:
-                out["componentKind"] = n["componentKind"]
-            if n["dispatchTargetRefByTrigger"]:
-                out["dispatchTargetRefByTrigger"] = n["dispatchTargetRefByTrigger"]
-            if n["dispatchPayloadFromByTrigger"]:
-                out["dispatchPayloadFromByTrigger"] = n["dispatchPayloadFromByTrigger"]
-            if n["propsJson"] is not None:
-                out["propsJson"] = n["propsJson"]
-            if n["propBindings"] is not None:
-                out["propBindings"] = n["propBindings"]
-            if n.get("debounceMs") is not None:
-                out["debounceMs"] = n["debounceMs"]
-            if n.get("parentNodeId") is not None:
-                out["parentNodeId"] = n["parentNodeId"]
-            return out
+        # UPDATED (canonical-generation -> physical-adoption lineage closure round, generic
+        # UI-Builder physical conversion): schemaComposedLayoutPatchJson is the SAME projection's
+        # tensor content, generated GENERICALLY per structural_authority_precedence_contract's
+        # DERIVED-carrier rule (build_schema_composed_layout_patch_json's own doc comment) instead
+        # of layoutPatchJson's tensor-only per-leaf shape -- proven byte-identical to THREE
+        # independent already-in-production schema-composed tensor rows (credential_management
+        # cd004, admin.enum ae206, team_dashboard dd015/dd025) by
+        # check_react_schema_topology_seed_translator.py. Once a surface's own
+        # layoutAdoptionCandidates has been physically adopted into components_layout_design.
+        # layout_schema_json.records[] (structural_authority_precedence_contract), THIS field --
+        # never layoutPatchJson -- is what belongs in ui_topology_tensor.layout_patch_json; a
+        # surface that stays tensor-only keeps using layoutPatchJson unchanged and this field is
+        # simply additional information, never itself adopted. Computed generically for every
+        # surface (never gated by seed_key/route/manifestKey) so it never silently goes stale for
+        # a surface not yet physically adopted.
+        schema_composed_layout_patch_json = build_schema_composed_layout_patch_json(layout_records)
 
         tensor_candidates.append({
             "tensorKey": f"{seed_key}.tensor",
@@ -2874,7 +3060,8 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
             # componentGroupBundleAdoptionCandidates key, NEVER the
             # packageAdoptionCandidates key (package_authority_boundary).
             "packageIdRef": f"<{component_group_bundle_candidates[0]['componentGroupBundleKey']}>" if component_group_bundle_candidates else None,
-            "layoutPatchJson": {"nodes": [_clean_tensor_node(merged[nid]) for nid in order]},
+            "layoutPatchJson": {"nodes": tensor_only_nodes},
+            "schemaComposedLayoutPatchJson": schema_composed_layout_patch_json,
             # Completeness-check-only sibling (never adopted into the DB row itself, same
             # convention as wiring_action_entries' sourceRecordKey above): which Action/Step
             # sourceActionKeys contributed an adminRuntimeDispatchOverride to each nodeId.

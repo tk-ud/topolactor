@@ -18,8 +18,10 @@ namespace Topolactor.Runtime.Tests;
 ///   dictionaries (never invented, never left as a silent fallback).
 /// - Unresolved record types become "unresolved_gap" entries that always carry their authored
 ///   knownGapRefs and never resolve to a componentId/componentKind.
-/// - Tensor nodes' runtimeInteractions (keyed by sourceActionKey per entry, at the FORM level) are
-///   merged onto the matching catalog_component leaf by leaf key == sourceActionKey.
+/// - Tensor nodes' runtimeInteractions (keyed by sourceActionKey per entry, at the resolved
+///   OWNING STRUCTURAL PARENT's own tensor NodeId -- Form, Workflow, Modal, or a lane/pairing-
+///   eligible Section; never restricted to Form) are merged onto the matching catalog_component
+///   leaf by leaf key == sourceActionKey.
 /// - NodeId collisions (the same authored key reused in two branches — a real authoring
 ///   possibility, since a record's key is only guaranteed unique within its own branch) are
 ///   disambiguated by parent-scoping rather than silently colliding.
@@ -1656,5 +1658,93 @@ public class LayoutSchemaStructuralCompositionTests
             if (started && depth == 0) break;
         }
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Independently resolves every REAL (component_kind -&gt; component_key) pair straight from
+    /// db/ui_component_registry_preset_catalog_bootstrap.sql (generic UI-Builder physical
+    /// conversion round) -- the canonical, already-existing component identity authority both
+    /// this file's own FieldControlToComponentKey/ActionComponentKey and
+    /// .agent/scripts/react_schema_topology_seed_translator.py's own
+    /// COMPONENT_KIND_TO_COMPONENT_KEY are hand-typed CONVENTION-TABLE mirrors of -- never a new
+    /// identity authority (this bootstrap SQL file already exists and already seeds the real
+    /// topology.ui_component_registry rows every componentId resolution in production reads
+    /// from). Mirrors check_react_schema_topology_seed_translator.py's own Python-side
+    /// extract_component_kind_to_component_key_from_registry_bootstrap() extraction discipline
+    /// (bounded by the next "ON CONFLICT" clause, never a naive ";" search -- this file's own
+    /// explanatory comments legitimately contain a bare ";" inside prose).
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> ExtractComponentKindToComponentKeyFromRegistryBootstrap()
+    {
+        var sqlPath = Path.Combine(RepoRoot(), "db", "ui_component_registry_preset_catalog_bootstrap.sql");
+        var sql = File.ReadAllText(sqlPath);
+        var marker = "INSERT INTO topology.ui_component_registry";
+        var idx = sql.IndexOf(marker, StringComparison.Ordinal);
+        Assert.True(idx >= 0, $"{sqlPath}: no INSERT INTO topology.ui_component_registry found");
+        var end = sql.IndexOf("ON CONFLICT", idx, StringComparison.Ordinal);
+        var section = end >= 0 ? sql[idx..end] : sql[idx..];
+        var rowPattern = new System.Text.RegularExpressions.Regex(
+            @"\('[0-9a-fA-F-]+',\s*'([^']+)',\s*'([^']+)',\s*'[^']*',\s*'[^']*'\)");
+        var pairs = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (System.Text.RegularExpressions.Match m in rowPattern.Matches(section))
+            pairs[m.Groups[2].Value] = m.Groups[1].Value;
+        Assert.True(pairs.Count > 0, $"{sqlPath}: matched zero (component_key, component_kind) rows -- extraction regex likely stale against this file's own current format");
+        return pairs;
+    }
+
+    /// <summary>
+    /// Component identity (componentKind -&gt; componentKey) verification against the existing
+    /// catalog authority (generic UI-Builder physical conversion round) -- VERIFIES
+    /// FieldControlToComponentKey stays a correct subset of db/ui_component_registry_preset_
+    /// catalog_bootstrap.sql's own real registry rows, rather than trusting this hand-typed C#
+    /// literal never to drift from the Python translator's own independently-maintained mirror of
+    /// the SAME real data. Never a new identity authority and never a change to the hand-typed
+    /// table itself (kept, per field_control_component_identity_contract, because C# cannot
+    /// import a Python module or a live DB row at generation time across languages -- a
+    /// permanent cross-check like this one is the generic, sustainable substitute for literal
+    /// code sharing).
+    /// </summary>
+    [Fact]
+    public void FieldControlToComponentKey_EveryEntryMatchesRealUiComponentRegistryBootstrapRow()
+    {
+        var realRegistryPairs = ExtractComponentKindToComponentKeyFromRegistryBootstrap();
+        var mismatches = LayoutSchemaTensorComposer.FieldControlToComponentKey
+            .Where(kv => !realRegistryPairs.TryGetValue(kv.Key, out var realKey) || realKey != kv.Value)
+            .ToList();
+        Assert.Empty(mismatches);
+    }
+
+    /// <summary>
+    /// Same discipline as FieldControlToComponentKey above, for the Action/WorkflowStep shared
+    /// button primitive convention constant.
+    /// </summary>
+    [Fact]
+    public void ActionComponentKey_MatchesRealUiComponentRegistryBootstrapRow()
+    {
+        var realRegistryPairs = ExtractComponentKindToComponentKeyFromRegistryBootstrap();
+        Assert.True(realRegistryPairs.TryGetValue("action/button", out var realKey), "action/button row not found in db/ui_component_registry_preset_catalog_bootstrap.sql");
+        Assert.Equal(LayoutSchemaTensorComposer.ActionComponentKey, realKey);
+    }
+
+    /// <summary>
+    /// Same discipline as FieldControlToComponentKey/ActionComponentKey above, for the Table
+    /// display convention table -- but TableDisplayToComponentKey's KEYS are "display" values
+    /// (card_list/data_grid/list/table), not componentKind strings, so the correspondence to a
+    /// real registry row is checked by SUFFIX (the component_kind's segment after its family/
+    /// prefix) rather than by direct key lookup, e.g. "table" -&gt; "table.primitive" here
+    /// corresponds to the real "data_display/table" -&gt; "table.primitive" registry row.
+    /// </summary>
+    [Fact]
+    public void TableDisplayToComponentKey_EveryEntryMatchesRealUiComponentRegistryBootstrapRowBySuffix()
+    {
+        var realRegistryPairs = ExtractComponentKindToComponentKeyFromRegistryBootstrap();
+        foreach (var (display, componentKey) in LayoutSchemaTensorComposer.TableDisplayToComponentKey)
+        {
+            var match = realRegistryPairs.FirstOrDefault(kv =>
+                kv.Value == componentKey && kv.Key.EndsWith("/" + display, StringComparison.Ordinal));
+            Assert.True(
+                match.Key != null,
+                $"no real registry row found whose component_kind ends with '/{display}' and component_key == '{componentKey}'");
+        }
     }
 }
