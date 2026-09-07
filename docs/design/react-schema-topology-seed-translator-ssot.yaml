@@ -1167,15 +1167,27 @@ react_schema_topology_seed_translator_ssot:
           tree at read time); the pre-existing FieldControlToComponentKey/ActionComponentKey
           (backend/repository/LayoutSchemaTensorComposer.cs) and COMPONENT_KIND_TO_COMPONENT_KEY
           (react_schema_topology_seed_translator.py) hand-typed convention tables are unchanged,
-          and are now each independently VERIFIED (not re-implemented) against db/ui_component_
-          registry_preset_catalog_bootstrap.sql's own real topology.ui_component_registry rows --
-          the canonical, already-existing component identity authority -- by
-          check_react_schema_topology_seed_translator.py's checks 148-149 (Python) and
-          LayoutSchemaStructuralCompositionTests.cs's FieldControlToComponentKey_/
-          ActionComponentKey_/TableDisplayToComponentKey_MatchesRealUiComponentRegistryBootstrap*
-          facts (C#), closing the OK-axis requirement that componentKey/componentKind identity be
-          derived/verified from the existing catalog authority rather than mirrored by a second,
-          independently-curated, drift-prone table. Representative proof (fail-close, permanent):
+          and are now each independently VERIFIED (not re-implemented) against real source data --
+          closing the OK-axis requirement that componentKey/componentKind identity be derived/
+          verified from the existing catalog authority rather than mirrored by a second,
+          independently-curated, drift-prone table. CORRECTED 2026-09-07 (SSOT catalog/registry
+          authority boundary closure round; this paragraph originally named db/ui_component_
+          registry_preset_catalog_bootstrap.sql itself "the canonical, already-existing component
+          identity authority" and cited checks 148-149 / a *_MatchesRealUiComponentRegistryBootstrap*
+          C# fact family against it -- that framing conflated identity authority with registration
+          evidence, exactly what ui_catalog_boundary_contract.catalogs.
+          db_component_registry_registration_evidence below now names and prohibits): the actual
+          identity authority is frontend/components/catalog.ts (ui_catalog_boundary_contract.
+          catalogs.frontend_component_catalog.source_of_truth) -- checks 148-149 verify against
+          catalog.ts's own real componentKey/componentKind pairs (extract_component_kind_to_
+          component_key_from_frontend_catalog), with LayoutSchemaStructuralCompositionTests.cs's
+          FieldControlToComponentKey_/ActionComponentKey_/TableDisplayToComponentKey_
+          MatchesRealFrontendComponentCatalogEntry* facts (C#) as the mirrored proof. The DB
+          bootstrap SQL's own topology.ui_component_registry rows are verified as a SEPARATE,
+          ADDITIONAL registration-evidence axis by checks 150-151 (Python) and
+          ConventionTableComponentKeys_AreAllRegisteredInUiComponentRegistryBootstrap (C#) --
+          necessary for runtime componentId resolution, never a substitute for the identity proof.
+          Representative proof (fail-close, permanent):
           check_react_schema_topology_seed_translator.py's checks 142-143 assert the REAL
           generated team_dashboard.admin/normal.projection output is byte-for-byte identical
           (content AND document order) to db/seed_empty.sql's own already-in-production dd015/

@@ -140,10 +140,15 @@ public static class LayoutSchemaTensorComposer
     // Reuses the existing preset catalog rows declared for table-shaped surfaces
     // (ui-builder-preset-ecosystem-ssot.yaml) — does not invent new registry entries.
     // Widened from private to internal so LayoutSchemaStructuralCompositionTests can verify each
-    // entry's VALUE resolves to a real topology.ui_component_registry row whose component_kind
-    // suffix (after the family/ prefix) equals this table's own KEY -- e.g. "table" ->
-    // "table.primitive" here corresponds to the real "data_display/table" -> "table.primitive"
-    // registry row. This table's keys are "display" convention values, not componentKind
+    // entry's VALUE against real source data on TWO separate axes (SSOT catalog/registry
+    // authority boundary closure round, 2026-09-07 -- CORRECTED from this comment's own original
+    // wording, which named only the registry-bootstrap axis): IDENTITY, against
+    // frontend/components/catalog.ts's own real componentKey/componentKind pairs, whose
+    // component_kind suffix (after the family/ prefix) equals this table's own KEY -- e.g.
+    // "table" -> "table.primitive" here corresponds to the real "data_display/table" ->
+    // "table.primitive" catalog pair; and REGISTRATION EVIDENCE (separate, additional), against
+    // db/ui_component_registry_preset_catalog_bootstrap.sql's own real topology.ui_component_
+    // registry rows. This table's keys are "display" convention values, not componentKind
     // strings, so the correspondence is checked by suffix, not by direct key lookup like
     // FieldControlToComponentKey/ActionComponentKey above.
     internal static readonly IReadOnlyDictionary<string, string> TableDisplayToComponentKey =
@@ -162,8 +167,12 @@ public static class LayoutSchemaTensorComposer
     // storage_adoption_contract.adoption_candidate_separation_contract, which already treats the
     // two identically across wiringAdoptionCandidates/tensorAdoptionCandidates.
     // Widened from private to internal so LayoutSchemaStructuralCompositionTests can verify this
-    // constant directly against db/ui_component_registry_preset_catalog_bootstrap.sql's real
-    // action/button row, mirroring the same precedent already applied to FieldControlToComponentKey.
+    // constant on TWO separate axes (SSOT catalog/registry authority boundary closure round,
+    // 2026-09-07 -- CORRECTED from this comment's own original wording, which named only the
+    // registry-bootstrap axis): IDENTITY, directly against frontend/components/catalog.ts's own
+    // real action/button pair; and REGISTRATION EVIDENCE (separate, additional), against
+    // db/ui_component_registry_preset_catalog_bootstrap.sql's own real action/button row --
+    // mirroring the same precedent already applied to FieldControlToComponentKey.
     internal const string ActionComponentKey = "button.primitive";
 
     public record SchemaRecordRow(
