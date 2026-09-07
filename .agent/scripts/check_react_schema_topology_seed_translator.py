@@ -300,9 +300,8 @@ def extract_component_kind_to_component_key_from_registry_bootstrap():
     end_marker = "ON CONFLICT"
     end = sql_text.find(end_marker, idx)
     section = sql_text[idx:end] if end != -1 else sql_text[idx:]
-    pairs = {}
-    for component_key, component_kind in UI_COMPONENT_REGISTRY_ROW_RE.findall(section):
-        pairs[component_kind] = component_key
+    raw_pairs = [(component_key, component_kind) for component_key, component_kind in UI_COMPONENT_REGISTRY_ROW_RE.findall(section)]
+    pairs = build_component_kind_to_component_key_pairs_fail_close(raw_pairs, source_label=str(UI_COMPONENT_REGISTRY_BOOTSTRAP_PATH))
     if not pairs:
         raise AssertionError(f"{UI_COMPONENT_REGISTRY_BOOTSTRAP_PATH}: matched zero (component_key, component_kind) rows -- extraction regex likely stale against this file's own current format")
     return pairs
@@ -346,13 +345,39 @@ def extract_component_kind_to_component_key_from_frontend_catalog():
     useful, but only as a SEPARATE registration-evidence axis (see checks 148-151).
     """
     ts_text = FRONTEND_CATALOG_PATH.read_text(encoding="utf-8")
-    pairs = {}
-    for component_key, component_kind in FRONTEND_CATALOG_IDENTITY_PAIR_RE.findall(ts_text):
-        if component_kind in FRONTEND_CATALOG_AMBIGUOUS_PLACEHOLDER_COMPONENT_KINDS:
-            continue
-        pairs[component_kind] = component_key
+    raw_pairs = [
+        (component_key, component_kind)
+        for component_key, component_kind in FRONTEND_CATALOG_IDENTITY_PAIR_RE.findall(ts_text)
+        if component_kind not in FRONTEND_CATALOG_AMBIGUOUS_PLACEHOLDER_COMPONENT_KINDS
+    ]
+    pairs = build_component_kind_to_component_key_pairs_fail_close(raw_pairs, source_label=str(FRONTEND_CATALOG_PATH))
     if not pairs:
         raise AssertionError(f"{FRONTEND_CATALOG_PATH}: matched zero (componentKey, componentKind) pairs -- extraction regex likely stale against this file's own current format")
+    return pairs
+
+
+def build_component_kind_to_component_key_pairs_fail_close(raw_pairs, source_label):
+    """SSOT self-consistency + schema-composed carrier proof closure round (2026-09-07): shared
+    fail-close duplicate-detection core for BOTH extract_component_kind_to_component_key_from_
+    frontend_catalog above and extract_component_kind_to_component_key_from_registry_bootstrap
+    (never a second, independently re-implemented duplicate-handling policy for the two) --
+    raises AssertionError the moment the SAME componentKind maps to two DIFFERENT componentKeys
+    across raw_pairs, rather than silently letting whichever pair appears last in source order
+    win. A real identity conflict here would mean the SOURCE FILE itself is ambiguous about a
+    componentKind's own componentKey -- a defect in that file, not something either extraction
+    function may paper over by picking an arbitrary winner. Known-ambiguous placeholder kinds
+    (e.g. "ui_ux/primitive", excluded by both call sites before raw_pairs reaches here) are a
+    documented exception to this rule, never silently rediscovered as new conflicts.
+    """
+    pairs = {}
+    for component_key, component_kind in raw_pairs:
+        if component_kind in pairs and pairs[component_kind] != component_key:
+            raise AssertionError(
+                f"{source_label}: componentKind {component_kind!r} maps to two DIFFERENT componentKeys "
+                f"({pairs[component_kind]!r} and {component_key!r}) -- ambiguous source data, never "
+                f"silently resolved by picking whichever pair appears last."
+            )
+        pairs[component_kind] = component_key
     return pairs
 
 
@@ -409,6 +434,68 @@ def schema_composed_layout_patch_json_shape_violations(payload):
             for trigger in node["dispatchPayloadFromByTrigger"]:
                 if trigger not in dispatch_targets:
                     violations.append(f"node {node_id}: dispatchPayloadFromByTrigger has trigger {trigger!r} with no matching dispatchTargetRefByTrigger entry")
+    return violations
+
+
+# SSOT self-consistency + schema-composed carrier proof closure round (2026-09-07): the SAME
+# carrier-eligible record-type boundary backend/repository/LayoutSchemaTensorComposer.cs's own
+# CarrierEligibleStructuralRecordTypes enforces at SAVE time (topology_ui_section/
+# topology_ui_form/topology_ui_workflow, plus Modal) -- Category and Validation are structural
+# but never a legal Action/interaction owner under any wiringLane
+# (react_schema_topology_seed_translator.py's own VALID_ACTION_OWNER_NODE_KINDS/
+# SECTION_OWNABLE_ACTION_LANES authoring-legality gate, enforced at generation time before a
+# record is ever adopted into layout_schema_json.records[]). Used below to prove the
+# GENERATION-side cardinality of build_schema_composed_layout_patch_json's own output never
+# contradicts that SAME boundary.
+SCHEMA_COMPOSED_CARRIER_ELIGIBLE_RECORD_TYPES = {
+    "topology_ui_section", "topology_ui_form", "topology_ui_workflow", "topology_ui_modal",
+}
+# A genuine catalog leaf may carry its OWN NodeLocalData contribution at its own resolved key
+# (never a runtimeInteractions-redirect target) -- topology_ui_field/topology_ui_table/
+# topology_ui_action/topology_ui_workflow_step, per storage_adoption_contract.candidate_buckets.
+# tensorAdoptionCandidates's own per-record_type derived_payload notes.
+SCHEMA_COMPOSED_CATALOG_LEAF_RECORD_TYPES = {
+    "topology_ui_field", "topology_ui_table", "topology_ui_action", "topology_ui_workflow_step",
+}
+
+
+def schema_composed_layout_patch_json_cardinality_violations(schema_composed_payload, layout_records, translator_impl):
+    """Fail-close GENERATION-CARDINALITY proof (SSOT self-consistency + schema-composed carrier
+    proof closure round, 2026-09-07): every node in a REAL generated schemaComposedLayoutPatchJson
+    must key at an identity this SAME layout_records tree classifies as either a genuine catalog
+    leaf (a Field/Table/Action/WorkflowStep's own resolved key, carrying its own NodeLocalData) or
+    a carrier-eligible structural/Modal parent (Form/Workflow/Section/Modal, carrying redirected
+    runtimeInteractions) -- never a Category, Validation, or unresolved_gap identity, and never a
+    phantom identity absent from this tree entirely.
+
+    Mirrors backend/repository/LayoutSchemaTensorComposer.cs's own
+    ResolveCarrierEligibleNodeIdsInSchemaTree boundary on the GENERATION side -- catching a
+    resolution bug in build_schema_composed_layout_patch_json itself (e.g. redirecting a
+    runtimeInteractions contribution to the wrong resolved parent) that gateStatus=pass / zero
+    validationErrors alone would never surface, since authoring-legality
+    (VALID_ACTION_OWNER_NODE_KINDS/SECTION_OWNABLE_ACTION_LANES) is enforced upstream at generate
+    time and is not re-derived here -- this function reuses the REAL
+    translator_impl.make_parent_scoped_identity_resolver (the actual production resolver, called
+    on the actual layout_records extracted from a real generate-topology-seed run) to compute each
+    record's own resolved key, never a second, independently re-implemented resolution algorithm.
+    """
+    resolve = translator_impl.make_parent_scoped_identity_resolver(layout_records)
+    record_type_by_resolved_key = {}
+    for wrapper in layout_records:
+        record = wrapper.get("record") or {}
+        resolved_key, _ = resolve(wrapper)
+        record_type_by_resolved_key[resolved_key] = record.get("recordType")
+
+    violations = []
+    nodes = (schema_composed_payload or {}).get("nodes") or []
+    for node in nodes:
+        node_id = node.get("nodeId")
+        record_type = record_type_by_resolved_key.get(node_id)
+        if record_type is None:
+            violations.append(f"nodeId {node_id!r} does not correspond to any record in this fixture's own layoutAdoptionCandidates schema tree")
+        elif (record_type not in SCHEMA_COMPOSED_CARRIER_ELIGIBLE_RECORD_TYPES
+                and record_type not in SCHEMA_COMPOSED_CATALOG_LEAF_RECORD_TYPES):
+            violations.append(f"nodeId {node_id!r} resolves to recordType {record_type!r}, which is neither a carrier-eligible structural/Modal parent nor a genuine catalog leaf")
     return violations
 
 
@@ -3107,17 +3194,29 @@ def main():
             "admin-enum-ae200": doc_ae200,
         }
         schema_composed_shape_violations_by_fixture = {}
+        schema_composed_cardinality_violations_by_fixture = {}
         schema_composed_shape_checked_fixture_count = 0
         for fixture_name, fixture_doc in schema_composed_shape_fixtures.items():
+            fixture_layout_records = dig(
+                fixture_doc, "adoptionCandidates", "layoutAdoptionCandidates",
+            )
+            fixture_layout_records = (
+                dig(fixture_layout_records[0], "layoutSchemaJson", "records")
+                if fixture_layout_records else []
+            ) or []
             for tensor_candidate in dig(fixture_doc, "adoptionCandidates", "tensorAdoptionCandidates") or []:
                 if "schemaComposedLayoutPatchJson" not in tensor_candidate:
                     continue
                 schema_composed_shape_checked_fixture_count += 1
-                violations = schema_composed_layout_patch_json_shape_violations(
-                    tensor_candidate["schemaComposedLayoutPatchJson"],
-                )
+                schema_composed_payload = tensor_candidate["schemaComposedLayoutPatchJson"]
+                violations = schema_composed_layout_patch_json_shape_violations(schema_composed_payload)
                 if violations:
                     schema_composed_shape_violations_by_fixture[fixture_name] = violations
+                cardinality_violations = schema_composed_layout_patch_json_cardinality_violations(
+                    schema_composed_payload, fixture_layout_records, translator_impl,
+                )
+                if cardinality_violations:
+                    schema_composed_cardinality_violations_by_fixture[fixture_name] = cardinality_violations
         expect(
             "152. EVERY real fixture's generated schemaComposedLayoutPatchJson (wherever tensorAdoptionCandidates actually carries the field) satisfies storage_adoption_contract.candidate_buckets.tensorAdoptionCandidates.schema_composed_derived_carrier_contract's own canonical shape -- required nodeId/nodeKind/runtimeInteractions present, componentKey/componentKind/parentNodeId never present, no field outside the contract's own required/optional vocabulary -- a general, fixture-independent structural proof of the OUTPUT CONTRACT itself, never only a specific fixture's own byte-exact match to one real seed row",
             schema_composed_shape_violations_by_fixture == {},
@@ -3125,6 +3224,74 @@ def main():
         expect(
             "153. at least 3 real fixtures' generated output actually carried a non-null schemaComposedLayoutPatchJson to check (positive control -- proves 152 passing is not a vacuous truth from zero fixtures ever reaching the field at all)",
             schema_composed_shape_checked_fixture_count >= 3,
+        )
+        expect(
+            "154. EVERY real fixture's generated schemaComposedLayoutPatchJson satisfies GENERATION CARDINALITY -- every node's nodeId resolves (via the REAL translator_impl.make_parent_scoped_identity_resolver, called on this SAME fixture's own real layoutAdoptionCandidates.layoutSchemaJson.records) to either a genuine catalog leaf or a carrier-eligible structural/Modal parent, never a Category/Validation/unresolved_gap identity or a phantom nodeId absent from the schema tree -- the GENERATION-side half of the SAME carrier-eligibility boundary backend/repository/LayoutSchemaTensorComposer.cs's own ResolveCarrierEligibleNodeIdsInSchemaTree now enforces at SAVE time",
+            schema_composed_cardinality_violations_by_fixture == {},
+        )
+
+        # 155-156 (SSOT self-consistency + schema-composed carrier proof closure round,
+        # 2026-09-07): NEGATIVE, fail-close proof that 152/154 are not vacuously passing merely
+        # because every real fixture today happens to be clean -- deliberately mutates a REAL,
+        # already-proven-clean payload (team-dashboard-admin's own generated
+        # schemaComposedLayoutPatchJson, td_admin_generated_carrier) and confirms each checker
+        # function actually reports a violation for an injected defect, the SAME "tested by
+        # deliberate mutation" discipline this file already applies elsewhere (e.g. the
+        # required_generator_fixture_proof checks above).
+        shape_mutated_nodes = [dict(n) for n in td_admin_generated_carrier]
+        shape_mutated_nodes[0] = {**shape_mutated_nodes[0], "componentKey": "button.primitive"}
+        shape_mutation_violations = schema_composed_layout_patch_json_shape_violations(
+            {"nodes": shape_mutated_nodes},
+        )
+        expect(
+            "155. schema_composed_layout_patch_json_shape_violations actually DETECTS a deliberately-injected forbidden componentKey field on an otherwise-real, already-clean node (team-dashboard-admin's own first generated node) -- proves 152 passing reflects a real, working fail-close check, never a checker that vacuously returns no violations regardless of input",
+            len(shape_mutation_violations) > 0
+            and any("componentKey" in v for v in shape_mutation_violations),
+        )
+
+        cardinality_mutated_nodes = [dict(n) for n in td_admin_generated_carrier]
+        cardinality_mutated_nodes[0] = {**cardinality_mutated_nodes[0], "nodeId": "not_a_real_schema_tree_identity_at_all"}
+        cardinality_mutation_violations = schema_composed_layout_patch_json_cardinality_violations(
+            {"nodes": cardinality_mutated_nodes},
+            dig(doc_td_admin, "adoptionCandidates", "layoutAdoptionCandidates")[0]["layoutSchemaJson"]["records"],
+            translator_impl,
+        )
+        expect(
+            "156. schema_composed_layout_patch_json_cardinality_violations actually DETECTS a deliberately-injected phantom nodeId absent from team-dashboard-admin's own real schema tree -- proves 154 passing reflects a real, working fail-close cardinality check, never a checker that vacuously returns no violations regardless of input",
+            len(cardinality_mutation_violations) > 0
+            and any("not_a_real_schema_tree_identity_at_all" in v for v in cardinality_mutation_violations),
+        )
+
+        # 157-158 (SSOT self-consistency + schema-composed carrier proof closure round,
+        # 2026-09-07): fail-close proof for build_component_kind_to_component_key_pairs_fail_close
+        # -- the shared duplicate-detection core BOTH catalog-authority extraction functions
+        # (frontend catalog identity axis, checks 148-149; registry-bootstrap registration-
+        # evidence axis, checks 150-151) now use, so a genuine future conflict in either real
+        # source file (the SAME componentKind mapping to two DIFFERENT componentKeys) can never be
+        # silently resolved by picking whichever pair happens to appear last, for either axis.
+        duplicate_detection_positive_control_error = None
+        try:
+            build_component_kind_to_component_key_pairs_fail_close(
+                [("key.a", "kind/one"), ("key.b", "kind/two")], source_label="<positive control>",
+            )
+        except AssertionError as exc:
+            duplicate_detection_positive_control_error = str(exc)
+        expect(
+            "157. build_component_kind_to_component_key_pairs_fail_close positive control: two DISTINCT componentKinds, each with their own single componentKey, raise no error at all -- proves 158's failure below is caused by the deliberately-injected genuine conflict, not by this function rejecting every input unconditionally",
+            duplicate_detection_positive_control_error is None,
+        )
+
+        duplicate_detection_negative_control_error = None
+        try:
+            build_component_kind_to_component_key_pairs_fail_close(
+                [("key.a", "kind/conflicting"), ("key.b", "kind/conflicting")], source_label="<negative control>",
+            )
+        except AssertionError as exc:
+            duplicate_detection_negative_control_error = str(exc)
+        expect(
+            "158. build_component_kind_to_component_key_pairs_fail_close actually DETECTS (raises AssertionError for) a deliberately-injected genuine conflict -- the SAME componentKind ('kind/conflicting') mapped to two DIFFERENT componentKeys -- rather than silently letting the later pair overwrite the earlier one, proving BOTH catalog-authority extraction functions that share this core are fail-close against this class of source-data ambiguity, not only against the already-known 'ui_ux/primitive' placeholder exception",
+            duplicate_detection_negative_control_error is not None
+            and "kind/conflicting" in duplicate_detection_negative_control_error,
         )
 
     print()

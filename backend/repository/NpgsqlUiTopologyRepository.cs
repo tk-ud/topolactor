@@ -684,22 +684,31 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     /// componentKey exactly as before this round — this is not a blanket exemption for "any node
     /// missing componentKey."
     ///
-    /// <paramref name="schemaTreeNodeIds"/> (team-dashboard-physical-layout-adoption round):
-    /// widens that SAME exemption to a tensor nodeId that resolves to ANY schema-tree identity
-    /// (LayoutSchemaTensorComposer.ResolveAllNodeIdsInSchemaTree) — not only a catalog leaf with
-    /// a canonical componentKey. A STRUCTURAL parent (Form/Section/Category/Workflow/Validation)
-    /// or a Modal acting purely as this patch's interaction carrier for its own owned children
-    /// (structural_authority_precedence_contract's interaction_ownership_and_addressing_contract)
-    /// never carries and never needs a componentKey — it is not becoming a rendered catalog leaf
-    /// — so it must be exempted the same way a real catalog leaf is, never rejected as an
-    /// unrecognized raw tensor-only node. Only schemaComposedComponentKeysByNodeId (never this
-    /// broader set) feeds the identity-mismatch check below — a structural/Modal carrier node
-    /// has no canonical componentKey to mismatch against in the first place.
+    /// <paramref name="carrierEligibleSchemaTreeNodeIds"/> (team-dashboard-physical-layout-
+    /// adoption round; NARROWED by the SSOT catalog/registry authority boundary + schema-composed
+    /// carrier save-validation closure round, 2026-09-07): widens that SAME exemption to a tensor
+    /// nodeId that resolves to a CARRIER-ELIGIBLE schema-tree identity
+    /// (LayoutSchemaTensorComposer.ResolveCarrierEligibleNodeIdsInSchemaTree) — not only a catalog
+    /// leaf with a canonical componentKey, and never every identity in the tree unconditionally. A
+    /// structural parent that may LEGALLY own an Action/interaction (Form, Workflow, or Section —
+    /// never Category or Validation, which are structural but never a legal Action owner under any
+    /// wiringLane) or a Modal, acting purely as this patch's interaction carrier for its own owned
+    /// children (structural_authority_precedence_contract's interaction_ownership_and_addressing_
+    /// contract) never carries and never needs a componentKey — it is not becoming a rendered
+    /// catalog leaf — so it must be exempted the same way a real catalog leaf is, never rejected as
+    /// an unrecognized raw tensor-only node. A Category, Validation, or unresolved_gap identity —
+    /// even though it is a real identity somewhere in the SAME schema tree — is deliberately NOT
+    /// in this set: none of them can ever legally be an interaction carrier, so a raw tensor node
+    /// claiming one of those identities with no componentKey of its own still fails
+    /// LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED exactly as an unrecognized node would. Only
+    /// schemaComposedComponentKeysByNodeId (never this broader set) feeds the identity-mismatch
+    /// check below — a structural/Modal carrier node has no canonical componentKey to mismatch
+    /// against in the first place.
     /// </summary>
     private static string? ValidateLayoutPatchNodes(
         string tensorPatchJson,
         IReadOnlyDictionary<string, string> schemaComposedComponentKeysByNodeId,
-        IReadOnlySet<string>? schemaTreeNodeIds = null)
+        IReadOnlySet<string>? carrierEligibleSchemaTreeNodeIds = null)
     {
         using var doc = JsonDocument.Parse(tensorPatchJson);
         if (!doc.RootElement.TryGetProperty("nodes", out var nodes) ||
@@ -764,7 +773,7 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                 var isSchemaComposedCatalogLeaf = schemaComposedComponentKeysByNodeId
                     .TryGetValue(nodeId!, out var canonicalComponentKey);
                 var isKnownSchemaTreeIdentity = isSchemaComposedCatalogLeaf ||
-                    (schemaTreeNodeIds is not null && schemaTreeNodeIds.Contains(nodeId!));
+                    (carrierEligibleSchemaTreeNodeIds is not null && carrierEligibleSchemaTreeNodeIds.Contains(nodeId!));
                 if (string.IsNullOrWhiteSpace(componentKey) && !isKnownSchemaTreeIdentity)
                 {
                     return "LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED";
@@ -1997,7 +2006,7 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             // narrower round-42 guarantee "never even run the cheap check without a dispatch field"
             // is retired, because that guarantee is exactly what left the spoof open.
             var schemaComposedComponentKeysByNodeId = new Dictionary<string, string>(StringComparer.Ordinal);
-            IReadOnlySet<string>? schemaTreeNodeIds = null;
+            IReadOnlySet<string>? carrierEligibleSchemaTreeNodeIds = null;
             IReadOnlyDictionary<string, string>? schemaComposedModalComponentKindsByNodeId = null;
             var mayBeSchemaComposed = ContainsNodeMissingComponentKey(normalized.TensorPatchJson) ||
                 (ContainsNodeWithComponentKeyPresent(normalized.TensorPatchJson) &&
@@ -2012,18 +2021,23 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                 {
                     schemaComposedComponentKeysByNodeId = new Dictionary<string, string>(
                         LayoutSchemaTensorComposer.ResolveCatalogComponentKeysByNodeId(schemaRows), StringComparer.Ordinal);
-                    // team-dashboard-physical-layout-adoption round: a STRUCTURAL parent or Modal
-                    // acting purely as this patch's interaction carrier for its own owned children
-                    // (e.g. team_dashboard_admin_editor / team_dashboard_admin_save_confirm_modal)
-                    // is a real schema-tree identity too, just not a catalog leaf with a
-                    // componentKey -- see ValidateLayoutPatchNodes's own doc comment.
-                    schemaTreeNodeIds = LayoutSchemaTensorComposer.ResolveAllNodeIdsInSchemaTree(schemaRows);
+                    // team-dashboard-physical-layout-adoption round, narrowed (SSOT catalog/
+                    // registry authority boundary + schema-composed carrier save-validation
+                    // closure round, 2026-09-07): a carrier-ELIGIBLE structural parent (Form/
+                    // Workflow/Section, never Category/Validation) or Modal acting purely as this
+                    // patch's interaction carrier for its own owned children (e.g.
+                    // team_dashboard_admin_editor / team_dashboard_admin_save_confirm_modal) is a
+                    // real schema-tree identity too, just not a catalog leaf with a componentKey
+                    // -- see ValidateLayoutPatchNodes's own doc comment. Never every identity in
+                    // the tree unconditionally -- a Category/Validation/unresolved_gap identity is
+                    // never carrier-eligible regardless of whether it exists in the same tree.
+                    carrierEligibleSchemaTreeNodeIds = LayoutSchemaTensorComposer.ResolveCarrierEligibleNodeIdsInSchemaTree(schemaRows);
                     schemaComposedModalComponentKindsByNodeId =
                         LayoutSchemaTensorComposer.ResolveModalComponentKindsByNodeId(schemaRows);
                 }
             }
 
-            var nodeError = ValidateLayoutPatchNodes(normalized.TensorPatchJson, schemaComposedComponentKeysByNodeId, schemaTreeNodeIds);
+            var nodeError = ValidateLayoutPatchNodes(normalized.TensorPatchJson, schemaComposedComponentKeysByNodeId, carrierEligibleSchemaTreeNodeIds);
             if (nodeError is not null)
                 return normalized with { Ok = false, Valid = false, Message = nodeError };
             using (var runtimeInteractionDoc = JsonDocument.Parse(normalized.TensorPatchJson))

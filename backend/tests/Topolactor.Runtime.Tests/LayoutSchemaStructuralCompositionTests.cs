@@ -1692,10 +1692,39 @@ public class LayoutSchemaStructuralCompositionTests
         var section = end >= 0 ? sql[idx..end] : sql[idx..];
         var rowPattern = new System.Text.RegularExpressions.Regex(
             @"\('[0-9a-fA-F-]+',\s*'([^']+)',\s*'([^']+)',\s*'[^']*',\s*'[^']*'\)");
-        var pairs = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (System.Text.RegularExpressions.Match m in rowPattern.Matches(section))
-            pairs[m.Groups[2].Value] = m.Groups[1].Value;
+        var rawPairs = rowPattern.Matches(section)
+            .Select(m => (ComponentKey: m.Groups[1].Value, ComponentKind: m.Groups[2].Value));
+        var pairs = BuildComponentKindToComponentKeyPairsFailClose(rawPairs, sqlPath);
         Assert.True(pairs.Count > 0, $"{sqlPath}: matched zero (component_key, component_kind) rows -- extraction regex likely stale against this file's own current format");
+        return pairs;
+    }
+
+    /// <summary>
+    /// SSOT self-consistency + schema-composed carrier proof closure round (2026-09-07): shared
+    /// fail-close duplicate-detection core for BOTH ExtractComponentKindToComponentKeyFromRegistry
+    /// Bootstrap above and ExtractComponentKindToComponentKeyFromFrontendCatalog below (never a
+    /// second, independently re-implemented duplicate-handling policy for the two, and mirroring
+    /// check_react_schema_topology_seed_translator.py's own
+    /// build_component_kind_to_component_key_pairs_fail_close on the Python side) -- throws the
+    /// moment the SAME componentKind maps to two DIFFERENT componentKeys across rawPairs, rather
+    /// than silently letting whichever pair appears last in source order win via plain dictionary
+    /// indexer overwrite.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> BuildComponentKindToComponentKeyPairsFailClose(
+        IEnumerable<(string ComponentKey, string ComponentKind)> rawPairs, string sourceLabel)
+    {
+        var pairs = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (componentKey, componentKind) in rawPairs)
+        {
+            if (pairs.TryGetValue(componentKind, out var existingKey) && existingKey != componentKey)
+            {
+                throw new InvalidOperationException(
+                    $"{sourceLabel}: componentKind '{componentKind}' maps to two DIFFERENT componentKeys " +
+                    $"('{existingKey}' and '{componentKey}') -- ambiguous source data, never silently " +
+                    "resolved by picking whichever pair appears last.");
+            }
+            pairs[componentKind] = componentKey;
+        }
         return pairs;
     }
 
@@ -1721,13 +1750,10 @@ public class LayoutSchemaStructuralCompositionTests
         var ts = SsotYamlContractReader.ReadDoc(catalogPath);
         var pairPattern = new System.Text.RegularExpressions.Regex(
             "componentKey:\\s*\"([^\"]+)\",\\s*\\n\\s*componentKind:\\s*\"([^\"]+)\"");
-        var pairs = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (System.Text.RegularExpressions.Match m in pairPattern.Matches(ts))
-        {
-            var (componentKey, componentKind) = (m.Groups[1].Value, m.Groups[2].Value);
-            if (componentKind == "ui_ux/primitive") continue;
-            pairs[componentKind] = componentKey;
-        }
+        var rawPairs = pairPattern.Matches(ts)
+            .Select(m => (ComponentKey: m.Groups[1].Value, ComponentKind: m.Groups[2].Value))
+            .Where(p => p.ComponentKind != "ui_ux/primitive");
+        var pairs = BuildComponentKindToComponentKeyPairsFailClose(rawPairs, catalogPath);
         Assert.True(pairs.Count > 0, $"{catalogPath}: matched zero (componentKey, componentKind) pairs -- extraction regex likely stale against this file's own current format");
         return pairs;
     }
@@ -1811,5 +1837,41 @@ public class LayoutSchemaStructuralCompositionTests
             .Distinct(StringComparer.Ordinal);
         var unregistered = usedComponentKeys.Where(key => !realRegistryComponentKeys.Contains(key)).ToList();
         Assert.Empty(unregistered);
+    }
+
+    /// <summary>
+    /// Positive control for BuildComponentKindToComponentKeyPairsFailClose (SSOT self-consistency
+    /// + schema-composed carrier proof closure round, 2026-09-07): two DISTINCT componentKinds,
+    /// each with their own single componentKey, raise nothing at all -- proves the negative test
+    /// below fails BECAUSE of the deliberately-injected genuine conflict, not because this helper
+    /// rejects every input unconditionally.
+    /// </summary>
+    [Fact]
+    public void BuildComponentKindToComponentKeyPairsFailClose_DistinctKinds_RaisesNothing()
+    {
+        var pairs = BuildComponentKindToComponentKeyPairsFailClose(
+            [("key.a", "kind/one"), ("key.b", "kind/two")], "<positive control>");
+        Assert.Equal(2, pairs.Count);
+    }
+
+    /// <summary>
+    /// NEGATIVE, fail-close proof (SSOT self-consistency + schema-composed carrier proof closure
+    /// round, 2026-09-07): BuildComponentKindToComponentKeyPairsFailClose actually THROWS for a
+    /// deliberately-injected genuine conflict -- the SAME componentKind mapped to two DIFFERENT
+    /// componentKeys -- rather than silently letting the later pair overwrite the earlier one via
+    /// plain dictionary-indexer assignment. Proves both
+    /// ExtractComponentKindToComponentKeyFromRegistryBootstrap and
+    /// ExtractComponentKindToComponentKeyFromFrontendCatalog, which share this core, are fail-close
+    /// against this class of source-data ambiguity, not only against the already-known
+    /// "ui_ux/primitive" placeholder exception (excluded upstream of this helper, never rediscovered
+    /// as a conflict here).
+    /// </summary>
+    [Fact]
+    public void BuildComponentKindToComponentKeyPairsFailClose_ConflictingKind_Throws()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            BuildComponentKindToComponentKeyPairsFailClose(
+                [("key.a", "kind/conflicting"), ("key.b", "kind/conflicting")], "<negative control>"));
+        Assert.Contains("kind/conflicting", ex.Message);
     }
 }

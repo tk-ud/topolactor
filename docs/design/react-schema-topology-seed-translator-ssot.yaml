@@ -1442,10 +1442,30 @@ react_schema_topology_seed_translator_ssot:
               the binding shape definition itself -- a closure narrative is not a substitute for
               a canonical output contract, and every real generated fixture's own
               schemaComposedLayoutPatchJson value must satisfy this shape (verified generically by
-              check_react_schema_topology_seed_translator.py's validate_schema_composed_layout_
-              patch_json_shape, run against every fixture whose generated output carries a non-null
-              value for this field, never only the specific fixtures also proven byte-exact against
-              a real physical seed row).
+              check_react_schema_topology_seed_translator.py's
+              schema_composed_layout_patch_json_shape_violations -- CORRECTED 2026-09-07,
+              SSOT self-consistency closure round: this paragraph previously named a function,
+              validate_schema_composed_layout_patch_json_shape, that does not exist in that file;
+              the real function's actual name and return convention -- a list of violation
+              strings, empty meaning compliant, never raising for a malformed payload -- is as
+              stated here -- run against every fixture whose generated output carries a non-null
+              value for this field, never only the specific fixtures also proven byte-exact
+              against a real physical seed row). GENERATION CARDINALITY (added same round, closing
+              a second gap: the shape check alone never verified WHICH identities a node's own
+              nodeId may legitimately be) is verified separately by that same file's
+              schema_composed_layout_patch_json_cardinality_violations, run against the SAME real
+              fixtures' own layoutAdoptionCandidates.layoutSchemaJson.records via the REAL
+              make_parent_scoped_identity_resolver (never a second, independently re-implemented
+              resolution algorithm) -- every generated node's nodeId must resolve to either a
+              genuine catalog leaf (topology_ui_field/table/action/workflow_step) or a
+              carrier-eligible structural/Modal parent (topology_ui_section/form/workflow, or
+              Modal) per interaction_ownership_and_addressing_contract below, never a Category,
+              Validation, or unresolved_gap identity, and never a phantom nodeId absent from the
+              schema tree entirely -- the GENERATION-side half of the SAME carrier-eligibility
+              boundary backend/repository/LayoutSchemaTensorComposer.cs's own
+              ResolveCarrierEligibleNodeIdsInSchemaTree enforces at SAVE time (see
+              runtime-orchestration-ssot.yaml and NpgsqlUiTopologyRepositoryLayoutPatchValidation
+              Tests.cs's own positive/negative proof pair for that side).
             generated_by: >-
               .agent/scripts/react_schema_topology_seed_translator.py's
               build_schema_composed_layout_patch_json(layout_records), a pure function of
@@ -1478,9 +1498,12 @@ react_schema_topology_seed_translator_ssot:
               - dispatchPayloadFromByTrigger_trigger_key_never_present_without_a_matching_dispatchTargetRefByTrigger_entry_for_the_same_trigger
               - schemaComposedLayoutPatchJson_computed_for_every_surface_never_gated_by_seed_key_route_or_manifestKey
               - schemaComposedLayoutPatchJson_is_computed_from_layoutAdoptionCandidates_records_alone_never_from_tensor_nodes_output
+              - every_generated_node_nodeId_resolves_to_a_genuine_catalog_leaf_or_a_carrier_eligible_structural_or_modal_parent_never_a_category_validation_or_unresolved_gap_identity_and_never_a_phantom_identity_absent_from_the_schema_tree
             prohibited:
               - leaving_schemaComposedLayoutPatchJson_shape_defined_only_by_closure_narrative_prose_without_a_canonical_shape_contract_and_generic_structural_validation
               - describing_a_single_fixtures_byte_exact_match_as_proof_of_the_general_output_contract_without_a_fixture_independent_structural_shape_check
+              - a_proof_surface_naming_a_verification_function_that_does_not_exist_or_has_a_different_actual_name_or_return_convention_in_the_referenced_file
+              - treating_shape_conformance_alone_as_proof_of_generation_cardinality_without_a_separate_check_that_every_node_identity_is_actually_carrier_eligible
         manifestRefsCandidate:
           target_table: manifest
           shape: >-
@@ -2348,6 +2371,24 @@ react_schema_topology_seed_translator_ssot:
           backend convention table (COMPONENT_KIND_TO_COMPONENT_KEY / FieldControlToComponentKey /
           ActionComponentKey / TableDisplayToComponentKey) must be verified against BOTH axes
           independently, never against this table alone.
+        duplicate_detection: >-
+          ADDED (SSOT self-consistency + schema-composed carrier proof closure round, 2026-09-07):
+          both real source files' own extraction functions -- Python's
+          extract_component_kind_to_component_key_from_frontend_catalog /
+          extract_component_kind_to_component_key_from_registry_bootstrap
+          (check_react_schema_topology_seed_translator.py) and C#'s
+          ExtractComponentKindToComponentKeyFromFrontendCatalog /
+          ExtractComponentKindToComponentKeyFromRegistryBootstrap
+          (LayoutSchemaStructuralCompositionTests.cs) -- now route their raw (componentKey,
+          componentKind) pairs through ONE shared, per-language fail-close core
+          (build_component_kind_to_component_key_pairs_fail_close /
+          BuildComponentKindToComponentKeyPairsFailClose) that raises the moment the SAME
+          componentKind maps to two DIFFERENT componentKeys, rather than a plain dict/Dictionary
+          indexer silently letting whichever pair appears last in source order win. The
+          already-known "ui_ux/primitive" placeholder ambiguity (many distinct catalog-only
+          primitives sharing one non-resolvable componentKind, none ever looked up by any
+          convention table) is excluded BEFORE reaching this core by both callers, never silently
+          rediscovered as a new conflict.
       style_catalog:
         role: presentation_reference_only
         source_of_truth:

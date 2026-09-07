@@ -981,11 +981,15 @@ admin_normal_surface_projection_seed_ssot:
               closure round): the "generator/fixture" proof named above was not yet backed by a
               permanent automated check on 2026-09-06 -- required_generator_fixture_proof below
               records the actual closure (check_react_schema_topology_seed_translator.py checks
-              136-141) added that same follow-up round. That round also found the tensor bucket's
-              own DERIVED-carrier content (dd015/dd025) has no equivalent generation-time
-              transform proof and is unlikely to get one without a further Owner-level design
-              decision -- see required_generator_fixture_proof's own NOTE below; this is a
-              reporting-only finding, production is unaffected.
+              136-141) added that same follow-up round. That same round also found the tensor
+              bucket's own DERIVED-carrier content (dd015/dd025) had no equivalent generation-time
+              transform proof at the time and reported it as an open, Owner-level finding rather
+              than inventing one -- see required_generator_fixture_proof's own NOTE below for the
+              CURRENT status of that finding (SINCE CLOSED by a later round in this same Bundle,
+              per react-schema-topology-seed-translator-ssot.yaml's own
+              tensor_derived_carrier_generation_lineage_status); this paragraph is kept verbatim as
+              the historical record of what this round itself found and reported, not restated as
+              still-current.
             governing_contract_ref: >-
               react-schema-topology-seed-translator-ssot.yaml
               storage_adoption_contract.structural_authority_precedence_contract (Owner
@@ -1096,7 +1100,19 @@ admin_normal_surface_projection_seed_ssot:
               raw per-leaf tensor-only shape the generator emits) — see
               react-schema-topology-seed-translator-ssot.yaml storage_adoption_contract.
               structural_authority_precedence_contract.tensor_derived_carrier_generation_lineage_
-              status for the open, Owner-level finding this re-audit surfaced on that side.
+              status. CORRECTED 2026-09-07 (SSOT self-consistency closure round; this NOTE
+              previously described that finding as still open after the referenced SSOT had
+              already closed it, contradicting itself across two files):
+              tensor_derived_carrier_generation_lineage_status has SINCE moved from OPEN to CLOSED
+              (generic schema-composed physical-conversion round, 2026-09-07) — a generic
+              generation-time transform (build_schema_composed_layout_patch_json) now exists,
+              proven byte-for-byte against this surface's own dd015/dd025 (react-schema-topology-
+              seed-translator-ssot.yaml's own checks 142-143) — this admin/normal SSOT's own
+              closure_note above and physical_seed_adoption/tensor_parentnodeid_disposition blocks
+              are unaffected and remain the historical record of the PHYSICAL ADOPTION round they
+              describe (2026-09-06), which predates and is independent of that later transform;
+              they are not re-opened or restated by this correction, only this stale forward
+              reference to the other SSOT's status is.
             required_field_control_component_identity_resolution: >-
               A PREREQUISITE for the structural-composition proof below, not an independent nice-
               to-have: backend/repository/LayoutSchemaTensorComposer.cs's

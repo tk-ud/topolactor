@@ -55,6 +55,24 @@ public static class LayoutSchemaTensorComposer
         "topology_ui_validation",
     };
 
+    // SSOT catalog/registry authority boundary + schema-composed carrier save-validation closure
+    // round (2026-09-07): the STRUCTURAL subset that may legally OWN an Action/interaction, per
+    // .agent/scripts/react_schema_topology_seed_translator.py's own authoring-legality gate
+    // (VALID_ACTION_OWNER_NODE_KINDS = {Form, Workflow, Modal} plus Section when the action's own
+    // wiringLane is in SECTION_OWNABLE_ACTION_LANES -- react-schema-topology-seed-translator-
+    // ssot.yaml structural_authority_precedence_contract.interaction_ownership_and_addressing_
+    // contract). Category and Validation are structural but NEVER legally own an Action under any
+    // wiringLane -- deliberately excluded here (unlike StructuralRecordTypes above, which is a
+    // RENDER-time classification, not an authoring-legality one). Modal is not itself in this set
+    // (it is a catalog_component, not IsStructural) but IS carrier-eligible -- see
+    // ResolveCarrierEligibleNodeIdsInSchemaTree below, which adds it explicitly.
+    private static readonly HashSet<string> CarrierEligibleStructuralRecordTypes = new(StringComparer.Ordinal)
+    {
+        "topology_ui_section",
+        "topology_ui_form",
+        "topology_ui_workflow",
+    };
+
     private const string ActionRecordType = "topology_ui_action";
     private const string TableRecordType = "topology_ui_table";
     private const string WorkflowStepRecordType = "topology_ui_workflow_step";
@@ -663,30 +681,49 @@ public static class LayoutSchemaTensorComposer
     }
 
     /// <summary>
-    /// team-dashboard-physical-layout-adoption round: every resolved NodeId anywhere in the
-    /// schema tree -- structural_node, catalog_component (Field/Table/Action/WorkflowStep AND
-    /// Modal, unlike ResolveCatalogComponentKeysByNodeId above which excludes Modal), and
-    /// unresolved_gap alike. Used by NpgsqlUiTopologyRepository.ValidateLayoutPatchNodes to widen
-    /// its "does this raw tensor nodeId need its own componentKey" exemption beyond catalog
-    /// leaves: a tensor node whose nodeId matches a STRUCTURAL parent (Form/Section/Category/
-    /// Workflow/Validation) acting purely as an interaction carrier for its own owned children
+    /// team-dashboard-physical-layout-adoption round, NARROWED (SSOT catalog/registry authority
+    /// boundary + schema-composed carrier save-validation closure round, 2026-09-07): every
+    /// resolved NodeId in the schema tree whose record type may LEGALLY own an Action/interaction
+    /// -- Form, Workflow, Section (CarrierEligibleStructuralRecordTypes above) and Modal -- never
+    /// Category, Validation (structural but never a legal Action owner under any wiringLane -- the
+    /// SAME authoring-legality boundary react_schema_topology_seed_translator.py's own
+    /// VALID_ACTION_OWNER_NODE_KINDS/SECTION_OWNABLE_ACTION_LANES enforce at generation time), and
+    /// never unresolved_gap (never a normal carrier, catalog component, or structural node of any
+    /// kind -- an explicit render-time failure only). This method previously (and incorrectly)
+    /// returned EVERY resolved NodeId in the tree without exception, which exempted a raw tensor
+    /// node claiming a Category/Validation/unresolved_gap identity from
+    /// LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED even though no such identity can ever
+    /// legitimately be an interaction carrier -- a real, if previously unexploited, boundary
+    /// mismatch this round's own audit found and closed; see
+    /// NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs's own positive (Section/Modal
+    /// carrier) and negative (Category/Validation/unresolved_gap rejected) proof pair.
+    ///
+    /// Used by NpgsqlUiTopologyRepository.ValidateLayoutPatchNodes to widen its "does this raw
+    /// tensor nodeId need its own componentKey" exemption beyond catalog leaves: a tensor node
+    /// whose nodeId matches a carrier-eligible structural parent or a Modal, acting purely as an
+    /// interaction carrier for its own owned children
     /// (structural_authority_precedence_contract's interaction_ownership_and_addressing_contract
     /// -- e.g. admin.enum.management.projection's own already-proven enum_dictionary_roster
-    /// tensor row) never carries a componentKey and never will -- it is not becoming a rendered
-    /// catalog leaf, so requiring one is a real, generic validation gap this round's own live-DB
-    /// proof surfaced (this exact shape was never previously pushed through the live validate
-    /// path for ANY surface, admin-enum included -- only through fresh-bootstrap SQL, which
-    /// bypasses this check entirely). A brand-new tensor nodeId absent from the schema tree
-    /// entirely still requires an explicit componentKey exactly as before -- this widens WHICH
-    /// known identities are exempt, it does not relax the rule that an unknown one still needs
-    /// one.
+    /// tensor row, and Team Dashboard's own Section/Modal carrier rows), never carries a
+    /// componentKey and never will -- it is not becoming a rendered catalog leaf, so requiring one
+    /// is a real, generic validation gap this round's own live-DB proof surfaced (this exact shape
+    /// was never previously pushed through the live validate path for ANY surface, admin-enum
+    /// included -- only through fresh-bootstrap SQL, which bypasses this check entirely). A
+    /// brand-new tensor nodeId absent from the schema tree entirely, or present but NOT
+    /// carrier-eligible, still requires an explicit componentKey exactly as before -- this widens
+    /// WHICH known, legally-eligible identities are exempt, it does not relax the rule that an
+    /// unknown or illegitimate one still needs one.
     /// </summary>
-    public static IReadOnlySet<string> ResolveAllNodeIdsInSchemaTree(
+    public static IReadOnlySet<string> ResolveCarrierEligibleNodeIdsInSchemaTree(
         IReadOnlyList<SchemaRecordRow> schemaRecords)
     {
         var result = new HashSet<string>(StringComparer.Ordinal);
         foreach (var identity in ResolveNodeIdentities(schemaRecords))
-            result.Add(identity.ResolvedNodeId);
+        {
+            var recordType = identity.Row.RecordType;
+            if (CarrierEligibleStructuralRecordTypes.Contains(recordType) || recordType == ModalRecordType)
+                result.Add(identity.ResolvedNodeId);
+        }
         return result;
     }
 

@@ -844,10 +844,16 @@ runtime_orchestration_ssot:
           Composition groups entries by "{parentTensorNodeId}::{sourceActionKey}" (never
           sourceActionKey alone) and merges each leaf's own matching entries by
           "{parentKey}::{key}" -- never a naive tensor-nodeId==record-key match (the tensor
-          nodeId belongs to whichever record is the OWNING STRUCTURAL PARENT -- a Form/Section/
-          Category structural_node in the common case, but a Modal catalog_component exactly as
-          validly when a Modal is itself the owning parent of its own Confirm/Cancel Action
-          children, per catalog_component_record_types' rule above) and never a bare-
+          nodeId belongs to whichever record is the OWNING STRUCTURAL PARENT -- a Form/Workflow/
+          Section structural_node in the common case (CORRECTED 2026-09-07, SSOT self-consistency
+          closure round: this previously and incorrectly listed Category among these -- Category
+          is structural but never a legal Action/interaction owner under any wiringLane, per
+          react-schema-topology-seed-translator-ssot.yaml's own VALID_ACTION_OWNER_NODE_KINDS/
+          SECTION_OWNABLE_ACTION_LANES authoring-legality gate; the SAME correction closed
+          backend/repository/LayoutSchemaTensorComposer.cs's own analogous
+          ResolveCarrierEligibleNodeIdsInSchemaTree save-validation boundary), but a Modal
+          catalog_component exactly as validly when a Modal is itself the owning parent of its own
+          Confirm/Cancel Action children, per catalog_component_record_types' rule above) and never a bare-
           sourceActionKey match, which would cross-contaminate two different parents that happen
           to author the same leaf key (Action/Field/Modal keys are only guaranteed unique within
           their own owning parent, the same way record keys are only guaranteed unique within
