@@ -1433,6 +1433,54 @@ react_schema_topology_seed_translator_ssot:
             displayColumns is authored without rowsSource; see
             validate_table_display_columns_and_rows_source). A Table authoring no
             displayColumns contributes no tensorAdoptionCandidates entry -- correct, not a gap.
+          schema_composed_derived_carrier_contract:
+            status: >-
+              CANONICAL (generic schema-composed physical-conversion round, 2026-09-07) -- this
+              is the OUTPUT SHAPE CONTRACT for tensorAdoptionCandidates[].schemaComposedLayoutPatch
+              Json; tensor_derived_carrier_generation_lineage_status above narrates HOW and WHY
+              this field is generated (its own generation-lineage history), but this subsection is
+              the binding shape definition itself -- a closure narrative is not a substitute for
+              a canonical output contract, and every real generated fixture's own
+              schemaComposedLayoutPatchJson value must satisfy this shape (verified generically by
+              check_react_schema_topology_seed_translator.py's validate_schema_composed_layout_
+              patch_json_shape, run against every fixture whose generated output carries a non-null
+              value for this field, never only the specific fixtures also proven byte-exact against
+              a real physical seed row).
+            generated_by: >-
+              .agent/scripts/react_schema_topology_seed_translator.py's
+              build_schema_composed_layout_patch_json(layout_records), a pure function of
+              layoutAdoptionCandidates.layoutSchemaJson.records[] alone (never of tensor_nodes
+              above -- a SEPARATE, generically-computed sibling projection, not a transform of
+              this same bucket's own layoutPatchJson).
+            shape: >-
+              {nodes: [{nodeId: <owning leaf's own resolved key, OR its resolved OWNING PARENT's
+              key for a runtimeInteractions contribution -- interaction_ownership_and_addressing_
+              contract>, nodeKind: <string, "catalog_component" unless a future record_type
+              branch sets otherwise>, runtimeInteractions: [<build_runtime_interaction_candidate
+              output per action, no runtimeInteractionId -- runtime_interactions_candidate_
+              contract.forbidden>], componentKey: NEVER, componentKind: NEVER, parentNodeId:
+              NEVER, dispatchTargetRefByTrigger: <optional, Record<trigger,targetRef>, present
+              only when at least one adminRuntimeDispatchOverride contributed>,
+              dispatchPayloadFromByTrigger: <optional, Record<trigger,payloadFrom>, present only
+              alongside a dispatchTargetRefByTrigger entry whose override authored payloadFrom>,
+              propsJson: <optional, JSON-serialized string, same convention as layoutPatchJson's
+              own tensor-only nodes>, propBindings: <optional, object>, debounceMs: <optional,
+              int>}]} -- the SAME merged/cleaned node shape layoutPatchJson's own tensor-only
+              nodes[] already uses (both paths share
+              _merge_and_clean_tensor_node_contributions), with componentKey/componentKind/
+              parentNodeId generically NEVER present for this bucket specifically (Compose
+              resolves those three from the PRIMARY schema tree at read time once a surface's
+              layoutAdoptionCandidates is physically adopted -- field_control_component_identity_
+              contract, tensor_parentnodeid_disposition.rule).
+            required_rules:
+              - every_node_carries_nodeId_nodeKind_runtimeInteractions
+              - schemaComposedLayoutPatchJson_node_never_carries_componentKey_or_componentKind_or_parentNodeId
+              - dispatchPayloadFromByTrigger_trigger_key_never_present_without_a_matching_dispatchTargetRefByTrigger_entry_for_the_same_trigger
+              - schemaComposedLayoutPatchJson_computed_for_every_surface_never_gated_by_seed_key_route_or_manifestKey
+              - schemaComposedLayoutPatchJson_is_computed_from_layoutAdoptionCandidates_records_alone_never_from_tensor_nodes_output
+            prohibited:
+              - leaving_schemaComposedLayoutPatchJson_shape_defined_only_by_closure_narrative_prose_without_a_canonical_shape_contract_and_generic_structural_validation
+              - describing_a_single_fixtures_byte_exact_match_as_proof_of_the_general_output_contract_without_a_fixture_independent_structural_shape_check
         manifestRefsCandidate:
           target_table: manifest
           shape: >-
@@ -2266,6 +2314,40 @@ react_schema_topology_seed_translator_ssot:
         rule: >-
           A seed may select only a registered componentKey/componentKind pair. Runtime-selectable
           only when registered per component-catalog-classification-ssot.yaml registration_required.
+      db_component_registry_registration_evidence:
+        status: >-
+          ADDED (generic schema-composed physical-conversion round, 2026-09-07) -- names an
+          authority-boundary distinction this contract always implied but never stated
+          explicitly, after a prior round's own verification tests conflated the two axes below.
+        role: registration_or_promotion_evidence_only_never_identity_or_classification_authority
+        table: topology.ui_component_registry
+        seed_source: db/ui_component_registry_preset_catalog_bootstrap.sql
+        table_role_ref: >-
+          docs/design/db-schema.yaml topology.ui_component_registry role: promoted_component_
+          registry -- a REGISTRATION/PROMOTION record (has this componentKey actually been
+          promoted into the live registry a runtime componentId resolution reads from), never a
+          classification vocabulary or componentKind<->componentKey identity authority. Same
+          principle component-catalog-classification-ssot.yaml seed_boundary.db_seed_surface
+          already states for the sibling ui_component_bucket table ("db seed is not
+          classification vocabulary authority"), extended here explicitly to
+          ui_component_registry since a prior round's own verification tests (check_react_schema_
+          topology_seed_translator.py checks 148-149, LayoutSchemaStructuralCompositionTests.cs's
+          three *_MatchesRealUiComponentRegistryBootstrapRow facts) read this bootstrap SQL file
+          AS IF it were the componentKind<->componentKey identity authority itself, rather than
+          registration evidence for keys whose identity is already established by
+          frontend_component_catalog above.
+        rule: >-
+          A componentKey/componentKind pair's IDENTITY correctness is proven against
+          frontend_component_catalog (frontend/components/catalog.ts's own componentKey/
+          componentKind literal pairs -- generically parsed, never a second independently
+          hand-typed mirror of those pairs). Whether that SAME componentKey has actually been
+          registered/promoted into the live DB registry a runtime componentId resolution reads
+          from is a SEPARATE, ADDITIONAL proof, read from this table's own bootstrap seed rows --
+          necessary for runtime componentId resolution to succeed, but never a substitute for, and
+          never conflated with, the identity-correctness proof above. A hand-typed translator/
+          backend convention table (COMPONENT_KIND_TO_COMPONENT_KEY / FieldControlToComponentKey /
+          ActionComponentKey / TableDisplayToComponentKey) must be verified against BOTH axes
+          independently, never against this table alone.
       style_catalog:
         role: presentation_reference_only
         source_of_truth:
@@ -2291,10 +2373,14 @@ react_schema_topology_seed_translator_ssot:
       - seed_must_not_emit_arbitrary_raw_html_tag
       - seed_must_not_emit_arbitrary_js
       - unknown_component_or_control_or_style_token_is_blocking_known_gap_ref
+      - componentKind_to_componentKey_identity_proven_against_frontend_component_catalog_never_against_db_component_registry_registration_evidence_alone
+      - db_component_registry_registration_evidence_proven_as_a_separate_additional_axis_never_a_substitute_for_frontend_component_catalog_identity_proof
     prohibited:
       - treating_raw_html_tag_generation_as_normal_seed_output
       - accepting_arbitrary_inline_css_without_allowlist_or_token_ref
       - treating_component_catalog_and_html_tag_catalog_as_the_same_authority
+      - treating_db_component_registry_bootstrap_seed_as_componentKind_to_componentKey_identity_or_classification_vocabulary_authority
+      - promoting_db_component_registry_bootstrap_seed_to_a_static_catalog_ssot
 
   # ===========================================================================
   # 10. projection_render_exchange_contract

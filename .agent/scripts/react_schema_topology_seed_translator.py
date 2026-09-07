@@ -2359,6 +2359,57 @@ def _merge_and_clean_tensor_node_contributions(node_contributions):
     return [_clean(merged[nid]) for nid in order], override_source_action_keys_by_node
 
 
+def make_parent_scoped_identity_resolver(records):
+    """parent_scoped_identity_reconstruction (docs/design/runtime-orchestration-ssot.yaml
+    ui_projection_render_reachability_contract.layout_schema_structural_render_contract): a
+    record's authored key is only guaranteed unique within its own branch -- the same scheme
+    LayoutSchemaTensorComposer.Compose (backend) applies when composing these same flat records
+    must apply HERE too, so a node grouped by its owning Form/Section's key never silently merges
+    two DIFFERENT Form/Section instances that happen to share that key. Duplicate keys are
+    namespaced "{resolvedParentKey}::{key}"; a record's resolved identity is tracked in document
+    order (flatten_topology_ui_seed_tree already emits parent-before-child) so a child always
+    resolves against the instance immediately preceding it, never a static, order-independent
+    lookup that cannot distinguish between duplicates.
+
+    ONE shared implementation (generic UI-Builder physical conversion round, closing a prior
+    round's own duplicate re-implementation finding) for every caller needing this algorithm --
+    split_flat_records_into_adoption_candidates (over flat_records, the full seed tree) and
+    build_schema_composed_layout_patch_json (over layout_records, the PRIMARY layout subtree
+    alone) previously carried two textually-identical but independently-maintained copies of this
+    same closure; both now call this one factory instead, on their own respective record list, so
+    duplicate-key/parent-scoped identity semantics can never drift between the two callers.
+
+    Returns a `resolve(wrapper) -> (resolved_key, resolved_parent_key)` closure, stateful across
+    calls in the SAME document-order-parent-before-child sequence `records` itself is in --
+    callers must invoke it once per wrapper, in that same document order, exactly as both
+    pre-existing call sites already did.
+    """
+    key_counts = {}
+    for wrapper in records:
+        key_counts[(wrapper.get("record") or {}).get("key")] = \
+            key_counts.get((wrapper.get("record") or {}).get("key"), 0) + 1
+    duplicate_keys = {k for k, count in key_counts.items() if count > 1}
+    last_resolved_key_by_raw_key = {}
+
+    def resolve(wrapper):
+        record = wrapper.get("record") or {}
+        raw_key = record.get("key")
+        raw_parent_key = wrapper.get("parentKey")
+        # Namespace by the parent's OWN resolved identity (already tracked, since document order
+        # is parent-before-child), never the raw parentKey string alone -- a duplicated child key
+        # under a duplicated parent key would otherwise namespace to the SAME
+        # "{rawParentKey}::{key}" string in every branch (e.g. two Sections both keyed
+        # "shared_section" each having their own Field keyed "shared_field" would both resolve to
+        # "shared_section::shared_field"), silently colliding instead of staying attached to the
+        # actual instance each was nested under.
+        resolved_parent_key = last_resolved_key_by_raw_key.get(raw_parent_key, raw_parent_key)
+        resolved_key = f"{resolved_parent_key}::{raw_key}" if raw_key in duplicate_keys else raw_key
+        last_resolved_key_by_raw_key[raw_key] = resolved_key
+        return resolved_key, resolved_parent_key
+
+    return resolve
+
+
 def build_schema_composed_layout_patch_json(layout_records):
     """Derives the schema-composed tensor DERIVED-carrier shape
     (ui_topology_tensor.layout_patch_json.nodes[]) generically FROM
@@ -2408,27 +2459,7 @@ def build_schema_composed_layout_patch_json(layout_records):
     (tensor_parentnodeid_disposition.rule) and never reads a tensor node's own
     parentNodeId field for containment.
     """
-    key_counts = {}
-    for wrapper in layout_records:
-        key_counts[(wrapper.get("record") or {}).get("key")] = \
-            key_counts.get((wrapper.get("record") or {}).get("key"), 0) + 1
-    duplicate_keys = {k for k, count in key_counts.items() if count > 1}
-    last_resolved_key_by_raw_key = {}
-
-    def resolve_and_track_identity(wrapper):
-        # SAME parent_scoped_identity_reconstruction algorithm as
-        # split_flat_records_into_adoption_candidates' own resolve_and_track_identity
-        # below -- deliberately re-implemented here (never imported across the two,
-        # since this function must stay a pure function of layout_records alone) but
-        # byte-identical in behavior; both walk the SAME document-order-parent-before-
-        # child guarantee flatten_topology_ui_seed_tree already provides.
-        record = wrapper.get("record") or {}
-        raw_key = record.get("key")
-        raw_parent_key = wrapper.get("parentKey")
-        resolved_parent_key = last_resolved_key_by_raw_key.get(raw_parent_key, raw_parent_key)
-        resolved_key = f"{resolved_parent_key}::{raw_key}" if raw_key in duplicate_keys else raw_key
-        last_resolved_key_by_raw_key[raw_key] = resolved_key
-        return resolved_key, resolved_parent_key
+    resolve_and_track_identity = make_parent_scoped_identity_resolver(layout_records)
 
     contributions = []
 
@@ -2556,33 +2587,12 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
     # a record's authored key is only guaranteed unique within its own branch -- the same
     # scheme LayoutSchemaTensorComposer.Compose (backend) applies when composing these same
     # flat records must apply HERE too, so a tensor node grouped by its owning Form's key
-    # never silently merges two DIFFERENT Form instances that happen to share that key.
-    # Duplicate keys are namespaced "{parentKey}::{key}"; a record's resolved identity is
-    # tracked in document order (flatten_topology_ui_seed_tree already emits parent-before-
-    # child) so a child always resolves against the instance immediately preceding it, never
-    # a static, order-independent lookup that cannot distinguish between duplicates.
-    key_counts = {}
-    for wrapper in flat_records:
-        key_counts[(wrapper.get("record") or {}).get("key")] = \
-            key_counts.get((wrapper.get("record") or {}).get("key"), 0) + 1
-    duplicate_keys = {k for k, count in key_counts.items() if count > 1}
-    last_resolved_key_by_raw_key = {}
-
-    def resolve_and_track_identity(wrapper):
-        record = wrapper.get("record") or {}
-        raw_key = record.get("key")
-        raw_parent_key = wrapper.get("parentKey")
-        # Namespace by the parent's OWN resolved identity (already tracked, since document order
-        # is parent-before-child), never the raw parentKey string alone -- a duplicated child key
-        # under a duplicated parent key would otherwise namespace to the SAME
-        # "{rawParentKey}::{key}" string in every branch (e.g. two Sections both keyed
-        # "shared_section" each having their own Field keyed "shared_field" would both resolve to
-        # "shared_section::shared_field"), silently colliding instead of staying attached to the
-        # actual instance each was nested under.
-        resolved_parent_key = last_resolved_key_by_raw_key.get(raw_parent_key, raw_parent_key)
-        resolved_key = f"{resolved_parent_key}::{raw_key}" if raw_key in duplicate_keys else raw_key
-        last_resolved_key_by_raw_key[raw_key] = resolved_key
-        return resolved_key, resolved_parent_key
+    # never silently merges two DIFFERENT Form instances that happen to share that key. Shared
+    # implementation (make_parent_scoped_identity_resolver, generic UI-Builder physical
+    # conversion round) -- SAME factory build_schema_composed_layout_patch_json uses on
+    # layout_records, called here on flat_records (the full seed tree) instead, so the two
+    # callers' duplicate-key/parent-scoped identity semantics can never independently drift.
+    resolve_and_track_identity = make_parent_scoped_identity_resolver(flat_records)
 
     # tensor_container_parent_contract: a tensor-adopted node's parentNodeId must be set when
     # (and only when) its OWN react_schema parent record ALSO becomes a real tensor node itself

@@ -1663,16 +1663,23 @@ public class LayoutSchemaStructuralCompositionTests
     /// <summary>
     /// Independently resolves every REAL (component_kind -&gt; component_key) pair straight from
     /// db/ui_component_registry_preset_catalog_bootstrap.sql (generic UI-Builder physical
-    /// conversion round) -- the canonical, already-existing component identity authority both
-    /// this file's own FieldControlToComponentKey/ActionComponentKey and
-    /// .agent/scripts/react_schema_topology_seed_translator.py's own
-    /// COMPONENT_KIND_TO_COMPONENT_KEY are hand-typed CONVENTION-TABLE mirrors of -- never a new
-    /// identity authority (this bootstrap SQL file already exists and already seeds the real
-    /// topology.ui_component_registry rows every componentId resolution in production reads
-    /// from). Mirrors check_react_schema_topology_seed_translator.py's own Python-side
-    /// extract_component_kind_to_component_key_from_registry_bootstrap() extraction discipline
-    /// (bounded by the next "ON CONFLICT" clause, never a naive ";" search -- this file's own
-    /// explanatory comments legitimately contain a bare ";" inside prose).
+    /// conversion round).
+    ///
+    /// CORRECTED (SSOT catalog/registry authority boundary closure round, 2026-09-07): this
+    /// bootstrap SQL seeds topology.ui_component_registry, whose role per
+    /// docs/design/db-schema.yaml is promoted_component_registry -- REGISTRATION/PROMOTION
+    /// evidence (has this componentKey actually been promoted into the live registry a runtime
+    /// componentId resolution reads from), never the componentKind&lt;-&gt;componentKey IDENTITY
+    /// authority itself. This file's own docstring here (and its own three
+    /// *_MatchesRealUiComponentRegistryBootstrapRow facts) previously named this bootstrap file
+    /// "the canonical... component identity authority" and verified
+    /// FieldControlToComponentKey/ActionComponentKey/TableDisplayToComponentKey against it alone
+    /// -- conflating registration evidence with identity authority, exactly what
+    /// ui_catalog_boundary_contract.catalogs.db_component_registry_registration_evidence
+    /// (react-schema-topology-seed-translator-ssot.yaml) now names and prohibits. This method's
+    /// own return value is still useful and still used below -- as REGISTRATION EVIDENCE ONLY
+    /// (see ExtractComponentKindToComponentKeyFromFrontendCatalog below for the actual
+    /// identity-authority extraction).
     /// </summary>
     private static IReadOnlyDictionary<string, string> ExtractComponentKindToComponentKeyFromRegistryBootstrap()
     {
@@ -1693,23 +1700,59 @@ public class LayoutSchemaStructuralCompositionTests
     }
 
     /// <summary>
-    /// Component identity (componentKind -&gt; componentKey) verification against the existing
-    /// catalog authority (generic UI-Builder physical conversion round) -- VERIFIES
-    /// FieldControlToComponentKey stays a correct subset of db/ui_component_registry_preset_
-    /// catalog_bootstrap.sql's own real registry rows, rather than trusting this hand-typed C#
-    /// literal never to drift from the Python translator's own independently-maintained mirror of
-    /// the SAME real data. Never a new identity authority and never a change to the hand-typed
-    /// table itself (kept, per field_control_component_identity_contract, because C# cannot
-    /// import a Python module or a live DB row at generation time across languages -- a
-    /// permanent cross-check like this one is the generic, sustainable substitute for literal
-    /// code sharing).
+    /// Resolves every REAL (componentKind -&gt; componentKey) pair straight from
+    /// frontend/components/catalog.ts (SSOT catalog/registry authority boundary closure round,
+    /// 2026-09-07) -- the actual componentKind&lt;-&gt;componentKey IDENTITY authority per
+    /// react-schema-topology-seed-translator-ssot.yaml
+    /// ui_catalog_boundary_contract.catalogs.frontend_component_catalog.source_of_truth. Reuses
+    /// the existing SsotYamlContractReader.ReadDoc helper (already used by
+    /// SsotWiringAuditComponentRegistrationTests.cs to read this same file) rather than adding a
+    /// new file-reading helper. Generically parsed (every `componentKey: "..."` in this file is
+    /// immediately followed by its own `componentKind: "..."` on the next line) -- never a
+    /// second, independently hand-typed mirror of these pairs. "ui_ux/primitive" is excluded: it
+    /// is UI_UX_PRIMITIVE_CATALOG_DEFINITION_ENTRIES' own shared placeholder componentKind for
+    /// many distinct catalog-only-lineup primitives (none of them runtimeConnected, none of them
+    /// ever looked up by FieldControlToComponentKey/ActionComponentKey/TableDisplayToComponentKey
+    /// below), ambiguous by design rather than a real resolvable 1:1 pair.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> ExtractComponentKindToComponentKeyFromFrontendCatalog()
+    {
+        var catalogPath = "frontend/components/catalog.ts";
+        var ts = SsotYamlContractReader.ReadDoc(catalogPath);
+        var pairPattern = new System.Text.RegularExpressions.Regex(
+            "componentKey:\\s*\"([^\"]+)\",\\s*\\n\\s*componentKind:\\s*\"([^\"]+)\"");
+        var pairs = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (System.Text.RegularExpressions.Match m in pairPattern.Matches(ts))
+        {
+            var (componentKey, componentKind) = (m.Groups[1].Value, m.Groups[2].Value);
+            if (componentKind == "ui_ux/primitive") continue;
+            pairs[componentKind] = componentKey;
+        }
+        Assert.True(pairs.Count > 0, $"{catalogPath}: matched zero (componentKey, componentKind) pairs -- extraction regex likely stale against this file's own current format");
+        return pairs;
+    }
+
+    /// <summary>
+    /// Component identity (componentKind -&gt; componentKey) verification against the actual
+    /// identity authority, frontend/components/catalog.ts (SSOT catalog/registry authority
+    /// boundary closure round, 2026-09-07 -- corrects this fact's prior round, which verified
+    /// against db/ui_component_registry_preset_catalog_bootstrap.sql alone; see
+    /// ExtractComponentKindToComponentKeyFromRegistryBootstrap's own updated docstring above for
+    /// why that was the wrong axis for this proof). VERIFIES FieldControlToComponentKey stays a
+    /// correct subset of catalog.ts's own real componentKey/componentKind pairs, rather than
+    /// trusting this hand-typed C# literal never to drift from the Python translator's own
+    /// independently-maintained mirror of the SAME real data. Never a new identity authority and
+    /// never a change to the hand-typed table itself (kept, per
+    /// field_control_component_identity_contract, because C# cannot import a Python module or a
+    /// live DB row at generation time across languages -- a permanent cross-check like this one
+    /// is the generic, sustainable substitute for literal code sharing).
     /// </summary>
     [Fact]
-    public void FieldControlToComponentKey_EveryEntryMatchesRealUiComponentRegistryBootstrapRow()
+    public void FieldControlToComponentKey_EveryEntryMatchesRealFrontendComponentCatalogEntry()
     {
-        var realRegistryPairs = ExtractComponentKindToComponentKeyFromRegistryBootstrap();
+        var realCatalogPairs = ExtractComponentKindToComponentKeyFromFrontendCatalog();
         var mismatches = LayoutSchemaTensorComposer.FieldControlToComponentKey
-            .Where(kv => !realRegistryPairs.TryGetValue(kv.Key, out var realKey) || realKey != kv.Value)
+            .Where(kv => !realCatalogPairs.TryGetValue(kv.Key, out var realKey) || realKey != kv.Value)
             .ToList();
         Assert.Empty(mismatches);
     }
@@ -1719,10 +1762,10 @@ public class LayoutSchemaStructuralCompositionTests
     /// button primitive convention constant.
     /// </summary>
     [Fact]
-    public void ActionComponentKey_MatchesRealUiComponentRegistryBootstrapRow()
+    public void ActionComponentKey_MatchesRealFrontendComponentCatalogEntry()
     {
-        var realRegistryPairs = ExtractComponentKindToComponentKeyFromRegistryBootstrap();
-        Assert.True(realRegistryPairs.TryGetValue("action/button", out var realKey), "action/button row not found in db/ui_component_registry_preset_catalog_bootstrap.sql");
+        var realCatalogPairs = ExtractComponentKindToComponentKeyFromFrontendCatalog();
+        Assert.True(realCatalogPairs.TryGetValue("action/button", out var realKey), "action/button pair not found in frontend/components/catalog.ts");
         Assert.Equal(LayoutSchemaTensorComposer.ActionComponentKey, realKey);
     }
 
@@ -1730,21 +1773,43 @@ public class LayoutSchemaStructuralCompositionTests
     /// Same discipline as FieldControlToComponentKey/ActionComponentKey above, for the Table
     /// display convention table -- but TableDisplayToComponentKey's KEYS are "display" values
     /// (card_list/data_grid/list/table), not componentKind strings, so the correspondence to a
-    /// real registry row is checked by SUFFIX (the component_kind's segment after its family/
+    /// real catalog pair is checked by SUFFIX (the componentKind's segment after its family/
     /// prefix) rather than by direct key lookup, e.g. "table" -&gt; "table.primitive" here
-    /// corresponds to the real "data_display/table" -&gt; "table.primitive" registry row.
+    /// corresponds to the real "data_display/table" -&gt; "table.primitive" catalog pair.
     /// </summary>
     [Fact]
-    public void TableDisplayToComponentKey_EveryEntryMatchesRealUiComponentRegistryBootstrapRowBySuffix()
+    public void TableDisplayToComponentKey_EveryEntryMatchesRealFrontendComponentCatalogEntryBySuffix()
     {
-        var realRegistryPairs = ExtractComponentKindToComponentKeyFromRegistryBootstrap();
+        var realCatalogPairs = ExtractComponentKindToComponentKeyFromFrontendCatalog();
         foreach (var (display, componentKey) in LayoutSchemaTensorComposer.TableDisplayToComponentKey)
         {
-            var match = realRegistryPairs.FirstOrDefault(kv =>
+            var match = realCatalogPairs.FirstOrDefault(kv =>
                 kv.Value == componentKey && kv.Key.EndsWith("/" + display, StringComparison.Ordinal));
             Assert.True(
                 match.Key != null,
-                $"no real registry row found whose component_kind ends with '/{display}' and component_key == '{componentKey}'");
+                $"no real frontend catalog pair found whose componentKind ends with '/{display}' and componentKey == '{componentKey}'");
         }
+    }
+
+    /// <summary>
+    /// SEPARATE, ADDITIONAL registration-evidence axis (SSOT catalog/registry authority boundary
+    /// closure round, 2026-09-07) -- never a substitute for the identity-correctness facts above.
+    /// Proves every componentKey these three convention tables resolve to is ALSO present as a
+    /// real, already-registered row's component_key in db/ui_component_registry_preset_catalog_
+    /// bootstrap.sql's own topology.ui_component_registry seed (db-schema.yaml:
+    /// promoted_component_registry), i.e. actually promoted/reachable for runtime componentId
+    /// resolution, not merely a correct catalog identity in the abstract.
+    /// </summary>
+    [Fact]
+    public void ConventionTableComponentKeys_AreAllRegisteredInUiComponentRegistryBootstrap()
+    {
+        var realRegistryComponentKeys = new HashSet<string>(
+            ExtractComponentKindToComponentKeyFromRegistryBootstrap().Values, StringComparer.Ordinal);
+        var usedComponentKeys = LayoutSchemaTensorComposer.FieldControlToComponentKey.Values
+            .Concat(LayoutSchemaTensorComposer.TableDisplayToComponentKey.Values)
+            .Append(LayoutSchemaTensorComposer.ActionComponentKey)
+            .Distinct(StringComparer.Ordinal);
+        var unregistered = usedComponentKeys.Where(key => !realRegistryComponentKeys.Contains(key)).ToList();
+        Assert.Empty(unregistered);
     }
 }

@@ -268,20 +268,24 @@ UI_COMPONENT_REGISTRY_ROW_RE = re.compile(
 def extract_component_kind_to_component_key_from_registry_bootstrap():
     """Independently resolves every REAL (component_kind -> component_key) pair
     straight from db/ui_component_registry_preset_catalog_bootstrap.sql (generic
-    UI-Builder physical conversion round) -- the canonical, already-existing
-    component identity authority both react_schema_topology_seed_translator.py's
-    own COMPONENT_KIND_TO_COMPONENT_KEY and backend/repository/
-    LayoutSchemaTensorComposer.cs's own FieldControlToComponentKey/
-    TableDisplayToComponentKey/ActionComponentKey are hand-typed CONVENTION-TABLE
-    mirrors of -- never a new identity authority (this bootstrap SQL file already
-    exists, already seeds the real topology.ui_component_registry rows every
-    componentId resolution in production reads from). Used to VERIFY those
-    hand-typed mirrors stay a correct subset of this real data, rather than
-    trusting each language's own independently-maintained literal never to drift
-    -- per structural_authority_precedence_contract's
-    field_control_component_identity_contract, "a control value present in one
-    table and absent from the other is itself a defect in whichever table is
-    missing it, never evidence that the control is unsupported."
+    UI-Builder physical conversion round).
+
+    CORRECTED (SSOT catalog/registry authority boundary closure round, 2026-09-07):
+    this bootstrap SQL seeds topology.ui_component_registry, whose role per
+    docs/design/db-schema.yaml is promoted_component_registry -- REGISTRATION/
+    PROMOTION evidence (has this componentKey actually been promoted into the live
+    registry a runtime componentId resolution reads from), never the componentKind
+    <-> componentKey IDENTITY authority itself. A prior round's own docstring here
+    (and its own checks 148-149) incorrectly named this bootstrap file "the
+    canonical... component identity authority" and verified translator/backend
+    hand-typed convention tables against it alone -- conflating registration
+    evidence with identity authority, exactly what
+    ui_catalog_boundary_contract.catalogs.db_component_registry_registration_evidence
+    (react-schema-topology-seed-translator-ssot.yaml) now names and prohibits. This
+    function's OWN return value is still useful and still used -- as REGISTRATION
+    EVIDENCE ONLY (see extract_component_kind_to_component_key_from_frontend_catalog
+    below for the actual identity-authority extraction, and checks 148-151 for how
+    the two axes are now proven separately, never as substitutes for each other).
     """
     sql_text = UI_COMPONENT_REGISTRY_BOOTSTRAP_PATH.read_text(encoding="utf-8")
     marker = "INSERT INTO topology.ui_component_registry"
@@ -302,6 +306,110 @@ def extract_component_kind_to_component_key_from_registry_bootstrap():
     if not pairs:
         raise AssertionError(f"{UI_COMPONENT_REGISTRY_BOOTSTRAP_PATH}: matched zero (component_key, component_kind) rows -- extraction regex likely stale against this file's own current format")
     return pairs
+
+
+FRONTEND_CATALOG_PATH = REPO_ROOT / "frontend" / "components" / "catalog.ts"
+
+FRONTEND_CATALOG_IDENTITY_PAIR_RE = re.compile(
+    r'componentKey:\s*"([^"]+)",\s*\n\s*componentKind:\s*"([^"]+)"'
+)
+
+# "ui_ux/primitive" is UI_UX_PRIMITIVE_CATALOG_DEFINITION_ENTRIES' own shared placeholder
+# componentKind for many distinct catalog-only-lineup primitives (none of them
+# runtimeConnected, none of them ever looked up by any translator/backend convention table
+# below) -- ambiguous by design (many componentKeys legitimately share it), so it is excluded
+# from the identity-authority dict this extraction builds rather than silently picking one
+# arbitrary componentKey for it (a real, resolvable componentKind must map to exactly one
+# componentKey to be usable as this dict's own key at all).
+FRONTEND_CATALOG_AMBIGUOUS_PLACEHOLDER_COMPONENT_KINDS = {"ui_ux/primitive"}
+
+
+def extract_component_kind_to_component_key_from_frontend_catalog():
+    """Resolves every REAL (component_kind -> component_key) pair straight from
+    frontend/components/catalog.ts (SSOT catalog/registry authority boundary
+    closure round, 2026-09-07) -- the actual componentKind<->componentKey IDENTITY
+    authority per react-schema-topology-seed-translator-ssot.yaml
+    ui_catalog_boundary_contract.catalogs.frontend_component_catalog.source_of_truth
+    (paired there with docs/design/component-catalog-classification-ssot.yaml's own
+    catalog_vocabulary_contract, which defines classification metadata fields --
+    componentFamily/semanticRole/visualRole/lifecycleStatus/capabilityTags -- but
+    not this componentKey/componentKind pairing itself; catalog.ts's own object
+    literals are where that pairing is actually authored). Generically parsed
+    (every `componentKey: "..."` in this file is immediately followed by its own
+    `componentKind: "..."` on the next line, verified 1:1 with zero unmatched
+    componentKey occurrences at the time this extraction was written) -- never a
+    second, independently hand-typed mirror of these pairs.
+
+    This is the PRIMARY identity-authority extraction (replacing the prior round's
+    mistaken use of extract_component_kind_to_component_key_from_registry_bootstrap
+    for this same purpose); that function's own return value remains valid and
+    useful, but only as a SEPARATE registration-evidence axis (see checks 148-151).
+    """
+    ts_text = FRONTEND_CATALOG_PATH.read_text(encoding="utf-8")
+    pairs = {}
+    for component_key, component_kind in FRONTEND_CATALOG_IDENTITY_PAIR_RE.findall(ts_text):
+        if component_kind in FRONTEND_CATALOG_AMBIGUOUS_PLACEHOLDER_COMPONENT_KINDS:
+            continue
+        pairs[component_kind] = component_key
+    if not pairs:
+        raise AssertionError(f"{FRONTEND_CATALOG_PATH}: matched zero (componentKey, componentKind) pairs -- extraction regex likely stale against this file's own current format")
+    return pairs
+
+
+SCHEMA_COMPOSED_LAYOUT_PATCH_JSON_NODE_REQUIRED_FIELDS = {"nodeId", "nodeKind", "runtimeInteractions"}
+SCHEMA_COMPOSED_LAYOUT_PATCH_JSON_NODE_FORBIDDEN_FIELDS = {"componentKey", "componentKind", "parentNodeId"}
+SCHEMA_COMPOSED_LAYOUT_PATCH_JSON_NODE_OPTIONAL_FIELDS = {
+    "dispatchTargetRefByTrigger", "dispatchPayloadFromByTrigger", "propsJson", "propBindings", "debounceMs",
+}
+
+
+def schema_composed_layout_patch_json_shape_violations(payload):
+    """Structural (fixture-INDEPENDENT) shape check for a tensorAdoptionCandidates[]
+    entry's own schemaComposedLayoutPatchJson value, against
+    react-schema-topology-seed-translator-ssot.yaml storage_adoption_contract.
+    candidate_buckets.tensorAdoptionCandidates.schema_composed_derived_carrier_
+    contract's own canonical `shape` (SSOT catalog/registry authority boundary
+    closure round, 2026-09-07) -- this is the contract itself, never a comparison
+    against one specific real fixture's own content (checks 142-143/144-147 already
+    do that, for the two real surfaces this round could cross-check against; this
+    function instead proves EVERY real fixture's generated output satisfies the
+    general shape contract, independent of whether a matching physical seed row
+    exists to compare against byte-for-byte).
+
+    Returns a list of human-readable violation strings; empty means the payload
+    satisfies the contract. Never raises -- a malformed payload (not a dict, no
+    "nodes" list) is itself reported as a violation string, not an exception, so a
+    single malformed fixture's own diagnostic detail is not lost inside a traceback.
+    """
+    violations = []
+    if not isinstance(payload, dict) or "nodes" not in payload or not isinstance(payload.get("nodes"), list):
+        return [f"payload is not a dict carrying a 'nodes' list: {payload!r}"]
+    for node in payload["nodes"]:
+        if not isinstance(node, dict):
+            violations.append(f"node is not a dict: {node!r}")
+            continue
+        node_id = node.get("nodeId", "<missing nodeId>")
+        missing_required = SCHEMA_COMPOSED_LAYOUT_PATCH_JSON_NODE_REQUIRED_FIELDS - node.keys()
+        if missing_required:
+            violations.append(f"node {node_id}: missing required field(s) {sorted(missing_required)}")
+        forbidden_present = SCHEMA_COMPOSED_LAYOUT_PATCH_JSON_NODE_FORBIDDEN_FIELDS & node.keys()
+        if forbidden_present:
+            violations.append(f"node {node_id}: carries forbidden field(s) {sorted(forbidden_present)} (must be resolved from the PRIMARY schema tree at read time, never emitted here)")
+        unknown_fields = node.keys() - SCHEMA_COMPOSED_LAYOUT_PATCH_JSON_NODE_REQUIRED_FIELDS - SCHEMA_COMPOSED_LAYOUT_PATCH_JSON_NODE_OPTIONAL_FIELDS - SCHEMA_COMPOSED_LAYOUT_PATCH_JSON_NODE_FORBIDDEN_FIELDS
+        if unknown_fields:
+            violations.append(f"node {node_id}: carries field(s) {sorted(unknown_fields)} outside the canonical shape's required/optional vocabulary")
+        if "nodeId" in node and not isinstance(node["nodeId"], str):
+            violations.append(f"node {node_id}: nodeId is not a string")
+        if "nodeKind" in node and not isinstance(node["nodeKind"], str):
+            violations.append(f"node {node_id}: nodeKind is not a string")
+        if "runtimeInteractions" in node and not isinstance(node["runtimeInteractions"], list):
+            violations.append(f"node {node_id}: runtimeInteractions is not a list")
+        if "dispatchPayloadFromByTrigger" in node:
+            dispatch_targets = node.get("dispatchTargetRefByTrigger") or {}
+            for trigger in node["dispatchPayloadFromByTrigger"]:
+                if trigger not in dispatch_targets:
+                    violations.append(f"node {node_id}: dispatchPayloadFromByTrigger has trigger {trigger!r} with no matching dispatchTargetRefByTrigger entry")
+    return violations
 
 
 FAILURES = []
@@ -2924,30 +3032,99 @@ def main():
             ae206_mismatches_outside_known_quirks == [],
         )
 
-        # 148-149 (generic UI-Builder physical conversion round): component identity
-        # (componentKind -> componentKey) verification against the existing catalog authority --
-        # db/ui_component_registry_preset_catalog_bootstrap.sql's own real topology.
-        # ui_component_registry rows, the SAME table every componentId resolution in production
-        # ultimately reads from -- rather than trusting translator_impl.COMPONENT_KIND_TO_
-        # COMPONENT_KEY's own hand-typed literal never to drift from it. This is VERIFICATION of
-        # an existing convention-table mirror against its own already-existing source of truth,
-        # never a new identity authority and never a change to the hand-typed table itself (kept,
-        # per field_control_component_identity_contract, because Python cannot import a C#
-        # backend table or a live DB row across languages -- a permanent cross-check is the
-        # generic, sustainable substitute for literal code sharing).
+        # 148-151 (SSOT catalog/registry authority boundary closure round, 2026-09-07):
+        # component identity (componentKind -> componentKey) verification against TWO SEPARATE
+        # axes, never conflated (ui_catalog_boundary_contract.catalogs.
+        # db_component_registry_registration_evidence, react-schema-topology-seed-translator-
+        # ssot.yaml) -- corrects a prior round's own checks 148-149, which verified
+        # translator_impl.COMPONENT_KIND_TO_COMPONENT_KEY against db/ui_component_registry_
+        # preset_catalog_bootstrap.sql ALONE and mislabeled that bootstrap file "the... component
+        # identity authority", when its real role (db-schema.yaml: promoted_component_registry)
+        # is registration/promotion evidence, not identity authority.
+        #
+        # Axis 1 (IDENTITY): every entry matches frontend/components/catalog.ts's own real
+        # componentKey/componentKind pairs -- the actual identity authority per
+        # ui_catalog_boundary_contract.catalogs.frontend_component_catalog.source_of_truth.
+        # Axis 2 (REGISTRATION EVIDENCE, separate, additional, never a substitute for axis 1):
+        # every entry's componentKey also appears as a REAL, already-registered row in
+        # db/ui_component_registry_preset_catalog_bootstrap.sql's own topology.
+        # ui_component_registry seed -- proving the componentKey is actually promoted/reachable
+        # for runtime componentId resolution, not merely a correct catalog identity in the
+        # abstract. Both are VERIFICATION of an existing hand-typed convention-table mirror
+        # against its own already-existing sources of truth, never a new identity authority and
+        # never a change to the hand-typed table itself (kept, per
+        # field_control_component_identity_contract, because Python cannot import a C# backend
+        # table, a TypeScript catalog module, or a live DB row across languages -- a permanent
+        # cross-check is the generic, sustainable substitute for literal code sharing).
+        real_catalog_pairs = extract_component_kind_to_component_key_from_frontend_catalog()
         real_registry_pairs = extract_component_kind_to_component_key_from_registry_bootstrap()
-        component_kind_to_component_key_mismatches = [
-            (kind, key, real_registry_pairs.get(kind))
+        component_kind_to_component_key_identity_mismatches = [
+            (kind, key, real_catalog_pairs.get(kind))
             for kind, key in translator_impl.COMPONENT_KIND_TO_COMPONENT_KEY.items()
-            if real_registry_pairs.get(kind) != key
+            if real_catalog_pairs.get(kind) != key
+        ]
+        component_key_registration_gaps = [
+            key
+            for key in translator_impl.COMPONENT_KIND_TO_COMPONENT_KEY.values()
+            if key not in real_registry_pairs.values()
         ]
         expect(
-            "148. every entry in react_schema_topology_seed_translator.py's own COMPONENT_KIND_TO_COMPONENT_KEY (9 control/componentKind -> componentKey pairs) matches a REAL row in db/ui_component_registry_preset_catalog_bootstrap.sql's own topology.ui_component_registry seed exactly -- proving this hand-typed convention table is a correct subset of the existing catalog authority, not an independently-invented mapping that could silently drift from the real registry",
-            component_kind_to_component_key_mismatches == [],
+            "148. every entry in react_schema_topology_seed_translator.py's own COMPONENT_KIND_TO_COMPONENT_KEY (9 control/componentKind -> componentKey pairs) matches a REAL (componentKey, componentKind) pair in frontend/components/catalog.ts exactly -- the actual componentKind<->componentKey IDENTITY authority (ui_catalog_boundary_contract.catalogs.frontend_component_catalog), proving this hand-typed convention table is a correct subset of that authority, not an independently-invented mapping",
+            component_kind_to_component_key_identity_mismatches == [],
         )
         expect(
-            "149. COMPONENT_KIND_TO_COMPONENT_KEY is non-empty and the real registry extraction actually found real rows (positive control -- proves 148 passing is not a vacuous truth from an empty comparison on either side)",
-            len(translator_impl.COMPONENT_KIND_TO_COMPONENT_KEY) > 0 and len(real_registry_pairs) >= len(translator_impl.COMPONENT_KIND_TO_COMPONENT_KEY),
+            "149. COMPONENT_KIND_TO_COMPONENT_KEY is non-empty and the real frontend catalog extraction actually found real pairs (positive control -- proves 148 passing is not a vacuous truth from an empty comparison on either side)",
+            len(translator_impl.COMPONENT_KIND_TO_COMPONENT_KEY) > 0 and len(real_catalog_pairs) >= len(translator_impl.COMPONENT_KIND_TO_COMPONENT_KEY),
+        )
+        expect(
+            "150. every componentKey COMPONENT_KIND_TO_COMPONENT_KEY resolves to is ALSO present as a real, already-registered row's component_key in db/ui_component_registry_preset_catalog_bootstrap.sql's own topology.ui_component_registry seed -- a SEPARATE, ADDITIONAL registration-evidence axis (db-schema.yaml: promoted_component_registry), proving each componentKey is actually promoted/reachable for runtime componentId resolution, never a substitute for check 148's identity-correctness proof",
+            component_key_registration_gaps == [],
+        )
+        expect(
+            "151. the real registry-bootstrap extraction (registration-evidence axis) independently found real rows, distinct from the frontend-catalog extraction (identity axis) used by 148-149 -- positive control proving 150 passing is not a vacuous truth from an empty registry-side comparison",
+            len(real_registry_pairs) > 0,
+        )
+
+        # 152-153 (SSOT catalog/registry authority boundary closure round, 2026-09-07):
+        # fixture-INDEPENDENT structural shape proof for schemaComposedLayoutPatchJson, against
+        # storage_adoption_contract.candidate_buckets.tensorAdoptionCandidates.schema_composed_
+        # derived_carrier_contract's own canonical `shape` (react-schema-topology-seed-translator-
+        # ssot.yaml) -- closes the finding that this field's shape was defined only by closure
+        # narrative prose (tensor_derived_carrier_generation_lineage_status) plus two specific
+        # fixtures' own byte-exact matches (checks 142-143), never by a general, fixture-
+        # independent contract check. Runs schema_composed_layout_patch_json_shape_violations
+        # against EVERY real fixture this script already generates topology-seed output for whose
+        # own tensorAdoptionCandidates actually carries the field (never gated to only the two
+        # fixtures also proven byte-exact against a real physical seed row) -- so a shape
+        # regression introduced for a DIFFERENT, not-yet-physically-adopted surface (e.g. the CRUD
+        # or credential-management fixtures, which stay tensor-only today) would still fail this
+        # check even though no dd0xx/ae206-style byte-exact comparison exists for it.
+        schema_composed_shape_fixtures = {
+            "credential-management-0092": doc_ts,
+            "physical-search-crud-aggregate": doc_crud,
+            "team-dashboard-admin": doc_td_admin,
+            "team-dashboard-normal": doc_td_normal,
+            "admin-enum-ae200": doc_ae200,
+        }
+        schema_composed_shape_violations_by_fixture = {}
+        schema_composed_shape_checked_fixture_count = 0
+        for fixture_name, fixture_doc in schema_composed_shape_fixtures.items():
+            for tensor_candidate in dig(fixture_doc, "adoptionCandidates", "tensorAdoptionCandidates") or []:
+                if "schemaComposedLayoutPatchJson" not in tensor_candidate:
+                    continue
+                schema_composed_shape_checked_fixture_count += 1
+                violations = schema_composed_layout_patch_json_shape_violations(
+                    tensor_candidate["schemaComposedLayoutPatchJson"],
+                )
+                if violations:
+                    schema_composed_shape_violations_by_fixture[fixture_name] = violations
+        expect(
+            "152. EVERY real fixture's generated schemaComposedLayoutPatchJson (wherever tensorAdoptionCandidates actually carries the field) satisfies storage_adoption_contract.candidate_buckets.tensorAdoptionCandidates.schema_composed_derived_carrier_contract's own canonical shape -- required nodeId/nodeKind/runtimeInteractions present, componentKey/componentKind/parentNodeId never present, no field outside the contract's own required/optional vocabulary -- a general, fixture-independent structural proof of the OUTPUT CONTRACT itself, never only a specific fixture's own byte-exact match to one real seed row",
+            schema_composed_shape_violations_by_fixture == {},
+        )
+        expect(
+            "153. at least 3 real fixtures' generated output actually carried a non-null schemaComposedLayoutPatchJson to check (positive control -- proves 152 passing is not a vacuous truth from zero fixtures ever reaching the field at all)",
+            schema_composed_shape_checked_fixture_count >= 3,
         )
 
     print()
