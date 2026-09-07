@@ -1148,6 +1148,51 @@ react_schema_topology_seed_translator_ssot:
             absent from the other is a defect in whichever table is missing it, never evidence
             the control is unsupported for that path; a non-Field entry's absence from
             FieldControlToComponentKey is correct and required, never a gap to close.
+        tensor_derived_carrier_generation_lineage_status: >-
+          OPEN FINDING (canonical-generation -> physical-adoption lineage closure round,
+          2026-09-07) -- reported per this round's own instruction to flag, not invent, when a
+          transform cannot be uniquely derived as an existing callable function. Re-confirmed: the
+          RELATIONSHIP between the generator's raw tensorAdoptionCandidates.layoutPatchJson.nodes[]
+          output and db/seed_empty.sql's dd015/dd025 physical DERIVED carrier content IS fully and
+          deterministically explained by this contract's own interaction_ownership_and_addressing_
+          contract and tensor_parentnodeid_disposition (admin-normal-surface-projection-seed-
+          ssot.yaml) rules, verified by hand for every node in dd015 against the real generator
+          output: team_dashboard_admin_save_button's own authored runtimeInteraction (openModal)
+          and team_dashboard_admin_save_confirm_modal's own authored runtimeInteraction (toggle
+          self-close) both resolve to the owning SECTION (team_dashboard_admin_editor) as their
+          respective records' resolved parent, so both entries correctly land on that Section's
+          carrier node; team_dashboard_admin_save_confirm_button's/_cancel_button's own authored
+          runtimeInteractions resolve to the owning MODAL (team_dashboard_admin_save_confirm_modal)
+          as their resolved parent (Modal is a VALID_ACTION_OWNER_NODE_KINDS member unconditionally),
+          so both land on the Modal's own carrier node; each Field/Action leaf's own NodeLocalData
+          (propsJson/propBindings/dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger) carries
+          through by exact nodeId match unchanged; componentKey/componentKind/label are dropped
+          because Compose resolves them from the PRIMARY schema tree at read time instead. What
+          remains OPEN: no existing callable function (this Python translator, or the C# backend)
+          mechanically computes the physical DERIVED carrier JSON FROM {tensorAdoptionCandidates,
+          layoutAdoptionCandidates} as pure inputs -- LayoutSchemaTensorComposer.Compose /
+          BuildInteractionsBySourceActionKey (backend/repository/LayoutSchemaTensorComposer.cs)
+          only implement the READ direction, consuming an ALREADY-persisted carrier at dispatch
+          time; they do not generate one. dd015/dd025's current content was authored by hand
+          during the team-dashboard-physical-layout-adoption round by applying this contract's
+          rules by inspection (cross-checked against admin.enum.management.projection's own
+          already-proven tensor shape as precedent) and independently verified CORRECT under the
+          real consuming algorithm via backend/tests/Topolactor.Integration.Tests/
+          TeamDashboardHubRelationUiProjectionLiveDbTests.cs's checked-in-fixture Compose proof and
+          TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs's live-DB
+          preview/validate/apply round trip -- both are real, permanent, READ-direction proofs
+          that dd015/dd025 are VALID, non-broken DERIVED carriers, never a WRITE-direction proof
+          that dd015/dd025 were themselves mechanically derived from the raw generator candidate.
+          Building such a WRITE-direction proof today would require either (a) a new reusable
+          generation-time transform function (a real translator feature, not proof-only code) or
+          (b) an independent test-only reimplementation of the addressing/grouping algorithm in
+          Python purely to re-derive an expected value to compare against (a second,
+          divergence-prone implementation of production logic) -- both are new engineering
+          decisions with no existing SSOT specifying WHICH approach the generator should take or
+          whether this transform should exist as generator output at all, so neither is added by
+          this round. This is an Owner-level design_change candidate, not an implementation_change
+          gap: production (the translator, LayoutSchemaTensorComposer, dd015/dd025's content) is
+          unchanged by this finding.
         prohibited:
           - treating_ui_topology_tensor_layout_patch_json_nodes_as_a_substitute_for_physically_adopting_real_layoutAdoptionCandidates_content_into_layout_schema_json_records
           - describing_a_surfaces_tensor_only_layout_patch_content_as_a_proven_or_completed_structural_authority_shape_in_its_own_declared_seed_surface_catalog_entry

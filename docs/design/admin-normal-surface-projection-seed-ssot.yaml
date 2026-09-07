@@ -841,11 +841,21 @@ admin_normal_surface_projection_seed_ssot:
             team_dashboard.admin.projection in react-schema-topology-seed-translator-ssot.yaml
             declared_seed_surface_catalog.known_declared_surfaces, whose own known_gaps is now []
             (see that entry's historical_known_gaps_closed_2026_08_17_uibuilder_lineage_closure_
-            round_3 for the full closure record). db/seed_empty.sql's dd015 tensor row IS the
-            clean generator output verbatim — zero post-generation patches, zero hand-authored
-            tensor content — proven end to end through the real live-DB layout_patch:preview ->
-            layout_patch:validate -> layout_patch:apply pipeline
-            (backend/tests/Topolactor.Integration.Tests/
+            round_3 for the full closure record). CORRECTED 2026-09-07 (canonical generation ->
+            physical adoption lineage audit): db/seed_empty.sql's dd015 tensor row was ONLY the
+            clean generator output verbatim at the time this paragraph was written (2026-08-17,
+            before physical layout adoption existed) -- dd013 now physically persists that role
+            instead (Owner "Judgment B", react-schema-topology-seed-translator-ssot.yaml
+            storage_adoption_contract.structural_authority_precedence_contract; see
+            physical_layout_schema_adoption_acceptance_criteria below for the full closure
+            record). dd015 was reshaped (team-dashboard-physical-layout-adoption
+            implementation_change, 2026-09-06) into the DERIVED runtime carrier that same
+            contract requires once dd013 carries non-empty records[] -- it is no longer the raw
+            generator output verbatim (componentKey/componentKind/label no longer live there;
+            runtimeInteractions are keyed by each Action/Modal's own resolved schema parent, not
+            per-leaf) -- proven end to end through the real live-DB layout_patch:preview ->
+            layout_patch:validate -> layout_patch:apply pipeline against the matching
+            schema-composed scaffold (backend/tests/Topolactor.Integration.Tests/
             TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs).
           capability_requirements:
             read: required
@@ -967,7 +977,15 @@ admin_normal_surface_projection_seed_ssot:
               tests/teamDashboardProductionProjectionBoundary.test.ts. The criteria below are kept
               verbatim as the record of what was required and how it was satisfied, per this
               repo's own historical_known_gaps_closed convention -- not because any part remains
-              open.
+              open. CORRECTED 2026-09-07 (canonical-generation -> physical-adoption lineage
+              closure round): the "generator/fixture" proof named above was not yet backed by a
+              permanent automated check on 2026-09-06 -- required_generator_fixture_proof below
+              records the actual closure (check_react_schema_topology_seed_translator.py checks
+              136-141) added that same follow-up round. That round also found the tensor bucket's
+              own DERIVED-carrier content (dd015/dd025) has no equivalent generation-time
+              transform proof and is unlikely to get one without a further Owner-level design
+              decision -- see required_generator_fixture_proof's own NOTE below; this is a
+              reporting-only finding, production is unaffected.
             governing_contract_ref: >-
               react-schema-topology-seed-translator-ssot.yaml
               storage_adoption_contract.structural_authority_precedence_contract (Owner
@@ -1050,13 +1068,35 @@ admin_normal_surface_projection_seed_ssot:
                 tensor content, not a re-opening of Round 2's own (already-merged) Modal
                 structural-containment fix, which this criterion does not touch or regress.
             required_generator_fixture_proof: >-
+              CLOSED (canonical-generation -> physical-adoption lineage closure round, 2026-09-07).
               A re-run of generate-topology-seed over both existing fixtures reporting
               gateStatus=pass with zero validationErrors (already true today) AND an explicit
               assertion that adoptionCandidates.layoutAdoptionCandidates.layoutSchemaJson.records
-              is byte-identical to what gets persisted into dd013/dd023 — the same "verbatim,
-              not a re-derived approximation" proof discipline
+              is canonical-byte-equivalent to what gets persisted into dd013/dd023 — the same
+              "verbatim, not a re-derived approximation" proof discipline
               TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs already established for
-              the tensor bucket, applied to the layout bucket.
+              the tensor bucket, applied to the layout bucket. Proof:
+              .agent/scripts/check_react_schema_topology_seed_translator.py checks 136-141 (run by
+              .agent/tests/check-react-schema-topology-seed-translator.sh, always-on, no live DB
+              required) invoke the REAL .agent/tools/react-schema-topology-seed-translator
+              generate-topology-seed CLI against the committed team-dashboard-admin/normal
+              .topology-seed.input.json fixtures and compare the actual stdout output's
+              layoutSchemaJson.records against db/seed_empty.sql's dd013/dd023 rows, both read
+              fresh from their own real source each run (extract_layout_schema_json_by_layout_id)
+              — never two copies of the same hand-typed constant compared to itself. This closes
+              the gap the team-dashboard-physical-layout-adoption round's own closure_note (above)
+              claimed satisfied without yet having a permanent automated check behind it.
+              NOTE (same round): the tensor bucket's OWN "verbatim, not re-derived" claim this
+              paragraph borrows its discipline from was, on re-audit, never actually about
+              layoutAdoptionCandidates parity in the first place -- TeamDashboardUiBuilderCanonical
+              ApplyPipelineLiveDbTests.cs proves dd015's PERSISTED content round-trips correctly
+              through layout_patch:preview/validate/apply, not that dd015 is byte-equivalent to the
+              raw generator's tensorAdoptionCandidates output (it is deliberately NOT, since dd015
+              is the reshaped DERIVED carrier per structural_authority_precedence_contract, not the
+              raw per-leaf tensor-only shape the generator emits) — see
+              react-schema-topology-seed-translator-ssot.yaml storage_adoption_contract.
+              structural_authority_precedence_contract.tensor_derived_carrier_generation_lineage_
+              status for the open, Owner-level finding this re-audit surfaced on that side.
             required_field_control_component_identity_resolution: >-
               A PREREQUISITE for the structural-composition proof below, not an independent nice-
               to-have: backend/repository/LayoutSchemaTensorComposer.cs's

@@ -33,6 +33,8 @@ TOOL = REPO_ROOT / ".agent" / "tools" / "react-schema-topology-seed-translator"
 FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "credential-management-0092.input.json"
 TOPOLOGY_SEED_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "credential-management-0092.topology-seed.input.json"
 ADMIN_ENUM_AE200_TOPOLOGY_SEED_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "admin-enum-ae200.topology-seed.input.json"
+TEAM_DASHBOARD_ADMIN_TOPOLOGY_SEED_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "team-dashboard-admin.topology-seed.input.json"
+TEAM_DASHBOARD_NORMAL_TOPOLOGY_SEED_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "team-dashboard-normal.topology-seed.input.json"
 CRUD_SCHEMA_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "physical-search-crud-aggregate.react-schema.json"
 CRUD_TOPOLOGY_SEED_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "physical-search-crud-aggregate.topology-seed.input.json"
 AGENT_TMP_DIR = REPO_ROOT / ".agent" / "tmp"
@@ -196,6 +198,38 @@ def extract_compile_snapshot(sql_text, seed_file_label):
         "styleCandidateJson": blocks[3],
         "unresolvedJson": blocks[4],
     }
+
+LAYOUT_SCHEMA_JSON_LITERAL_RE = re.compile(r"'(\{.*?\})'::jsonb", re.DOTALL)
+
+
+def extract_layout_schema_json_by_layout_id(sql_text, layout_id):
+    """Independently resolves a components_layout_design row's layout_schema_json
+    straight from db/seed_empty.sql (team-dashboard-physical-layout-adoption
+    canonical-lineage-proof round).
+
+    This is the physical-seed side of the required_generator_fixture_proof
+    contract (docs/design/admin-normal-surface-projection-seed-ssot.yaml
+    surface_axes.admin.surfaces.team_dashboard.physical_layout_schema_adoption_
+    acceptance_criteria.required_generator_fixture_proof): reads the SAME kind
+    of single-line SQL string literal ('{"records":[...]}'::jsonb, never the
+    $$...$$ dollar-quoted compile-snapshot shape extract_compile_snapshot()
+    above reads) that db/seed_empty.sql's INSERT INTO
+    topology.components_layout_design ... VALUES ('<layout_id>', ...,
+    '<layout_schema_json>'::jsonb, ...) statements use. The translator itself
+    never reads db/*.sql (same authority boundary as
+    resolve_seed_evidence_from_seed_file above); only this check script's
+    proof side does.
+    """
+    marker = f"VALUES ('{layout_id}'"
+    idx = sql_text.find(marker)
+    if idx == -1:
+        raise AssertionError(f"components_layout_design VALUES for layout_id={layout_id} not found in db/seed_empty.sql")
+    window = sql_text[idx: idx + 20000]
+    m = LAYOUT_SCHEMA_JSON_LITERAL_RE.search(window)
+    if not m:
+        raise AssertionError(f"layout_schema_json '{{...}}'::jsonb literal for layout_id={layout_id} not found")
+    return json.loads(m.group(1))
+
 
 FAILURES = []
 PASS_COUNT = 0
@@ -2666,6 +2700,69 @@ def main():
             "SIBLING_ORDER_MUST_BE_INTEGER" not in run_structural_check(
                 {"kind": "Category", "key": "test_category_valid_sibling_order", "siblingOrder": -1},
             ),
+        )
+
+        # 136-141 (canonical-generation -> physical-adoption lineage closure round, 2026-09-07):
+        # permanent proof of docs/design/admin-normal-surface-projection-seed-ssot.yaml
+        # surface_axes.admin.surfaces.team_dashboard.physical_layout_schema_adoption_acceptance_
+        # criteria.required_generator_fixture_proof, which this checker never actually ran until
+        # now (the team-dashboard-physical-layout-adoption round's own closure_note claimed this
+        # criterion satisfied without a permanent automated check backing it -- this closes that
+        # gap). Runs generate-topology-seed for REAL against Team Dashboard's own committed
+        # Admin/Normal fixtures and asserts the ACTUAL adoptionCandidates.layoutAdoptionCandidates.
+        # layoutSchemaJson.records output is canonical-byte-equivalent (structural equality of the
+        # parsed JSON, the same notion of "verbatim" TeamDashboardHubRelationUiProjectionLiveDbTests
+        # already uses for its own checked-in fixture comparisons) to what
+        # db/seed_empty.sql's dd013/dd023 rows actually persist -- reading BOTH sides fresh each
+        # run (never two copies of the same hand-typed constant compared to itself, which would be
+        # a tautology proving nothing about the generator).
+        seed_empty_text_for_team_dashboard = SEED_EMPTY_PATH.read_text(encoding="utf-8")
+        proc_td_admin, doc_td_admin = run_generate_topology_seed(TEAM_DASHBOARD_ADMIN_TOPOLOGY_SEED_FIXTURE)
+        expect(
+            "136. real team-dashboard-admin fixture's generate-topology-seed run reports gateStatus == pass",
+            doc_td_admin is not None and doc_td_admin.get("gateStatus") == "pass",
+        )
+        expect(
+            "137. real team-dashboard-admin fixture's generate-topology-seed run reports zero validationErrors",
+            doc_td_admin is not None and doc_td_admin.get("validationErrors") == [],
+        )
+        td_admin_generated_records = (
+            dig(doc_td_admin, "adoptionCandidates", "layoutAdoptionCandidates")[0]["layoutSchemaJson"]["records"]
+            if doc_td_admin and dig(doc_td_admin, "adoptionCandidates", "layoutAdoptionCandidates")
+            else None
+        )
+        dd013_physical_records = extract_layout_schema_json_by_layout_id(
+            seed_empty_text_for_team_dashboard, "00000000-0000-0000-0000-0000000dd013",
+        )["records"]
+        expect(
+            "138. db/seed_empty.sql's dd013 (team_dashboard.admin.projection.layout) layout_schema_json.records[] is canonical-byte-equivalent to the REAL generate-topology-seed output of the committed team-dashboard-admin fixture -- both sides read fresh from their own source (actual generator stdout vs. the actual physical seed SQL literal), never two copies of the same hand-typed constant -- proving dd013 is verbatim physical adoption of layoutAdoptionCandidates, not a re-derived or hand-patched approximation",
+            td_admin_generated_records is not None
+            and len(td_admin_generated_records) > 0
+            and td_admin_generated_records == dd013_physical_records,
+        )
+
+        proc_td_normal, doc_td_normal = run_generate_topology_seed(TEAM_DASHBOARD_NORMAL_TOPOLOGY_SEED_FIXTURE)
+        expect(
+            "139. real team-dashboard-normal fixture's generate-topology-seed run reports gateStatus == pass",
+            doc_td_normal is not None and doc_td_normal.get("gateStatus") == "pass",
+        )
+        expect(
+            "140. real team-dashboard-normal fixture's generate-topology-seed run reports zero validationErrors",
+            doc_td_normal is not None and doc_td_normal.get("validationErrors") == [],
+        )
+        td_normal_generated_records = (
+            dig(doc_td_normal, "adoptionCandidates", "layoutAdoptionCandidates")[0]["layoutSchemaJson"]["records"]
+            if doc_td_normal and dig(doc_td_normal, "adoptionCandidates", "layoutAdoptionCandidates")
+            else None
+        )
+        dd023_physical_records = extract_layout_schema_json_by_layout_id(
+            seed_empty_text_for_team_dashboard, "00000000-0000-0000-0000-0000000dd023",
+        )["records"]
+        expect(
+            "141. db/seed_empty.sql's dd023 (team_dashboard.normal.projection.layout) layout_schema_json.records[] is canonical-byte-equivalent to the REAL generate-topology-seed output of the committed team-dashboard-normal fixture, same discipline as 138 -- proving dd023 is verbatim physical adoption, not a re-derived or hand-patched approximation",
+            td_normal_generated_records is not None
+            and len(td_normal_generated_records) > 0
+            and td_normal_generated_records == dd023_physical_records,
         )
 
     print()

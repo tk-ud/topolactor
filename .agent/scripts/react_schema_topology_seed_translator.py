@@ -2411,17 +2411,28 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
             # UIBuilder-lineage closure round: keyed at the Modal's OWN this_resolved_key, never
             # an owning-parent redirect. Direct read/proof of BOTH real consumers settles this:
             # (1) a TENSOR-ONLY-authored layout (empty components_layout_design.
-            # layout_schema_json.records[], e.g. team_dashboard's own production layout) has no
-            # Compose step at all -- NpgsqlTopologyRepository.LoadLayoutNodesAsync returns
+            # layout_schema_json.records[] -- most UI-Builder-authored layouts today; team_dashboard
+            # was this shape until its own team-dashboard-physical-layout-adoption
+            # implementation_change, 2026-09-06, physically adopted its generated
+            # layoutAdoptionCandidates into dd013/dd023's records[] per Owner "Judgment B" -- see
+            # docs/design/react-schema-topology-seed-translator-ssot.yaml
+            # storage_adoption_contract.structural_authority_precedence_contract; it is schema-
+            # composed today, case (2) below) has no Compose step at all --
+            # NpgsqlTopologyRepository.LoadLayoutNodesAsync returns
             # layout_patch_json.nodes[] verbatim, and frontend/runtime builds each rendered
             # component's eventBinding strictly from THAT SAME node's own runtimeInteractions
             # (frontend/runtime/renderEmission.ts: `rawLocalInteractions =
             # node.runtimeInteractions`, grep-confirmed) -- an owning-parent placement would leave
             # a Section/Category container (never a real interactive component) holding the
             # toggle entry, and the real Modal component would never satisfy modalFactory's
-            # requireBinding(spec, "toggle"); proven by a real live-DB layout_patch:preview ->
-            # validate -> apply round trip
-            # (TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs), which additionally
+            # requireBinding(spec, "toggle"); originally proven by a real live-DB
+            # layout_patch:preview -> validate -> apply round trip against team_dashboard's own
+            # THEN-tensor-only scaffold (TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs,
+            # before its physical layout adoption -- that test file's scaffold now always includes
+            # a matching layoutSchemaJson too, per the same adoption, so it no longer exercises a
+            # purely tensor-only empty-records[] scaffold for this surface specifically; the case
+            # (1) reasoning below is unaffected -- it describes any layout still in that shape,
+            # most UI-Builder-authored ones today), which additionally
             # surfaced that an owning-parent-keyed entry with no componentKey of its own (a
             # Category/Section is never a registry-backed catalog leaf) fails
             # LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED outright for a tensor-only layout -- so
