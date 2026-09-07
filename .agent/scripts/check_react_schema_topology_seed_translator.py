@@ -69,12 +69,26 @@ def layout_patch_from_seed_runtime_interaction(seed_action_record):
     }
 
 
-def validate_runtime_interactions_boundary_equivalent(layout_patch_json, approved_instance_target_refs):
+def validate_runtime_interactions_boundary_equivalent(layout_patch_json, approved_instance_target_refs, translator_impl=None):
     """Python proof mirror of backend ValidateRuntimeInteractions targetRef boundary.
 
     This is intentionally small and vocabulary-focused: it catches seed/template
     candidate targetRef drift before the proof claims ApplyConfirmedLayoutPatchAsync
     can reach AssignRuntimeInteractionIds.
+
+    CONVERGED (proof-chain continuity round 3, 2026-09-07): this function's own trigger/
+    actionType presence+type checks previously duplicated -- inline, independently -- the SAME
+    "is this a non-empty string" judgment react_schema_topology_seed_translator.py's own
+    runtime_interaction_candidate_shape_facts ALSO computes for the SAME two field names on the
+    SAME runtimeInteractions[] entry shape (missing_trigger/missing_or_invalid_action_type) --
+    two copies of one rule. When translator_impl is given (every real call site in this file's
+    own main() passes the already-imported module), this function now delegates its trigger/
+    actionType checks to that shared function instead, keeping its OWN distinct,
+    boundary-specific logic unchanged: dispatch-specific targetRef shape/regex, approved-
+    instance-targetRef-list membership, and payloadFrom value shape are NOT duplicated
+    anywhere else, so they stay here. translator_impl is optional (None falls back to this
+    function's own original inline trigger/actionType check, degrading gracefully rather than
+    raising) so this function stays usable standalone.
     """
     nodes = layout_patch_json.get("nodes") if isinstance(layout_patch_json, dict) else None
     if not isinstance(nodes, list):
@@ -88,12 +102,20 @@ def validate_runtime_interactions_boundary_equivalent(layout_patch_json, approve
         for interaction in interactions:
             if not isinstance(interaction, dict):
                 return "RUNTIME_INTERACTION_MUST_BE_OBJECT"
-            trigger = interaction.get("trigger")
-            if not isinstance(trigger, str) or not trigger.strip():
-                return "RUNTIME_INTERACTION_TRIGGER_REQUIRED"
+            if translator_impl is not None:
+                shared_facts = translator_impl.runtime_interaction_candidate_shape_facts(interaction)
+                if shared_facts["missing_trigger"]:
+                    return "RUNTIME_INTERACTION_TRIGGER_REQUIRED"
+                if shared_facts["missing_or_invalid_action_type"]:
+                    return "RUNTIME_INTERACTION_ACTION_TYPE_REQUIRED"
+            else:
+                trigger = interaction.get("trigger")
+                if not isinstance(trigger, str) or not trigger.strip():
+                    return "RUNTIME_INTERACTION_TRIGGER_REQUIRED"
+                action_type_check = interaction.get("actionType")
+                if not isinstance(action_type_check, str) or not action_type_check.strip():
+                    return "RUNTIME_INTERACTION_ACTION_TYPE_REQUIRED"
             action_type = interaction.get("actionType")
-            if not isinstance(action_type, str) or not action_type.strip():
-                return "RUNTIME_INTERACTION_ACTION_TYPE_REQUIRED"
             if action_type == "dispatchInstanceOperation":
                 target_ref = interaction.get("instanceTargetRef")
                 if not isinstance(target_ref, str) or not target_ref.strip():
@@ -577,6 +599,8 @@ def schema_composed_layout_patch_json_shape_violations(
                 violations.append(f"node {node_id}: runtimeInteractions[{index}] is missing a non-empty sourceActionKey")
             if facts["missing_trigger"]:
                 violations.append(f"node {node_id}: runtimeInteractions[{index}] is missing a non-empty trigger")
+            if facts["missing_or_invalid_action_type"]:
+                violations.append(f"node {node_id}: runtimeInteractions[{index}] is missing a non-empty string actionType (found {interaction.get('actionType')!r})")
             if facts["dispatch_action_type"] and facts["missing_dispatch_fields"]:
                 violations.append(f"node {node_id}: runtimeInteractions[{index}] ({interaction.get('actionType')}) is missing idempotency route field(s) {facts['missing_dispatch_fields']}")
             if facts["is_disclosure_action_type"]:
@@ -2314,7 +2338,7 @@ def main():
         )
         layout_patch_from_candidate = layout_patch_from_seed_runtime_interaction(idem_action_record or {})
         approved_instance_refs = {"instance-port:db_instance_port:instance_authority_key:operation_binding_key"}
-        boundary_error = validate_runtime_interactions_boundary_equivalent(layout_patch_from_candidate, approved_instance_refs)
+        boundary_error = validate_runtime_interactions_boundary_equivalent(layout_patch_from_candidate, approved_instance_refs, translator_impl)
         expect(
             "99. seed/template runtimeInteractions[] candidate reaches backend ValidateRuntimeInteractions-equivalent targetRef vocabulary before assignment",
             boundary_error is None
@@ -2322,10 +2346,35 @@ def main():
         )
         invalid_layout_patch = json.loads(json.dumps(layout_patch_from_candidate))
         invalid_layout_patch["nodes"][0]["runtimeInteractions"][0]["instanceTargetRef"] = "instance:db_instance_port:instance_authority_key:operation_binding_key"
-        invalid_boundary_error = validate_runtime_interactions_boundary_equivalent(invalid_layout_patch, approved_instance_refs)
+        invalid_boundary_error = validate_runtime_interactions_boundary_equivalent(invalid_layout_patch, approved_instance_refs, translator_impl)
         expect(
             "100. cross-boundary proof fails closed on eventBinding instance: vocabulary when used as runtimeInteractions[].instanceTargetRef",
             invalid_boundary_error == "RUNTIME_INTERACTION_INSTANCE_TARGET_REF_INVALID:instance:db_instance_port:instance_authority_key:operation_binding_key",
+        )
+
+        # 100a-100b (schema-composed proof-chain continuity round 3, 2026-09-07): NEGATIVE proof
+        # that validate_runtime_interactions_boundary_equivalent's own CONVERGED trigger/actionType
+        # check (now delegating to translator_impl.runtime_interaction_candidate_shape_facts
+        # instead of its own previously-independent inline isinstance+strip logic) still returns
+        # the SAME error codes as before the convergence -- proves the refactor moved WHERE the
+        # judgment lives, not WHAT it decides.
+        missing_trigger_layout_patch = json.loads(json.dumps(layout_patch_from_candidate))
+        del missing_trigger_layout_patch["nodes"][0]["runtimeInteractions"][0]["trigger"]
+        missing_trigger_boundary_error = validate_runtime_interactions_boundary_equivalent(
+            missing_trigger_layout_patch, approved_instance_refs, translator_impl,
+        )
+        expect(
+            "100a. validate_runtime_interactions_boundary_equivalent's own CONVERGED trigger check (delegated to translator_impl.runtime_interaction_candidate_shape_facts) still returns RUNTIME_INTERACTION_TRIGGER_REQUIRED for a missing trigger, the SAME error code its own pre-convergence inline check returned",
+            missing_trigger_boundary_error == "RUNTIME_INTERACTION_TRIGGER_REQUIRED",
+        )
+        missing_action_type_layout_patch = json.loads(json.dumps(layout_patch_from_candidate))
+        del missing_action_type_layout_patch["nodes"][0]["runtimeInteractions"][0]["actionType"]
+        missing_action_type_boundary_error = validate_runtime_interactions_boundary_equivalent(
+            missing_action_type_layout_patch, approved_instance_refs, translator_impl,
+        )
+        expect(
+            "100b. validate_runtime_interactions_boundary_equivalent's own CONVERGED actionType check (delegated to translator_impl.runtime_interaction_candidate_shape_facts) still returns RUNTIME_INTERACTION_ACTION_TYPE_REQUIRED for a missing actionType, the SAME error code its own pre-convergence inline check returned",
+            missing_action_type_boundary_error == "RUNTIME_INTERACTION_ACTION_TYPE_REQUIRED",
         )
 
         agent_tools_dir = REPO_ROOT / ".agent" / "scripts" / "agent_tools"
@@ -3559,6 +3608,52 @@ def main():
             any("is missing a non-empty trigger" in v for v in disclosure_shape_mutation_violations)
             and any("is missing a non-empty targetNodeId" in v for v in disclosure_shape_mutation_violations)
             and any("has statePath 'closed', expected 'open' or absent" in v for v in disclosure_shape_mutation_violations),
+        )
+
+        # 156f (schema-composed proof-chain continuity round 3, 2026-09-07): NEGATIVE proof that
+        # actionType itself now has a real shape fact (missing_or_invalid_action_type, closing the
+        # gap where an entry with NO actionType at all, or a non-string one, matched neither
+        # DISCLOSURE_ACTION_TYPES nor RUNTIME_DISPATCH_ACTION_TYPES membership and so silently
+        # passed every other check), and that missing_trigger/missing_target_node_id now use a
+        # real isinstance(str)+non-empty judgment (mirroring validate_runtime_interactions_
+        # boundary_equivalent's own established rule) rather than bare truthiness, which would
+        # have silently accepted a non-string-but-truthy value. Uses team-dashboard-admin's own 4
+        # real disclosure runtimeInteractions[] entries (2 on the editor Section, 2 on the confirm
+        # Modal), each mutated with exactly ONE isolated defect so each assertion below is
+        # attributable to a specific field's own check, not a combination.
+        action_type_shape_mutated_nodes = [dict(n) for n in td_admin_generated_carrier]
+        for index, node in enumerate(action_type_shape_mutated_nodes):
+            if node.get("nodeId") == "team_dashboard_admin_editor":
+                mutated = [dict(entry) for entry in node["runtimeInteractions"]]
+                # entry 0 (real openModal): actionType key removed entirely.
+                mutated[0] = {k: v for k, v in mutated[0].items() if k != "actionType"}
+                # entry 1 (real closeModal): trigger set to a non-string, truthy value.
+                mutated[1] = {**mutated[1], "trigger": 12345}
+                action_type_shape_mutated_nodes[index] = {**node, "runtimeInteractions": mutated}
+            elif node.get("nodeId") == "team_dashboard_admin_save_confirm_modal":
+                mutated = [dict(entry) for entry in node["runtimeInteractions"]]
+                # entry 0 (real closeModal): actionType set to a non-string, truthy value.
+                mutated[0] = {**mutated[0], "actionType": 42}
+                # entry 1 (real closeModal): targetNodeId set to a non-string, truthy value --
+                # actionType stays the real "closeModal" so this entry remains disclosure-
+                # classified and missing_target_node_id's own check actually runs.
+                mutated[1] = {**mutated[1], "targetNodeId": True}
+                action_type_shape_mutated_nodes[index] = {**node, "runtimeInteractions": mutated}
+        action_type_shape_mutation_violations = schema_composed_layout_patch_json_shape_violations(
+            {"nodes": action_type_shape_mutated_nodes}, translator_impl, admin_runtime_dispatch_override_lane_def,
+        )
+        expect(
+            "156f. schema_composed_layout_patch_json_shape_violations actually DETECTS a runtimeInteractions[] entry missing actionType entirely, a non-string (truthy) actionType, a non-string (truthy) trigger, AND a non-string (truthy) targetNodeId -- each on an otherwise-real, already-clean team-dashboard-admin disclosure entry -- proving these fields are verified by real isinstance(str)+non-empty judgments (the SAME rule validate_runtime_interactions_boundary_equivalent already applies), not bare truthiness (which would silently accept a non-string-but-truthy value) and not silently skipped when actionType itself is absent or malformed",
+            sum(
+                1
+                for needle in (
+                    "is missing a non-empty string actionType (found None)",
+                    "is missing a non-empty string actionType (found 42)",
+                    "is missing a non-empty trigger",
+                    "is missing a non-empty targetNodeId",
+                )
+                if any(needle in v for v in action_type_shape_mutation_violations)
+            ) == 4,
         )
 
         # 157-158 (SSOT self-consistency + schema-composed carrier proof closure round,

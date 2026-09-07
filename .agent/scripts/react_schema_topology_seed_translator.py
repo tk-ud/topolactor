@@ -1230,6 +1230,21 @@ def build_runtime_interaction_candidate(node):
     return candidate
 
 
+def _is_nonempty_string(value):
+    """Fail-close non-empty-string judgment -- mirrors
+    check_react_schema_topology_seed_translator.py's own validate_runtime_interactions_boundary_
+    equivalent, whose trigger/actionType checks already use exactly this rule (`isinstance(x, str)
+    and x.strip()`), established there as the real boundary-equivalent proof for backend/
+    repository/NpgsqlUiTopologyRepository.cs's own ValidateRuntimeInteractions. That checker
+    function cannot be imported here (this file is production code; the checker imports it, never
+    the reverse), so this is the ONE canonical copy of the RULE, reused by both
+    runtime_interaction_candidate_shape_facts below and (via translator_impl) that checker
+    function's own trigger/actionType checks -- proof-chain continuity round 3, 2026-09-07,
+    replacing a bare truthiness check (`not value`) that silently treated a non-string truthy
+    value, or a whitespace-only string, as "present"."""
+    return isinstance(value, str) and bool(value.strip())
+
+
 def runtime_interaction_candidate_shape_facts(interaction):
     """Fail-close, single-source shape facts for ONE runtimeInteractions[] candidate entry --
     ONE shared implementation of "what must this actionType's candidate carry", extracted
@@ -1261,16 +1276,42 @@ def runtime_interaction_candidate_shape_facts(interaction):
     generation-time authoring-legality concern (a different tree-shaped input from a flat
     runtimeInteractions[] candidate), not a per-entry shape fact.
 
+    EXTENDED AGAIN (proof-chain continuity round 3, 2026-09-07): closed two remaining gaps a
+    re-audit of round 2's own extension found.
+    1. missing_trigger/missing_target_node_id used bare truthiness (`not value`), which silently
+       PASSES a non-string-but-truthy value (e.g. an int) and a whitespace-only string as
+       "present" -- inconsistent with, and weaker than, this SAME field's own already-established
+       check_react_schema_topology_seed_translator.py validate_runtime_interactions_boundary_
+       equivalent judgment (isinstance(str) + non-empty-after-strip). Both facts now use the
+       shared _is_nonempty_string helper above, matching that judgment exactly.
+    2. actionType itself had NO shape fact at all -- an interaction missing actionType entirely,
+       or carrying a non-string actionType, produced `is_disclosure_action_type=False` and
+       `dispatch_action_type=False` (neither DISCLOSURE_ACTION_TYPES nor
+       RUNTIME_DISPATCH_ACTION_TYPES membership match a non-string/None value), so it silently
+       passed every other check as if it were some unclassified-but-fine actionType family.
+       New missing_or_invalid_action_type fact closes this, using the SAME _is_nonempty_string
+       judgment and mirroring validate_runtime_interactions_boundary_equivalent's own
+       RUNTIME_INTERACTION_ACTION_TYPE_REQUIRED check.
+    sourceActionKey's own missing_source_action_key fact deliberately KEEPS its bare truthiness
+    check (not strengthened to a type check) -- investigated this round: neither
+    NpgsqlUiTopologyRepository.cs's ValidateRuntimeInteractions nor any other backend consumer
+    checks sourceActionKey's own type at all (it is a translator/checker-side addressing key,
+    grouped by BuildInteractionsBySourceActionKey, never itself backend-persistence-validated),
+    so there is no existing mechanism or SSOT contract to converge a stricter check to -- adding
+    one here would be inventing a NEW, unjustified policy, which storage_adoption_contract's own
+    reuse-over-invention discipline (and this round's own NG axis) argues against absent a real
+    reachable gap.
+
     Returns a dict: {"has_runtime_interaction_id": bool, "missing_source_action_key": bool,
-    "missing_trigger": bool, "dispatch_action_type": bool, "missing_dispatch_fields": list[str],
-    "is_disclosure_action_type": bool, "missing_target_node_id": bool, "invalid_state_path": bool}.
-    Never raises -- a non-dict interaction is reported via the caller's own top-level type check,
-    not here. Dispatch-field completeness scope matches validate_adoption_candidates' own
-    existing, narrower coverage exactly: only RUNTIME_DISPATCH_ACTION_TYPES
-    (dispatchExternalPort/dispatchInstanceOperation) get idempotency-route-field checks --
-    localStateMutation/routeNavigation/contentsApiDispatch actionTypes are not additionally gated
-    here, matching this file's own already-established validation boundary, never a newly-invented
-    wider one.
+    "missing_trigger": bool, "missing_or_invalid_action_type": bool, "dispatch_action_type": bool,
+    "missing_dispatch_fields": list[str], "is_disclosure_action_type": bool,
+    "missing_target_node_id": bool, "invalid_state_path": bool}. Never raises -- a non-dict
+    interaction is reported via the caller's own top-level type check, not here. Dispatch-field
+    completeness scope matches validate_adoption_candidates' own existing, narrower coverage
+    exactly: only RUNTIME_DISPATCH_ACTION_TYPES (dispatchExternalPort/dispatchInstanceOperation)
+    get idempotency-route-field checks -- localStateMutation/routeNavigation/contentsApiDispatch
+    actionTypes are not additionally gated here, matching this file's own already-established
+    validation boundary, never a newly-invented wider one.
     """
     action_type = interaction.get("actionType")
     is_disclosure = action_type in DISCLOSURE_ACTION_TYPES
@@ -1278,16 +1319,17 @@ def runtime_interaction_candidate_shape_facts(interaction):
     facts = {
         "has_runtime_interaction_id": "runtimeInteractionId" in interaction,
         "missing_source_action_key": not interaction.get("sourceActionKey"),
-        "missing_trigger": not interaction.get("trigger"),
+        "missing_trigger": not _is_nonempty_string(interaction.get("trigger")),
+        "missing_or_invalid_action_type": not _is_nonempty_string(action_type),
         "dispatch_action_type": action_type in RUNTIME_DISPATCH_ACTION_TYPES,
         "missing_dispatch_fields": [],
         "is_disclosure_action_type": is_disclosure,
-        "missing_target_node_id": is_disclosure and not interaction.get("targetNodeId"),
+        "missing_target_node_id": is_disclosure and not _is_nonempty_string(interaction.get("targetNodeId")),
         "invalid_state_path": is_disclosure and state_path is not None and state_path != "open",
     }
     if facts["dispatch_action_type"]:
         missing = []
-        if not interaction.get("trigger"):
+        if not _is_nonempty_string(interaction.get("trigger")):
             missing.append("trigger")
         target_field = "instanceTargetRef" if action_type == "dispatchInstanceOperation" else "portTargetRef"
         if not interaction.get(target_field):
