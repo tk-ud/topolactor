@@ -1,7 +1,7 @@
-using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Topolactor.Repository;
 using Topolactor.Schema;
+using Topolactor.Tests.Shared;
 using Xunit;
 
 namespace Topolactor.Runtime.Tests;
@@ -50,18 +50,6 @@ public class LayoutSchemaStructuralCompositionTests
         var result = LayoutSchemaTensorComposer.ParseRecords(json);
         var valid = Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Valid>(result);
         return valid.Rows;
-    }
-
-    private static string RepoRoot([CallerFilePath] string sourceFile = "")
-    {
-        var fromSource = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(sourceFile)!, "..", "..", ".."));
-        if (File.Exists(Path.Combine(fromSource, "db", "seed_empty.sql"))) return fromSource;
-        var cwd = Directory.GetCurrentDirectory();
-        if (File.Exists(Path.Combine(cwd, "db", "seed_empty.sql"))) return cwd;
-        var dir = AppContext.BaseDirectory;
-        while (dir is not null && !File.Exists(Path.Combine(dir, "db", "seed_empty.sql")))
-            dir = Directory.GetParent(dir)?.FullName;
-        return dir ?? throw new InvalidOperationException("repo root not found");
     }
 
     [Fact]
@@ -1423,14 +1411,14 @@ public class LayoutSchemaStructuralCompositionTests
         // NpgsqlTopologyRepository.LoadLayoutNodesAsync resolves for manifest 092 at dispatch
         // time) that the credential-management category-collapse seed edit is syntactically and
         // semantically valid through the SAME ParseRecords/Compose path production uses.
-        var sqlPath = Path.Combine(RepoRoot(), "db", "seed_empty.sql");
+        var sqlPath = Path.Combine(SqlSeedLiteralTestSupport.RepoRoot(), "db", "seed_empty.sql");
         var sql = File.ReadAllText(sqlPath);
         var marker = "'00000000-0000-0000-0000-0000000cd002'";
         var idx = sql.IndexOf(marker, StringComparison.Ordinal);
         Assert.True(idx >= 0, "manifest 092 layout row (cd002) not found in db/seed_empty.sql");
         var litStart = sql.IndexOf("'{\"records\":", idx, StringComparison.Ordinal);
         Assert.True(litStart >= 0, "cd002 layout_schema_json literal not found");
-        var json = ExtractSqlJsonLiteral(sql, litStart);
+        var json = SqlSeedLiteralTestSupport.ExtractSqlJsonLiteral(sql, litStart);
 
         var parseResult = LayoutSchemaTensorComposer.ParseRecords(json);
         var valid = Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Valid>(parseResult);
@@ -1504,14 +1492,14 @@ public class LayoutSchemaStructuralCompositionTests
         // (frontend/components/Tabs.tsx TabItem/TabsProps) rather than select.template's
         // {data:{value,options[{label,value}]}} -- items[].key is still the SAME canonical
         // CredentialManagementCategories.All value, unrenamed.
-        var sqlPath = Path.Combine(RepoRoot(), "db", "seed_empty.sql");
+        var sqlPath = Path.Combine(SqlSeedLiteralTestSupport.RepoRoot(), "db", "seed_empty.sql");
         var sql = File.ReadAllText(sqlPath);
         var marker = "'00000000-0000-0000-0000-0000000cd004'";
         var idx = sql.IndexOf(marker, StringComparison.Ordinal);
         Assert.True(idx >= 0, "manifest 092 tensor row (cd004) not found in db/seed_empty.sql");
         var litStart = sql.IndexOf("'{\"nodes\":", idx, StringComparison.Ordinal);
         Assert.True(litStart >= 0, "cd004 layout_patch_json literal not found");
-        var json = ExtractSqlJsonLiteral(sql, litStart);
+        var json = SqlSeedLiteralTestSupport.ExtractSqlJsonLiteral(sql, litStart);
 
         using var doc = JsonDocument.Parse(json);
         var nodes = doc.RootElement.GetProperty("nodes").EnumerateArray().ToList();
@@ -1628,39 +1616,6 @@ public class LayoutSchemaStructuralCompositionTests
     }
 
     /// <summary>
-    /// Extracts a single-quoted (SQL-escaped, '' for embedded ') JSON object literal starting at
-    /// the opening quote's position, by brace-depth counting over the un-escaped content — mirrors
-    /// how psql itself would de-escape the literal before Postgres ever parses it as jsonb.
-    /// </summary>
-    private static string ExtractSqlJsonLiteral(string sql, int quoteStart)
-    {
-        var i = quoteStart + 1; // past opening '
-        var sb = new System.Text.StringBuilder();
-        var depth = 0;
-        var started = false;
-        while (i < sql.Length)
-        {
-            var ch = sql[i];
-            if (ch == '\'' && i + 1 < sql.Length && sql[i + 1] == '\'')
-            {
-                sb.Append('\'');
-                i += 2;
-                continue;
-            }
-            if (ch == '\'')
-            {
-                break; // real closing quote
-            }
-            if (ch == '{') { depth++; started = true; }
-            else if (ch == '}') depth--;
-            sb.Append(ch);
-            i++;
-            if (started && depth == 0) break;
-        }
-        return sb.ToString();
-    }
-
-    /// <summary>
     /// Independently resolves every REAL (component_kind -&gt; component_key) pair straight from
     /// db/ui_component_registry_preset_catalog_bootstrap.sql (generic UI-Builder physical
     /// conversion round).
@@ -1683,7 +1638,7 @@ public class LayoutSchemaStructuralCompositionTests
     /// </summary>
     private static IReadOnlyDictionary<string, string> ExtractComponentKindToComponentKeyFromRegistryBootstrap()
     {
-        var sqlPath = Path.Combine(RepoRoot(), "db", "ui_component_registry_preset_catalog_bootstrap.sql");
+        var sqlPath = Path.Combine(SqlSeedLiteralTestSupport.RepoRoot(), "db", "ui_component_registry_preset_catalog_bootstrap.sql");
         var sql = File.ReadAllText(sqlPath);
         var marker = "INSERT INTO topology.ui_component_registry";
         var idx = sql.IndexOf(marker, StringComparison.Ordinal);

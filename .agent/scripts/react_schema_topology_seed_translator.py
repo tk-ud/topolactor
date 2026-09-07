@@ -1241,21 +1241,49 @@ def runtime_interaction_candidate_shape_facts(interaction):
     build_runtime_interaction_candidate objects, redirected to a parent nodeId, never rebuilt) --
     never a second, independently-reimplemented judgment of which fields matter per actionType.
 
+    EXTENDED (proof-chain continuity round 2, 2026-09-07): "trigger" is required for EVERY
+    runtimeInteractions[] entry regardless of actionType, matching backend/repository/
+    NpgsqlUiTopologyRepository.cs ValidateRuntimeInteractions' own RUNTIME_INTERACTION_TRIGGER_
+    REQUIRED check, which is unconditional -- previously this function only checked "trigger" as
+    part of dispatch_action_type's own missing_dispatch_fields, silently never checking it for a
+    disclosure entry. Also added disclosure-actionType shape facts (is_disclosure_action_type/
+    missing_target_node_id/invalid_state_path), reusing the SAME closed DISCLOSURE_ACTION_TYPES
+    vocabulary build_runtime_interaction_candidate itself already branches on above (never a
+    second, independently-invented actionType list) and mirroring
+    NpgsqlUiTopologyRepository.cs ValidateRuntimeInteractions' own isDisclosure branch:
+    targetNodeId is required (RUNTIME_INTERACTION_TARGET_NODE_REQUIRED) and statePath, if present,
+    must equal "open" (RUNTIME_INTERACTION_STATE_PATH_UNSUPPORTED for the Modal family this
+    translator emits -- see DISCLOSURE_TARGET_KIND_BY_ACTION_TYPE, which only maps the Modal
+    family today; Drawer/Dialog are backend-supported vocabulary this translator never emits, so
+    they are intentionally out of scope here exactly as they are for validate_disclosure_targets).
+    Target-KIND cross-checking (does targetNodeId actually resolve to a Modal in this tree) is
+    deliberately NOT duplicated here -- that is validate_disclosure_targets' own, separate,
+    generation-time authoring-legality concern (a different tree-shaped input from a flat
+    runtimeInteractions[] candidate), not a per-entry shape fact.
+
     Returns a dict: {"has_runtime_interaction_id": bool, "missing_source_action_key": bool,
-    "dispatch_action_type": bool, "missing_dispatch_fields": list[str]}. Never raises -- a
-    non-dict interaction is reported via the caller's own top-level type check, not here.
-    Scope matches validate_adoption_candidates' own existing, narrower coverage exactly:
-    only RUNTIME_DISPATCH_ACTION_TYPES (dispatchExternalPort/dispatchInstanceOperation) get
-    idempotency-route-field checks -- localStateMutation/routeNavigation/contentsApiDispatch/
-    disclosure actionTypes are not additionally gated here, matching this file's own
-    already-established validation boundary, never a newly-invented wider one.
+    "missing_trigger": bool, "dispatch_action_type": bool, "missing_dispatch_fields": list[str],
+    "is_disclosure_action_type": bool, "missing_target_node_id": bool, "invalid_state_path": bool}.
+    Never raises -- a non-dict interaction is reported via the caller's own top-level type check,
+    not here. Dispatch-field completeness scope matches validate_adoption_candidates' own
+    existing, narrower coverage exactly: only RUNTIME_DISPATCH_ACTION_TYPES
+    (dispatchExternalPort/dispatchInstanceOperation) get idempotency-route-field checks --
+    localStateMutation/routeNavigation/contentsApiDispatch actionTypes are not additionally gated
+    here, matching this file's own already-established validation boundary, never a newly-invented
+    wider one.
     """
     action_type = interaction.get("actionType")
+    is_disclosure = action_type in DISCLOSURE_ACTION_TYPES
+    state_path = interaction.get("statePath")
     facts = {
         "has_runtime_interaction_id": "runtimeInteractionId" in interaction,
         "missing_source_action_key": not interaction.get("sourceActionKey"),
+        "missing_trigger": not interaction.get("trigger"),
         "dispatch_action_type": action_type in RUNTIME_DISPATCH_ACTION_TYPES,
         "missing_dispatch_fields": [],
+        "is_disclosure_action_type": is_disclosure,
+        "missing_target_node_id": is_disclosure and not interaction.get("targetNodeId"),
+        "invalid_state_path": is_disclosure and state_path is not None and state_path != "open",
     }
     if facts["dispatch_action_type"]:
         missing = []

@@ -1,10 +1,10 @@
-using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using Topolactor.Endpoint;
 using Topolactor.Repository;
 using Topolactor.Runtime;
 using Topolactor.Schema;
+using Topolactor.Tests.Shared;
 using Xunit;
 
 namespace Topolactor.Integration.Tests;
@@ -238,61 +238,6 @@ public class TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests
         }
     }
 
-    private static string RepoRoot([CallerFilePath] string sourceFile = "")
-    {
-        var fromSource = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(sourceFile)!, "..", "..", ".."));
-        if (File.Exists(Path.Combine(fromSource, "db", "seed_empty.sql"))) return fromSource;
-        var cwd = Directory.GetCurrentDirectory();
-        if (File.Exists(Path.Combine(cwd, "db", "seed_empty.sql"))) return cwd;
-        var dir = AppContext.BaseDirectory;
-        while (dir is not null && !File.Exists(Path.Combine(dir, "db", "seed_empty.sql")))
-            dir = Directory.GetParent(dir)?.FullName;
-        return dir ?? throw new InvalidOperationException("repo root not found");
-    }
-
-    // Mirrors LayoutSchemaStructuralCompositionTests.cs's own single-quoted-SQL-string-literal
-    // extraction (same '' -> ' escaping rule, same brace-depth-tracked terminator) -- reused for
-    // the SAME semantic purpose here (pulling a JSON literal out of db/seed_empty.sql's own raw
-    // text), never a second, independently re-derived parsing rule.
-    private static string ExtractSqlJsonLiteral(string sql, int quoteStart)
-    {
-        var i = quoteStart + 1;
-        var sb = new System.Text.StringBuilder();
-        var depth = 0;
-        var started = false;
-        while (i < sql.Length)
-        {
-            var ch = sql[i];
-            if (ch == '\'' && i + 1 < sql.Length && sql[i + 1] == '\'')
-            {
-                sb.Append('\'');
-                i += 2;
-                continue;
-            }
-            if (ch == '\'') break;
-            if (ch == '{') { depth++; started = true; }
-            else if (ch == '}') depth--;
-            sb.Append(ch);
-            i++;
-            if (started && depth == 0) break;
-        }
-        return sb.ToString();
-    }
-
-    // db/seed_empty.sql's own dd015/dd025 tensor rows use Postgres dollar-quoting ($$...$$) rather
-    // than a single-quoted string literal (chosen there for the embedded double-quote-heavy JSON) --
-    // a distinct quoting style from dd013/dd023's own layout_schema_json literal, so this is a
-    // genuinely different extraction rule, not a duplicate of ExtractSqlJsonLiteral above.
-    private static string ExtractSqlDollarQuotedJsonLiteral(string sql, int afterIdx)
-    {
-        var dollarStart = sql.IndexOf("$$", afterIdx, StringComparison.Ordinal);
-        Assert.True(dollarStart >= 0, "expected a $$-quoted literal after the given index");
-        var contentStart = dollarStart + 2;
-        var dollarEnd = sql.IndexOf("$$", contentStart, StringComparison.Ordinal);
-        Assert.True(dollarEnd >= 0, "expected a closing $$ for the dollar-quoted literal");
-        return sql.Substring(contentStart, dollarEnd - contentStart).Trim();
-    }
-
     private static void AssertJsonStructurallyEqual(string expectedJson, string actualJson, string context)
     {
         using var expectedDoc = System.Text.Json.JsonDocument.Parse(expectedJson);
@@ -322,14 +267,14 @@ public class TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests
     [Fact]
     public void AdminAndNormalLayoutSchemaAndTensorPatchJsonConstants_AreIdenticalToDbSeedEmptySql_BeforeFeedingTheRealApplyPipeline()
     {
-        var sql = File.ReadAllText(Path.Combine(RepoRoot(), "db", "seed_empty.sql"));
+        var sql = File.ReadAllText(Path.Combine(SqlSeedLiteralTestSupport.RepoRoot(), "db", "seed_empty.sql"));
 
         var dd013Marker = sql.IndexOf("'00000000-0000-0000-0000-0000000dd013'", StringComparison.Ordinal);
         Assert.True(dd013Marker >= 0, "dd013 (team_dashboard.admin.projection.layout) row not found in db/seed_empty.sql");
         var dd013LiteralStart = sql.IndexOf("'{\"records\":", dd013Marker, StringComparison.Ordinal);
         Assert.True(dd013LiteralStart >= 0, "dd013 layout_schema_json literal not found");
         AssertJsonStructurallyEqual(
-            AdminLayoutSchemaJson, ExtractSqlJsonLiteral(sql, dd013LiteralStart),
+            AdminLayoutSchemaJson, SqlSeedLiteralTestSupport.ExtractSqlJsonLiteral(sql, dd013LiteralStart),
             "db/seed_empty.sql's dd013 layout_schema_json vs this file's own AdminLayoutSchemaJson constant");
 
         var dd023Marker = sql.IndexOf("'00000000-0000-0000-0000-0000000dd023'", StringComparison.Ordinal);
@@ -337,19 +282,19 @@ public class TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests
         var dd023LiteralStart = sql.IndexOf("'{\"records\":", dd023Marker, StringComparison.Ordinal);
         Assert.True(dd023LiteralStart >= 0, "dd023 layout_schema_json literal not found");
         AssertJsonStructurallyEqual(
-            NormalLayoutSchemaJson, ExtractSqlJsonLiteral(sql, dd023LiteralStart),
+            NormalLayoutSchemaJson, SqlSeedLiteralTestSupport.ExtractSqlJsonLiteral(sql, dd023LiteralStart),
             "db/seed_empty.sql's dd023 layout_schema_json vs this file's own NormalLayoutSchemaJson constant");
 
         var dd015Marker = sql.IndexOf("'00000000-0000-0000-0000-0000000dd015'", StringComparison.Ordinal);
         Assert.True(dd015Marker >= 0, "dd015 (admin tensor) row not found in db/seed_empty.sql");
         AssertJsonStructurallyEqual(
-            AdminTensorPatchJson, ExtractSqlDollarQuotedJsonLiteral(sql, dd015Marker),
+            AdminTensorPatchJson, SqlSeedLiteralTestSupport.ExtractSqlDollarQuotedJsonLiteral(sql, dd015Marker),
             "db/seed_empty.sql's dd015 layout_patch_json vs this file's own AdminTensorPatchJson constant");
 
         var dd025Marker = sql.IndexOf("'00000000-0000-0000-0000-0000000dd025'", StringComparison.Ordinal);
         Assert.True(dd025Marker >= 0, "dd025 (normal tensor) row not found in db/seed_empty.sql");
         AssertJsonStructurallyEqual(
-            NormalTensorPatchJson, ExtractSqlDollarQuotedJsonLiteral(sql, dd025Marker),
+            NormalTensorPatchJson, SqlSeedLiteralTestSupport.ExtractSqlDollarQuotedJsonLiteral(sql, dd025Marker),
             "db/seed_empty.sql's dd025 layout_patch_json vs this file's own NormalTensorPatchJson constant");
     }
 

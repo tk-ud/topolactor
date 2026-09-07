@@ -387,19 +387,24 @@ SCHEMA_COMPOSED_LAYOUT_PATCH_JSON_NODE_OPTIONAL_FIELDS = {
     "dispatchTargetRefByTrigger", "dispatchPayloadFromByTrigger", "propsJson", "propBindings", "debounceMs",
 }
 
-# Schema-composed proof-chain continuity closure round (2026-09-07): mirrors backend/repository/
-# NpgsqlUiTopologyRepository.cs's own AdminRuntimeTargetRefRe exactly -- the SAME
-# "manifest:<uuid>:<layer>:<action>" shape node.targetRef itself uses, the real save-time
-# authority for what a dispatchTargetRefByTrigger VALUE must look like (never re-derived
-# independently; this Python regex exists only because C# cannot be called in-process from this
-# checker -- same discipline as this file's own catalog-authority extraction functions, which
-# mirror real source data rather than inventing a parallel rule).
-SCHEMA_COMPOSED_ADMIN_RUNTIME_TARGET_REF_RE = re.compile(
-    r"^manifest:[0-9a-fA-F-]{36}:[^:]+:[^:]+$"
-)
+# CORRECTED (proof-chain continuity round 2, 2026-09-07): a hand-derived
+# SCHEMA_COMPOSED_ADMIN_RUNTIME_TARGET_REF_RE regex previously lived here, mirroring backend/
+# repository/NpgsqlUiTopologyRepository.cs's own AdminRuntimeTargetRefRe by hand -- a SECOND,
+# checker-only targetRef-shape authority parallel to the one this repo already declares
+# generically: docs/design/react-schema-topology-seed-translator-ssot.yaml
+# wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring.targetRef_shape
+# ('manifest:<manifestId>:<layer>:<action>'), which react_schema_topology_seed_translator.py's own
+# shape_to_regex/lane_target_ref_patterns ALREADY turn into a compiled pattern for
+# validate_wiring_node's own TARGET_REF_SHAPE_MISMATCH check at generation time. Removed; see
+# schema_composed_layout_patch_json_shape_violations' own admin_runtime_dispatch_override_lane_def
+# parameter below, which loads that SAME SSOT lane definition once in main() and reuses
+# translator_impl.lane_target_ref_patterns to build the pattern from it -- one shape authority,
+# not two.
 
 
-def schema_composed_layout_patch_json_shape_violations(payload, translator_impl=None):
+def schema_composed_layout_patch_json_shape_violations(
+    payload, translator_impl=None, admin_runtime_dispatch_override_lane_def=None,
+):
     """Structural (fixture-INDEPENDENT) shape check for a tensorAdoptionCandidates[]
     entry's own schemaComposedLayoutPatchJson value, against
     react-schema-topology-seed-translator-ssot.yaml storage_adoption_contract.
@@ -414,26 +419,77 @@ def schema_composed_layout_patch_json_shape_violations(payload, translator_impl=
 
     EXTENDED (schema-composed proof-chain continuity closure round, 2026-09-07): the
     original version of this function checked field NAMES only (required/forbidden/
-    optional presence) -- it never verified each field's own internal TYPE/shape, so
-    e.g. a propsJson authored as a dict instead of the SSOT-declared JSON-serialized
-    string, or a dispatchTargetRefByTrigger value that is not a real
-    "manifest:<uuid>:<layer>:<action>" ref, would silently pass. Now validates:
-    propsJson (str), propBindings (dict), debounceMs (int), dispatchTargetRefByTrigger
-    values (non-empty string matching the real AdminRuntimeTargetRefRe shape),
-    dispatchPayloadFromByTrigger values (dict of string values, mirroring backend's own
-    ValidatePayloadFromShape), and each runtimeInteractions[] entry's own shape via
+    optional presence) -- it never verified each field's own internal TYPE/shape. Now
+    validates: propsJson (a JSON-parseable string, not merely `str`-typed -- round 2
+    below), propBindings (dict), debounceMs (int), dispatchTargetRefByTrigger values
+    (matching the SAME wiring_lane_contract.lanes.admin_runtime_dispatch_override_
+    wiring.targetRef_shape pattern generation time enforces -- round 2 below),
+    dispatchPayloadFromByTrigger values (source patterns recognized by that SAME
+    lane's own allowed_payload_from_sources vocabulary -- round 2 below), and each
+    runtimeInteractions[] entry's own shape via
     translator_impl.runtime_interaction_candidate_shape_facts -- the SAME shared,
     single-source judgment validate_adoption_candidates itself uses for authored
-    records, never a second, independently-reimplemented one. `translator_impl` is
-    optional (None skips the runtimeInteractions[] per-entry checks, degrading
-    gracefully rather than raising) so this function stays usable standalone; every
-    real call site in this file's own main() passes the already-imported module.
+    records, never a second, independently-reimplemented one.
+
+    EXTENDED AGAIN (proof-chain continuity round 2, 2026-09-07): closed three
+    remaining gaps found by re-auditing round 1's own extension:
+    1. runtime_interaction_candidate_shape_facts' dispatch-field completeness was
+       narrow to dispatchExternalPort/dispatchInstanceOperation by design (matching
+       validate_adoption_candidates' own existing scope) and so never verified
+       Team Dashboard's own real disclosure entries (openModal/closeModal) at all --
+       that shared function now also reports missing_trigger (universal, matching
+       NpgsqlUiTopologyRepository.cs's own unconditional RUNTIME_INTERACTION_TRIGGER_
+       REQUIRED) and, for DISCLOSURE_ACTION_TYPES entries specifically,
+       missing_target_node_id/invalid_state_path (mirroring that SAME file's own
+       isDisclosure branch) -- checked below when translator_impl is given.
+    2. propsJson was checked as `isinstance(..., str)` only -- a string that is not
+       actually valid JSON (e.g. `"{not json"`) silently passed even though the SSOT
+       explicitly calls this field a "JSON-serialized string". Now also attempted via
+       json.loads, reported as a violation (not raised) on failure.
+    3. dispatchTargetRefByTrigger was checked against a checker-only regex
+       (SCHEMA_COMPOSED_ADMIN_RUNTIME_TARGET_REF_RE, since removed) hand-mirroring
+       backend's AdminRuntimeTargetRefRe -- a second targetRef-shape authority
+       parallel to the one this repo already declares generically:
+       wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring.
+       targetRef_shape, which react_schema_topology_seed_translator.py's own
+       shape_to_regex/lane_target_ref_patterns already turn into a compiled pattern
+       for generation-time TARGET_REF_SHAPE_MISMATCH checking. Now takes that SAME
+       lane definition (loaded once from the real SSOT in main(), never re-typed)
+       as `admin_runtime_dispatch_override_lane_def` and builds its pattern via
+       translator_impl.lane_target_ref_patterns -- one shape authority, not two.
+       dispatchPayloadFromByTrigger values are similarly reclassified via
+       translator_impl.classify_source_pattern (node_value/event_path/literal,
+       the SAME judgment validate_wiring_node applies to an authored eventBinding's
+       own payloadFrom) and checked against that SAME lane_def's own
+       allowed_payload_from_sources set -- dispatchPayloadFromByTrigger is, per
+       that lane's own `record_carrier` note, ALWAYS admin_runtime_dispatch_
+       override_wiring-sourced content, so reusing its allowlist here is not a
+       guess. `admin_runtime_dispatch_override_lane_def` is optional (None falls
+       back to a bare non-empty-string check on dispatchTargetRefByTrigger values
+       and a bare string-type check on dispatchPayloadFromByTrigger values,
+       degrading gracefully rather than raising); every real call site in this
+       file's own main() passes the real lane_def loaded from the SSOT.
+
+    `translator_impl` is optional (None skips the runtimeInteractions[] per-entry
+    checks, degrading gracefully rather than raising) so this function stays usable
+    standalone; every real call site in this file's own main() passes the
+    already-imported module.
 
     Returns a list of human-readable violation strings; empty means the payload
     satisfies the contract. Never raises -- a malformed payload (not a dict, no
     "nodes" list) is itself reported as a violation string, not an exception, so a
     single malformed fixture's own diagnostic detail is not lost inside a traceback.
     """
+    admin_runtime_target_ref_patterns = (
+        translator_impl.lane_target_ref_patterns(admin_runtime_dispatch_override_lane_def)
+        if translator_impl is not None and admin_runtime_dispatch_override_lane_def
+        else []
+    )
+    admin_runtime_allowed_payload_from_sources = (
+        set(admin_runtime_dispatch_override_lane_def.get("allowed_payload_from_sources") or [])
+        if admin_runtime_dispatch_override_lane_def
+        else None
+    )
     violations = []
     if not isinstance(payload, dict) or "nodes" not in payload or not isinstance(payload.get("nodes"), list):
         return [f"payload is not a dict carrying a 'nodes' list: {payload!r}"]
@@ -455,8 +511,14 @@ def schema_composed_layout_patch_json_shape_violations(payload, translator_impl=
             violations.append(f"node {node_id}: nodeId is not a string")
         if "nodeKind" in node and not isinstance(node["nodeKind"], str):
             violations.append(f"node {node_id}: nodeKind is not a string")
-        if "propsJson" in node and not isinstance(node["propsJson"], str):
-            violations.append(f"node {node_id}: propsJson is not a JSON-serialized string (found {type(node['propsJson']).__name__})")
+        if "propsJson" in node:
+            if not isinstance(node["propsJson"], str):
+                violations.append(f"node {node_id}: propsJson is not a JSON-serialized string (found {type(node['propsJson']).__name__})")
+            else:
+                try:
+                    json.loads(node["propsJson"])
+                except (ValueError, TypeError) as exc:
+                    violations.append(f"node {node_id}: propsJson is a string but not valid JSON ({exc})")
         if "propBindings" in node and not isinstance(node["propBindings"], dict):
             violations.append(f"node {node_id}: propBindings is not an object (found {type(node['propBindings']).__name__})")
         if "debounceMs" in node and (isinstance(node["debounceMs"], bool) or not isinstance(node["debounceMs"], int)):
@@ -468,8 +530,14 @@ def schema_composed_layout_patch_json_shape_violations(payload, translator_impl=
                 violations.append(f"node {node_id}: dispatchTargetRefByTrigger is not an object (found {type(dispatch_targets).__name__})")
             else:
                 for trigger, target_ref in dispatch_targets.items():
-                    if not isinstance(target_ref, str) or not SCHEMA_COMPOSED_ADMIN_RUNTIME_TARGET_REF_RE.match(target_ref):
-                        violations.append(f"node {node_id}: dispatchTargetRefByTrigger[{trigger!r}] is not a real 'manifest:<uuid>:<layer>:<action>' ref (found {target_ref!r})")
+                    if admin_runtime_target_ref_patterns:
+                        target_ref_ok = isinstance(target_ref, str) and any(
+                            p.match(target_ref) for p in admin_runtime_target_ref_patterns
+                        )
+                    else:
+                        target_ref_ok = isinstance(target_ref, str) and bool(target_ref)
+                    if not target_ref_ok:
+                        violations.append(f"node {node_id}: dispatchTargetRefByTrigger[{trigger!r}] does not match wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring.targetRef_shape (found {target_ref!r})")
         if "dispatchPayloadFromByTrigger" in node:
             payload_from_by_trigger = node["dispatchPayloadFromByTrigger"]
             if not isinstance(payload_from_by_trigger, dict):
@@ -483,7 +551,13 @@ def schema_composed_layout_patch_json_shape_violations(payload, translator_impl=
                         violations.append(f"node {node_id}: dispatchPayloadFromByTrigger[{trigger!r}] is not an object (found {type(payload_from).__name__})")
                     else:
                         for prop_name, source in payload_from.items():
-                            if not isinstance(source, str):
+                            if translator_impl is not None:
+                                source_kind = translator_impl.classify_source_pattern(source)
+                                if source_kind is None:
+                                    violations.append(f"node {node_id}: dispatchPayloadFromByTrigger[{trigger!r}][{prop_name!r}] value {source!r} does not match a recognized wiring_lane_contract payloadFrom source pattern (node_value/event_path/literal)")
+                                elif admin_runtime_allowed_payload_from_sources is not None and source_kind not in admin_runtime_allowed_payload_from_sources:
+                                    violations.append(f"node {node_id}: dispatchPayloadFromByTrigger[{trigger!r}][{prop_name!r}] source kind {source_kind!r} is not in admin_runtime_dispatch_override_wiring's own allowed_payload_from_sources")
+                            elif not isinstance(source, str):
                                 violations.append(f"node {node_id}: dispatchPayloadFromByTrigger[{trigger!r}][{prop_name!r}] is not a string (found {type(source).__name__})")
 
         if "runtimeInteractions" not in node or not isinstance(node["runtimeInteractions"], list):
@@ -501,8 +575,15 @@ def schema_composed_layout_patch_json_shape_violations(payload, translator_impl=
                 violations.append(f"node {node_id}: runtimeInteractions[{index}] must never carry runtimeInteractionId (backend-persist-time-only assignment authority)")
             if facts["missing_source_action_key"]:
                 violations.append(f"node {node_id}: runtimeInteractions[{index}] is missing a non-empty sourceActionKey")
+            if facts["missing_trigger"]:
+                violations.append(f"node {node_id}: runtimeInteractions[{index}] is missing a non-empty trigger")
             if facts["dispatch_action_type"] and facts["missing_dispatch_fields"]:
                 violations.append(f"node {node_id}: runtimeInteractions[{index}] ({interaction.get('actionType')}) is missing idempotency route field(s) {facts['missing_dispatch_fields']}")
+            if facts["is_disclosure_action_type"]:
+                if facts["missing_target_node_id"]:
+                    violations.append(f"node {node_id}: runtimeInteractions[{index}] ({interaction.get('actionType')}) is missing a non-empty targetNodeId")
+                if facts["invalid_state_path"]:
+                    violations.append(f"node {node_id}: runtimeInteractions[{index}] ({interaction.get('actionType')}) has statePath {interaction.get('statePath')!r}, expected 'open' or absent")
     return violations
 
 
@@ -3241,6 +3322,27 @@ def main():
             len(real_registry_pairs) > 0,
         )
 
+        # 151a (schema-composed proof-chain continuity round 2, 2026-09-07): load the REAL
+        # wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring lane definition ONCE
+        # from the actual SSOT (never a hand-typed copy of its targetRef_shape/
+        # allowed_payload_from_sources), so schema_composed_layout_patch_json_shape_violations
+        # (checks 152/155/156a below) can build its dispatchTargetRefByTrigger/
+        # dispatchPayloadFromByTrigger checks from the SAME generic shape_to_regex/
+        # classify_source_pattern mechanism validate_wiring_node itself uses at generation time,
+        # never a second, checker-only shape authority (see that removed
+        # SCHEMA_COMPOSED_ADMIN_RUNTIME_TARGET_REF_RE constant's own replacement comment above).
+        ssot_root_for_lane_defs, ssot_root_errors_for_lane_defs = translator_impl.load_ssot(REPO_ROOT)
+        expect(
+            "151a. the real react-schema-topology-seed-translator-ssot.yaml loads cleanly and its own wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring lane definition (targetRef_shape + allowed_payload_from_sources) is actually found -- positive control proving the dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger shape checks below are built from the REAL SSOT lane, never silently degrading to a no-op because the lookup failed",
+            ssot_root_for_lane_defs is not None
+            and not ssot_root_errors_for_lane_defs
+            and bool(dig(ssot_root_for_lane_defs, "wiring_lane_contract", "lanes", "admin_runtime_dispatch_override_wiring", "targetRef_shape"))
+            and bool(dig(ssot_root_for_lane_defs, "wiring_lane_contract", "lanes", "admin_runtime_dispatch_override_wiring", "allowed_payload_from_sources")),
+        )
+        admin_runtime_dispatch_override_lane_def = dig(
+            ssot_root_for_lane_defs, "wiring_lane_contract", "lanes", "admin_runtime_dispatch_override_wiring",
+        ) or {}
+
         # 152-153 (SSOT catalog/registry authority boundary closure round, 2026-09-07):
         # fixture-INDEPENDENT structural shape proof for schemaComposedLayoutPatchJson, against
         # storage_adoption_contract.candidate_buckets.tensorAdoptionCandidates.schema_composed_
@@ -3278,7 +3380,9 @@ def main():
                     continue
                 schema_composed_shape_checked_fixture_count += 1
                 schema_composed_payload = tensor_candidate["schemaComposedLayoutPatchJson"]
-                violations = schema_composed_layout_patch_json_shape_violations(schema_composed_payload, translator_impl)
+                violations = schema_composed_layout_patch_json_shape_violations(
+                    schema_composed_payload, translator_impl, admin_runtime_dispatch_override_lane_def,
+                )
                 if violations:
                     schema_composed_shape_violations_by_fixture[fixture_name] = violations
                 cardinality_violations = schema_composed_layout_patch_json_cardinality_violations(
@@ -3310,7 +3414,7 @@ def main():
         shape_mutated_nodes = [dict(n) for n in td_admin_generated_carrier]
         shape_mutated_nodes[0] = {**shape_mutated_nodes[0], "componentKey": "button.primitive"}
         shape_mutation_violations = schema_composed_layout_patch_json_shape_violations(
-            {"nodes": shape_mutated_nodes}, translator_impl,
+            {"nodes": shape_mutated_nodes}, translator_impl, admin_runtime_dispatch_override_lane_def,
         )
         expect(
             "155. schema_composed_layout_patch_json_shape_violations actually DETECTS a deliberately-injected forbidden componentKey field on an otherwise-real, already-clean node (team-dashboard-admin's own first generated node) -- proves 152 passing reflects a real, working fail-close check, never a checker that vacuously returns no violations regardless of input",
@@ -3357,20 +3461,57 @@ def main():
                     "propBindings": ["not", "an", "object"],
                 }
         field_shape_mutation_violations = schema_composed_layout_patch_json_shape_violations(
-            {"nodes": field_shape_mutated_nodes}, translator_impl,
+            {"nodes": field_shape_mutated_nodes}, translator_impl, admin_runtime_dispatch_override_lane_def,
         )
         expect(
-            "156a. schema_composed_layout_patch_json_shape_violations actually DETECTS each of 5 deliberately-injected field-internal type/shape defects on otherwise-real, already-clean nodes -- a malformed dispatchTargetRefByTrigger value (not the real manifest:<uuid>:<layer>:<action> shape), a non-string dispatchPayloadFromByTrigger source, a non-int debounceMs, a non-string propsJson, and a non-object propBindings -- proving these are real, working fail-close checks and not field-name-existence-only checking mistaken for a complete shape proof",
+            "156a. schema_composed_layout_patch_json_shape_violations actually DETECTS each of 5 deliberately-injected field-internal type/shape defects on otherwise-real, already-clean nodes -- a dispatchTargetRefByTrigger value not matching wiring_lane_contract's own admin_runtime_dispatch_override_wiring.targetRef_shape, a non-string dispatchPayloadFromByTrigger source, a non-int debounceMs, a non-string propsJson, and a non-object propBindings -- proving these are real, working fail-close checks and not field-name-existence-only checking mistaken for a complete shape proof",
             all(
                 any(needle in v for v in field_shape_mutation_violations)
                 for needle in (
-                    "dispatchTargetRefByTrigger['click'] is not a real",
-                    "dispatchPayloadFromByTrigger['click']['bodyMarkdown'] is not a string",
+                    "dispatchTargetRefByTrigger['click'] does not match wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring.targetRef_shape",
+                    "dispatchPayloadFromByTrigger['click']['bodyMarkdown'] value 42 does not match a recognized wiring_lane_contract payloadFrom source pattern",
                     "debounceMs is not an int",
                     "propsJson is not a JSON-serialized string",
                     "propBindings is not an object",
                 )
             ),
+        )
+
+        # 156c (schema-composed proof-chain continuity round 2, 2026-09-07): NEGATIVE proof that
+        # propsJson's own JSON-parseability is actually checked, not merely its Python type -- a
+        # string that LOOKS like it could be JSON-serialized (isinstance str passes) but is not
+        # actually valid JSON must still be caught, since the SSOT explicitly calls this field a
+        # "JSON-serialized string", not merely "a string".
+        invalid_json_props_nodes = [dict(n) for n in td_admin_generated_carrier]
+        for index, node in enumerate(invalid_json_props_nodes):
+            if node.get("nodeId") == "team_dashboard_admin_viewer":
+                invalid_json_props_nodes[index] = {**node, "propsJson": '{"data": invalid_json_here}'}
+        invalid_json_props_violations = schema_composed_layout_patch_json_shape_violations(
+            {"nodes": invalid_json_props_nodes}, translator_impl, admin_runtime_dispatch_override_lane_def,
+        )
+        expect(
+            "156c. schema_composed_layout_patch_json_shape_violations actually DETECTS a propsJson value that is a Python str (passes the bare isinstance check) but is NOT valid JSON -- proves propsJson is verified as an actually-parseable JSON-serialized string, per the SSOT's own wording, not merely type-checked",
+            any("propsJson is a string but not valid JSON" in v for v in invalid_json_props_violations),
+        )
+
+        # 156d (schema-composed proof-chain continuity round 2, 2026-09-07): NEGATIVE proof that
+        # dispatchPayloadFromByTrigger source values are classified via translator_impl.
+        # classify_source_pattern (node_value/event_path/literal) rather than a bare string-type
+        # check -- a string that IS a str but matches none of those recognized patterns must still
+        # be caught, distinguishing this from the non-string case 156a already covers.
+        unrecognized_source_nodes = [dict(n) for n in td_admin_generated_carrier]
+        for index, node in enumerate(unrecognized_source_nodes):
+            if node.get("nodeId") == "team_dashboard_admin_save_button":
+                unrecognized_source_nodes[index] = {
+                    **node,
+                    "dispatchPayloadFromByTrigger": {"click": {"bodyMarkdown": "not_a_recognized_source_pattern_at_all"}},
+                }
+        unrecognized_source_violations = schema_composed_layout_patch_json_shape_violations(
+            {"nodes": unrecognized_source_nodes}, translator_impl, admin_runtime_dispatch_override_lane_def,
+        )
+        expect(
+            "156d. schema_composed_layout_patch_json_shape_violations actually DETECTS a dispatchPayloadFromByTrigger source value that IS a string but matches none of classify_source_pattern's own recognized node_value/event_path/literal shapes -- proves source classification is real pattern matching, not a bare isinstance(str) approximation of the SSOT's own payloadFrom source grammar",
+            any("does not match a recognized wiring_lane_contract payloadFrom source pattern" in v for v in unrecognized_source_violations),
         )
 
         runtime_interaction_shape_mutated_nodes = [dict(n) for n in td_admin_generated_carrier]
@@ -3381,12 +3522,43 @@ def main():
                 mutated_interactions[1] = {k: v for k, v in mutated_interactions[1].items() if k != "sourceActionKey"}
                 runtime_interaction_shape_mutated_nodes[index] = {**node, "runtimeInteractions": mutated_interactions}
         runtime_interaction_shape_mutation_violations = schema_composed_layout_patch_json_shape_violations(
-            {"nodes": runtime_interaction_shape_mutated_nodes}, translator_impl,
+            {"nodes": runtime_interaction_shape_mutated_nodes}, translator_impl, admin_runtime_dispatch_override_lane_def,
         )
         expect(
             "156b. schema_composed_layout_patch_json_shape_violations actually DETECTS a deliberately-injected forbidden runtimeInteractionId AND a deliberately-removed required sourceActionKey inside team-dashboard-admin's own real runtimeInteractions[] entries, via the SAME shared translator_impl.runtime_interaction_candidate_shape_facts judgment validate_adoption_candidates itself uses for authored records -- proving runtimeInteractions[] internal shape is actually verified, not merely presence-checked as a bare list",
             any("must never carry runtimeInteractionId" in v for v in runtime_interaction_shape_mutation_violations)
             and any("missing a non-empty sourceActionKey" in v for v in runtime_interaction_shape_mutation_violations),
+        )
+
+        # 156e (schema-composed proof-chain continuity round 2, 2026-09-07): NEGATIVE proof that
+        # DISCLOSURE runtimeInteractions[] entries (openModal/closeModal -- the actionType family
+        # Team Dashboard itself actually uses, e.g. team_dashboard_admin_editor's own two real
+        # entries below) are shape-checked too, not only the dispatchExternalPort/
+        # dispatchInstanceOperation family checks 156b already covers -- mirrors backend/
+        # repository/NpgsqlUiTopologyRepository.cs's own ValidateRuntimeInteractions isDisclosure
+        # branch: trigger is unconditionally required, targetNodeId is required for a disclosure
+        # entry specifically, and statePath (when present) must equal "open".
+        disclosure_shape_mutated_nodes = [dict(n) for n in td_admin_generated_carrier]
+        for index, node in enumerate(disclosure_shape_mutated_nodes):
+            if node.get("nodeId") == "team_dashboard_admin_editor":
+                mutated_interactions = [dict(entry) for entry in node["runtimeInteractions"]]
+                # entry 0: real openModal (trigger="click") -- strip trigger entirely.
+                mutated_interactions[0] = {k: v for k, v in mutated_interactions[0].items() if k != "trigger"}
+                # entry 1: real closeModal (targetNodeId=team_dashboard_admin_save_confirm_modal,
+                # statePath="open") -- strip targetNodeId AND set an unsupported statePath.
+                mutated_interactions[1] = {
+                    k: v for k, v in mutated_interactions[1].items() if k != "targetNodeId"
+                }
+                mutated_interactions[1]["statePath"] = "closed"
+                disclosure_shape_mutated_nodes[index] = {**node, "runtimeInteractions": mutated_interactions}
+        disclosure_shape_mutation_violations = schema_composed_layout_patch_json_shape_violations(
+            {"nodes": disclosure_shape_mutated_nodes}, translator_impl, admin_runtime_dispatch_override_lane_def,
+        )
+        expect(
+            "156e. schema_composed_layout_patch_json_shape_violations actually DETECTS each of 3 deliberately-injected defects on team-dashboard-admin's own REAL disclosure (openModal/closeModal) runtimeInteractions[] entries -- a missing trigger, a missing targetNodeId, and an unsupported statePath -- proving disclosure-family shape is verified against the SAME canonical persistence shape NpgsqlUiTopologyRepository.cs's own isDisclosure branch enforces, not only the narrower dispatch-actionType family 156b already covers",
+            any("is missing a non-empty trigger" in v for v in disclosure_shape_mutation_violations)
+            and any("is missing a non-empty targetNodeId" in v for v in disclosure_shape_mutation_violations)
+            and any("has statePath 'closed', expected 'open' or absent" in v for v in disclosure_shape_mutation_violations),
         )
 
         # 157-158 (SSOT self-consistency + schema-composed carrier proof closure round,
