@@ -22,13 +22,19 @@ namespace Topolactor.Repository;
 /// that never resolve to a component and always fail explicit at frontend render time, carrying
 /// their authored knownGapRefs.
 ///
-/// Tensor runtimeInteractions merge: authored tensor nodes (layout_patch_json.nodes[]) key their
-/// runtimeInteractions array at the FORM level, with each entry individually tagged by
+/// Tensor runtimeInteractions merge: authored/adopted tensor nodes (layout_patch_json.nodes[]) key
+/// their runtimeInteractions array at the resolved OWNING STRUCTURAL PARENT's own tensor NodeId —
+/// whichever record type legally owns the Action per the schema's authoring-legality gate (Form,
+/// Workflow, Modal, or a lane/pairing-eligible Section; never restricted to Form — see
+/// react-schema-topology-seed-translator-ssot.yaml structural_authority_precedence_contract.
+/// interaction_ownership_and_addressing_contract), with each entry individually tagged by
 /// sourceActionKey identifying which specific Action/Field leaf it belongs to — the merge groups
 /// tensor interaction entries by sourceActionKey (BuildInteractionsBySourceActionKey) and attaches
 /// each leaf's own matching entries by leaf key == sourceActionKey, not by a naive
-/// tensor-nodeId == record-key match (the tensor nodeId is the FORM's key, a structural node, which
-/// never receives runtimeInteractions).
+/// tensor-nodeId == record-key match (the tensor nodeId here is the owning PARENT's resolved key, a
+/// structural identity, not the leaf's own key — the composed structural_node LayoutNodeRecord for
+/// that same parent never itself receives runtimeInteractions in Compose's output; only catalog
+/// leaves do, via this by-sourceActionKey lookup).
 ///
 /// Layouts whose layout_schema_json has no records[] (most UI-Builder-authored layouts, where
 /// componentId/componentKind already live directly on the tensor nodes) are unaffected — callers
@@ -47,6 +53,24 @@ public static class LayoutSchemaTensorComposer
         "topology_ui_form",
         "topology_ui_workflow",
         "topology_ui_validation",
+    };
+
+    // SSOT catalog/registry authority boundary + schema-composed carrier save-validation closure
+    // round (2026-09-07): the STRUCTURAL subset that may legally OWN an Action/interaction, per
+    // .agent/scripts/react_schema_topology_seed_translator.py's own authoring-legality gate
+    // (VALID_ACTION_OWNER_NODE_KINDS = {Form, Workflow, Modal} plus Section when the action's own
+    // wiringLane is in SECTION_OWNABLE_ACTION_LANES -- react-schema-topology-seed-translator-
+    // ssot.yaml structural_authority_precedence_contract.interaction_ownership_and_addressing_
+    // contract). Category and Validation are structural but NEVER legally own an Action under any
+    // wiringLane -- deliberately excluded here (unlike StructuralRecordTypes above, which is a
+    // RENDER-time classification, not an authoring-legality one). Modal is not itself in this set
+    // (it is a catalog_component, not IsStructural) but IS carrier-eligible -- see
+    // ResolveCarrierEligibleNodeIdsInSchemaTree below, which adds it explicitly.
+    private static readonly HashSet<string> CarrierEligibleStructuralRecordTypes = new(StringComparer.Ordinal)
+    {
+        "topology_ui_section",
+        "topology_ui_form",
+        "topology_ui_workflow",
     };
 
     private const string ActionRecordType = "topology_ui_action";
@@ -87,6 +111,18 @@ public static class LayoutSchemaTensorComposer
     // Round 41: widened from private to internal so NpgsqlUiTopologyRepository.
     // FieldFamilyComponentKeys can derive directly from this map's Values instead of
     // maintaining an independently hand-kept mirror of the same Field-family set.
+    // data_display/md_viewer and form_input/textarea_template (team-dashboard-physical-layout-
+    // adoption round): mirror .agent/scripts/react_schema_topology_seed_translator.py's own
+    // COMPONENT_KIND_TO_COMPONENT_KEY entries for these same two Field-authorable controls
+    // exactly (docs/design/react-schema-topology-seed-translator-ssot.yaml
+    // field_control_component_identity_contract) -- both already real, active
+    // topology.ui_component_registry rows (db/ui_component_registry_preset_catalog_bootstrap.sql)
+    // and real frontend/components/catalog.ts entries; this table was simply missing the
+    // convention-table entries a schema-composed Field authoring either control needs. Never add
+    // "action/button" or "disclosure/modal" here -- ResolveComponentKey below never looks either
+    // up through this table (Action/WorkflowStep resolve via the separate ActionComponentKey
+    // constant; Modal resolves via its own literal componentKind), so an entry for either would be
+    // dead, unreachable code, not a fix.
     internal static readonly IReadOnlyDictionary<string, string> FieldControlToComponentKey =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -96,12 +132,26 @@ public static class LayoutSchemaTensorComposer
             ["form_input/textarea"] = "textarea.alias",
             ["form_input/search_input"] = "search_input.alias",
             ["disclosure/tabs"] = "tabs.template",
+            ["data_display/md_viewer"] = "md_viewer.projection",
+            ["form_input/textarea_template"] = "textarea.template",
         };
 
     // Canonical display -> ui_component_registry.component_key convention for Table leaves.
     // Reuses the existing preset catalog rows declared for table-shaped surfaces
     // (ui-builder-preset-ecosystem-ssot.yaml) — does not invent new registry entries.
-    private static readonly IReadOnlyDictionary<string, string> TableDisplayToComponentKey =
+    // Widened from private to internal so LayoutSchemaStructuralCompositionTests can verify each
+    // entry's VALUE against real source data on TWO separate axes (SSOT catalog/registry
+    // authority boundary closure round, 2026-09-07 -- CORRECTED from this comment's own original
+    // wording, which named only the registry-bootstrap axis): IDENTITY, against
+    // frontend/components/catalog.ts's own real componentKey/componentKind pairs, whose
+    // component_kind suffix (after the family/ prefix) equals this table's own KEY -- e.g.
+    // "table" -> "table.primitive" here corresponds to the real "data_display/table" ->
+    // "table.primitive" catalog pair; and REGISTRATION EVIDENCE (separate, additional), against
+    // db/ui_component_registry_preset_catalog_bootstrap.sql's own real topology.ui_component_
+    // registry rows. This table's keys are "display" convention values, not componentKind
+    // strings, so the correspondence is checked by suffix, not by direct key lookup like
+    // FieldControlToComponentKey/ActionComponentKey above.
+    internal static readonly IReadOnlyDictionary<string, string> TableDisplayToComponentKey =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["card_list"] = "card_list.primitive",
@@ -116,7 +166,14 @@ public static class LayoutSchemaTensorComposer
     // docs/design/react-schema-topology-seed-translator-ssot.yaml
     // storage_adoption_contract.adoption_candidate_separation_contract, which already treats the
     // two identically across wiringAdoptionCandidates/tensorAdoptionCandidates.
-    private const string ActionComponentKey = "button.primitive";
+    // Widened from private to internal so LayoutSchemaStructuralCompositionTests can verify this
+    // constant on TWO separate axes (SSOT catalog/registry authority boundary closure round,
+    // 2026-09-07 -- CORRECTED from this comment's own original wording, which named only the
+    // registry-bootstrap axis): IDENTITY, directly against frontend/components/catalog.ts's own
+    // real action/button pair; and REGISTRATION EVIDENCE (separate, additional), against
+    // db/ui_component_registry_preset_catalog_bootstrap.sql's own real action/button row --
+    // mirroring the same precedent already applied to FieldControlToComponentKey.
+    internal const string ActionComponentKey = "button.primitive";
 
     public record SchemaRecordRow(
         string RecordType,
@@ -370,17 +427,19 @@ public static class LayoutSchemaTensorComposer
 
     /// <summary>
     /// Groups tensor nodes' (layout_patch_json.nodes[]) runtimeInteractions entries by
-    /// "{formTensorNodeId}::{sourceActionKey}" — each tensor node carries its child Action/Field
-    /// leaves' entries at the FORM level, individually tagged by which leaf they belong to.
-    /// Scoping the map key by the OWNING FORM's own tensor NodeId (not sourceActionKey alone)
-    /// prevents cross-contamination when two different Forms happen to author the same leaf key
-    /// (e.g. two Forms both authoring an Action named "validate") — each Form's entries stay
-    /// attributed only to its own children, never merged across Forms. Malformed JSON, a
-    /// non-array runtimeInteractions value, a non-object entry, or an entry missing a non-empty
-    /// sourceActionKey is a real authoring defect — never silently skipped — and returns Invalid.
-    /// Valid returns a map from "{formTensorNodeId}::{sourceActionKey}" to the JSON array text of
-    /// that key's own entries (usually one) — see Compose's ResolveInteractionsMergeKey for the
-    /// matching leaf-side key construction.
+    /// "{ownerTensorNodeId}::{sourceActionKey}" — each tensor node carries its own owned child
+    /// Action/Field leaves' entries, individually tagged by which leaf they belong to. Scoping
+    /// the map key by the OWNING PARENT's own tensor NodeId (not sourceActionKey alone) —
+    /// whichever record type legally owns the Action per the schema's authoring-legality gate
+    /// (Form, Workflow, Modal, or a lane/pairing-eligible Section; never restricted to Form) —
+    /// prevents cross-contamination when two different owning parents happen to author the same
+    /// leaf key (e.g. two Sections both authoring an Action named "validate") — each owner's
+    /// entries stay attributed only to its own children, never merged across owners. Malformed
+    /// JSON, a non-array runtimeInteractions value, a non-object entry, or an entry missing a
+    /// non-empty sourceActionKey is a real authoring defect — never silently skipped — and
+    /// returns Invalid. Valid returns a map from "{ownerTensorNodeId}::{sourceActionKey}" to the
+    /// JSON array text of that key's own entries (usually one) — see Compose's own inline
+    /// "{parentNodeId}::{row.Key}" lookup below for the matching leaf-side key construction.
     /// </summary>
     public static InteractionsParseResult BuildInteractionsBySourceActionKey(
         IReadOnlyList<LayoutNodeRecord> tensorNodes)
@@ -498,9 +557,11 @@ public static class LayoutSchemaTensorComposer
     /// componentId/componentKind, never merged with runtimeInteractions. Each catalog_component
     /// leaf's runtimeInteractions are merged from interactionsBySourceActionKey (see
     /// BuildInteractionsBySourceActionKey) by "{parentKey}::{key}" — scoped to the leaf's OWNING
-    /// FORM, never by leaf key alone, so two different Forms authoring the same leaf key never
-    /// cross-contaminate each other's interactions. Order follows the authored document order
-    /// (already parent-before-child).
+    /// PARENT (whichever record type legally owns the Action per the schema's authoring-legality
+    /// gate: Form, Workflow, Modal, or a lane/pairing-eligible Section; never restricted to
+    /// Form), never by leaf key alone, so two different owning parents authoring the same leaf
+    /// key never cross-contaminate each other's interactions. Order follows the authored document
+    /// order (already parent-before-child).
     ///
     /// NodeId is normally the record's own authored key; when two records anywhere in the tree
     /// share the same key (an authoring collision — the record tree's key is only guaranteed
@@ -628,6 +689,100 @@ public static class LayoutSchemaTensorComposer
         return result;
     }
 
+    /// <summary>
+    /// team-dashboard-physical-layout-adoption round, NARROWED (SSOT catalog/registry authority
+    /// boundary + schema-composed carrier save-validation closure round, 2026-09-07): every
+    /// resolved NodeId in the schema tree whose record type may LEGALLY own an Action/interaction
+    /// -- Form, Workflow, Section (CarrierEligibleStructuralRecordTypes above) and Modal -- never
+    /// Category, Validation (structural but never a legal Action owner under any wiringLane -- the
+    /// SAME authoring-legality boundary react_schema_topology_seed_translator.py's own
+    /// VALID_ACTION_OWNER_NODE_KINDS/SECTION_OWNABLE_ACTION_LANES enforce at generation time), and
+    /// never unresolved_gap (never a normal carrier, catalog component, or structural node of any
+    /// kind -- an explicit render-time failure only). This method previously (and incorrectly)
+    /// returned EVERY resolved NodeId in the tree without exception, which exempted a raw tensor
+    /// node claiming a Category/Validation/unresolved_gap identity from
+    /// LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED even though no such identity can ever
+    /// legitimately be an interaction carrier -- a real, if previously unexploited, boundary
+    /// mismatch this round's own audit found and closed; see
+    /// NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs's own positive (Section/Modal
+    /// carrier) and negative (Category/Validation/unresolved_gap rejected) proof pair.
+    ///
+    /// INVESTIGATED (proof-chain continuity closure round, 2026-09-07): Section is included here
+    /// by record type ALONE, never re-checking any specific child Action's own wiringLane against
+    /// SECTION_OWNABLE_ACTION_LANES at this save-time boundary -- confirmed sufficient, not merely
+    /// assumed: NpgsqlUiTopologyRepository.ApplyConfirmedLayoutPatchAsync is the ONLY code path in
+    /// the entire live backend that ever writes components_layout_design.layout_schema_json, and
+    /// its own CASE guard preserves layout_schema_json.records[] unchanged whenever already
+    /// non-empty (write-once-then-immutable at this boundary); its one write branch fires only
+    /// when records[] was still empty, and writes a flat tensor nodes[] shape structurally
+    /// incapable of expressing a Section-owns-Action relationship at all. So a Section-owns-Action
+    /// relationship can only ever originate from db bootstrap SQL authored to match
+    /// generate-react-schema/generate-topology-seed's own output, where VALID_ACTION_OWNER_
+    /// NODE_KINDS/SECTION_OWNABLE_ACTION_LANES and section_owned_dryrun_preview_pairing's own
+    /// validate_admin_runtime_preview_action_pairing are already enforced before adoption -- no
+    /// live, network-reachable path can inject a lane-illegal one here. See
+    /// react-schema-topology-seed-translator-ssot.yaml storage_adoption_contract.
+    /// adoption_candidate_separation_contract.structural_authority_precedence_contract.
+    /// interaction_ownership_and_addressing_contract.
+    /// save_time_carrier_eligibility_boundary_investigation for the full investigation.
+    ///
+    /// Used by NpgsqlUiTopologyRepository.ValidateLayoutPatchNodes to widen its "does this raw
+    /// tensor nodeId need its own componentKey" exemption beyond catalog leaves: a tensor node
+    /// whose nodeId matches a carrier-eligible structural parent or a Modal, acting purely as an
+    /// interaction carrier for its own owned children
+    /// (structural_authority_precedence_contract's interaction_ownership_and_addressing_contract
+    /// -- e.g. admin.enum.management.projection's own already-proven enum_dictionary_roster
+    /// tensor row, and Team Dashboard's own Section/Modal carrier rows), never carries a
+    /// componentKey and never will -- it is not becoming a rendered catalog leaf, so requiring one
+    /// is a real, generic validation gap this round's own live-DB proof surfaced (this exact shape
+    /// was never previously pushed through the live validate path for ANY surface, admin-enum
+    /// included -- only through fresh-bootstrap SQL, which bypasses this check entirely). A
+    /// brand-new tensor nodeId absent from the schema tree entirely, or present but NOT
+    /// carrier-eligible, still requires an explicit componentKey exactly as before -- this widens
+    /// WHICH known, legally-eligible identities are exempt, it does not relax the rule that an
+    /// unknown or illegitimate one still needs one.
+    /// </summary>
+    public static IReadOnlySet<string> ResolveCarrierEligibleNodeIdsInSchemaTree(
+        IReadOnlyList<SchemaRecordRow> schemaRecords)
+    {
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var identity in ResolveNodeIdentities(schemaRecords))
+        {
+            var recordType = identity.Row.RecordType;
+            if (CarrierEligibleStructuralRecordTypes.Contains(recordType) || recordType == ModalRecordType)
+                result.Add(identity.ResolvedNodeId);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// team-dashboard-physical-layout-adoption round: resolved NodeId -&gt; componentKind for
+    /// every Modal record in the schema tree. Unlike Field/Table/Action's own componentKind
+    /// (registry-resolved at read time via componentIdToKind, not cheaply available to
+    /// ValidateRuntimeInteractions), a Modal's componentKind is always its own authored literal
+    /// value already present on the schema record itself (never a registry lookup -- see
+    /// ResolveNodeIdentities/Compose's own Modal branch) -- so it costs nothing extra to expose
+    /// here. Used by NpgsqlUiTopologyRepository.ValidateRuntimeInteractions' own
+    /// RUNTIME_INTERACTION_TARGET_KIND_MISMATCH check, which previously read componentKind ONLY
+    /// from the raw tensor node's own JSON -- correct for a tensor-only-authored Modal, but a
+    /// schema-composed Modal's own tensor-carrier entry (structural_authority_precedence_
+    /// contract) legitimately carries no componentKind of its own anymore (it is schema-resolved
+    /// at render time), so an openModal/closeModal/toggleModal interaction targeting it must
+    /// also accept this schema-resolved value, never only the raw tensor node's own (possibly
+    /// absent) field.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> ResolveModalComponentKindsByNodeId(
+        IReadOnlyList<SchemaRecordRow> schemaRecords)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var identity in ResolveNodeIdentities(schemaRecords))
+        {
+            if (identity.Row.RecordType == ModalRecordType && identity.Row.ComponentKind is not null)
+                result[identity.ResolvedNodeId] = identity.Row.ComponentKind;
+        }
+        return result;
+    }
+
     public static IReadOnlyList<LayoutNodeRecord> Compose(
         IReadOnlyList<SchemaRecordRow> schemaRecords,
         IReadOnlyDictionary<string, string> interactionsBySourceActionKey,
@@ -676,11 +831,13 @@ public static class LayoutSchemaTensorComposer
             }
 
             // Merge target is a catalog_component leaf only, keyed by "{resolvedParentNodeId}::{key}"
-            // — scoped to the leaf's owning FORM's RESOLVED identity (see
+            // — scoped to the leaf's OWNING PARENT's RESOLVED identity (whichever record type
+            // legally owns the Action per the schema's authoring-legality gate: Form, Workflow,
+            // Modal, or a lane/pairing-eligible Section; never restricted to Form — see
             // BuildInteractionsBySourceActionKey, whose tensor-side key uses the same resolved
-            // owning_form_key the translator emits) — never the leaf's raw authored parentKey
-            // alone. A raw-parentKey key would collide when the OWNING FORM's key is itself
-            // duplicated across branches (e.g. two Forms both keyed "shared_section", each with
+            // owning-parent key the translator emits) — never the leaf's raw authored parentKey
+            // alone. A raw-parentKey key would collide when the OWNING PARENT's key is itself
+            // duplicated across branches (e.g. two Sections both keyed "shared_section", each with
             // its own Action keyed "shared_action") — using the resolved parent identity keeps
             // each duplicate branch's interactions attributed only to its own leaf. structural_node
             // and unresolved_gap nodes never receive runtimeInteractions.

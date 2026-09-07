@@ -33,11 +33,14 @@ TOOL = REPO_ROOT / ".agent" / "tools" / "react-schema-topology-seed-translator"
 FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "credential-management-0092.input.json"
 TOPOLOGY_SEED_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "credential-management-0092.topology-seed.input.json"
 ADMIN_ENUM_AE200_TOPOLOGY_SEED_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "admin-enum-ae200.topology-seed.input.json"
+TEAM_DASHBOARD_ADMIN_TOPOLOGY_SEED_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "team-dashboard-admin.topology-seed.input.json"
+TEAM_DASHBOARD_NORMAL_TOPOLOGY_SEED_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "team-dashboard-normal.topology-seed.input.json"
 CRUD_SCHEMA_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "physical-search-crud-aggregate.react-schema.json"
 CRUD_TOPOLOGY_SEED_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "physical-search-crud-aggregate.topology-seed.input.json"
 AGENT_TMP_DIR = REPO_ROOT / ".agent" / "tmp"
 SEED_EMPTY_PATH = REPO_ROOT / "db" / "seed_empty.sql"
 CRUD_PRESET_SEED_SQL_PATH = REPO_ROOT / "db" / "physical_search_crud_aggregate_preset_seed.sql"
+UI_COMPONENT_REGISTRY_BOOTSTRAP_PATH = REPO_ROOT / "db" / "ui_component_registry_preset_catalog_bootstrap.sql"
 
 # Mirrors frontend/tests/presetSeedLineContract.test.ts REQUIRED_NODE_FIELDS,
 # so the seed-first connection checks below apply the same layout node shape
@@ -66,12 +69,26 @@ def layout_patch_from_seed_runtime_interaction(seed_action_record):
     }
 
 
-def validate_runtime_interactions_boundary_equivalent(layout_patch_json, approved_instance_target_refs):
+def validate_runtime_interactions_boundary_equivalent(layout_patch_json, approved_instance_target_refs, translator_impl=None):
     """Python proof mirror of backend ValidateRuntimeInteractions targetRef boundary.
 
     This is intentionally small and vocabulary-focused: it catches seed/template
     candidate targetRef drift before the proof claims ApplyConfirmedLayoutPatchAsync
     can reach AssignRuntimeInteractionIds.
+
+    CONVERGED (proof-chain continuity round 3, 2026-09-07): this function's own trigger/
+    actionType presence+type checks previously duplicated -- inline, independently -- the SAME
+    "is this a non-empty string" judgment react_schema_topology_seed_translator.py's own
+    runtime_interaction_candidate_shape_facts ALSO computes for the SAME two field names on the
+    SAME runtimeInteractions[] entry shape (missing_trigger/missing_or_invalid_action_type) --
+    two copies of one rule. When translator_impl is given (every real call site in this file's
+    own main() passes the already-imported module), this function now delegates its trigger/
+    actionType checks to that shared function instead, keeping its OWN distinct,
+    boundary-specific logic unchanged: dispatch-specific targetRef shape/regex, approved-
+    instance-targetRef-list membership, and payloadFrom value shape are NOT duplicated
+    anywhere else, so they stay here. translator_impl is optional (None falls back to this
+    function's own original inline trigger/actionType check, degrading gracefully rather than
+    raising) so this function stays usable standalone.
     """
     nodes = layout_patch_json.get("nodes") if isinstance(layout_patch_json, dict) else None
     if not isinstance(nodes, list):
@@ -85,12 +102,20 @@ def validate_runtime_interactions_boundary_equivalent(layout_patch_json, approve
         for interaction in interactions:
             if not isinstance(interaction, dict):
                 return "RUNTIME_INTERACTION_MUST_BE_OBJECT"
-            trigger = interaction.get("trigger")
-            if not isinstance(trigger, str) or not trigger.strip():
-                return "RUNTIME_INTERACTION_TRIGGER_REQUIRED"
+            if translator_impl is not None:
+                shared_facts = translator_impl.runtime_interaction_candidate_shape_facts(interaction)
+                if shared_facts["missing_trigger"]:
+                    return "RUNTIME_INTERACTION_TRIGGER_REQUIRED"
+                if shared_facts["missing_or_invalid_action_type"]:
+                    return "RUNTIME_INTERACTION_ACTION_TYPE_REQUIRED"
+            else:
+                trigger = interaction.get("trigger")
+                if not isinstance(trigger, str) or not trigger.strip():
+                    return "RUNTIME_INTERACTION_TRIGGER_REQUIRED"
+                action_type_check = interaction.get("actionType")
+                if not isinstance(action_type_check, str) or not action_type_check.strip():
+                    return "RUNTIME_INTERACTION_ACTION_TYPE_REQUIRED"
             action_type = interaction.get("actionType")
-            if not isinstance(action_type, str) or not action_type.strip():
-                return "RUNTIME_INTERACTION_ACTION_TYPE_REQUIRED"
             if action_type == "dispatchInstanceOperation":
                 target_ref = interaction.get("instanceTargetRef")
                 if not isinstance(target_ref, str) or not target_ref.strip():
@@ -196,6 +221,457 @@ def extract_compile_snapshot(sql_text, seed_file_label):
         "styleCandidateJson": blocks[3],
         "unresolvedJson": blocks[4],
     }
+
+LAYOUT_SCHEMA_JSON_LITERAL_RE = re.compile(r"'(\{.*?\})'::jsonb", re.DOTALL)
+
+
+def extract_layout_schema_json_by_layout_id(sql_text, layout_id):
+    """Independently resolves a components_layout_design row's layout_schema_json
+    straight from db/seed_empty.sql (team-dashboard-physical-layout-adoption
+    canonical-lineage-proof round).
+
+    This is the physical-seed side of the required_generator_fixture_proof
+    contract (docs/design/admin-normal-surface-projection-seed-ssot.yaml
+    surface_axes.admin.surfaces.team_dashboard.physical_layout_schema_adoption_
+    acceptance_criteria.required_generator_fixture_proof): reads the SAME kind
+    of single-line SQL string literal ('{"records":[...]}'::jsonb, never the
+    $$...$$ dollar-quoted compile-snapshot shape extract_compile_snapshot()
+    above reads) that db/seed_empty.sql's INSERT INTO
+    topology.components_layout_design ... VALUES ('<layout_id>', ...,
+    '<layout_schema_json>'::jsonb, ...) statements use. The translator itself
+    never reads db/*.sql (same authority boundary as
+    resolve_seed_evidence_from_seed_file above); only this check script's
+    proof side does.
+    """
+    marker = f"VALUES ('{layout_id}'"
+    idx = sql_text.find(marker)
+    if idx == -1:
+        raise AssertionError(f"components_layout_design VALUES for layout_id={layout_id} not found in db/seed_empty.sql")
+    window = sql_text[idx: idx + 20000]
+    m = LAYOUT_SCHEMA_JSON_LITERAL_RE.search(window)
+    if not m:
+        raise AssertionError(f"layout_schema_json '{{...}}'::jsonb literal for layout_id={layout_id} not found")
+    return json.loads(m.group(1))
+
+
+def extract_tensor_layout_patch_json_by_tensor_id(sql_text, tensor_id):
+    """Independently resolves a ui_topology_tensor row's own layout_patch_json
+    straight from db/seed_empty.sql (canonical-generation -> physical-adoption
+    lineage closure round, generic UI-Builder physical conversion) -- the
+    tensor-side counterpart of extract_layout_schema_json_by_layout_id above,
+    used to fail-close-prove build_schema_composed_layout_patch_json's own
+    generated output against a REAL already-in-production DERIVED carrier.
+    ui_topology_tensor.layout_patch_json is authored in EITHER SQL string-
+    literal shape across this file's own history -- a plain
+    '{"nodes":[...]}'::jsonb single-line literal (e.g. team_dashboard's own
+    dd015/dd025 rows) or a $$...$$::jsonb dollar-quoted block (e.g.
+    admin.enum.management.projection's ae206 row) -- so both are tried, never
+    assuming one shape is universal.
+    """
+    marker = f"'{tensor_id}',"
+    idx = sql_text.find(marker)
+    if idx == -1:
+        raise AssertionError(f"ui_topology_tensor VALUES for tensor_id={tensor_id} not found in db/seed_empty.sql")
+    window = sql_text[idx: idx + 80000]
+    m = COMPILE_SNAPSHOT_BLOCK_RE.search(window)
+    if m:
+        return json.loads(m.group(1))
+    m = LAYOUT_SCHEMA_JSON_LITERAL_RE.search(window)
+    if m:
+        return json.loads(m.group(1))
+    raise AssertionError(f"layout_patch_json literal (neither $$...$$ nor '{{...}}' shape) for tensor_id={tensor_id} not found")
+
+
+UI_COMPONENT_REGISTRY_ROW_RE = re.compile(
+    r"\('[0-9a-fA-F-]+',\s*'([^']+)',\s*'([^']+)',\s*'[^']*',\s*'[^']*'\)"
+)
+
+
+def extract_component_kind_to_component_key_from_registry_bootstrap():
+    """Independently resolves every REAL (component_kind -> component_key) pair
+    straight from db/ui_component_registry_preset_catalog_bootstrap.sql (generic
+    UI-Builder physical conversion round).
+
+    CORRECTED (SSOT catalog/registry authority boundary closure round, 2026-09-07):
+    this bootstrap SQL seeds topology.ui_component_registry, whose role per
+    docs/design/db-schema.yaml is promoted_component_registry -- REGISTRATION/
+    PROMOTION evidence (has this componentKey actually been promoted into the live
+    registry a runtime componentId resolution reads from), never the componentKind
+    <-> componentKey IDENTITY authority itself. A prior round's own docstring here
+    (and its own checks 148-149) incorrectly named this bootstrap file "the
+    canonical... component identity authority" and verified translator/backend
+    hand-typed convention tables against it alone -- conflating registration
+    evidence with identity authority, exactly what
+    ui_catalog_boundary_contract.catalogs.db_component_registry_registration_evidence
+    (react-schema-topology-seed-translator-ssot.yaml) now names and prohibits. This
+    function's OWN return value is still useful and still used -- as REGISTRATION
+    EVIDENCE ONLY (see extract_component_kind_to_component_key_from_frontend_catalog
+    below for the actual identity-authority extraction, and checks 148-151 for how
+    the two axes are now proven separately, never as substitutes for each other).
+    """
+    sql_text = UI_COMPONENT_REGISTRY_BOOTSTRAP_PATH.read_text(encoding="utf-8")
+    marker = "INSERT INTO topology.ui_component_registry"
+    idx = sql_text.find(marker)
+    if idx == -1:
+        raise AssertionError(f"{UI_COMPONENT_REGISTRY_BOOTSTRAP_PATH}: no INSERT INTO topology.ui_component_registry found")
+    # Bounded by the next "ON CONFLICT" clause, never a naive ";" search -- this file's own
+    # explanatory comments (e.g. "...PR #604); this is...") legitimately contain a bare ";"
+    # inside prose, which would truncate the VALUES list mid-way and silently miss later rows
+    # (data_display/md_viewer / form_input/textarea_template, added in a later comment block
+    # within this SAME statement) if used as the boundary instead.
+    end_marker = "ON CONFLICT"
+    end = sql_text.find(end_marker, idx)
+    section = sql_text[idx:end] if end != -1 else sql_text[idx:]
+    raw_pairs = [(component_key, component_kind) for component_key, component_kind in UI_COMPONENT_REGISTRY_ROW_RE.findall(section)]
+    pairs = build_component_kind_to_component_key_pairs_fail_close(raw_pairs, source_label=str(UI_COMPONENT_REGISTRY_BOOTSTRAP_PATH))
+    if not pairs:
+        raise AssertionError(f"{UI_COMPONENT_REGISTRY_BOOTSTRAP_PATH}: matched zero (component_key, component_kind) rows -- extraction regex likely stale against this file's own current format")
+    return pairs
+
+
+FRONTEND_CATALOG_PATH = REPO_ROOT / "frontend" / "components" / "catalog.ts"
+
+FRONTEND_CATALOG_IDENTITY_PAIR_RE = re.compile(
+    r'componentKey:\s*"([^"]+)",\s*\n\s*componentKind:\s*"([^"]+)"'
+)
+
+# "ui_ux/primitive" is UI_UX_PRIMITIVE_CATALOG_DEFINITION_ENTRIES' own shared placeholder
+# componentKind for many distinct catalog-only-lineup primitives (none of them
+# runtimeConnected, none of them ever looked up by any translator/backend convention table
+# below) -- ambiguous by design (many componentKeys legitimately share it), so it is excluded
+# from the identity-authority dict this extraction builds rather than silently picking one
+# arbitrary componentKey for it (a real, resolvable componentKind must map to exactly one
+# componentKey to be usable as this dict's own key at all).
+FRONTEND_CATALOG_AMBIGUOUS_PLACEHOLDER_COMPONENT_KINDS = {"ui_ux/primitive"}
+
+
+def extract_component_kind_to_component_key_from_frontend_catalog():
+    """Resolves every REAL (component_kind -> component_key) pair straight from
+    frontend/components/catalog.ts (SSOT catalog/registry authority boundary
+    closure round, 2026-09-07) -- the actual componentKind<->componentKey IDENTITY
+    authority per react-schema-topology-seed-translator-ssot.yaml
+    ui_catalog_boundary_contract.catalogs.frontend_component_catalog.source_of_truth
+    (paired there with docs/design/component-catalog-classification-ssot.yaml's own
+    catalog_vocabulary_contract, which defines classification metadata fields --
+    componentFamily/semanticRole/visualRole/lifecycleStatus/capabilityTags -- but
+    not this componentKey/componentKind pairing itself; catalog.ts's own object
+    literals are where that pairing is actually authored). Generically parsed
+    (every `componentKey: "..."` in this file is immediately followed by its own
+    `componentKind: "..."` on the next line, verified 1:1 with zero unmatched
+    componentKey occurrences at the time this extraction was written) -- never a
+    second, independently hand-typed mirror of these pairs.
+
+    This is the PRIMARY identity-authority extraction (replacing the prior round's
+    mistaken use of extract_component_kind_to_component_key_from_registry_bootstrap
+    for this same purpose); that function's own return value remains valid and
+    useful, but only as a SEPARATE registration-evidence axis (see checks 148-151).
+    """
+    ts_text = FRONTEND_CATALOG_PATH.read_text(encoding="utf-8")
+    raw_pairs = [
+        (component_key, component_kind)
+        for component_key, component_kind in FRONTEND_CATALOG_IDENTITY_PAIR_RE.findall(ts_text)
+        if component_kind not in FRONTEND_CATALOG_AMBIGUOUS_PLACEHOLDER_COMPONENT_KINDS
+    ]
+    pairs = build_component_kind_to_component_key_pairs_fail_close(raw_pairs, source_label=str(FRONTEND_CATALOG_PATH))
+    if not pairs:
+        raise AssertionError(f"{FRONTEND_CATALOG_PATH}: matched zero (componentKey, componentKind) pairs -- extraction regex likely stale against this file's own current format")
+    return pairs
+
+
+def build_component_kind_to_component_key_pairs_fail_close(raw_pairs, source_label):
+    """SSOT self-consistency + schema-composed carrier proof closure round (2026-09-07): shared
+    fail-close duplicate-detection core for BOTH extract_component_kind_to_component_key_from_
+    frontend_catalog above and extract_component_kind_to_component_key_from_registry_bootstrap
+    (never a second, independently re-implemented duplicate-handling policy for the two) --
+    raises AssertionError the moment the SAME componentKind maps to two DIFFERENT componentKeys
+    across raw_pairs, rather than silently letting whichever pair appears last in source order
+    win. A real identity conflict here would mean the SOURCE FILE itself is ambiguous about a
+    componentKind's own componentKey -- a defect in that file, not something either extraction
+    function may paper over by picking an arbitrary winner. Known-ambiguous placeholder kinds
+    (e.g. "ui_ux/primitive", excluded by both call sites before raw_pairs reaches here) are a
+    documented exception to this rule, never silently rediscovered as new conflicts.
+    """
+    pairs = {}
+    for component_key, component_kind in raw_pairs:
+        if component_kind in pairs and pairs[component_kind] != component_key:
+            raise AssertionError(
+                f"{source_label}: componentKind {component_kind!r} maps to two DIFFERENT componentKeys "
+                f"({pairs[component_kind]!r} and {component_key!r}) -- ambiguous source data, never "
+                f"silently resolved by picking whichever pair appears last."
+            )
+        pairs[component_kind] = component_key
+    return pairs
+
+
+SCHEMA_COMPOSED_LAYOUT_PATCH_JSON_NODE_REQUIRED_FIELDS = {"nodeId", "nodeKind", "runtimeInteractions"}
+SCHEMA_COMPOSED_LAYOUT_PATCH_JSON_NODE_FORBIDDEN_FIELDS = {"componentKey", "componentKind", "parentNodeId"}
+SCHEMA_COMPOSED_LAYOUT_PATCH_JSON_NODE_OPTIONAL_FIELDS = {
+    "dispatchTargetRefByTrigger", "dispatchPayloadFromByTrigger", "propsJson", "propBindings", "debounceMs",
+}
+
+# CORRECTED (proof-chain continuity round 2, 2026-09-07): a hand-derived
+# SCHEMA_COMPOSED_ADMIN_RUNTIME_TARGET_REF_RE regex previously lived here, mirroring backend/
+# repository/NpgsqlUiTopologyRepository.cs's own AdminRuntimeTargetRefRe by hand -- a SECOND,
+# checker-only targetRef-shape authority parallel to the one this repo already declares
+# generically: docs/design/react-schema-topology-seed-translator-ssot.yaml
+# wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring.targetRef_shape
+# ('manifest:<manifestId>:<layer>:<action>'), which react_schema_topology_seed_translator.py's own
+# shape_to_regex/lane_target_ref_patterns ALREADY turn into a compiled pattern for
+# validate_wiring_node's own TARGET_REF_SHAPE_MISMATCH check at generation time. Removed; see
+# schema_composed_layout_patch_json_shape_violations' own admin_runtime_dispatch_override_lane_def
+# parameter below, which loads that SAME SSOT lane definition once in main() and reuses
+# translator_impl.lane_target_ref_patterns to build the pattern from it -- one shape authority,
+# not two.
+
+
+def schema_composed_layout_patch_json_shape_violations(
+    payload, translator_impl=None, admin_runtime_dispatch_override_lane_def=None,
+):
+    """Structural (fixture-INDEPENDENT) shape check for a tensorAdoptionCandidates[]
+    entry's own schemaComposedLayoutPatchJson value, against
+    react-schema-topology-seed-translator-ssot.yaml storage_adoption_contract.
+    candidate_buckets.tensorAdoptionCandidates.schema_composed_derived_carrier_
+    contract's own canonical `shape` (SSOT catalog/registry authority boundary
+    closure round, 2026-09-07) -- this is the contract itself, never a comparison
+    against one specific real fixture's own content (checks 142-143/144-147 already
+    do that, for the two real surfaces this round could cross-check against; this
+    function instead proves EVERY real fixture's generated output satisfies the
+    general shape contract, independent of whether a matching physical seed row
+    exists to compare against byte-for-byte).
+
+    EXTENDED (schema-composed proof-chain continuity closure round, 2026-09-07): the
+    original version of this function checked field NAMES only (required/forbidden/
+    optional presence) -- it never verified each field's own internal TYPE/shape. Now
+    validates: propsJson (a JSON-parseable string, not merely `str`-typed -- round 2
+    below), propBindings (dict), debounceMs (int), dispatchTargetRefByTrigger values
+    (matching the SAME wiring_lane_contract.lanes.admin_runtime_dispatch_override_
+    wiring.targetRef_shape pattern generation time enforces -- round 2 below),
+    dispatchPayloadFromByTrigger values (source patterns recognized by that SAME
+    lane's own allowed_payload_from_sources vocabulary -- round 2 below), and each
+    runtimeInteractions[] entry's own shape via
+    translator_impl.runtime_interaction_candidate_shape_facts -- the SAME shared,
+    single-source judgment validate_adoption_candidates itself uses for authored
+    records, never a second, independently-reimplemented one.
+
+    EXTENDED AGAIN (proof-chain continuity round 2, 2026-09-07): closed three
+    remaining gaps found by re-auditing round 1's own extension:
+    1. runtime_interaction_candidate_shape_facts' dispatch-field completeness was
+       narrow to dispatchExternalPort/dispatchInstanceOperation by design (matching
+       validate_adoption_candidates' own existing scope) and so never verified
+       Team Dashboard's own real disclosure entries (openModal/closeModal) at all --
+       that shared function now also reports missing_trigger (universal, matching
+       NpgsqlUiTopologyRepository.cs's own unconditional RUNTIME_INTERACTION_TRIGGER_
+       REQUIRED) and, for DISCLOSURE_ACTION_TYPES entries specifically,
+       missing_target_node_id/invalid_state_path (mirroring that SAME file's own
+       isDisclosure branch) -- checked below when translator_impl is given.
+    2. propsJson was checked as `isinstance(..., str)` only -- a string that is not
+       actually valid JSON (e.g. `"{not json"`) silently passed even though the SSOT
+       explicitly calls this field a "JSON-serialized string". Now also attempted via
+       json.loads, reported as a violation (not raised) on failure.
+    3. dispatchTargetRefByTrigger was checked against a checker-only regex
+       (SCHEMA_COMPOSED_ADMIN_RUNTIME_TARGET_REF_RE, since removed) hand-mirroring
+       backend's AdminRuntimeTargetRefRe -- a second targetRef-shape authority
+       parallel to the one this repo already declares generically:
+       wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring.
+       targetRef_shape, which react_schema_topology_seed_translator.py's own
+       shape_to_regex/lane_target_ref_patterns already turn into a compiled pattern
+       for generation-time TARGET_REF_SHAPE_MISMATCH checking. Now takes that SAME
+       lane definition (loaded once from the real SSOT in main(), never re-typed)
+       as `admin_runtime_dispatch_override_lane_def` and builds its pattern via
+       translator_impl.lane_target_ref_patterns -- one shape authority, not two.
+       dispatchPayloadFromByTrigger values are similarly reclassified via
+       translator_impl.classify_source_pattern (node_value/event_path/literal,
+       the SAME judgment validate_wiring_node applies to an authored eventBinding's
+       own payloadFrom) and checked against that SAME lane_def's own
+       allowed_payload_from_sources set -- dispatchPayloadFromByTrigger is, per
+       that lane's own `record_carrier` note, ALWAYS admin_runtime_dispatch_
+       override_wiring-sourced content, so reusing its allowlist here is not a
+       guess. `admin_runtime_dispatch_override_lane_def` is optional (None falls
+       back to a bare non-empty-string check on dispatchTargetRefByTrigger values
+       and a bare string-type check on dispatchPayloadFromByTrigger values,
+       degrading gracefully rather than raising); every real call site in this
+       file's own main() passes the real lane_def loaded from the SSOT.
+
+    `translator_impl` is optional (None skips the runtimeInteractions[] per-entry
+    checks, degrading gracefully rather than raising) so this function stays usable
+    standalone; every real call site in this file's own main() passes the
+    already-imported module.
+
+    Returns a list of human-readable violation strings; empty means the payload
+    satisfies the contract. Never raises -- a malformed payload (not a dict, no
+    "nodes" list) is itself reported as a violation string, not an exception, so a
+    single malformed fixture's own diagnostic detail is not lost inside a traceback.
+    """
+    admin_runtime_target_ref_patterns = (
+        translator_impl.lane_target_ref_patterns(admin_runtime_dispatch_override_lane_def)
+        if translator_impl is not None and admin_runtime_dispatch_override_lane_def
+        else []
+    )
+    admin_runtime_allowed_payload_from_sources = (
+        set(admin_runtime_dispatch_override_lane_def.get("allowed_payload_from_sources") or [])
+        if admin_runtime_dispatch_override_lane_def
+        else None
+    )
+    violations = []
+    if not isinstance(payload, dict) or "nodes" not in payload or not isinstance(payload.get("nodes"), list):
+        return [f"payload is not a dict carrying a 'nodes' list: {payload!r}"]
+    for node in payload["nodes"]:
+        if not isinstance(node, dict):
+            violations.append(f"node is not a dict: {node!r}")
+            continue
+        node_id = node.get("nodeId", "<missing nodeId>")
+        missing_required = SCHEMA_COMPOSED_LAYOUT_PATCH_JSON_NODE_REQUIRED_FIELDS - node.keys()
+        if missing_required:
+            violations.append(f"node {node_id}: missing required field(s) {sorted(missing_required)}")
+        forbidden_present = SCHEMA_COMPOSED_LAYOUT_PATCH_JSON_NODE_FORBIDDEN_FIELDS & node.keys()
+        if forbidden_present:
+            violations.append(f"node {node_id}: carries forbidden field(s) {sorted(forbidden_present)} (must be resolved from the PRIMARY schema tree at read time, never emitted here)")
+        unknown_fields = node.keys() - SCHEMA_COMPOSED_LAYOUT_PATCH_JSON_NODE_REQUIRED_FIELDS - SCHEMA_COMPOSED_LAYOUT_PATCH_JSON_NODE_OPTIONAL_FIELDS - SCHEMA_COMPOSED_LAYOUT_PATCH_JSON_NODE_FORBIDDEN_FIELDS
+        if unknown_fields:
+            violations.append(f"node {node_id}: carries field(s) {sorted(unknown_fields)} outside the canonical shape's required/optional vocabulary")
+        if "nodeId" in node and not isinstance(node["nodeId"], str):
+            violations.append(f"node {node_id}: nodeId is not a string")
+        if "nodeKind" in node and not isinstance(node["nodeKind"], str):
+            violations.append(f"node {node_id}: nodeKind is not a string")
+        if "propsJson" in node:
+            if not isinstance(node["propsJson"], str):
+                violations.append(f"node {node_id}: propsJson is not a JSON-serialized string (found {type(node['propsJson']).__name__})")
+            else:
+                try:
+                    json.loads(node["propsJson"])
+                except (ValueError, TypeError) as exc:
+                    violations.append(f"node {node_id}: propsJson is a string but not valid JSON ({exc})")
+        if "propBindings" in node and not isinstance(node["propBindings"], dict):
+            violations.append(f"node {node_id}: propBindings is not an object (found {type(node['propBindings']).__name__})")
+        if "debounceMs" in node and (isinstance(node["debounceMs"], bool) or not isinstance(node["debounceMs"], int)):
+            violations.append(f"node {node_id}: debounceMs is not an int (found {type(node['debounceMs']).__name__})")
+
+        dispatch_targets = node.get("dispatchTargetRefByTrigger")
+        if "dispatchTargetRefByTrigger" in node:
+            if not isinstance(dispatch_targets, dict):
+                violations.append(f"node {node_id}: dispatchTargetRefByTrigger is not an object (found {type(dispatch_targets).__name__})")
+            else:
+                for trigger, target_ref in dispatch_targets.items():
+                    if admin_runtime_target_ref_patterns:
+                        target_ref_ok = isinstance(target_ref, str) and any(
+                            p.match(target_ref) for p in admin_runtime_target_ref_patterns
+                        )
+                    else:
+                        target_ref_ok = isinstance(target_ref, str) and bool(target_ref)
+                    if not target_ref_ok:
+                        violations.append(f"node {node_id}: dispatchTargetRefByTrigger[{trigger!r}] does not match wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring.targetRef_shape (found {target_ref!r})")
+        if "dispatchPayloadFromByTrigger" in node:
+            payload_from_by_trigger = node["dispatchPayloadFromByTrigger"]
+            if not isinstance(payload_from_by_trigger, dict):
+                violations.append(f"node {node_id}: dispatchPayloadFromByTrigger is not an object (found {type(payload_from_by_trigger).__name__})")
+            else:
+                dispatch_targets_dict = dispatch_targets if isinstance(dispatch_targets, dict) else {}
+                for trigger, payload_from in payload_from_by_trigger.items():
+                    if trigger not in dispatch_targets_dict:
+                        violations.append(f"node {node_id}: dispatchPayloadFromByTrigger has trigger {trigger!r} with no matching dispatchTargetRefByTrigger entry")
+                    if not isinstance(payload_from, dict):
+                        violations.append(f"node {node_id}: dispatchPayloadFromByTrigger[{trigger!r}] is not an object (found {type(payload_from).__name__})")
+                    else:
+                        for prop_name, source in payload_from.items():
+                            if translator_impl is not None:
+                                source_kind = translator_impl.classify_source_pattern(source)
+                                if source_kind is None:
+                                    violations.append(f"node {node_id}: dispatchPayloadFromByTrigger[{trigger!r}][{prop_name!r}] value {source!r} does not match a recognized wiring_lane_contract payloadFrom source pattern (node_value/event_path/literal)")
+                                elif admin_runtime_allowed_payload_from_sources is not None and source_kind not in admin_runtime_allowed_payload_from_sources:
+                                    violations.append(f"node {node_id}: dispatchPayloadFromByTrigger[{trigger!r}][{prop_name!r}] source kind {source_kind!r} is not in admin_runtime_dispatch_override_wiring's own allowed_payload_from_sources")
+                            elif not isinstance(source, str):
+                                violations.append(f"node {node_id}: dispatchPayloadFromByTrigger[{trigger!r}][{prop_name!r}] is not a string (found {type(source).__name__})")
+
+        if "runtimeInteractions" not in node or not isinstance(node["runtimeInteractions"], list):
+            if "runtimeInteractions" in node:
+                violations.append(f"node {node_id}: runtimeInteractions is not a list")
+            continue
+        for index, interaction in enumerate(node["runtimeInteractions"]):
+            if not isinstance(interaction, dict):
+                violations.append(f"node {node_id}: runtimeInteractions[{index}] is not an object: {interaction!r}")
+                continue
+            if translator_impl is None:
+                continue
+            facts = translator_impl.runtime_interaction_candidate_shape_facts(interaction)
+            if facts["has_runtime_interaction_id"]:
+                violations.append(f"node {node_id}: runtimeInteractions[{index}] must never carry runtimeInteractionId (backend-persist-time-only assignment authority)")
+            if facts["missing_source_action_key"]:
+                violations.append(f"node {node_id}: runtimeInteractions[{index}] is missing a non-empty sourceActionKey")
+            if facts["missing_trigger"]:
+                violations.append(f"node {node_id}: runtimeInteractions[{index}] is missing a non-empty trigger")
+            if facts["missing_or_invalid_action_type"]:
+                violations.append(f"node {node_id}: runtimeInteractions[{index}] is missing a non-empty string actionType (found {interaction.get('actionType')!r})")
+            if facts["dispatch_action_type"] and facts["missing_dispatch_fields"]:
+                violations.append(f"node {node_id}: runtimeInteractions[{index}] ({interaction.get('actionType')}) is missing idempotency route field(s) {facts['missing_dispatch_fields']}")
+            if facts["is_disclosure_action_type"]:
+                if facts["missing_target_node_id"]:
+                    violations.append(f"node {node_id}: runtimeInteractions[{index}] ({interaction.get('actionType')}) is missing a non-empty targetNodeId")
+                if facts["invalid_state_path"]:
+                    violations.append(f"node {node_id}: runtimeInteractions[{index}] ({interaction.get('actionType')}) has statePath {interaction.get('statePath')!r}, expected 'open' or absent")
+    return violations
+
+
+# SSOT self-consistency + schema-composed carrier proof closure round (2026-09-07): the SAME
+# carrier-eligible record-type boundary backend/repository/LayoutSchemaTensorComposer.cs's own
+# CarrierEligibleStructuralRecordTypes enforces at SAVE time (topology_ui_section/
+# topology_ui_form/topology_ui_workflow, plus Modal) -- Category and Validation are structural
+# but never a legal Action/interaction owner under any wiringLane
+# (react_schema_topology_seed_translator.py's own VALID_ACTION_OWNER_NODE_KINDS/
+# SECTION_OWNABLE_ACTION_LANES authoring-legality gate, enforced at generation time before a
+# record is ever adopted into layout_schema_json.records[]). Used below to prove the
+# GENERATION-side cardinality of build_schema_composed_layout_patch_json's own output never
+# contradicts that SAME boundary.
+SCHEMA_COMPOSED_CARRIER_ELIGIBLE_RECORD_TYPES = {
+    "topology_ui_section", "topology_ui_form", "topology_ui_workflow", "topology_ui_modal",
+}
+# A genuine catalog leaf may carry its OWN NodeLocalData contribution at its own resolved key
+# (never a runtimeInteractions-redirect target) -- topology_ui_field/topology_ui_table/
+# topology_ui_action/topology_ui_workflow_step, per storage_adoption_contract.candidate_buckets.
+# tensorAdoptionCandidates's own per-record_type derived_payload notes.
+SCHEMA_COMPOSED_CATALOG_LEAF_RECORD_TYPES = {
+    "topology_ui_field", "topology_ui_table", "topology_ui_action", "topology_ui_workflow_step",
+}
+
+
+def schema_composed_layout_patch_json_cardinality_violations(schema_composed_payload, layout_records, translator_impl):
+    """Fail-close GENERATION-CARDINALITY proof (SSOT self-consistency + schema-composed carrier
+    proof closure round, 2026-09-07): every node in a REAL generated schemaComposedLayoutPatchJson
+    must key at an identity this SAME layout_records tree classifies as either a genuine catalog
+    leaf (a Field/Table/Action/WorkflowStep's own resolved key, carrying its own NodeLocalData) or
+    a carrier-eligible structural/Modal parent (Form/Workflow/Section/Modal, carrying redirected
+    runtimeInteractions) -- never a Category, Validation, or unresolved_gap identity, and never a
+    phantom identity absent from this tree entirely.
+
+    Mirrors backend/repository/LayoutSchemaTensorComposer.cs's own
+    ResolveCarrierEligibleNodeIdsInSchemaTree boundary on the GENERATION side -- catching a
+    resolution bug in build_schema_composed_layout_patch_json itself (e.g. redirecting a
+    runtimeInteractions contribution to the wrong resolved parent) that gateStatus=pass / zero
+    validationErrors alone would never surface, since authoring-legality
+    (VALID_ACTION_OWNER_NODE_KINDS/SECTION_OWNABLE_ACTION_LANES) is enforced upstream at generate
+    time and is not re-derived here -- this function reuses the REAL
+    translator_impl.make_parent_scoped_identity_resolver (the actual production resolver, called
+    on the actual layout_records extracted from a real generate-topology-seed run) to compute each
+    record's own resolved key, never a second, independently re-implemented resolution algorithm.
+    """
+    resolve = translator_impl.make_parent_scoped_identity_resolver(layout_records)
+    record_type_by_resolved_key = {}
+    for wrapper in layout_records:
+        record = wrapper.get("record") or {}
+        resolved_key, _ = resolve(wrapper)
+        record_type_by_resolved_key[resolved_key] = record.get("recordType")
+
+    violations = []
+    nodes = (schema_composed_payload or {}).get("nodes") or []
+    for node in nodes:
+        node_id = node.get("nodeId")
+        record_type = record_type_by_resolved_key.get(node_id)
+        if record_type is None:
+            violations.append(f"nodeId {node_id!r} does not correspond to any record in this fixture's own layoutAdoptionCandidates schema tree")
+        elif (record_type not in SCHEMA_COMPOSED_CARRIER_ELIGIBLE_RECORD_TYPES
+                and record_type not in SCHEMA_COMPOSED_CATALOG_LEAF_RECORD_TYPES):
+            violations.append(f"nodeId {node_id!r} resolves to recordType {record_type!r}, which is neither a carrier-eligible structural/Modal parent nor a genuine catalog leaf")
+    return violations
+
 
 FAILURES = []
 PASS_COUNT = 0
@@ -1862,7 +2338,7 @@ def main():
         )
         layout_patch_from_candidate = layout_patch_from_seed_runtime_interaction(idem_action_record or {})
         approved_instance_refs = {"instance-port:db_instance_port:instance_authority_key:operation_binding_key"}
-        boundary_error = validate_runtime_interactions_boundary_equivalent(layout_patch_from_candidate, approved_instance_refs)
+        boundary_error = validate_runtime_interactions_boundary_equivalent(layout_patch_from_candidate, approved_instance_refs, translator_impl)
         expect(
             "99. seed/template runtimeInteractions[] candidate reaches backend ValidateRuntimeInteractions-equivalent targetRef vocabulary before assignment",
             boundary_error is None
@@ -1870,10 +2346,35 @@ def main():
         )
         invalid_layout_patch = json.loads(json.dumps(layout_patch_from_candidate))
         invalid_layout_patch["nodes"][0]["runtimeInteractions"][0]["instanceTargetRef"] = "instance:db_instance_port:instance_authority_key:operation_binding_key"
-        invalid_boundary_error = validate_runtime_interactions_boundary_equivalent(invalid_layout_patch, approved_instance_refs)
+        invalid_boundary_error = validate_runtime_interactions_boundary_equivalent(invalid_layout_patch, approved_instance_refs, translator_impl)
         expect(
             "100. cross-boundary proof fails closed on eventBinding instance: vocabulary when used as runtimeInteractions[].instanceTargetRef",
             invalid_boundary_error == "RUNTIME_INTERACTION_INSTANCE_TARGET_REF_INVALID:instance:db_instance_port:instance_authority_key:operation_binding_key",
+        )
+
+        # 100a-100b (schema-composed proof-chain continuity round 3, 2026-09-07): NEGATIVE proof
+        # that validate_runtime_interactions_boundary_equivalent's own CONVERGED trigger/actionType
+        # check (now delegating to translator_impl.runtime_interaction_candidate_shape_facts
+        # instead of its own previously-independent inline isinstance+strip logic) still returns
+        # the SAME error codes as before the convergence -- proves the refactor moved WHERE the
+        # judgment lives, not WHAT it decides.
+        missing_trigger_layout_patch = json.loads(json.dumps(layout_patch_from_candidate))
+        del missing_trigger_layout_patch["nodes"][0]["runtimeInteractions"][0]["trigger"]
+        missing_trigger_boundary_error = validate_runtime_interactions_boundary_equivalent(
+            missing_trigger_layout_patch, approved_instance_refs, translator_impl,
+        )
+        expect(
+            "100a. validate_runtime_interactions_boundary_equivalent's own CONVERGED trigger check (delegated to translator_impl.runtime_interaction_candidate_shape_facts) still returns RUNTIME_INTERACTION_TRIGGER_REQUIRED for a missing trigger, the SAME error code its own pre-convergence inline check returned",
+            missing_trigger_boundary_error == "RUNTIME_INTERACTION_TRIGGER_REQUIRED",
+        )
+        missing_action_type_layout_patch = json.loads(json.dumps(layout_patch_from_candidate))
+        del missing_action_type_layout_patch["nodes"][0]["runtimeInteractions"][0]["actionType"]
+        missing_action_type_boundary_error = validate_runtime_interactions_boundary_equivalent(
+            missing_action_type_layout_patch, approved_instance_refs, translator_impl,
+        )
+        expect(
+            "100b. validate_runtime_interactions_boundary_equivalent's own CONVERGED actionType check (delegated to translator_impl.runtime_interaction_candidate_shape_facts) still returns RUNTIME_INTERACTION_ACTION_TYPE_REQUIRED for a missing actionType, the SAME error code its own pre-convergence inline check returned",
+            missing_action_type_boundary_error == "RUNTIME_INTERACTION_ACTION_TYPE_REQUIRED",
         )
 
         agent_tools_dir = REPO_ROOT / ".agent" / "scripts" / "agent_tools"
@@ -2666,6 +3167,558 @@ def main():
             "SIBLING_ORDER_MUST_BE_INTEGER" not in run_structural_check(
                 {"kind": "Category", "key": "test_category_valid_sibling_order", "siblingOrder": -1},
             ),
+        )
+
+        # 136-141 (canonical-generation -> physical-adoption lineage closure round, 2026-09-07):
+        # permanent proof of docs/design/admin-normal-surface-projection-seed-ssot.yaml
+        # surface_axes.admin.surfaces.team_dashboard.physical_layout_schema_adoption_acceptance_
+        # criteria.required_generator_fixture_proof, which this checker never actually ran until
+        # now (the team-dashboard-physical-layout-adoption round's own closure_note claimed this
+        # criterion satisfied without a permanent automated check backing it -- this closes that
+        # gap). Runs generate-topology-seed for REAL against Team Dashboard's own committed
+        # Admin/Normal fixtures and asserts the ACTUAL adoptionCandidates.layoutAdoptionCandidates.
+        # layoutSchemaJson.records output is canonical-byte-equivalent (structural equality of the
+        # parsed JSON, the same notion of "verbatim" TeamDashboardHubRelationUiProjectionLiveDbTests
+        # already uses for its own checked-in fixture comparisons) to what
+        # db/seed_empty.sql's dd013/dd023 rows actually persist -- reading BOTH sides fresh each
+        # run (never two copies of the same hand-typed constant compared to itself, which would be
+        # a tautology proving nothing about the generator).
+        seed_empty_text_for_team_dashboard = SEED_EMPTY_PATH.read_text(encoding="utf-8")
+        proc_td_admin, doc_td_admin = run_generate_topology_seed(TEAM_DASHBOARD_ADMIN_TOPOLOGY_SEED_FIXTURE)
+        expect(
+            "136. real team-dashboard-admin fixture's generate-topology-seed run reports gateStatus == pass",
+            doc_td_admin is not None and doc_td_admin.get("gateStatus") == "pass",
+        )
+        expect(
+            "137. real team-dashboard-admin fixture's generate-topology-seed run reports zero validationErrors",
+            doc_td_admin is not None and doc_td_admin.get("validationErrors") == [],
+        )
+        td_admin_generated_records = (
+            dig(doc_td_admin, "adoptionCandidates", "layoutAdoptionCandidates")[0]["layoutSchemaJson"]["records"]
+            if doc_td_admin and dig(doc_td_admin, "adoptionCandidates", "layoutAdoptionCandidates")
+            else None
+        )
+        dd013_physical_records = extract_layout_schema_json_by_layout_id(
+            seed_empty_text_for_team_dashboard, "00000000-0000-0000-0000-0000000dd013",
+        )["records"]
+        expect(
+            "138. db/seed_empty.sql's dd013 (team_dashboard.admin.projection.layout) layout_schema_json.records[] is canonical-byte-equivalent to the REAL generate-topology-seed output of the committed team-dashboard-admin fixture -- both sides read fresh from their own source (actual generator stdout vs. the actual physical seed SQL literal), never two copies of the same hand-typed constant -- proving dd013 is verbatim physical adoption of layoutAdoptionCandidates, not a re-derived or hand-patched approximation",
+            td_admin_generated_records is not None
+            and len(td_admin_generated_records) > 0
+            and td_admin_generated_records == dd013_physical_records,
+        )
+
+        proc_td_normal, doc_td_normal = run_generate_topology_seed(TEAM_DASHBOARD_NORMAL_TOPOLOGY_SEED_FIXTURE)
+        expect(
+            "139. real team-dashboard-normal fixture's generate-topology-seed run reports gateStatus == pass",
+            doc_td_normal is not None and doc_td_normal.get("gateStatus") == "pass",
+        )
+        expect(
+            "140. real team-dashboard-normal fixture's generate-topology-seed run reports zero validationErrors",
+            doc_td_normal is not None and doc_td_normal.get("validationErrors") == [],
+        )
+        td_normal_generated_records = (
+            dig(doc_td_normal, "adoptionCandidates", "layoutAdoptionCandidates")[0]["layoutSchemaJson"]["records"]
+            if doc_td_normal and dig(doc_td_normal, "adoptionCandidates", "layoutAdoptionCandidates")
+            else None
+        )
+        dd023_physical_records = extract_layout_schema_json_by_layout_id(
+            seed_empty_text_for_team_dashboard, "00000000-0000-0000-0000-0000000dd023",
+        )["records"]
+        expect(
+            "141. db/seed_empty.sql's dd023 (team_dashboard.normal.projection.layout) layout_schema_json.records[] is canonical-byte-equivalent to the REAL generate-topology-seed output of the committed team-dashboard-normal fixture, same discipline as 138 -- proving dd023 is verbatim physical adoption, not a re-derived or hand-patched approximation",
+            td_normal_generated_records is not None
+            and len(td_normal_generated_records) > 0
+            and td_normal_generated_records == dd023_physical_records,
+        )
+
+        # 142-147 (generic UI-Builder physical conversion round, 2026-09-07): permanent proof of
+        # build_schema_composed_layout_patch_json -- the GENERIC translator-side derivation of the
+        # schema-composed tensor DERIVED carrier FROM layoutAdoptionCandidates.layoutSchemaJson.
+        # records[] alone (structural_authority_precedence_contract's interaction_ownership_and_
+        # addressing_contract), closing the "no existing callable function derives the physical
+        # carrier from the raw candidate" open finding the previous round
+        # (tensor_derived_carrier_generation_lineage_status) reported rather than invented.
+        # Cross-checked against TWO independent, real, already-in-production DERIVED carriers read
+        # fresh from db/seed_empty.sql each run (never hand-typed constants): team_dashboard's own
+        # dd015/dd025 (exact byte-for-byte match, both content AND document order) and
+        # admin.enum.management.projection's own ae206 (structural match -- node set, zero
+        # componentKey/componentKind anywhere, and the owning-Section's own interaction-grouping
+        # count -- content-exact for every node except three PRE-EXISTING, UNRELATED quirks in
+        # ae206's own legacy hand-authored content this cross-check incidentally surfaced, not
+        # introduced or fixed by this round: two Fields (form_input/input controls
+        # enum_update_group_name_input/enum_set_group_items_input) are missing their own authored
+        # label as propsJson.data.label even though runtime-orchestration-ssot.yaml's own
+        # buildProductionCatalogComponentProps switch (frontend/runtime/renderEmission.ts) never
+        # special-cases form_input/input to read node.label directly, so it needs this SAME
+        # NodeLocalData mechanism data_display/md_viewer and form_input/textarea_template already
+        # rely on -- this generic function correctly includes it; and
+        # enum_set_group_items_confirm_modal's own authored body text carries a literal doubled
+        # apostrophe ('' instead of ') -- a SQL-escaping artifact leaked into the JSON text itself
+        # at some point in that row's own hand-authored history. Both are surface-specific defects
+        # in a DIFFERENT, already-shipped surface's own seed content, unrelated to Team Dashboard
+        # and this Bundle's own scope -- reported, not fixed, per this round's own instruction not
+        # to silently absorb an unrelated known gap.)
+        td_admin_generated_carrier = dig(
+            doc_td_admin, "adoptionCandidates", "tensorAdoptionCandidates",
+        )[0]["schemaComposedLayoutPatchJson"]["nodes"]
+        dd015_physical_nodes = extract_tensor_layout_patch_json_by_tensor_id(
+            seed_empty_text_for_team_dashboard, "00000000-0000-0000-0000-0000000dd015",
+        )["nodes"]
+        expect(
+            "142. build_schema_composed_layout_patch_json's REAL generated output for team-dashboard-admin is byte-for-byte identical (content AND document order) to db/seed_empty.sql's dd015 -- the actual already-in-production DERIVED carrier -- proving the generic translator-side derivation reproduces this surface's own physical adoption exactly, not merely a structurally-similar approximation",
+            td_admin_generated_carrier == dd015_physical_nodes,
+        )
+
+        td_normal_generated_carrier = dig(
+            doc_td_normal, "adoptionCandidates", "tensorAdoptionCandidates",
+        )[0]["schemaComposedLayoutPatchJson"]["nodes"]
+        dd025_physical_nodes = extract_tensor_layout_patch_json_by_tensor_id(
+            seed_empty_text_for_team_dashboard, "00000000-0000-0000-0000-0000000dd025",
+        )["nodes"]
+        expect(
+            "143. build_schema_composed_layout_patch_json's REAL generated output for team-dashboard-normal is byte-for-byte identical to db/seed_empty.sql's dd025, same discipline as 142",
+            td_normal_generated_carrier == dd025_physical_nodes,
+        )
+
+        ae206_generated_carrier = dig(
+            doc_ae200, "adoptionCandidates", "tensorAdoptionCandidates",
+        )[0]["schemaComposedLayoutPatchJson"]["nodes"]
+        ae206_seed_text = SEED_EMPTY_PATH.read_text(encoding="utf-8")
+        ae206_physical_nodes = extract_tensor_layout_patch_json_by_tensor_id(
+            ae206_seed_text, "00000000-0000-0000-0000-0000000ae206",
+        )["nodes"]
+        ae206_generated_by_id = {n["nodeId"]: n for n in ae206_generated_carrier}
+        ae206_physical_by_id = {n["nodeId"]: n for n in ae206_physical_nodes}
+        expect(
+            "144. build_schema_composed_layout_patch_json's REAL generated output for admin-enum-ae200 produces the EXACT SAME set of nodeIds (27) as db/seed_empty.sql's own already-in-production ae206 carrier -- proving the generic mechanism neither drops nor invents a node for a second, independent, more complex (multiple Sections/Modals) real surface",
+            set(ae206_generated_by_id) == set(ae206_physical_by_id) and len(ae206_physical_by_id) == 27,
+        )
+        expect(
+            "145. NO node in the generated ae206 carrier carries componentKey or componentKind -- generically true for every surface, since LayoutSchemaTensorComposer.Compose resolves both from the PRIMARY schema tree at read time once layout_schema_json.records[] is non-empty",
+            all("componentKey" not in n and "componentKind" not in n for n in ae206_generated_carrier),
+        )
+        expect(
+            "146. the owning Section's (enum_dictionary_roster) generated carrier node groups all 14 real interaction entries (7 buttons' own openModal + 7 modals' own toggle-closeModal) -- the SAME count and SAME sourceActionKey/targetNodeId pairs as the real ae206 row -- proving the OWNING-PARENT addressing rule generalizes correctly to a Section with many more owned Actions/Modals than team_dashboard's own Section ever exercises",
+            ae206_generated_by_id.get("enum_dictionary_roster", {}).get("runtimeInteractions")
+            == ae206_physical_by_id.get("enum_dictionary_roster", {}).get("runtimeInteractions"),
+        )
+        AE206_KNOWN_PRE_EXISTING_UNRELATED_QUIRK_NODE_IDS = {
+            "enum_update_group_name_input",
+            "enum_set_group_items_input",
+            "enum_set_group_items_confirm_modal",
+        }
+        ae206_mismatches_outside_known_quirks = [
+            nid for nid in ae206_physical_by_id
+            if nid not in AE206_KNOWN_PRE_EXISTING_UNRELATED_QUIRK_NODE_IDS
+            and ae206_generated_by_id.get(nid) != ae206_physical_by_id.get(nid)
+        ]
+        expect(
+            "147. every OTHER node (24 of 27, excluding the three pre-existing/unrelated ae206 quirks named above) in the generated ae206 carrier is content-identical to the real physical row -- proving the generic mechanism is not merely producing the right node SET (144) but the right per-node CONTENT for the overwhelming majority of a second real surface",
+            ae206_mismatches_outside_known_quirks == [],
+        )
+
+        # 148-151 (SSOT catalog/registry authority boundary closure round, 2026-09-07):
+        # component identity (componentKind -> componentKey) verification against TWO SEPARATE
+        # axes, never conflated (ui_catalog_boundary_contract.catalogs.
+        # db_component_registry_registration_evidence, react-schema-topology-seed-translator-
+        # ssot.yaml) -- corrects a prior round's own checks 148-149, which verified
+        # translator_impl.COMPONENT_KIND_TO_COMPONENT_KEY against db/ui_component_registry_
+        # preset_catalog_bootstrap.sql ALONE and mislabeled that bootstrap file "the... component
+        # identity authority", when its real role (db-schema.yaml: promoted_component_registry)
+        # is registration/promotion evidence, not identity authority.
+        #
+        # Axis 1 (IDENTITY): every entry matches frontend/components/catalog.ts's own real
+        # componentKey/componentKind pairs -- the actual identity authority per
+        # ui_catalog_boundary_contract.catalogs.frontend_component_catalog.source_of_truth.
+        # Axis 2 (REGISTRATION EVIDENCE, separate, additional, never a substitute for axis 1):
+        # every entry's componentKey also appears as a REAL, already-registered row in
+        # db/ui_component_registry_preset_catalog_bootstrap.sql's own topology.
+        # ui_component_registry seed -- proving the componentKey is actually promoted/reachable
+        # for runtime componentId resolution, not merely a correct catalog identity in the
+        # abstract. Both are VERIFICATION of an existing hand-typed convention-table mirror
+        # against its own already-existing sources of truth, never a new identity authority and
+        # never a change to the hand-typed table itself (kept, per
+        # field_control_component_identity_contract, because Python cannot import a C# backend
+        # table, a TypeScript catalog module, or a live DB row across languages -- a permanent
+        # cross-check is the generic, sustainable substitute for literal code sharing).
+        real_catalog_pairs = extract_component_kind_to_component_key_from_frontend_catalog()
+        real_registry_pairs = extract_component_kind_to_component_key_from_registry_bootstrap()
+        component_kind_to_component_key_identity_mismatches = [
+            (kind, key, real_catalog_pairs.get(kind))
+            for kind, key in translator_impl.COMPONENT_KIND_TO_COMPONENT_KEY.items()
+            if real_catalog_pairs.get(kind) != key
+        ]
+        component_key_registration_gaps = [
+            key
+            for key in translator_impl.COMPONENT_KIND_TO_COMPONENT_KEY.values()
+            if key not in real_registry_pairs.values()
+        ]
+        expect(
+            "148. every entry in react_schema_topology_seed_translator.py's own COMPONENT_KIND_TO_COMPONENT_KEY (9 control/componentKind -> componentKey pairs) matches a REAL (componentKey, componentKind) pair in frontend/components/catalog.ts exactly -- the actual componentKind<->componentKey IDENTITY authority (ui_catalog_boundary_contract.catalogs.frontend_component_catalog), proving this hand-typed convention table is a correct subset of that authority, not an independently-invented mapping",
+            component_kind_to_component_key_identity_mismatches == [],
+        )
+        expect(
+            "149. COMPONENT_KIND_TO_COMPONENT_KEY is non-empty and the real frontend catalog extraction actually found real pairs (positive control -- proves 148 passing is not a vacuous truth from an empty comparison on either side)",
+            len(translator_impl.COMPONENT_KIND_TO_COMPONENT_KEY) > 0 and len(real_catalog_pairs) >= len(translator_impl.COMPONENT_KIND_TO_COMPONENT_KEY),
+        )
+        expect(
+            "150. every componentKey COMPONENT_KIND_TO_COMPONENT_KEY resolves to is ALSO present as a real, already-registered row's component_key in db/ui_component_registry_preset_catalog_bootstrap.sql's own topology.ui_component_registry seed -- a SEPARATE, ADDITIONAL registration-evidence axis (db-schema.yaml: promoted_component_registry), proving each componentKey is actually promoted/reachable for runtime componentId resolution, never a substitute for check 148's identity-correctness proof",
+            component_key_registration_gaps == [],
+        )
+        expect(
+            "151. the real registry-bootstrap extraction (registration-evidence axis) independently found real rows, distinct from the frontend-catalog extraction (identity axis) used by 148-149 -- positive control proving 150 passing is not a vacuous truth from an empty registry-side comparison",
+            len(real_registry_pairs) > 0,
+        )
+
+        # 151a (schema-composed proof-chain continuity round 2, 2026-09-07): load the REAL
+        # wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring lane definition ONCE
+        # from the actual SSOT (never a hand-typed copy of its targetRef_shape/
+        # allowed_payload_from_sources), so schema_composed_layout_patch_json_shape_violations
+        # (checks 152/155/156a below) can build its dispatchTargetRefByTrigger/
+        # dispatchPayloadFromByTrigger checks from the SAME generic shape_to_regex/
+        # classify_source_pattern mechanism validate_wiring_node itself uses at generation time,
+        # never a second, checker-only shape authority (see that removed
+        # SCHEMA_COMPOSED_ADMIN_RUNTIME_TARGET_REF_RE constant's own replacement comment above).
+        ssot_root_for_lane_defs, ssot_root_errors_for_lane_defs = translator_impl.load_ssot(REPO_ROOT)
+        expect(
+            "151a. the real react-schema-topology-seed-translator-ssot.yaml loads cleanly and its own wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring lane definition (targetRef_shape + allowed_payload_from_sources) is actually found -- positive control proving the dispatchTargetRefByTrigger/dispatchPayloadFromByTrigger shape checks below are built from the REAL SSOT lane, never silently degrading to a no-op because the lookup failed",
+            ssot_root_for_lane_defs is not None
+            and not ssot_root_errors_for_lane_defs
+            and bool(dig(ssot_root_for_lane_defs, "wiring_lane_contract", "lanes", "admin_runtime_dispatch_override_wiring", "targetRef_shape"))
+            and bool(dig(ssot_root_for_lane_defs, "wiring_lane_contract", "lanes", "admin_runtime_dispatch_override_wiring", "allowed_payload_from_sources")),
+        )
+        admin_runtime_dispatch_override_lane_def = dig(
+            ssot_root_for_lane_defs, "wiring_lane_contract", "lanes", "admin_runtime_dispatch_override_wiring",
+        ) or {}
+
+        # 152-153 (SSOT catalog/registry authority boundary closure round, 2026-09-07):
+        # fixture-INDEPENDENT structural shape proof for schemaComposedLayoutPatchJson, against
+        # storage_adoption_contract.candidate_buckets.tensorAdoptionCandidates.schema_composed_
+        # derived_carrier_contract's own canonical `shape` (react-schema-topology-seed-translator-
+        # ssot.yaml) -- closes the finding that this field's shape was defined only by closure
+        # narrative prose (tensor_derived_carrier_generation_lineage_status) plus two specific
+        # fixtures' own byte-exact matches (checks 142-143), never by a general, fixture-
+        # independent contract check. Runs schema_composed_layout_patch_json_shape_violations
+        # against EVERY real fixture this script already generates topology-seed output for whose
+        # own tensorAdoptionCandidates actually carries the field (never gated to only the two
+        # fixtures also proven byte-exact against a real physical seed row) -- so a shape
+        # regression introduced for a DIFFERENT, not-yet-physically-adopted surface (e.g. the CRUD
+        # or credential-management fixtures, which stay tensor-only today) would still fail this
+        # check even though no dd0xx/ae206-style byte-exact comparison exists for it.
+        schema_composed_shape_fixtures = {
+            "credential-management-0092": doc_ts,
+            "physical-search-crud-aggregate": doc_crud,
+            "team-dashboard-admin": doc_td_admin,
+            "team-dashboard-normal": doc_td_normal,
+            "admin-enum-ae200": doc_ae200,
+        }
+        schema_composed_shape_violations_by_fixture = {}
+        schema_composed_cardinality_violations_by_fixture = {}
+        schema_composed_shape_checked_fixture_count = 0
+        for fixture_name, fixture_doc in schema_composed_shape_fixtures.items():
+            fixture_layout_records = dig(
+                fixture_doc, "adoptionCandidates", "layoutAdoptionCandidates",
+            )
+            fixture_layout_records = (
+                dig(fixture_layout_records[0], "layoutSchemaJson", "records")
+                if fixture_layout_records else []
+            ) or []
+            for tensor_candidate in dig(fixture_doc, "adoptionCandidates", "tensorAdoptionCandidates") or []:
+                if "schemaComposedLayoutPatchJson" not in tensor_candidate:
+                    continue
+                schema_composed_shape_checked_fixture_count += 1
+                schema_composed_payload = tensor_candidate["schemaComposedLayoutPatchJson"]
+                violations = schema_composed_layout_patch_json_shape_violations(
+                    schema_composed_payload, translator_impl, admin_runtime_dispatch_override_lane_def,
+                )
+                if violations:
+                    schema_composed_shape_violations_by_fixture[fixture_name] = violations
+                cardinality_violations = schema_composed_layout_patch_json_cardinality_violations(
+                    schema_composed_payload, fixture_layout_records, translator_impl,
+                )
+                if cardinality_violations:
+                    schema_composed_cardinality_violations_by_fixture[fixture_name] = cardinality_violations
+        expect(
+            "152. EVERY real fixture's generated schemaComposedLayoutPatchJson (wherever tensorAdoptionCandidates actually carries the field) satisfies storage_adoption_contract.candidate_buckets.tensorAdoptionCandidates.schema_composed_derived_carrier_contract's own canonical shape -- required nodeId/nodeKind/runtimeInteractions present, componentKey/componentKind/parentNodeId never present, no field outside the contract's own required/optional vocabulary -- a general, fixture-independent structural proof of the OUTPUT CONTRACT itself, never only a specific fixture's own byte-exact match to one real seed row",
+            schema_composed_shape_violations_by_fixture == {},
+        )
+        expect(
+            "153. at least 3 real fixtures' generated output actually carried a non-null schemaComposedLayoutPatchJson to check (positive control -- proves 152 passing is not a vacuous truth from zero fixtures ever reaching the field at all)",
+            schema_composed_shape_checked_fixture_count >= 3,
+        )
+        expect(
+            "154. EVERY real fixture's generated schemaComposedLayoutPatchJson satisfies GENERATION CARDINALITY -- every node's nodeId resolves (via the REAL translator_impl.make_parent_scoped_identity_resolver, called on this SAME fixture's own real layoutAdoptionCandidates.layoutSchemaJson.records) to either a genuine catalog leaf or a carrier-eligible structural/Modal parent, never a Category/Validation/unresolved_gap identity or a phantom nodeId absent from the schema tree -- the GENERATION-side half of the SAME carrier-eligibility boundary backend/repository/LayoutSchemaTensorComposer.cs's own ResolveCarrierEligibleNodeIdsInSchemaTree now enforces at SAVE time",
+            schema_composed_cardinality_violations_by_fixture == {},
+        )
+
+        # 155-156 (SSOT self-consistency + schema-composed carrier proof closure round,
+        # 2026-09-07): NEGATIVE, fail-close proof that 152/154 are not vacuously passing merely
+        # because every real fixture today happens to be clean -- deliberately mutates a REAL,
+        # already-proven-clean payload (team-dashboard-admin's own generated
+        # schemaComposedLayoutPatchJson, td_admin_generated_carrier) and confirms each checker
+        # function actually reports a violation for an injected defect, the SAME "tested by
+        # deliberate mutation" discipline this file already applies elsewhere (e.g. the
+        # required_generator_fixture_proof checks above).
+        shape_mutated_nodes = [dict(n) for n in td_admin_generated_carrier]
+        shape_mutated_nodes[0] = {**shape_mutated_nodes[0], "componentKey": "button.primitive"}
+        shape_mutation_violations = schema_composed_layout_patch_json_shape_violations(
+            {"nodes": shape_mutated_nodes}, translator_impl, admin_runtime_dispatch_override_lane_def,
+        )
+        expect(
+            "155. schema_composed_layout_patch_json_shape_violations actually DETECTS a deliberately-injected forbidden componentKey field on an otherwise-real, already-clean node (team-dashboard-admin's own first generated node) -- proves 152 passing reflects a real, working fail-close check, never a checker that vacuously returns no violations regardless of input",
+            len(shape_mutation_violations) > 0
+            and any("componentKey" in v for v in shape_mutation_violations),
+        )
+
+        cardinality_mutated_nodes = [dict(n) for n in td_admin_generated_carrier]
+        cardinality_mutated_nodes[0] = {**cardinality_mutated_nodes[0], "nodeId": "not_a_real_schema_tree_identity_at_all"}
+        cardinality_mutation_violations = schema_composed_layout_patch_json_cardinality_violations(
+            {"nodes": cardinality_mutated_nodes},
+            dig(doc_td_admin, "adoptionCandidates", "layoutAdoptionCandidates")[0]["layoutSchemaJson"]["records"],
+            translator_impl,
+        )
+        expect(
+            "156. schema_composed_layout_patch_json_cardinality_violations actually DETECTS a deliberately-injected phantom nodeId absent from team-dashboard-admin's own real schema tree -- proves 154 passing reflects a real, working fail-close cardinality check, never a checker that vacuously returns no violations regardless of input",
+            len(cardinality_mutation_violations) > 0
+            and any("not_a_real_schema_tree_identity_at_all" in v for v in cardinality_mutation_violations),
+        )
+
+        # 156a-156b (schema-composed proof-chain continuity closure round, 2026-09-07):
+        # NEGATIVE, fail-close proof that the field-INTERNAL type/shape checks added to
+        # schema_composed_layout_patch_json_shape_violations this round (propsJson/propBindings/
+        # debounceMs types, dispatchTargetRefByTrigger's real manifest-ref shape,
+        # dispatchPayloadFromByTrigger's string-valued-object shape, and runtimeInteractions[]
+        # internal shape via the shared translator_impl.runtime_interaction_candidate_shape_facts)
+        # are not vacuously passing merely because every real fixture today happens to already be
+        # clean (which 152 alone would not distinguish from a checker that never actually looks
+        # inside these fields) -- same "deliberately mutate a real, already-proven-clean payload"
+        # discipline as 155-156, applied to the NEW type-level checks specifically.
+        field_shape_mutated_nodes = [dict(n) for n in td_admin_generated_carrier]
+        for index, node in enumerate(field_shape_mutated_nodes):
+            if node.get("nodeId") == "team_dashboard_admin_save_button":
+                field_shape_mutated_nodes[index] = {
+                    **node,
+                    "dispatchTargetRefByTrigger": {"click": "not_a_real_manifest_ref"},
+                    "dispatchPayloadFromByTrigger": {"click": {"bodyMarkdown": 42}},
+                    "debounceMs": "300",
+                }
+            elif node.get("nodeId") == "team_dashboard_admin_save_confirm_modal":
+                field_shape_mutated_nodes[index] = {
+                    **node,
+                    "propsJson": {"already": "a dict, not a JSON string"},
+                    "propBindings": ["not", "an", "object"],
+                }
+        field_shape_mutation_violations = schema_composed_layout_patch_json_shape_violations(
+            {"nodes": field_shape_mutated_nodes}, translator_impl, admin_runtime_dispatch_override_lane_def,
+        )
+        expect(
+            "156a. schema_composed_layout_patch_json_shape_violations actually DETECTS each of 5 deliberately-injected field-internal type/shape defects on otherwise-real, already-clean nodes -- a dispatchTargetRefByTrigger value not matching wiring_lane_contract's own admin_runtime_dispatch_override_wiring.targetRef_shape, a non-string dispatchPayloadFromByTrigger source, a non-int debounceMs, a non-string propsJson, and a non-object propBindings -- proving these are real, working fail-close checks and not field-name-existence-only checking mistaken for a complete shape proof",
+            all(
+                any(needle in v for v in field_shape_mutation_violations)
+                for needle in (
+                    "dispatchTargetRefByTrigger['click'] does not match wiring_lane_contract.lanes.admin_runtime_dispatch_override_wiring.targetRef_shape",
+                    "dispatchPayloadFromByTrigger['click']['bodyMarkdown'] value 42 does not match a recognized wiring_lane_contract payloadFrom source pattern",
+                    "debounceMs is not an int",
+                    "propsJson is not a JSON-serialized string",
+                    "propBindings is not an object",
+                )
+            ),
+        )
+
+        # 156c (schema-composed proof-chain continuity round 2, 2026-09-07): NEGATIVE proof that
+        # propsJson's own JSON-parseability is actually checked, not merely its Python type -- a
+        # string that LOOKS like it could be JSON-serialized (isinstance str passes) but is not
+        # actually valid JSON must still be caught, since the SSOT explicitly calls this field a
+        # "JSON-serialized string", not merely "a string".
+        invalid_json_props_nodes = [dict(n) for n in td_admin_generated_carrier]
+        for index, node in enumerate(invalid_json_props_nodes):
+            if node.get("nodeId") == "team_dashboard_admin_viewer":
+                invalid_json_props_nodes[index] = {**node, "propsJson": '{"data": invalid_json_here}'}
+        invalid_json_props_violations = schema_composed_layout_patch_json_shape_violations(
+            {"nodes": invalid_json_props_nodes}, translator_impl, admin_runtime_dispatch_override_lane_def,
+        )
+        expect(
+            "156c. schema_composed_layout_patch_json_shape_violations actually DETECTS a propsJson value that is a Python str (passes the bare isinstance check) but is NOT valid JSON -- proves propsJson is verified as an actually-parseable JSON-serialized string, per the SSOT's own wording, not merely type-checked",
+            any("propsJson is a string but not valid JSON" in v for v in invalid_json_props_violations),
+        )
+
+        # 156d (schema-composed proof-chain continuity round 2, 2026-09-07): NEGATIVE proof that
+        # dispatchPayloadFromByTrigger source values are classified via translator_impl.
+        # classify_source_pattern (node_value/event_path/literal) rather than a bare string-type
+        # check -- a string that IS a str but matches none of those recognized patterns must still
+        # be caught, distinguishing this from the non-string case 156a already covers.
+        unrecognized_source_nodes = [dict(n) for n in td_admin_generated_carrier]
+        for index, node in enumerate(unrecognized_source_nodes):
+            if node.get("nodeId") == "team_dashboard_admin_save_button":
+                unrecognized_source_nodes[index] = {
+                    **node,
+                    "dispatchPayloadFromByTrigger": {"click": {"bodyMarkdown": "not_a_recognized_source_pattern_at_all"}},
+                }
+        unrecognized_source_violations = schema_composed_layout_patch_json_shape_violations(
+            {"nodes": unrecognized_source_nodes}, translator_impl, admin_runtime_dispatch_override_lane_def,
+        )
+        expect(
+            "156d. schema_composed_layout_patch_json_shape_violations actually DETECTS a dispatchPayloadFromByTrigger source value that IS a string but matches none of classify_source_pattern's own recognized node_value/event_path/literal shapes -- proves source classification is real pattern matching, not a bare isinstance(str) approximation of the SSOT's own payloadFrom source grammar",
+            any("does not match a recognized wiring_lane_contract payloadFrom source pattern" in v for v in unrecognized_source_violations),
+        )
+
+        runtime_interaction_shape_mutated_nodes = [dict(n) for n in td_admin_generated_carrier]
+        for index, node in enumerate(runtime_interaction_shape_mutated_nodes):
+            if node.get("nodeId") == "team_dashboard_admin_editor":
+                mutated_interactions = [dict(entry) for entry in node["runtimeInteractions"]]
+                mutated_interactions[0] = {**mutated_interactions[0], "runtimeInteractionId": "should-never-be-here"}
+                mutated_interactions[1] = {k: v for k, v in mutated_interactions[1].items() if k != "sourceActionKey"}
+                runtime_interaction_shape_mutated_nodes[index] = {**node, "runtimeInteractions": mutated_interactions}
+        runtime_interaction_shape_mutation_violations = schema_composed_layout_patch_json_shape_violations(
+            {"nodes": runtime_interaction_shape_mutated_nodes}, translator_impl, admin_runtime_dispatch_override_lane_def,
+        )
+        expect(
+            "156b. schema_composed_layout_patch_json_shape_violations actually DETECTS a deliberately-injected forbidden runtimeInteractionId AND a deliberately-removed required sourceActionKey inside team-dashboard-admin's own real runtimeInteractions[] entries, via the SAME shared translator_impl.runtime_interaction_candidate_shape_facts judgment validate_adoption_candidates itself uses for authored records -- proving runtimeInteractions[] internal shape is actually verified, not merely presence-checked as a bare list",
+            any("must never carry runtimeInteractionId" in v for v in runtime_interaction_shape_mutation_violations)
+            and any("missing a non-empty sourceActionKey" in v for v in runtime_interaction_shape_mutation_violations),
+        )
+
+        # 156e (schema-composed proof-chain continuity round 2, 2026-09-07): NEGATIVE proof that
+        # DISCLOSURE runtimeInteractions[] entries (openModal/closeModal -- the actionType family
+        # Team Dashboard itself actually uses, e.g. team_dashboard_admin_editor's own two real
+        # entries below) are shape-checked too, not only the dispatchExternalPort/
+        # dispatchInstanceOperation family checks 156b already covers -- mirrors backend/
+        # repository/NpgsqlUiTopologyRepository.cs's own ValidateRuntimeInteractions isDisclosure
+        # branch: trigger is unconditionally required, targetNodeId is required for a disclosure
+        # entry specifically, and statePath (when present) must equal "open".
+        disclosure_shape_mutated_nodes = [dict(n) for n in td_admin_generated_carrier]
+        for index, node in enumerate(disclosure_shape_mutated_nodes):
+            if node.get("nodeId") == "team_dashboard_admin_editor":
+                mutated_interactions = [dict(entry) for entry in node["runtimeInteractions"]]
+                # entry 0: real openModal (trigger="click") -- strip trigger entirely.
+                mutated_interactions[0] = {k: v for k, v in mutated_interactions[0].items() if k != "trigger"}
+                # entry 1: real closeModal (targetNodeId=team_dashboard_admin_save_confirm_modal,
+                # statePath="open") -- strip targetNodeId AND set an unsupported statePath.
+                mutated_interactions[1] = {
+                    k: v for k, v in mutated_interactions[1].items() if k != "targetNodeId"
+                }
+                mutated_interactions[1]["statePath"] = "closed"
+                disclosure_shape_mutated_nodes[index] = {**node, "runtimeInteractions": mutated_interactions}
+        disclosure_shape_mutation_violations = schema_composed_layout_patch_json_shape_violations(
+            {"nodes": disclosure_shape_mutated_nodes}, translator_impl, admin_runtime_dispatch_override_lane_def,
+        )
+        expect(
+            "156e. schema_composed_layout_patch_json_shape_violations actually DETECTS each of 3 deliberately-injected defects on team-dashboard-admin's own REAL disclosure (openModal/closeModal) runtimeInteractions[] entries -- a missing trigger, a missing targetNodeId, and an unsupported statePath -- proving disclosure-family shape is verified against the SAME canonical persistence shape NpgsqlUiTopologyRepository.cs's own isDisclosure branch enforces, not only the narrower dispatch-actionType family 156b already covers",
+            any("is missing a non-empty trigger" in v for v in disclosure_shape_mutation_violations)
+            and any("is missing a non-empty targetNodeId" in v for v in disclosure_shape_mutation_violations)
+            and any("has statePath 'closed', expected 'open' or absent" in v for v in disclosure_shape_mutation_violations),
+        )
+
+        # 156f (schema-composed proof-chain continuity round 3, 2026-09-07): NEGATIVE proof that
+        # actionType itself now has a real shape fact (missing_or_invalid_action_type, closing the
+        # gap where an entry with NO actionType at all, or a non-string one, matched neither
+        # DISCLOSURE_ACTION_TYPES nor RUNTIME_DISPATCH_ACTION_TYPES membership and so silently
+        # passed every other check), and that missing_trigger/missing_target_node_id now use a
+        # real isinstance(str)+non-empty judgment (mirroring validate_runtime_interactions_
+        # boundary_equivalent's own established rule) rather than bare truthiness, which would
+        # have silently accepted a non-string-but-truthy value. Uses team-dashboard-admin's own 4
+        # real disclosure runtimeInteractions[] entries (2 on the editor Section, 2 on the confirm
+        # Modal), each mutated with exactly ONE isolated defect so each assertion below is
+        # attributable to a specific field's own check, not a combination.
+        action_type_shape_mutated_nodes = [dict(n) for n in td_admin_generated_carrier]
+        for index, node in enumerate(action_type_shape_mutated_nodes):
+            if node.get("nodeId") == "team_dashboard_admin_editor":
+                mutated = [dict(entry) for entry in node["runtimeInteractions"]]
+                # entry 0 (real openModal): actionType key removed entirely.
+                mutated[0] = {k: v for k, v in mutated[0].items() if k != "actionType"}
+                # entry 1 (real closeModal): trigger set to a non-string, truthy value.
+                mutated[1] = {**mutated[1], "trigger": 12345}
+                action_type_shape_mutated_nodes[index] = {**node, "runtimeInteractions": mutated}
+            elif node.get("nodeId") == "team_dashboard_admin_save_confirm_modal":
+                mutated = [dict(entry) for entry in node["runtimeInteractions"]]
+                # entry 0 (real closeModal): actionType set to a non-string, truthy value.
+                mutated[0] = {**mutated[0], "actionType": 42}
+                # entry 1 (real closeModal): targetNodeId set to a non-string, truthy value --
+                # actionType stays the real "closeModal" so this entry remains disclosure-
+                # classified and missing_target_node_id's own check actually runs.
+                mutated[1] = {**mutated[1], "targetNodeId": True}
+                action_type_shape_mutated_nodes[index] = {**node, "runtimeInteractions": mutated}
+        action_type_shape_mutation_violations = schema_composed_layout_patch_json_shape_violations(
+            {"nodes": action_type_shape_mutated_nodes}, translator_impl, admin_runtime_dispatch_override_lane_def,
+        )
+        expect(
+            "156f. schema_composed_layout_patch_json_shape_violations actually DETECTS a runtimeInteractions[] entry missing actionType entirely, a non-string (truthy) actionType, a non-string (truthy) trigger, AND a non-string (truthy) targetNodeId -- each on an otherwise-real, already-clean team-dashboard-admin disclosure entry -- proving these fields are verified by real isinstance(str)+non-empty judgments (the SAME rule validate_runtime_interactions_boundary_equivalent already applies), not bare truthiness (which would silently accept a non-string-but-truthy value) and not silently skipped when actionType itself is absent or malformed",
+            sum(
+                1
+                for needle in (
+                    "is missing a non-empty string actionType (found None)",
+                    "is missing a non-empty string actionType (found 42)",
+                    "is missing a non-empty trigger",
+                    "is missing a non-empty targetNodeId",
+                )
+                if any(needle in v for v in action_type_shape_mutation_violations)
+            ) == 4,
+        )
+
+        # 156g (schema-composed proof-chain continuity round 4, 2026-09-07): NEGATIVE proof that
+        # an UNHASHABLE (dict/list) actionType -- not merely a hashable wrong-type one like the
+        # int 156f already covers -- is reported via missing_or_invalid_action_type, never
+        # propagated as a raw TypeError. Before this round, runtime_interaction_candidate_shape_
+        # facts computed `action_type in DISCLOSURE_ACTION_TYPES` (a set-membership test, which
+        # requires its operand to be hashable) BEFORE checking whether action_type was even a
+        # string at all -- a dict/list actionType raised TypeError: unhashable type at that line,
+        # never reaching this function's own explicit, non-raising fail-close contract. Uses
+        # team-dashboard-admin's own 2 real openModal/closeModal entries on the editor Section,
+        # each mutated with exactly one unhashable actionType (a dict, then a list) -- both other
+        # fields left otherwise real/clean.
+        unhashable_action_type_mutated_nodes = [dict(n) for n in td_admin_generated_carrier]
+        for index, node in enumerate(unhashable_action_type_mutated_nodes):
+            if node.get("nodeId") == "team_dashboard_admin_editor":
+                mutated = [dict(entry) for entry in node["runtimeInteractions"]]
+                mutated[0] = {**mutated[0], "actionType": {"malformed": "dict-typed actionType"}}
+                mutated[1] = {**mutated[1], "actionType": ["malformed", "list-typed", "actionType"]}
+                unhashable_action_type_mutated_nodes[index] = {**node, "runtimeInteractions": mutated}
+        unhashable_action_type_violations = None
+        unhashable_action_type_raised = None
+        try:
+            unhashable_action_type_violations = schema_composed_layout_patch_json_shape_violations(
+                {"nodes": unhashable_action_type_mutated_nodes}, translator_impl, admin_runtime_dispatch_override_lane_def,
+            )
+        except Exception as exc:  # noqa: BLE001 - the check below asserts this branch is NEVER taken
+            unhashable_action_type_raised = exc
+        expect(
+            "156g. schema_composed_layout_patch_json_shape_violations does NOT raise (returns a violation list) when a runtimeInteractions[] entry's actionType is itself an UNHASHABLE value (dict or list) -- proving the evaluation-order fix (non-empty-string check before any set-membership test) actually closes the TypeError path a hashable-only wrong-type mutation (156f's int case) could never have exercised, and that both the dict-typed and list-typed mutated entries are reported via missing_or_invalid_action_type, not silently dropped",
+            unhashable_action_type_raised is None
+            and unhashable_action_type_violations is not None
+            and sum(1 for v in unhashable_action_type_violations if "is missing a non-empty string actionType" in v) >= 2,
+        )
+
+        # 157-158 (SSOT self-consistency + schema-composed carrier proof closure round,
+        # 2026-09-07): fail-close proof for build_component_kind_to_component_key_pairs_fail_close
+        # -- the shared duplicate-detection core BOTH catalog-authority extraction functions
+        # (frontend catalog identity axis, checks 148-149; registry-bootstrap registration-
+        # evidence axis, checks 150-151) now use, so a genuine future conflict in either real
+        # source file (the SAME componentKind mapping to two DIFFERENT componentKeys) can never be
+        # silently resolved by picking whichever pair happens to appear last, for either axis.
+        duplicate_detection_positive_control_error = None
+        try:
+            build_component_kind_to_component_key_pairs_fail_close(
+                [("key.a", "kind/one"), ("key.b", "kind/two")], source_label="<positive control>",
+            )
+        except AssertionError as exc:
+            duplicate_detection_positive_control_error = str(exc)
+        expect(
+            "157. build_component_kind_to_component_key_pairs_fail_close positive control: two DISTINCT componentKinds, each with their own single componentKey, raise no error at all -- proves 158's failure below is caused by the deliberately-injected genuine conflict, not by this function rejecting every input unconditionally",
+            duplicate_detection_positive_control_error is None,
+        )
+
+        duplicate_detection_negative_control_error = None
+        try:
+            build_component_kind_to_component_key_pairs_fail_close(
+                [("key.a", "kind/conflicting"), ("key.b", "kind/conflicting")], source_label="<negative control>",
+            )
+        except AssertionError as exc:
+            duplicate_detection_negative_control_error = str(exc)
+        expect(
+            "158. build_component_kind_to_component_key_pairs_fail_close actually DETECTS (raises AssertionError for) a deliberately-injected genuine conflict -- the SAME componentKind ('kind/conflicting') mapped to two DIFFERENT componentKeys -- rather than silently letting the later pair overwrite the earlier one, proving BOTH catalog-authority extraction functions that share this core are fail-close against this class of source-data ambiguity, not only against the already-known 'ui_ux/primitive' placeholder exception",
+            duplicate_detection_negative_control_error is not None
+            and "kind/conflicting" in duplicate_detection_negative_control_error,
         )
 
     print()

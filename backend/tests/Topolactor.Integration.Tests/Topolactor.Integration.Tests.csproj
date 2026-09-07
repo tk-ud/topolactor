@@ -30,6 +30,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="../Shared/*.cs" Link="Shared/%(Filename)%(Extension)" />
     <Compile Include="../../schema/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../service/AuthService.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../service/JwtTokenIssuer.cs" Link="RuntimeSource/%(Filename)%(Extension)" />

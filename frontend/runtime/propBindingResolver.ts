@@ -358,7 +358,24 @@ export function resolvePropBindings(
 
     if (!Array.isArray(resolved)) {
       if (acceptsNonArrayResolvedValue(componentKind, propName)) {
+        const existingData = props.data;
         props[propName] = resolved;
+        // Same mirror-into-props.data rule as the array branch below (textareaTemplateFactory /
+        // searchInputFactory read their own value from props.data.value, not top-level
+        // props.value — without this, a scalar propBindings.value resolution is silently
+        // shadowed by defaultProps' own stale data.value, e.g. "" from the preview-placeholder
+        // default). Skipped when propName is itself "data" (data_display/json and the
+        // aggregation/hub-statistics panels' own full-object "data" target) — the assignment
+        // above already replaced props.data directly; mirroring again here would wrap the just-
+        // assigned value a second time under its own "data" key. Never mutates the pre-existing
+        // props.data reference.
+        if (
+          propName !== "data" &&
+          typeof existingData === "object" && existingData !== null &&
+          !Array.isArray(existingData)
+        ) {
+          props.data = { ...(existingData as Record<string, unknown>), [propName]: resolved };
+        }
         continue;
       }
       return {

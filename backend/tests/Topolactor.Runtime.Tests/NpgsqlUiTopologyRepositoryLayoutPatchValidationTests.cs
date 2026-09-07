@@ -1742,6 +1742,113 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
         Assert.True(result.Valid);
     }
 
+    // ── SSOT catalog/registry authority boundary + schema-composed carrier save-validation
+    // closure round (2026-09-07): positive/negative proof pair for
+    // LayoutSchemaTensorComposer.ResolveCarrierEligibleNodeIdsInSchemaTree's own narrowed
+    // exemption boundary. The exemption above (SchemaComposedSearchFieldNodeId) proves a real
+    // CATALOG LEAF is exempt; these prove the WIDER "structural/Modal carrier" exemption is
+    // scoped to only the record types react_schema_topology_seed_translator.py's own
+    // VALID_ACTION_OWNER_NODE_KINDS/SECTION_OWNABLE_ACTION_LANES authoring-legality gate allows
+    // to legally own an Action/interaction (Form, Workflow, Section, Modal) — never every
+    // identity merely because it exists somewhere in the same schema tree. Neither this fixture
+    // nor these tests existed before this round: the exemption itself (team-dashboard-physical-
+    // layout-adoption round) shipped with a live-DB integration proof for its Section/Modal
+    // POSITIVE case only (TeamDashboardHubRelationUiProjectionLiveDbTests.cs), never an isolated
+    // unit-level proof here, and never a NEGATIVE proof anywhere that Category/Validation/
+    // unresolved_gap are correctly excluded. ──────────────────────────────
+
+    private const string SchemaComposedLegalSectionCarrierNodeId = "schema_legal_section_carrier";
+    private const string SchemaComposedLegalModalCarrierNodeId = "schema_legal_modal_carrier";
+    private const string SchemaComposedIllegalCategoryCarrierNodeId = "schema_illegal_category_carrier";
+    private const string SchemaComposedIllegalValidationCarrierNodeId = "schema_illegal_validation_carrier";
+    private const string SchemaComposedIllegalUnresolvedCarrierNodeId = "schema_illegal_unresolved_carrier";
+
+    // Five flat, parentless records — one per record type under test. Structural/Modal/Unresolved
+    // record_common_required_fields (LayoutSchemaTensorComposer.ParseRecords) satisfied for each:
+    // every record needs its own non-empty recordType/key and a knownGapRefs array; Modal
+    // additionally needs its own literal componentKind; Unresolved additionally needs a non-empty
+    // knownGapRefs array. None of these five needs a parent chain to prove this exemption boundary
+    // — ResolveCarrierEligibleNodeIdsInSchemaTree classifies purely by each record's own
+    // RecordType, independent of nesting.
+    private const string SchemaComposedCarrierEligibilityRecordsJson = $$$"""
+        {"records":[
+          {"type":"topology_ui_seed_record","seedKey":"test.carrier.eligibility","parentKey":null,
+           "record":{"recordType":"topology_ui_section","key":"{{{SchemaComposedLegalSectionCarrierNodeId}}}",
+             "label":"Legal section carrier","sourceYamlRefs":["test-ssot.yaml#x"],
+             "sourceReactPath":"$.root.children[0]","knownGapRefs":[]}},
+          {"type":"topology_ui_seed_record","seedKey":"test.carrier.eligibility","parentKey":null,
+           "record":{"recordType":"topology_ui_modal","key":"{{{SchemaComposedLegalModalCarrierNodeId}}}",
+             "label":"Legal modal carrier","sourceYamlRefs":["test-ssot.yaml#x"],
+             "sourceReactPath":"$.root.children[1]","knownGapRefs":[],"componentKind":"disclosure/modal"}},
+          {"type":"topology_ui_seed_record","seedKey":"test.carrier.eligibility","parentKey":null,
+           "record":{"recordType":"topology_ui_category","key":"{{{SchemaComposedIllegalCategoryCarrierNodeId}}}",
+             "label":"Illegal category carrier","sourceYamlRefs":["test-ssot.yaml#x"],
+             "sourceReactPath":"$.root.children[2]","knownGapRefs":[]}},
+          {"type":"topology_ui_seed_record","seedKey":"test.carrier.eligibility","parentKey":null,
+           "record":{"recordType":"topology_ui_validation","key":"{{{SchemaComposedIllegalValidationCarrierNodeId}}}",
+             "label":"Illegal validation carrier","sourceYamlRefs":["test-ssot.yaml#x"],
+             "sourceReactPath":"$.root.children[3]","knownGapRefs":[]}},
+          {"type":"topology_ui_seed_record","seedKey":"test.carrier.eligibility","parentKey":null,
+           "record":{"recordType":"topology_ui_unresolved","key":"{{{SchemaComposedIllegalUnresolvedCarrierNodeId}}}",
+             "label":"Illegal unresolved carrier","sourceYamlRefs":["test-ssot.yaml#x"],
+             "sourceReactPath":"$.root.children[4]","knownGapRefs":["test-gap-ref"]}}
+        ]}
+        """;
+
+    [Theory]
+    [InlineData(SchemaComposedLegalSectionCarrierNodeId)]
+    [InlineData(SchemaComposedLegalModalCarrierNodeId)]
+    public async Task ValidateLayoutPatchAsync_SchemaComposedLegalCarrierNode_MissingComponentKey_ExemptFromCatalogComponentKeyRequired(string nodeId)
+    {
+        // POSITIVE proof: a Section or Modal acting purely as an interaction carrier for its own
+        // owned children is a legal Action/interaction owner
+        // (VALID_ACTION_OWNER_NODE_KINDS/SECTION_OWNABLE_ACTION_LANES) and must stay exempt from
+        // LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED — this is the SAME shape Team Dashboard's
+        // own dd015/dd025 (team_dashboard_admin_editor Section, team_dashboard_admin_save_confirm_
+        // modal Modal) and admin-enum's own ae206 (enum_dictionary_roster Section) already rely on
+        // in production.
+        var repo = new SchemaComposedTestRepository("admin_runtime", SchemaComposedCarrierEligibilityRecordsJson, FullyAuthorizedManifest);
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "{{nodeId}}", "nodeKind": "catalog_component" }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok, result.Message);
+        Assert.True(result.Valid);
+    }
+
+    [Theory]
+    [InlineData(SchemaComposedIllegalCategoryCarrierNodeId)]
+    [InlineData(SchemaComposedIllegalValidationCarrierNodeId)]
+    [InlineData(SchemaComposedIllegalUnresolvedCarrierNodeId)]
+    public async Task ValidateLayoutPatchAsync_SchemaComposedIllegalCarrierNode_MissingComponentKey_StillFailsClose(string nodeId)
+    {
+        // NEGATIVE proof: Category and Validation are structural but NEVER a legal Action owner
+        // under any wiringLane (react_schema_topology_seed_translator.py's own
+        // VALID_ACTION_OWNER_NODE_KINDS/SECTION_OWNABLE_ACTION_LANES authoring-legality gate), and
+        // unresolved_gap is never a normal carrier, catalog component, or structural node of any
+        // kind. All three exist as real identities in the SAME schema tree as the legal carriers
+        // above, yet a raw tensor node claiming one of their identities with no componentKey of
+        // its own must still fail exactly as an unrecognized node would — proving the exemption
+        // is scoped to carrier-ELIGIBLE identities, never every identity merely because it is
+        // present somewhere in the tree.
+        var repo = new SchemaComposedTestRepository("admin_runtime", SchemaComposedCarrierEligibilityRecordsJson, FullyAuthorizedManifest);
+        var tensorPatchJson = $$"""
+        { "nodes": [
+          { "nodeId": "{{nodeId}}", "nodeKind": "catalog_component" }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED", result.Message);
+    }
+
     [Fact]
     public async Task ValidateLayoutPatchAsync_TensorOnlyNode_MissingComponentKey_NotInSchemaTree_StillFailsClose()
     {

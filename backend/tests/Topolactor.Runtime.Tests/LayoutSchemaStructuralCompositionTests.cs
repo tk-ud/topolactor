@@ -1,7 +1,7 @@
-using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Topolactor.Repository;
 using Topolactor.Schema;
+using Topolactor.Tests.Shared;
 using Xunit;
 
 namespace Topolactor.Runtime.Tests;
@@ -18,8 +18,10 @@ namespace Topolactor.Runtime.Tests;
 ///   dictionaries (never invented, never left as a silent fallback).
 /// - Unresolved record types become "unresolved_gap" entries that always carry their authored
 ///   knownGapRefs and never resolve to a componentId/componentKind.
-/// - Tensor nodes' runtimeInteractions (keyed by sourceActionKey per entry, at the FORM level) are
-///   merged onto the matching catalog_component leaf by leaf key == sourceActionKey.
+/// - Tensor nodes' runtimeInteractions (keyed by sourceActionKey per entry, at the resolved
+///   OWNING STRUCTURAL PARENT's own tensor NodeId -- Form, Workflow, Modal, or a lane/pairing-
+///   eligible Section; never restricted to Form) are merged onto the matching catalog_component
+///   leaf by leaf key == sourceActionKey.
 /// - NodeId collisions (the same authored key reused in two branches — a real authoring
 ///   possibility, since a record's key is only guaranteed unique within its own branch) are
 ///   disambiguated by parent-scoping rather than silently colliding.
@@ -48,18 +50,6 @@ public class LayoutSchemaStructuralCompositionTests
         var result = LayoutSchemaTensorComposer.ParseRecords(json);
         var valid = Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Valid>(result);
         return valid.Rows;
-    }
-
-    private static string RepoRoot([CallerFilePath] string sourceFile = "")
-    {
-        var fromSource = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(sourceFile)!, "..", "..", ".."));
-        if (File.Exists(Path.Combine(fromSource, "db", "seed_empty.sql"))) return fromSource;
-        var cwd = Directory.GetCurrentDirectory();
-        if (File.Exists(Path.Combine(cwd, "db", "seed_empty.sql"))) return cwd;
-        var dir = AppContext.BaseDirectory;
-        while (dir is not null && !File.Exists(Path.Combine(dir, "db", "seed_empty.sql")))
-            dir = Directory.GetParent(dir)?.FullName;
-        return dir ?? throw new InvalidOperationException("repo root not found");
     }
 
     [Fact]
@@ -1421,14 +1411,14 @@ public class LayoutSchemaStructuralCompositionTests
         // NpgsqlTopologyRepository.LoadLayoutNodesAsync resolves for manifest 092 at dispatch
         // time) that the credential-management category-collapse seed edit is syntactically and
         // semantically valid through the SAME ParseRecords/Compose path production uses.
-        var sqlPath = Path.Combine(RepoRoot(), "db", "seed_empty.sql");
+        var sqlPath = Path.Combine(SqlSeedLiteralTestSupport.RepoRoot(), "db", "seed_empty.sql");
         var sql = File.ReadAllText(sqlPath);
         var marker = "'00000000-0000-0000-0000-0000000cd002'";
         var idx = sql.IndexOf(marker, StringComparison.Ordinal);
         Assert.True(idx >= 0, "manifest 092 layout row (cd002) not found in db/seed_empty.sql");
         var litStart = sql.IndexOf("'{\"records\":", idx, StringComparison.Ordinal);
         Assert.True(litStart >= 0, "cd002 layout_schema_json literal not found");
-        var json = ExtractSqlJsonLiteral(sql, litStart);
+        var json = SqlSeedLiteralTestSupport.ExtractSqlJsonLiteral(sql, litStart);
 
         var parseResult = LayoutSchemaTensorComposer.ParseRecords(json);
         var valid = Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Valid>(parseResult);
@@ -1502,14 +1492,14 @@ public class LayoutSchemaStructuralCompositionTests
         // (frontend/components/Tabs.tsx TabItem/TabsProps) rather than select.template's
         // {data:{value,options[{label,value}]}} -- items[].key is still the SAME canonical
         // CredentialManagementCategories.All value, unrenamed.
-        var sqlPath = Path.Combine(RepoRoot(), "db", "seed_empty.sql");
+        var sqlPath = Path.Combine(SqlSeedLiteralTestSupport.RepoRoot(), "db", "seed_empty.sql");
         var sql = File.ReadAllText(sqlPath);
         var marker = "'00000000-0000-0000-0000-0000000cd004'";
         var idx = sql.IndexOf(marker, StringComparison.Ordinal);
         Assert.True(idx >= 0, "manifest 092 tensor row (cd004) not found in db/seed_empty.sql");
         var litStart = sql.IndexOf("'{\"nodes\":", idx, StringComparison.Ordinal);
         Assert.True(litStart >= 0, "cd004 layout_patch_json literal not found");
-        var json = ExtractSqlJsonLiteral(sql, litStart);
+        var json = SqlSeedLiteralTestSupport.ExtractSqlJsonLiteral(sql, litStart);
 
         using var doc = JsonDocument.Parse(json);
         var nodes = doc.RootElement.GetProperty("nodes").EnumerateArray().ToList();
@@ -1626,35 +1616,217 @@ public class LayoutSchemaStructuralCompositionTests
     }
 
     /// <summary>
-    /// Extracts a single-quoted (SQL-escaped, '' for embedded ') JSON object literal starting at
-    /// the opening quote's position, by brace-depth counting over the un-escaped content — mirrors
-    /// how psql itself would de-escape the literal before Postgres ever parses it as jsonb.
+    /// Independently resolves every REAL (component_kind -&gt; component_key) pair straight from
+    /// db/ui_component_registry_preset_catalog_bootstrap.sql (generic UI-Builder physical
+    /// conversion round).
+    ///
+    /// CORRECTED (SSOT catalog/registry authority boundary closure round, 2026-09-07): this
+    /// bootstrap SQL seeds topology.ui_component_registry, whose role per
+    /// docs/design/db-schema.yaml is promoted_component_registry -- REGISTRATION/PROMOTION
+    /// evidence (has this componentKey actually been promoted into the live registry a runtime
+    /// componentId resolution reads from), never the componentKind&lt;-&gt;componentKey IDENTITY
+    /// authority itself. This file's own docstring here (and its own three
+    /// *_MatchesRealUiComponentRegistryBootstrapRow facts) previously named this bootstrap file
+    /// "the canonical... component identity authority" and verified
+    /// FieldControlToComponentKey/ActionComponentKey/TableDisplayToComponentKey against it alone
+    /// -- conflating registration evidence with identity authority, exactly what
+    /// ui_catalog_boundary_contract.catalogs.db_component_registry_registration_evidence
+    /// (react-schema-topology-seed-translator-ssot.yaml) now names and prohibits. This method's
+    /// own return value is still useful and still used below -- as REGISTRATION EVIDENCE ONLY
+    /// (see ExtractComponentKindToComponentKeyFromFrontendCatalog below for the actual
+    /// identity-authority extraction).
     /// </summary>
-    private static string ExtractSqlJsonLiteral(string sql, int quoteStart)
+    private static IReadOnlyDictionary<string, string> ExtractComponentKindToComponentKeyFromRegistryBootstrap()
     {
-        var i = quoteStart + 1; // past opening '
-        var sb = new System.Text.StringBuilder();
-        var depth = 0;
-        var started = false;
-        while (i < sql.Length)
+        var sqlPath = Path.Combine(SqlSeedLiteralTestSupport.RepoRoot(), "db", "ui_component_registry_preset_catalog_bootstrap.sql");
+        var sql = File.ReadAllText(sqlPath);
+        var marker = "INSERT INTO topology.ui_component_registry";
+        var idx = sql.IndexOf(marker, StringComparison.Ordinal);
+        Assert.True(idx >= 0, $"{sqlPath}: no INSERT INTO topology.ui_component_registry found");
+        var end = sql.IndexOf("ON CONFLICT", idx, StringComparison.Ordinal);
+        var section = end >= 0 ? sql[idx..end] : sql[idx..];
+        var rowPattern = new System.Text.RegularExpressions.Regex(
+            @"\('[0-9a-fA-F-]+',\s*'([^']+)',\s*'([^']+)',\s*'[^']*',\s*'[^']*'\)");
+        var rawPairs = rowPattern.Matches(section)
+            .Select(m => (ComponentKey: m.Groups[1].Value, ComponentKind: m.Groups[2].Value));
+        var pairs = BuildComponentKindToComponentKeyPairsFailClose(rawPairs, sqlPath);
+        Assert.True(pairs.Count > 0, $"{sqlPath}: matched zero (component_key, component_kind) rows -- extraction regex likely stale against this file's own current format");
+        return pairs;
+    }
+
+    /// <summary>
+    /// SSOT self-consistency + schema-composed carrier proof closure round (2026-09-07): shared
+    /// fail-close duplicate-detection core for BOTH ExtractComponentKindToComponentKeyFromRegistry
+    /// Bootstrap above and ExtractComponentKindToComponentKeyFromFrontendCatalog below (never a
+    /// second, independently re-implemented duplicate-handling policy for the two, and mirroring
+    /// check_react_schema_topology_seed_translator.py's own
+    /// build_component_kind_to_component_key_pairs_fail_close on the Python side) -- throws the
+    /// moment the SAME componentKind maps to two DIFFERENT componentKeys across rawPairs, rather
+    /// than silently letting whichever pair appears last in source order win via plain dictionary
+    /// indexer overwrite.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> BuildComponentKindToComponentKeyPairsFailClose(
+        IEnumerable<(string ComponentKey, string ComponentKind)> rawPairs, string sourceLabel)
+    {
+        var pairs = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (componentKey, componentKind) in rawPairs)
         {
-            var ch = sql[i];
-            if (ch == '\'' && i + 1 < sql.Length && sql[i + 1] == '\'')
+            if (pairs.TryGetValue(componentKind, out var existingKey) && existingKey != componentKey)
             {
-                sb.Append('\'');
-                i += 2;
-                continue;
+                throw new InvalidOperationException(
+                    $"{sourceLabel}: componentKind '{componentKind}' maps to two DIFFERENT componentKeys " +
+                    $"('{existingKey}' and '{componentKey}') -- ambiguous source data, never silently " +
+                    "resolved by picking whichever pair appears last.");
             }
-            if (ch == '\'')
-            {
-                break; // real closing quote
-            }
-            if (ch == '{') { depth++; started = true; }
-            else if (ch == '}') depth--;
-            sb.Append(ch);
-            i++;
-            if (started && depth == 0) break;
+            pairs[componentKind] = componentKey;
         }
-        return sb.ToString();
+        return pairs;
+    }
+
+    /// <summary>
+    /// Resolves every REAL (componentKind -&gt; componentKey) pair straight from
+    /// frontend/components/catalog.ts (SSOT catalog/registry authority boundary closure round,
+    /// 2026-09-07) -- the actual componentKind&lt;-&gt;componentKey IDENTITY authority per
+    /// react-schema-topology-seed-translator-ssot.yaml
+    /// ui_catalog_boundary_contract.catalogs.frontend_component_catalog.source_of_truth. Reuses
+    /// the existing SsotYamlContractReader.ReadDoc helper (already used by
+    /// SsotWiringAuditComponentRegistrationTests.cs to read this same file) rather than adding a
+    /// new file-reading helper. Generically parsed (every `componentKey: "..."` in this file is
+    /// immediately followed by its own `componentKind: "..."` on the next line) -- never a
+    /// second, independently hand-typed mirror of these pairs. "ui_ux/primitive" is excluded: it
+    /// is UI_UX_PRIMITIVE_CATALOG_DEFINITION_ENTRIES' own shared placeholder componentKind for
+    /// many distinct catalog-only-lineup primitives (none of them runtimeConnected, none of them
+    /// ever looked up by FieldControlToComponentKey/ActionComponentKey/TableDisplayToComponentKey
+    /// below), ambiguous by design rather than a real resolvable 1:1 pair.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> ExtractComponentKindToComponentKeyFromFrontendCatalog()
+    {
+        var catalogPath = "frontend/components/catalog.ts";
+        var ts = SsotYamlContractReader.ReadDoc(catalogPath);
+        var pairPattern = new System.Text.RegularExpressions.Regex(
+            "componentKey:\\s*\"([^\"]+)\",\\s*\\n\\s*componentKind:\\s*\"([^\"]+)\"");
+        var rawPairs = pairPattern.Matches(ts)
+            .Select(m => (ComponentKey: m.Groups[1].Value, ComponentKind: m.Groups[2].Value))
+            .Where(p => p.ComponentKind != "ui_ux/primitive");
+        var pairs = BuildComponentKindToComponentKeyPairsFailClose(rawPairs, catalogPath);
+        Assert.True(pairs.Count > 0, $"{catalogPath}: matched zero (componentKey, componentKind) pairs -- extraction regex likely stale against this file's own current format");
+        return pairs;
+    }
+
+    /// <summary>
+    /// Component identity (componentKind -&gt; componentKey) verification against the actual
+    /// identity authority, frontend/components/catalog.ts (SSOT catalog/registry authority
+    /// boundary closure round, 2026-09-07 -- corrects this fact's prior round, which verified
+    /// against db/ui_component_registry_preset_catalog_bootstrap.sql alone; see
+    /// ExtractComponentKindToComponentKeyFromRegistryBootstrap's own updated docstring above for
+    /// why that was the wrong axis for this proof). VERIFIES FieldControlToComponentKey stays a
+    /// correct subset of catalog.ts's own real componentKey/componentKind pairs, rather than
+    /// trusting this hand-typed C# literal never to drift from the Python translator's own
+    /// independently-maintained mirror of the SAME real data. Never a new identity authority and
+    /// never a change to the hand-typed table itself (kept, per
+    /// field_control_component_identity_contract, because C# cannot import a Python module or a
+    /// live DB row at generation time across languages -- a permanent cross-check like this one
+    /// is the generic, sustainable substitute for literal code sharing).
+    /// </summary>
+    [Fact]
+    public void FieldControlToComponentKey_EveryEntryMatchesRealFrontendComponentCatalogEntry()
+    {
+        var realCatalogPairs = ExtractComponentKindToComponentKeyFromFrontendCatalog();
+        var mismatches = LayoutSchemaTensorComposer.FieldControlToComponentKey
+            .Where(kv => !realCatalogPairs.TryGetValue(kv.Key, out var realKey) || realKey != kv.Value)
+            .ToList();
+        Assert.Empty(mismatches);
+    }
+
+    /// <summary>
+    /// Same discipline as FieldControlToComponentKey above, for the Action/WorkflowStep shared
+    /// button primitive convention constant.
+    /// </summary>
+    [Fact]
+    public void ActionComponentKey_MatchesRealFrontendComponentCatalogEntry()
+    {
+        var realCatalogPairs = ExtractComponentKindToComponentKeyFromFrontendCatalog();
+        Assert.True(realCatalogPairs.TryGetValue("action/button", out var realKey), "action/button pair not found in frontend/components/catalog.ts");
+        Assert.Equal(LayoutSchemaTensorComposer.ActionComponentKey, realKey);
+    }
+
+    /// <summary>
+    /// Same discipline as FieldControlToComponentKey/ActionComponentKey above, for the Table
+    /// display convention table -- but TableDisplayToComponentKey's KEYS are "display" values
+    /// (card_list/data_grid/list/table), not componentKind strings, so the correspondence to a
+    /// real catalog pair is checked by SUFFIX (the componentKind's segment after its family/
+    /// prefix) rather than by direct key lookup, e.g. "table" -&gt; "table.primitive" here
+    /// corresponds to the real "data_display/table" -&gt; "table.primitive" catalog pair.
+    /// </summary>
+    [Fact]
+    public void TableDisplayToComponentKey_EveryEntryMatchesRealFrontendComponentCatalogEntryBySuffix()
+    {
+        var realCatalogPairs = ExtractComponentKindToComponentKeyFromFrontendCatalog();
+        foreach (var (display, componentKey) in LayoutSchemaTensorComposer.TableDisplayToComponentKey)
+        {
+            var match = realCatalogPairs.FirstOrDefault(kv =>
+                kv.Value == componentKey && kv.Key.EndsWith("/" + display, StringComparison.Ordinal));
+            Assert.True(
+                match.Key != null,
+                $"no real frontend catalog pair found whose componentKind ends with '/{display}' and componentKey == '{componentKey}'");
+        }
+    }
+
+    /// <summary>
+    /// SEPARATE, ADDITIONAL registration-evidence axis (SSOT catalog/registry authority boundary
+    /// closure round, 2026-09-07) -- never a substitute for the identity-correctness facts above.
+    /// Proves every componentKey these three convention tables resolve to is ALSO present as a
+    /// real, already-registered row's component_key in db/ui_component_registry_preset_catalog_
+    /// bootstrap.sql's own topology.ui_component_registry seed (db-schema.yaml:
+    /// promoted_component_registry), i.e. actually promoted/reachable for runtime componentId
+    /// resolution, not merely a correct catalog identity in the abstract.
+    /// </summary>
+    [Fact]
+    public void ConventionTableComponentKeys_AreAllRegisteredInUiComponentRegistryBootstrap()
+    {
+        var realRegistryComponentKeys = new HashSet<string>(
+            ExtractComponentKindToComponentKeyFromRegistryBootstrap().Values, StringComparer.Ordinal);
+        var usedComponentKeys = LayoutSchemaTensorComposer.FieldControlToComponentKey.Values
+            .Concat(LayoutSchemaTensorComposer.TableDisplayToComponentKey.Values)
+            .Append(LayoutSchemaTensorComposer.ActionComponentKey)
+            .Distinct(StringComparer.Ordinal);
+        var unregistered = usedComponentKeys.Where(key => !realRegistryComponentKeys.Contains(key)).ToList();
+        Assert.Empty(unregistered);
+    }
+
+    /// <summary>
+    /// Positive control for BuildComponentKindToComponentKeyPairsFailClose (SSOT self-consistency
+    /// + schema-composed carrier proof closure round, 2026-09-07): two DISTINCT componentKinds,
+    /// each with their own single componentKey, raise nothing at all -- proves the negative test
+    /// below fails BECAUSE of the deliberately-injected genuine conflict, not because this helper
+    /// rejects every input unconditionally.
+    /// </summary>
+    [Fact]
+    public void BuildComponentKindToComponentKeyPairsFailClose_DistinctKinds_RaisesNothing()
+    {
+        var pairs = BuildComponentKindToComponentKeyPairsFailClose(
+            [("key.a", "kind/one"), ("key.b", "kind/two")], "<positive control>");
+        Assert.Equal(2, pairs.Count);
+    }
+
+    /// <summary>
+    /// NEGATIVE, fail-close proof (SSOT self-consistency + schema-composed carrier proof closure
+    /// round, 2026-09-07): BuildComponentKindToComponentKeyPairsFailClose actually THROWS for a
+    /// deliberately-injected genuine conflict -- the SAME componentKind mapped to two DIFFERENT
+    /// componentKeys -- rather than silently letting the later pair overwrite the earlier one via
+    /// plain dictionary-indexer assignment. Proves both
+    /// ExtractComponentKindToComponentKeyFromRegistryBootstrap and
+    /// ExtractComponentKindToComponentKeyFromFrontendCatalog, which share this core, are fail-close
+    /// against this class of source-data ambiguity, not only against the already-known
+    /// "ui_ux/primitive" placeholder exception (excluded upstream of this helper, never rediscovered
+    /// as a conflict here).
+    /// </summary>
+    [Fact]
+    public void BuildComponentKindToComponentKeyPairsFailClose_ConflictingKind_Throws()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            BuildComponentKindToComponentKeyPairsFailClose(
+                [("key.a", "kind/conflicting"), ("key.b", "kind/conflicting")], "<negative control>"));
+        Assert.Contains("kind/conflicting", ex.Message);
     }
 }
