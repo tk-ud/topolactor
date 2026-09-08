@@ -669,6 +669,85 @@ admin_normal_surface_projection_seed_ssot:
               - multiple_active_target_manifests_for_related_hub_id
               - target_manifest_deprecated
               - first_match_oldest_or_implicit_surface_fallback_required
+            relation_display_label_contract:
+              status: design_change
+              note: >-
+                docs/design/db-schema.yaml db_schema.tables.hub_relations.key_columns now carries
+                an optional, nullable hubs.hub_relations.name column: this relation row's own
+                user-facing display name (relation-self, not the related hub's identity). This
+                contract defines the effective label this surface renders. name is
+                presentation-only and additive — it is NOT added to
+                selected_link_payload_required above, which stays
+                [hub_relation_id, topology_manifest_id, related_hub_id].
+              effective_label_priority:
+                - hubs.hub_relations.name, when non-null/non-empty, is the rendered relation label.
+                - >-
+                  When name is null/empty, the rendered label falls back to a
+                  sequence_position-derived default ("Hub 1" / "Hub 2" / "Hub 3", 1-indexed by
+                  ordinal position among the parent manifest's active sibling hub_relations rows)
+                  computed at read/projection time only — never persisted to
+                  hubs.hub_relations.name or any other column, so a name-less relation's
+                  displayed default tracks sequence_position after hub_navigation:reorder without
+                  any write to name.
+              prohibited_fallback_authorities: >-
+                topology.relation_registry.name (names the related hub's own abstract identity,
+                not this edge — see docs/design/db-schema.yaml
+                meaning_collision_guardrails.hubs_hub_relations_name_vs_relation_registry_name;
+                today's HubNavigationSequenceItem.relatedHubLabel /
+                HubNavigationHubRelationItemDto.RelatedHubLabel derive from
+                COALESCE(rr.name, hr.related_hub_id::text) in
+                NpgsqlContentBundleRepository.ListHubRelationsByManifestAsync and
+                LoadHubNavigationSequenceAsync — a future implementation_change closing this
+                design_change extends that COALESCE chain to prefer hr.name first, e.g.
+                COALESCE(hr.name, rr.name, hr.related_hub_id::text), rather than leaving
+                relation_registry.name as the normal fallback once hr.name exists), the raw
+                related_hub_id UUID, the target hubs.topology_manifests UUID, and any manifestKey
+                string — none of these are normal user-facing fallback authorities for this
+                relation's own label.
+              uniqueness_scope: >-
+                hubs.hub_relations.name is not globally unique. If a future
+                implementation_change adopts a duplicate-name prohibition, its boundary is active
+                (status='active') sibling hub_relations rows sharing the same
+                topology_manifest_id parent — never a cross-manifest/global uniqueness
+                constraint — and must exclude status='deprecated' rows from that scope
+                (deprecated rows are retained for audit per docs/design/db-schema.yaml
+                hub_relations.minimum_cardinality_completion_invariant and legacy_migration_ref,
+                and must remain independently nameable without being constrained by an
+                active-row uniqueness check).
+              not_an_identity_field: >-
+                name is never promoted to a runtime lookup key, dispatch identity, or target
+                resolution key; it changes none of hub_relation_id (row identity),
+                topology_manifest_id (parent/source context), related_hub_id (target
+                resolution), or sequence_position (navigation-order authority).
+              next_implementation_change_bundle_acceptance:
+                - >-
+                  SQL schema: hubs.hub_relations gains a nullable name text column
+                  (db/topology_tables.sql), no destructive DROP CASCADE, no new table or
+                  parallel authority.
+                - >-
+                  backend: hub_navigation:create / hub_navigation:update accept an optional
+                  name field; NpgsqlContentBundleRepository read paths
+                  (ListHubRelationsByManifestAsync, LoadHubNavigationSequenceAsync) resolve the
+                  effective label per effective_label_priority above (e.g.
+                  COALESCE(hr.name, rr.name, hr.related_hub_id::text)) without adding name to
+                  selected_link_payload_required or any other identity DTO field.
+                - >-
+                  Admin Manifests UI: HubNavigationAdmin.tsx (existing /admin/manifests
+                  authoring surface, no new route/editor) gains a name input on create/update
+                  and displays the resolved effective label (named or sequence-derived default)
+                  in its existing table; reorder continues to re-derive the default for
+                  name-less rows.
+                - >-
+                  runtime projection: NavigationSequence emission's rendered label
+                  (relatedHubLabel or its successor field) follows effective_label_priority;
+                  ProjectionShell/CardList rendering and frontend/runtime/projectionEntry.ts
+                  consume the resolved label without a second resolution path.
+                - >-
+                  live-DB/DOM proof: a hub_relations row authored with an explicit name renders
+                  that name; a name-less row renders its sequence_position-derived default;
+                  reordering a name-less row updates its rendered default to match the new
+                  sequence_position without any write to name; an explicitly named row's label
+                  persists unchanged across reorder of itself or its siblings.
           seed_contract:
             component_tree:
               - node_key: hub_relation_link_list

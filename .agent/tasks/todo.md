@@ -13,6 +13,7 @@
 | `test-orchestration-review` | Seed conversion後の proof / test orchestration review | not_started | 1 | proof surface carry-over | `docs/design/pipeline-continuity-ssot.yaml` |
 | `admin-console-workflow-step-wording-boundary` | Seed conversion後の admin console workflow wording boundary | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `ui-builder-schema-composed-override-delta-reachability` | schema-composed override-delta nodeがUI-Builder再オープン時に消失するnode-loss gap | not_started | 1 | 未割当（`frontend-canonical-surface-structure-label-boundary` PR#610 9ラウンド目監査からの新規発見、別scope） | `docs/design/runtime-orchestration-ssot.yaml` / `docs/design/react-schema-topology-seed-translator-ssot.yaml` |
+| `hub-relations-user-facing-name` | hubs.hub_relations に relation自身のuser-facing name authorityを追加する implementation_change | not_started | 1 | 未割当（design_change PRでSSOT契約のみ確定、実装は本Bundleの後段） | `docs/design/db-schema.yaml` / `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/admin-normal-surface-projection-seed-ssot.yaml` |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
 
@@ -406,3 +407,39 @@ PR #608での `credential_category_filter` の select→tabs.template presentati
 - [x] credential-management surfaceの全confirmation Modal(12ペア)について、実tab/preview button clickによるdryRun dispatch決着後、実際にModalがopenし、日本語title/body/Confirm/Cancelが表示され、実Cancel/Confirm clickで正しくclose・dispatchTargetRef/payloadFrom保持まで到達することを実DOM操作で証明した（文字列absenceのみの証明ではない）。
 
 Bundleの全受入条件を満たしたため、Status を `partial` → `implemented` として扱ってよい（次回 audit/レビューで確認されるまでは Roadmap bundle index からの削除・完全クローズはオーナー/監査役判断とする）。
+
+---
+
+## Bundle `hub-relations-user-facing-name`
+
+**Status:** `not_started`
+**Primary SSOT:** `docs/design/db-schema.yaml` `db_schema.tables.hub_relations.key_columns`（name欄）/ `docs/design/admin-console-workflow-ssot.yaml` `admin_hub_relation_navigation_contract.authoring.relation_name_authoring` / `docs/design/admin-normal-surface-projection-seed-ssot.yaml` `hub_relation_navigation_binding.relation_display_label_contract`
+**Position:** design_change 完了（本PR、SSOT契約確定のみ）の後段 implementation_change。SQL DDL / backend / frontend / seed / test実装はすべて未着手。
+
+### 問題点
+
+`hubs.hub_relations`（`hubs.hub -> hubs.topology_manifests -> hubs.hub_relations` 親子階層のnavigation sequence行）に、relation行自身のuser-facing name authorityが存在しなかった。productionの表示ラベル（`HubNavigationSequenceItem.relatedHubLabel`）は `topology.relation_registry.name`（related hubの抽象identity名）または `related_hub_id` UUIDへの `COALESCE` fallbackのみで構成されており、relation edge自身に固有の名前を付けられなかった。
+
+### 目的
+
+relation行自身に任意編集可能な`name`（nullable）を持たせ、未指定時のみ`sequence_position`由来のdefault（"Hub 1"/"Hub 2"/"Hub 3"相当、非永続・reorder追従）を表示するeffective label契約を実装する。
+
+### 本ラウンド（design_change）で確定したSSOT契約
+
+- `docs/design/db-schema.yaml`: `hub_relations.key_columns`に`name`（text, nullable, role: user_facing_relation_name）を追加し、`user_facing_name_contract`でsemantic role・effective label優先順位・prohibited fallback・uniqueness scope（active sibling under同一topology_manifest_id、deprecated行除外）・非identity境界を明示。`meaning_collision_guardrails`に`hubs_hub_relations_name_vs_relation_registry_name`を追加し、`relation_registry.name`（hub identity）との衝突境界を明示。`manifest_hub_chain.shape`ミラーにも`name`を反映。
+- `docs/design/admin-console-workflow-ssot.yaml`: `admin_hub_relation_navigation_contract.authoring`に`relation_name_authoring`を追加し、`hub_navigation:create`/`update`への追加optional fieldとして位置づけ、新規route/新規relation editorを設計しないことを明示。
+- `docs/design/admin-normal-surface-projection-seed-ssot.yaml`: `hub_relation_navigation_binding.relation_display_label_contract`を新設し、effective label優先順位・prohibited fallback authorities・uniqueness scope・非identity境界・次implementation_changeのBundle acceptance条件（SQL schema / backend / Admin Manifests UI / runtime projection / live-DB・DOM proof）を明示。`selected_link_payload_required`は`[hub_relation_id, topology_manifest_id, related_hub_id]`のまま変更していない。
+
+### 次段（implementation_change）の受入条件
+
+- [ ] SQL: `db/topology_tables.sql`の`hubs.hub_relations`へ`name text NULL`列を追加(destructive DROP CASCADE無し、bootstrap_policy維持)。
+- [ ] backend: `hub_navigation:create`/`hub_navigation:update`が任意の`name`を受理・永続化する。`NpgsqlContentBundleRepository.ListHubRelationsByManifestAsync`/`LoadHubNavigationSequenceAsync`のCOALESCE式を`COALESCE(hr.name, rr.name, hr.related_hub_id::text)`相当へ拡張し、`selected_link_payload_required`(identity)には`name`を追加しない。
+- [ ] Admin Manifests UI: `HubNavigationAdmin.tsx`(既存 `/admin/manifests` authoring surface、新規route/editorなし)に`name`入力と、有効ラベル(named or sequence-derived default)表示を追加。reorder後、name無し行のdefault表示が新しい`sequence_position`に追従することを確認。
+- [ ] runtime projection: `NavigationSequence`emissionの`relatedHubLabel`(またはその後継field)が上記effective label優先順位に従う。`ProjectionShell`/`CardList`/`frontend/runtime/projectionEntry.ts`が単一の解決経路のみを経由する。
+- [ ] live-DB/DOM proof: 明示nameを持つrelationはそのnameを表示し、name無しrelationはsequence_position由来のdefaultを表示し、name無し行のreorder後にdefaultが新しいsequence_positionへ追従し、name付き行のラベルが自身/兄弟行のreorderを経ても不変であることを実DOM/live-DB経由で証明する。
+
+### 対応資料
+
+- `docs/design/db-schema.yaml`
+- `docs/design/admin-console-workflow-ssot.yaml`
+- `docs/design/admin-normal-surface-projection-seed-ssot.yaml`

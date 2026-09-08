@@ -474,6 +474,48 @@ db_schema:
             full owner/singularity/resolution-priority/active-status/failure-semantics contract.
             Distinct from this table's ordinary sequence_position navigation-link role; at most
             one active row across the whole table may carry this marker.
+        - name: name
+          type: text
+          role: user_facing_relation_name
+          nullable: true
+          user_facing_name_contract: >-
+            design_change (this row's own arbitrary, freely-editable display name — status:
+            design_change, no SQL DDL yet; see next_implementation_change_bundle_acceptance
+            below). hubs.hub_relations.name is a pure presentation attribute for this relation
+            row itself, never a navigation/runtime addressing identity: it changes none of
+            hub_relation_id (row identity), topology_manifest_id (parent/source manifest
+            context), related_hub_id (target resolution), or sequence_position (navigation-order
+            authority). It is never a runtime lookup key, dispatch identity, or target
+            resolution key, and it is explicitly excluded from the identity payload — see
+            docs/design/admin-normal-surface-projection-seed-ssot.yaml
+            hub_relation_navigation_binding.selected_link_payload_required, which stays
+            [hub_relation_id, topology_manifest_id, related_hub_id] with no name/label field
+            added. Effective label contract (full detail in
+            admin-normal-surface-projection-seed-ssot.yaml
+            hub_relation_navigation_binding.relation_display_label_contract): when name is
+            non-null/non-empty it is the rendered relation label; when null/empty, the rendered
+            label falls back to a sequence_position-derived default ("Hub 1" / "Hub 2" /
+            "Hub 3" for sequence_position 1/2/3, 1-indexed by ordinal position among the parent
+            manifest's active sibling hub_relations rows) computed at read/projection time only
+            — never persisted to this column or any other authority, so a name-less relation's
+            displayed default tracks sequence_position after hub_navigation:reorder without any
+            write to name. Prohibited fallback authorities for this label:
+            topology.relation_registry.name (names the related hub's own abstract identity, not
+            this edge — see meaning_collision_guardrails.hubs_hub_relations_name_vs_relation_registry_name
+            below), the raw related_hub_id UUID, the target hubs.topology_manifests UUID, and any
+            manifestKey string. Uniqueness: not globally unique; a duplicate-name prohibition, if
+            adopted by a future implementation_change, is scoped to active (status='active')
+            sibling hub_relations rows sharing the same topology_manifest_id parent — never a
+            cross-manifest/global constraint — and must exclude status='deprecated' rows from
+            that scope (deprecated rows are retained for audit per this table's
+            minimum_cardinality_completion_invariant / legacy_migration_ref and must remain
+            independently nameable without being constrained by an active-row uniqueness check).
+            relation_config remains the existing optional sequence-metadata jsonb authority
+            (including the canonical_default_entry_marker above) and must not gain a parallel
+            name/label key; this column is the sole user-facing relation-name authority. No
+            case/trim/whitespace normalization policy is defined for this field by any existing
+            SSOT; a future implementation_change introducing one must add it explicitly rather
+            than assume one.
         - name: status
           type: enum
           role: active_or_deprecated
@@ -963,6 +1005,7 @@ db_schema:
     - hubs_hub_relation_vs_ui_order: hubs.hub.relation is not UI display or transition order.
     - hubs_space_hierarchy: "hubs.hub -> hubs.topology_manifests -> hubs.hub_relations; hub_relations source hub is derived via topology_manifests.hub_id, not hub_relations.hub_id."
     - hubs_hub_relations_sequence: hubs.hub_relations owns manifest-scoped hub sequence / UI transition order; not a global hub-to-hub relation graph.
+    - hubs_hub_relations_name_vs_relation_registry_name: "hubs.hub_relations.name (design_change; see db_schema.tables.hub_relations.key_columns) is this relation row's own optional user-facing caption for this specific navigation edge. topology.relation_registry.name (joined via hubs.hub.relation_registry_id) is the related hub's own abstract identity name — an independent authority. The same hub reused as related_hub_id from multiple manifests keeps one relation_registry.name but may carry a different hub_relations.name per edge; hub_relations.name is never promoted to relation_registry, hub, or manifest naming, and relation_registry.name / related_hub_id / target manifest UUID / manifestKey are not normal user-facing fallback authorities for hub_relations.name's own effective label."
     - logs_current_preserved: logs.current is the rebuildable trigger basis; logs.hub_current is an optional support cache / derived current; logs.attention is the append-only SQLAT / phaseAT generation log.
     - sql_attention_target: "SQL Attention resolves related topology_manifest_id arrays and explores hubs.hub_relations; hub_id is derived through hubs.topology_manifests."
     - sql_attention_persistence: "logs.current is a trigger-basis projection, logs.hub_current is not the exploration body, and logs.attention stores append-only evidence generations rather than Draft or adopted canonical state."
@@ -1092,6 +1135,7 @@ db_schema:
         related_hub_id: uuid
         sequence_position: integer
         relation_config: jsonb
+        name: text (nullable; design_change — see hub_relations.key_columns user_facing_name_contract)
         status: enum active/deprecated
         created_at: timestamptz
         updated_at: timestamptz
@@ -1100,6 +1144,11 @@ db_schema:
       note: >-
         Child of hubs.topology_manifests. Not a global hub-to-hub relation graph.
         related_hub_id is the sequenced hub entry. relation_config holds optional sequence metadata.
+        name is this row's own optional user-facing caption (design_change); see
+        hub_relations.key_columns user_facing_name_contract and
+        admin-normal-surface-projection-seed-ssot.yaml
+        hub_relation_navigation_binding.relation_display_label_contract for the full effective
+        label / uniqueness-scope / prohibited-fallback contract.
       navigation_target_resolution:
         note: >-
           Minimal design addendum (credential-management hub relation / navigation bundle).

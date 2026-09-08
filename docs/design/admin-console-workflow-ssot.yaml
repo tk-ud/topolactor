@@ -52,6 +52,21 @@ admin_console_workflow_ssot:
       dispatcher_mapping_status: >-
         All six axes already have active production dispatcher_mapping rows in db/seed_empty.sql
         (unlike auth_users/team_markdown before this Bundle's fix) — no wiring gap here.
+      relation_name_authoring: >-
+        design_change (SSOT only; no backend/frontend change yet — see
+        docs/design/db-schema.yaml db_schema.tables.hub_relations.key_columns and
+        docs/design/admin-normal-surface-projection-seed-ssot.yaml
+        hub_relation_navigation_binding.relation_display_label_contract for the full name/label
+        contract this note points at). hubs.hub_relations gains an optional, nullable
+        user-facing name field owned by the relation row itself. This is authored on the
+        existing hub_navigation:create / hub_navigation:update dispatch actions above as an
+        additional optional field — it does not add a new dispatch axis, a new route, or a new
+        relation editor: /admin/manifests + HubNavigationAdmin.tsx remain the sole authoring
+        surface. A future implementation_change closing this design_change extends
+        hub_navigation:create/update to accept it and extends HubNavigationAdmin.tsx's existing
+        table/form with a name input and the resolved effective label (named or
+        sequence_position-derived default); hub_navigation:reorder/deprecate/get_hub_relations/
+        list_manifests need no new parameters for this field.
       repository: >-
         NpgsqlContentBundleRepository (CreateHubRelationAsync / UpdateHubRelationAsync /
         DeprecateHubRelationAsync / ReorderHubRelationsAsync / ListHubRelationsByManifestAsync /

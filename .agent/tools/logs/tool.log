@@ -133,3 +133,4 @@
 2026-09-07T12:12:04Z 2affc306-df9b-499a-afe2-c8aaa3ed0475 team-dashboard-proof-chain-continuity-round2 implementation_change
 2026-09-07T12:53:08Z 5aeaa2b4-8ec5-4e01-b6d6-87f0267a6bd8 team-dashboard-runtime-interaction-shape-convergence implementation_change
 2026-09-07T13:50:09Z 21c94005-32f9-4ff1-b35d-8a2db39e39fa team-dashboard-actiontype-unhashable-eval-order-fix implementation_change
+2026-09-08T05:13:47Z 97d6841e-50df-43c8-b11b-1c5633a27400 hub-relations-name-ssot design_change
