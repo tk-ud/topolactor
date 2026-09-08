@@ -841,6 +841,73 @@ db_schema:
           fabricating hub_relations, hubs, or topology_manifests rows that would not otherwise
           exist merely to satisfy this cardinality (PR #584 review comment ban on an empty/fake
           manifest created only to host a hub_relations row remains in force).
+        active_row_semantic_role_reclassification: >-
+          PR #612 recursive audit finding (2026-09-08): applies_to's rejection of any
+          manifest-kind exception (PR #602 round 10->13 history, mirrored in
+          runtime-orchestration-ssot.yaml
+          ui_projection_render_reachability_contract.production_projection_connectivity_invariant.note)
+          is reaffirmed, not walked back -- this field does not create a new exception class; it
+          reclassifies db/seed_empty.sql's current 21 active hubs.topology_manifests rows (see
+          runtime-orchestration-ssot.yaml
+          ui_projection_render_reachability_contract.hub_navigation_resolution.scope.
+          seed_backfill_state_note for the row-level count) by their EXISTING semantic/lifecycle
+          role, to state precisely which rows this invariant can close today and which cannot be
+          closed without either fabrication or a rule change. (1) manifest 092: already satisfies
+          the invariant via its own canonical_default_entry_contract self-reference. (2) ad200,
+          ae200, 5c100, dd010 (the four axis_navigation_membership manifests besides 092): closing
+          each one's OWN outbound-relation requirement is a concrete registration task, not an open
+          design question -- ad200's is satisfied once its axis_navigation_membership relations are
+          registered (it becomes source of 4 real outbound relations); ae200's can reuse the
+          already-tested, real (non-fabricated) ae200 -> ae210 hub_navigation:create authoring path
+          backend/tests/Topolactor.Integration.Tests/AdminEnumHubRelationUiProjectionLiveDbTests.cs
+          DispatchAsync_AdminEnumManagementManifest_HubNavigationCreate_ToCreateGroupWriteManifest_
+          ResolutionChainReflectsIt already proves end-to-end (created and rolled back inside that
+          test, never left as a persisted seed row) -- persisting one such relation
+          closes ae200's own cardinality without inventing a new mechanism; 5c100 and dd010 each
+          need the equivalent registration of one real outbound relation of their own and are
+          tracked as the same implementation task. (3) dd020 (team_dashboard.normal.projection, the
+          sole real Normal-axis surface): admin-console-workflow-ssot.yaml
+          admin_hub_relation_navigation_contract.normal_navigation_membership already records that
+          repo-wide search found no other Normal-axis surface to link it to or from -- dd020 has no
+          natural non-fabricated outbound target today. (4) ae210/ae220/ae230/ae240/ae250/ae260/
+          ae270/ae280 (admin-enum's 8 dedicated single-purpose write manifests, each reached only via
+          admin_runtime_dispatch_override_wiring node-local dispatch or explicit ?manifest=<id>
+          selection, never independently browsed into in a way that motivates its own onward
+          navigation): no existing SSOT authority establishes a genuine navigational reason for any
+          of them to individually own an outbound relation -- the only structurally available target
+          (ae200, their own parent surface) would be a relation authored for no reason other than
+          satisfying this invariant, which this document's own NG-axis governance (PR #612 Round 12
+          instruction) explicitly forbids regardless of whether the target manifest itself is real;
+          a bare self-loop would be equally motiveless and is rejected on the same
+          does_not_authorize / meaningless-relation grounds. (5) 0000a3-0000a8 (external-port-
+          consumer-completion projections: email/stripe/webhook_inbox/job_scheduler/audit_approval/
+          export_sftp) and 093 (file-storage-bundle-export-job-dispatch, the same
+          bundle_projection/consumer-evidence kind -- a flat metadata/dispatch object, no
+          ui_projection, never declared under admin-console-workflow-ssot.yaml
+          admin_hub_relation_navigation_contract.out_of_membership_scope's surface_axes.admin or
+          surface_axes.normal): repo-wide search (surface_axes.admin.surfaces.credentials'
+          external_api_credential/external_instance_credential categories are a distinct, unrelated
+          concept -- credential CRUD management, not these response-port projection manifests
+          themselves) found no natural parent/owning surface for any of these 7 rows either.
+          Resolution: groups (3), (4), and (5) above -- dd020, the 8 admin-enum write manifests, and
+          the 7 consumer/evidence manifests, 16 rows total -- remain genuinely Owner judgment
+          required. The conflict to put to the Owner is exact: this invariant's applies_to text
+          requires every active row to own an outbound relation with no kind-based carve-out, but
+          for these 16 rows no relation can be authored that is both non-fabricated and not "merely
+          to satisfy cardinality" under this repository's own existing authority and governance as
+          written -- closing the gap requires either (a) the Owner accepting a scoped,
+          explicit amendment to applies_to for a named, existing semantic category (e.g.
+          dispatch-only write manifests and consumer/evidence manifests), which PR #602 round 11
+          previously rejected in general form and would need to be re-affirmed or distinguished by
+          the Owner specifically for these categories, or (b) the Owner accepting relations
+          authored for these rows despite no independent navigational motive, an explicit narrow
+          exception to does_not_authorize's "merely to satisfy cardinality" ban, or (c) some other
+          Owner-directed resolution (a possible parallel to how team-dashboard's own unmet
+          hub_navigation_only retirement_kind was resolved by a route/manifest-agnostic
+          product-level substitute rather than literal relation authoring -- see
+          runtime-orchestration-ssot.yaml admin_route_retirement_matrix.routes
+          /admin/team-dashboard status=superseded_by_owner_directed_alternate for that precedent).
+          This design_change does not pick among (a)/(b)/(c) on the Owner's behalf.
         enforcement_boundary: >-
           The canonical completion boundary is NpgsqlManifestRepository.PromoteAsync — the
           existing public.manifest draft -> active transition. Promotion queries

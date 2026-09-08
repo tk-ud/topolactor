@@ -129,6 +129,28 @@ runtime_orchestration_ssot:
           manifest an admin selects there, never required to be /admin's own landing page) in
           addition to the route's existing direct URL.
       routes:
+        - route: /admin
+          retirement_kind: thin_projection_wrapper
+          replacement: same_url_seed_backed
+          status: design_resolved_not_started
+          precondition: >-
+            PR #612 Round 12 design_change resolution (2026-09-08): admin-console-workflow-ssot.yaml
+            admin_hub_relation_navigation_contract.axis_navigation_membership.
+            production_reachability_precondition resolves the open "new route vs. link from static
+            index" fork an earlier round of this same PR left unresolved -- /admin has no other
+            available registry slot and inventing a new route is prohibited, so it collapses to this
+            same thin_projection_wrapper pattern /admin/enums already uses: route file and URL
+            unchanged, frontend/routes/admin/index.tsx's current hardcoded AdminIndex body (static
+            step-guide/checklist/route-card content, see frontend/content/adminGuides.ts) is replaced
+            by a same-URL ProjectionShell thin wrapper pinned to manifest ad200
+            (00000000-0000-0000-0000-0000000ad200), the same convention enums.tsx already
+            established for ae200. This design_change performs no SQL DDL/backend/frontend/test
+            work; status is design_resolved_not_started (the design fork is closed, production work
+            has not begun) rather than done, to avoid conflating design convergence with
+            implementation completion (see the agent task tracking surface's PR #612 vs. downstream
+            implementation_change Bundle boundary note). Closing this route entry to status=done is
+            a hub-relation-target-manifest-canonical-migration Bundle acceptance item, alongside
+            registering axis_navigation_membership's HubRelation rows.
         - route: /admin/enums
           retirement_kind: thin_projection_wrapper
           replacement: same_url_seed_backed

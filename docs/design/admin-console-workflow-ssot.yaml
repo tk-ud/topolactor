@@ -9,11 +9,18 @@ admin_console_workflow_ssot:
       This document is subordinate to runtime orchestration. It describes the admin UI
       responsibility split but MUST NOT add canonical admin routes outside that registry.
     canonical_routes:
+      # PR #612 Round 12: re-synced against runtime-orchestration-ssot.yaml frontend_routes.admin
+      # (2026-09-08) -- this mirror had drifted stale, missing /admin/team-markdown, /admin/enums,
+      # and /admin/users. Kept only as a readability mirror; the file listed in
+      # canonical_admin_route_registry above remains the sole authority on order/membership.
       - /admin
       - /admin/manifests
       - /admin/contents
       - /admin/ui-builder
       - /admin/team-dashboard
+      - /admin/team-markdown
+      - /admin/enums
+      - /admin/users
       - /admin/scheduler
 
   admin_hub_relation_navigation_contract:
@@ -151,6 +158,43 @@ admin_console_workflow_ssot:
       hubs.hub_relations query — never duplicated here as a fixed per-subBundle "wired"/"unconnected"
       SSOT status ledger. This document defines the authoring contract, schema, and resolution
       semantics; it does not track live connection state.
+    bootstrap_seed_vs_runtime_authoring_boundary: >-
+      RESOLVED (PR #612 Round 12, 2026-09-08): cross-checked against
+      docs/design/admin-normal-surface-projection-seed-ssot.yaml
+      seed_physical_hierarchy_and_definition.seed_definition.rule, which defines "seed" for this
+      whole Bundle as "the physical DB rows across hub_relation / topology / hub / package ...
+      pre-built initial sample data, equivalent in shape to what an admin would obtain by actually
+      using /admin/contents + /admin/ui-builder + /admin/manifests -- not an independently-designed
+      artifact class with a separate authoring lifecycle of its own", and against that same file's
+      physical_hierarchy.hub_relation entry, which defines a seeded hub_relation row as ordinary
+      "an outbound navigation row from a source topology_manifest ... to a target hub" -- the exact
+      same row shape and table (hubs.hub_relations) connection_state_authority above already
+      governs. Read together, seed_definition and connection_state_authority do not conflict: they
+      answer different questions (seed_definition says WHAT PHYSICAL FORM pre-built content takes;
+      connection_state_authority says WHERE the live ledger of that content's current state lives,
+      namely the DB itself, never a parallel SSOT status field) rather than competing over one
+      question. There is no separate "bootstrap-only" persistence authority distinct from ordinary
+      runtime hub_relations rows -- a seeded hub_relations row IS a runtime hub_relations row,
+      merely pre-authored before deployment instead of authored later by an admin through
+      /admin/manifests; both are written through the identical table and, once
+      hub-relation-target-manifest-canonical-migration lands, the identical
+      NpgsqlManifestRepository.PromoteAsync-adjacent authoring path. Applied to axis_navigation_
+      membership below: the four relations it defines (ad200 -> ae200/5c100/dd010/092) are meant to
+      be registered as pre-built db/seed_empty.sql rows -- consistent with every other
+      already-closed subBundle in this Bundle (092's canonical_default_entry self-reference and,
+      per the precedent /admin/scheduler and /admin/enums already establish, relations authored
+      through the same live hub_navigation:create path proven by
+      SchedulerSettingsHubRelationUiProjectionLiveDbTests.cs and
+      AdminEnumHubRelationUiProjectionLiveDbTests.cs) -- and remain ordinary, admin-editable
+      hubs.hub_relations rows after bootstrap, never locked or exempted from later admin authoring.
+      This does not reopen or duplicate the design already settled by
+      hub_navigation_only/thin_projection_wrapper retirement_kind's own "no static
+      hubs.hub_relations seed row is ever shipped" convention noted on /admin/scheduler above --
+      that convention describes HOW those two subBundles' relations happen to be authored (via a
+      live-DB test proving the authoring path, not a literal SQL seed row), not a rule that seeding
+      a hub_relations row is categorically forbidden; axis_navigation_membership's own registration
+      may use either convention (a literal seed row, or a proven live-authoring path) since both are
+      the same physical mechanism under this resolution.
     axis_navigation_membership:
       note: >-
         Owner-confirmed design (this design_change, resolving what an earlier round of this same
@@ -241,22 +285,45 @@ admin_console_workflow_ssot:
         surface_axes.admin or surface_axes.normal at all and carry no ui_projection topology entry
         (a flat external-port-consumer-completion metadata object instead) -- they are not
         user-facing navigable screens, and this entry does not include them in either axis's
-        navigation membership. Whether their own active status without an outbound hub_relations
-        row is consistent with db-schema.yaml hub_relations.minimum_cardinality_completion_
-        invariant is a separate question this entry does not resolve; it is not closed by
-        declaring them navigation targets, since they were never designed as ones.
+        navigation membership. The same applies to manifest 093 (file-storage-bundle-export-job-
+        dispatch, the same bundle_projection/consumer-evidence kind) and, for a different reason
+        (dispatch-only, never independently navigated to), to ae210/ae220/ae230/ae240/ae250/ae260/
+        ae270/ae280 above. Whether any of these rows' active status without an outbound
+        hub_relations row of their own is consistent with db-schema.yaml
+        hub_relations.minimum_cardinality_completion_invariant is NOT resolved by this entry --
+        db-schema.yaml minimum_cardinality_completion_invariant.
+        active_row_semantic_role_reclassification (PR #612 Round 12) is the canonical answer: it
+        confirms none of these rows can be closed without either fabricating a relation or
+        authoring one for no reason but cardinality (both independently prohibited), and reports
+        the resulting conflict as Owner judgment required rather than leaving it unaddressed. It is
+        not closed by declaring any of them navigation targets, since none were ever designed as
+        ones.
       production_reachability_precondition: >-
-        Repo-wide grep found no frontend route, island, or backend code referencing
-        00000000-0000-0000-0000-0000000ad200 outside test files
+        RESOLVED (PR #612 Round 12, 2026-09-08): repo-wide grep found no frontend route, island, or
+        backend code referencing 00000000-0000-0000-0000-0000000ad200 outside test files
         (backend/tests/Topolactor.Integration.Tests/AdminDashboardNavigationUiProjectionLiveDbTests.cs
         and frontend/tests/adminWiringExecutionLane.test.ts) -- unlike ae200 (/admin/enums) and
         dd010 (/admin/team-dashboard), admin-dashboard has no production route or entry point of
-        its own today. Declaring it the canonical Admin navigation source above does not by itself
-        make its card_list of links visible to any real admin user; a later implementation_change's
-        acceptance criteria must give admin-dashboard a real, reachable production entry point
-        (e.g. the same thin_projection_wrapper pattern /admin/enums already uses, or a link from
-        the existing static /admin index) in addition to registering the HubRelation rows this
-        entry defines membership for.
+        its own today. An earlier round of this same PR left the closing move as an open fork
+        ("the same thin_projection_wrapper pattern /admin/enums already uses, or a link from the
+        existing static /admin index") for a later implementation agent to pick; that fork does not
+        survive cross-checking runtime-orchestration-ssot.yaml frontend_routes.admin (the sole
+        canonical admin route registry, 9 entries, re-synced above): none of the other 8 routes is
+        an available slot for admin-dashboard, and authoring_this_entry's own NG-axis governance
+        forbids inventing a new route (e.g. /admin/dashboard) outside that registry. /admin itself
+        is already the canonical landing route in that registry and is not assigned to any other
+        subBundle's surface, so "a link from the existing static /admin index" collapses to the
+        same route as the thin_projection_wrapper option -- there is no second, distinct URL for it
+        to point at. The unique, existing-authority-derived resolution is therefore: /admin becomes
+        admin-dashboard's (ad200's) production entry point via the same thin_projection_wrapper
+        retirement_kind runtime-orchestration-ssot.yaml admin_route_retirement_matrix already used
+        for /admin/enums (route file and URL unchanged, route body swapped from the current
+        hardcoded frontend/routes/admin/index.tsx content to a seed-backed ProjectionShell
+        projection of manifest ad200) -- see admin_route_retirement_matrix.routes' new /admin entry
+        for the design-side registration; production implementation (swapping index.tsx's body,
+        registering the HubRelation rows this entry defines membership for) remains a
+        hub-relation-target-manifest-canonical-migration Bundle implementation_change item, not
+        design_change work.
     subbundle_target_readiness:
       note: >-
         The only structural readiness gate this Bundle tracks per subBundle for STARTING that
