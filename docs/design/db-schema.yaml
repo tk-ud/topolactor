@@ -693,11 +693,19 @@ db_schema:
             that tier defers (SEARCH/DISPLAY and SQLAT-EVIDENCE, not target-resolution, per
             inventory_scope_note above -- deferred to a later implementation_change, not excluded):
             ListContentHubRelationsAsync / ListHubRelationsByManifestAsync's display-only
-            related_hub_id/RelatedHubLabel reads (their eventual replacement source, once
-            related_hub_id is fully retired, is an Owner decision for that later
-            implementation_change -- e.g. deriving a display value from target_topology_manifest_id
-            instead -- not decided or assumed here), adminUxTerms.ts's raw-vocabulary label
-            dictionary entry, NpgsqlSqlAttentionLogsRepository.LoadHubRelationExplorationCandidatesAsync,
+            related_hub_id/RelatedHubLabel reads (their replacement source is already decided,
+            not an open question for that later implementation_change: the canonical relation
+            display authority is docs/design/admin-normal-surface-projection-seed-ssot.yaml
+            hub_relation_navigation_binding.relation_display_label_contract.effective_label_priority
+            -- explicit hubs.hub_relations.name when set, else literal "Hub {sequence_position}"
+            -- and that later implementation_change's job is only to physically retarget these two
+            read paths onto that already-canonical authority; it must not read
+            topology.relation_registry.name, the raw related_hub_id UUID, the target
+            hubs.topology_manifests UUID (target_topology_manifest_id included), or any
+            manifestKey string as a display-label fallback, per
+            relation_display_label_contract.prohibited_fallback_authorities), adminUxTerms.ts's
+            raw-vocabulary label dictionary entry,
+            NpgsqlSqlAttentionLogsRepository.LoadHubRelationExplorationCandidatesAsync,
             and HubAttractorExplorationRuntime.cs's expandedHubIds folding of RelatedHubId (this
             last one is also tracked, with its retirement already resolved as a firm decision --
             not an open replace-or-remove judgment -- under

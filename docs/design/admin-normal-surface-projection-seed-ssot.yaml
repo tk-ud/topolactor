@@ -801,8 +801,16 @@ admin_normal_surface_projection_seed_ssot:
               not_an_identity_field: >-
                 name is never promoted to a runtime lookup key, dispatch identity, or target
                 resolution key; it changes none of hub_relation_id (row identity),
-                topology_manifest_id (parent/source context), related_hub_id (target
-                resolution), or sequence_position (navigation-order authority).
+                topology_manifest_id (parent/source context), sequence_position
+                (navigation-order authority), related_hub_id, or target_topology_manifest_id. Per
+                docs/design/db-schema.yaml meaning_collision_guardrails.
+                hubs_hub_relations_target_topology_manifest_id_vs_related_hub_id, related_hub_id is
+                CURRENT implementation's target-resolution field only -- retired as canonical
+                target-resolution authority as of this design_change but not physically dropped,
+                still the field every existing unmodified code path actually resolves targets
+                through today -- while target_topology_manifest_id (no SQL DDL yet) is the
+                canonical forward target reference. Neither role is altered by this contract; name
+                does not become, replace, or duplicate either.
               next_implementation_change_bundle_acceptance:
                 - >-
                   SQL schema: hubs.hub_relations gains a nullable name text column
