@@ -290,12 +290,17 @@ data_driven_topology_runtime_framework:
         top authority -- that field, not this one or the runtime-orchestration-ssot.yaml mirror, is
         the canonical source; both are pointers to avoid independently-drifting copies. Round 13
         re-aligned the enforcement boundary to the existing public.manifest draft -> active ->
-        deprecated lifecycle -- see below). PR #612 Round 13 (2026-09-08, a separate, later PR --
+        deprecated lifecycle -- see below). PR #612 Round 13/14 (2026-09-08, a separate, later PR --
         not this note's own PR #602 "round 13"): db-schema.yaml's applies_to now scopes this
         invariant to declared canonical fixed-navigation source manifests only (admin-dashboard/ad200
-        alone today); see that field's navigation_source_scoped_reinterpretation
-        for the current concrete scope. The summary line below still reads as the wider, original
-        wording -- db-schema.yaml is authoritative wherever the two differ.
+        alone today; see navigation_source_scoped_reinterpretation), and Round 14 further found no
+        runtime-consumable authority exists to let PromoteAsync classify sources, re-deriving the
+        enforcement boundary itself to bootstrap seed completeness plus the existing
+        hub_navigation:deprecate guard (see runtime_source_authority_search_and_enforcement_
+        boundary_reconciliation). The summary line below is synced to the current source-scoped
+        wording; the "Enforcement boundary" sentence further down describes PromoteAsync's own
+        real, unchanged code accurately but is no longer this invariant's own forward completion
+        authority -- db-schema.yaml is authoritative wherever the two differ.
       invariant: topology_manifest_must_not_be_navigation_orphan
       summary: >-
         Every hubs.topology_manifests row with status='active' that is a declared canonical
@@ -311,7 +316,11 @@ data_driven_topology_runtime_framework:
         dedicated navbar/header/sidebar/Home-button fallback or component/nodeId/manifest-UUID-
         specific hardcoding -- the fix belongs at the authoring/proof layer. Does not authorize
         fabricating hub_relations/hubs/topology_manifests to satisfy connectivity (PR #584 ban
-        remains in force). Enforcement boundary: NpgsqlManifestRepository.PromoteAsync (the existing
+        remains in force). This invariant's actual enforcement boundary (PR #612 Round 14) is
+        bootstrap seed completeness plus the unmodified hub_navigation:deprecate guard, not
+        PromoteAsync -- see the note above. PromoteAsync's own real code behavior, accurately
+        described but reclassified as an independent stricter safety net rather than this
+        invariant's forward authority: NpgsqlManifestRepository.PromoteAsync (the existing
         draft -> active transition) fails closed with HUB_RELATION_REQUIRED_FOR_PROMOTION on zero,
         deprecated-only, or unresolved-only-target relations before opening its transaction;
         hub_navigation:create remains deliberately unblocked on a draft topology_manifest (hub

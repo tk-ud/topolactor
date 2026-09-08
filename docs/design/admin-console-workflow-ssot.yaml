@@ -351,36 +351,46 @@ admin_console_workflow_ssot:
         hub-relation-target-manifest-canonical-migration Bundle implementation_change item, not
         design_change work.
       initial_relation_ordering_and_naming: >-
-        PR #612 Round 13 (2026-09-08): repo-wide search for an existing order/label authority for
-        ad200's four bootstrap relations (-> ae200/5c100/dd010/092), so the implementation Bundle
-        does not have to invent one. sequence_position: PARTIALLY RESOLVED. ae200 is fixed at
-        sequence_position=1 -- this is derivable from existing authority, not an arbitrary pick:
-        admin_navigation_targets above already singles ae200 out as "the manifest this PR's
-        original production symptom names," i.e. the one concrete surface this whole Bundle exists
-        to make reachable, and no other target carries any comparable existing distinction. The
-        relative order of 5c100/dd010/092 (positions 2-4) is NOT uniquely derivable: two existing
-        SSOT lists already disagree on it, and neither is declared authoritative for ordering
-        purposes -- admin_navigation_targets' own prose order above reads ae200, 5c100, dd010, 092,
-        while runtime-orchestration-ssot.yaml admin_route_retirement_matrix.routes lists (for the
-        subset with a dedicated route) ae200, dd010, 5c100, omitting 092 entirely (credential-
-        management has no dedicated route). This is reported as Owner judgment required for ONLY
-        these three's relative order -- not for axis membership or invariant scope, both of which
-        remain fully resolved -- with a non-committal default (assign 2/3/4 in the existing
-        admin_navigation_targets prose order: 5c100, dd010, 092) that the Owner may accept or
-        override without reopening anything else. name: RESOLVED -- leave unset for all four
-        bootstrap relations. No existing SSOT declares a userFacingTopologyLabel (or equivalent
-        human-readable caption) for ae200/5c100/dd010/092 at the manifest level -- each carries only
-        a machine manifestKey (e.g. "admin.enum.management.projection"), and reusing a machine key,
-        UUID, or topology.relation_registry.name as a relation's user-facing name is exactly what
-        this contract's own relation_name_authoring / relation_display_label_contract
-        (admin-normal-surface-projection-seed-ssot.yaml hub_relation_navigation_binding) prohibits.
-        That same contract already defines the correct behavior for exactly this case: when no
-        explicit name is authored, the effective label falls back to a sequence_position-derived
-        default ("Hub 1"/"Hub 2"/"Hub 3"/"Hub 4"), computed at read/projection time. Inventing a
-        human label (e.g. "Enum管理") for these four rows would not be reading off existing
-        authority, it would be fabricating one -- so bootstrap leaves name NULL for all four and
-        relies on the already-declared fallback, exactly as authored relations with no explicit
-        name already do today.
+        sequence_position: RESOLVED (PR #612 Round 14, 2026-09-08, superseding Round 13's partial
+        Owner-judgment framing below in full). Round 13 treated admin_navigation_targets' own
+        prose order and runtime-orchestration-ssot.yaml admin_route_retirement_matrix.routes' list
+        order as two competing, equally-weighted "existing SSOT lists" that happened to disagree,
+        and escalated the disagreement to the Owner. Re-examined: admin_route_retirement_matrix is
+        a route-RETIREMENT tracking table keyed by route, never declared anywhere as an ordering
+        authority for anything -- its list order is incidental to retirement bookkeeping, not a
+        competing claim about navigation sequence. admin_navigation_targets, by contrast, is the
+        SAME SSOT entry that declares axis membership itself (this entry, immediately above) --
+        promoting its own existing list order to also serve as the bootstrap sequence_position
+        authority does not conflict with db-schema.yaml hub_relations.key_columns
+        sequence_position.reorder_mutation_contract (which governs how the value CHANGES over
+        time via hub_navigation:reorder, not what its INITIAL bootstrap value is) or with any other
+        existing ordering contract -- there is no genuine second authority to reconcile, only a
+        non-authoritative list that coincidentally reads differently. sequence_position is
+        therefore fixed directly: ae200=1, 5c100=2, dd010=3, 092=4 (unchanged reasoning for ae200's
+        own primacy: admin_navigation_targets already singles it out as "the manifest this PR's
+        original production symptom names"; 5c100/dd010/092 keep the same relative order
+        admin_navigation_targets already lists them in). No Owner judgment item remains for
+        ordering. name: RESOLVED (PR #612 Round 14, refining Round 13's blanket "leave unset for
+        all four" below). Round 13's search for an existing human-label authority checked
+        manifest-level fields only and found none for any of the four targets; a further
+        repo-wide check of each target's own db/seed_empty.sql manifest.topology array (not just
+        SSOT prose) found manifest 092's OWN topology already carries a
+        screen_data_shape.userFacingTopologyLabel entry: "Auth / external credential management"
+        -- an existing, already-authored human label, not one invented for this relation. Per this
+        contract's own relation_name_authoring / relation_display_label_contract
+        (admin-normal-surface-projection-seed-ssot.yaml hub_relation_navigation_binding), an
+        existing canonical human label takes priority over the sequence-derived default, so the
+        ad200 -> 092 relation's bootstrap name is set to "Auth / external credential management"
+        verbatim (not a machine key, UUID, or topology.relation_registry.name -- an
+        already-existing, manifest-authored, human-facing caption). ae200/5c100/dd010 have no
+        equivalent userFacingTopologyLabel or any other human-readable caption anywhere in their
+        own manifest.topology arrays (each carries only machine manifestKey values, e.g.
+        "admin.enum.management.projection") -- for these three, Round 13's conclusion stands
+        unchanged: name is left NULL and the already-declared sequence_position-derived fallback
+        ("Hub 1"/"Hub 2"/"Hub 3") applies, since inventing a human label for them would not be
+        reading off existing authority. This asymmetry (092 named, the other three defaulted) is
+        deliberate and derived per-relation from what actually exists, not applied uniformly for
+        consistency's own sake.
     subbundle_target_readiness:
       note: >-
         The only structural readiness gate this Bundle tracks per subBundle for STARTING that

@@ -907,24 +907,80 @@ db_schema:
           by any existing SSOT -- this invariant requires nothing of them. (6) 0000a3-0000a8 and
           093 are consumer/evidence/dispatch-projection manifests entirely outside
           surface_axes.admin/surface_axes.normal (out_of_membership_scope) -- never declared a
-          source by any existing SSOT -- this invariant requires nothing of them either. Known
-          code/design gap, stated plainly rather than left implicit: the actual,
-          unchanged, tested production enforcement (NpgsqlManifestRepository.PromoteAsync, proven
-          unconditionally against every promoted manifest by backend/tests/
-          Topolactor.Integration.Tests/ManifestDraftActivePromotionLifecycleLiveDbTests.cs) still
-          gates every draft -> active promotion regardless of declared-source role -- this is the
-          WIDER, original scope this field narrows at the design level, and narrowing the live
-          enforcement_boundary check to match is not done this round (no backend/test changes).
-          This does not misfire today: all 20 non-ad200 active seed rows were inserted via raw
-          SQL bypassing PromoteAsync entirely (seed_backfill_state_note), never through the live
-          draft -> active path, so the gate has never actually run against a non-source manifest in
-          production. It would misfire only if a future implementation promotes one of these 20
-          manifests through the ordinary live authoring flow while this design stands -- narrowing
-          HasResolvableActiveHubRelationAsync's gate to declared-source manifests only is recorded
-          as a concrete forward implementation item (see the agent task tracking surface), not an
-          ambiguous design question: the WHAT is resolved by this round; only WHICH future Bundle's
-          code change performs the narrowing remains open, and that is a sequencing question, not
-          an Owner-judgment one.
+          source by any existing SSOT -- this invariant requires nothing of them either.
+          SUPERSEDED (PR #612 Round 14, 2026-09-08): the paragraph that stood here characterized
+          NpgsqlManifestRepository.PromoteAsync's unconditional enforcement as a "known code/design
+          gap" to be narrowed by a future implementation item. Round 14 re-audited this after
+          confirming (see runtime_source_authority_search_and_enforcement_boundary_reconciliation
+          below) that no existing runtime-consumable authority lets PromoteAsync ask "is this
+          manifest a declared source" in the first place -- reclassifying PromoteAsync as the
+          enforcement_boundary was itself the error, not PromoteAsync's behavior. See that field
+          for the current, non-deferred resolution.
+        runtime_source_authority_search_and_enforcement_boundary_reconciliation: >-
+          PR #612 Round 14 finding (2026-09-08). Repo-wide search for an existing
+          runtime-consumable mechanism letting NpgsqlManifestRepository.PromoteAsync (or any
+          promotion-time code) determine "is this manifest a declared canonical fixed-navigation
+          source" before deciding whether to require an outbound relation -- checked and found
+          none: the manifest table's own key_columns (manifest_id, relation_registry_id, topology)
+          carry no role/kind/source column; hubs.topology_manifests carries only
+          topology_manifest_id/hub_id/manifest_key/status/topology_jsonb, likewise no such column;
+          manifest.topology's own catalogued entry types (dispatcher_mapping, runtime_mapping,
+          ui_projection, projection_constructor_mapping, sse_projection, plus the hub_grouping/
+          screen_data_shape/canonical_port_bindings/etc. variants seed rows actually use) include
+          nothing resembling a source/role/kind flag either -- ad200's own topology array (hub_
+          grouping, runtime_mapping, ui_projection only, deliberately no dispatcher_mapping of its
+          own) distinguishes HOW it is entered, not whether it is a declared navigation source, and
+          092 (a declared TARGET, not a source) has a dispatcher_mapping entry of its own too, so
+          presence/absence of dispatcher_mapping does not track source/target status either; the
+          axis_navigation_membership fields that actually declare ad200 as source
+          (data_authority_ref, projection_responsibility, admin-normal-surface-projection-seed-
+          ssot.yaml surface_axes.admin.surfaces.dashboard) are pure SSOT-YAML prose, never
+          persisted to any table and never read by any backend code (confirmed by repo-wide grep:
+          zero hits in db/*.sql or backend/); canonical_default_entry_contract's marker
+          (relation_config.transition) lives on an already-existing hub_relations ROW, so it
+          cannot answer the question for a manifest that does not have one yet, and it marks a
+          single relation's special role, not a manifest's general source eligibility; frontend
+          route registries (runtime-orchestration-ssot.yaml frontend_routes,
+          admin_route_retirement_matrix) are frontend/SSOT-only and not reachable from backend
+          promotion code regardless. Conclusion: no existing runtime-consumable source-classification
+          authority exists, and none is invented (no manifestId==ad200 hardcode, no new
+          navigation_required/is_navigation_source flag, no manifest-kind enum, no exception
+          table) -- per this design_change's own governance, this closes the search rather than
+          leaving it as an implicit gap. With no such authority available, PromoteAsync CANNOT be
+          the enforcement_boundary for a source-scoped invariant without either building new
+          classification authority (prohibited this round) or hardcoding an identity check
+          (prohibited outright) -- so the enforcement_boundary itself is re-derived rather than
+          patched: the canonical completion authority for this invariant, as source-scoped by
+          navigation_source_scoped_reinterpretation above, is (a) BOOTSTRAP SEED COMPLETENESS --
+          the same seed-row audit / live-DB+DOM proof discipline already required as
+          axis_navigation_membership's own Bundle acceptance criterion (fresh db/seed_empty.sql
+          either contains ad200's 4 outbound relations or it does not; this is checked once, as
+          data, not per-manifest at promotion time), combined with (b) the EXISTING, unmodified
+          hub_navigation:deprecate last-active-relation fail-close guard
+          (NpgsqlContentBundleRepository.DeprecateHubRelationAsync,
+          HUB_RELATION_LAST_ACTIVE_FOR_MANIFEST), which already protects any manifest that
+          owns active relations today -- source or not -- from regressing to zero, without
+          ever needing to classify which manifests are declared sources in advance. Together these
+          two, both already existing and unmodified, fully cover the source-scoped invariant's
+          actual completion property (a declared source's relations exist at bootstrap and cannot
+          silently regress to zero afterward) with no new mechanism. PromoteAsync's own
+          HasResolvableActiveHubRelationAsync gate is RECLASSIFIED, not removed or changed: it
+          remains exactly the code it is today (unconditional across every promoted manifest,
+          proven by ManifestDraftActivePromotionLifecycleLiveDbTests.cs), but it is no longer this
+          invariant's enforcement_boundary -- it is an independent, pre-existing, stricter
+          admin-authoring safety behavior that happens to over-satisfy (never under-satisfy) the
+          source-scoped invariant for anything actually authored through it: a declared source
+          promoted live would need a relation anyway under the narrowed design (desired, not a
+          conflict), and a non-source manifest promoted live is asked for a relation the narrowed
+          design does not strictly require of it -- an authoring-ergonomics friction (an admin
+          authoring a legitimate non-navigable manifest today must give it a relation or use raw
+          SQL, as db/seed_empty.sql's own 20 non-ad200 rows already do), never a fail-open
+          correctness gap, since over-enforcement cannot produce a navigation orphan. Narrowing
+          PromoteAsync to skip non-source manifests is therefore downgraded from Round 13's
+          "concrete forward implementation item, sequencing question only" to an OPTIONAL future
+          authoring-ergonomics improvement -- not a completion requirement, not blocking any
+          Bundle's closure, and not an Owner-judgment item, since correctness does not depend on
+          it.
         active_row_semantic_role_reclassification: >-
           SUPERSEDED (PR #612 Round 13, 2026-09-08) -- see navigation_source_scoped_
           reinterpretation above, which is now the canonical answer for this invariant's scope.
@@ -997,8 +1053,17 @@ db_schema:
           reinterpreting applies_to's scope itself (see navigation_source_scoped_reinterpretation
           above) rather than picking among (a)/(b)/(c).
         enforcement_boundary: >-
-          The canonical completion boundary is NpgsqlManifestRepository.PromoteAsync — the
-          existing public.manifest draft -> active transition. Promotion queries
+          PR #612 Round 14 (2026-09-08): this field accurately describes CURRENT, unchanged
+          production code (unaffected by this design_change, no backend edits made) -- but as of
+          navigation_source_scoped_reinterpretation/runtime_source_authority_search_and_
+          enforcement_boundary_reconciliation above, PromoteAsync is no longer this invariant's own
+          canonical enforcement_boundary; it is an independent, pre-existing, unconditional
+          admin-authoring safety behavior that happens to over-satisfy the now-source-scoped
+          invariant. This invariant's actual enforcement_boundary is bootstrap seed completeness
+          plus the unmodified hub_navigation:deprecate guard described in that field -- read the
+          text below as an accurate description of PromoteAsync's own real behavior, not as this
+          invariant's forward completion authority. PromoteAsync remains the existing
+          public.manifest draft -> active transition it always was. Promotion queries
           ContentBundleRepository.HasResolvableActiveHubRelationAsync (reusing
           LoadHubNavigationSequenceAsync's own resolution semantics, not a duplicated COUNT-only
           check) before opening its transaction and fails closed with

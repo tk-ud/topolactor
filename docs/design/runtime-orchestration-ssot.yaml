@@ -560,14 +560,20 @@ runtime_orchestration_ssot:
         docs/design/db-schema.yaml hub_relations.minimum_cardinality_completion_invariant as the
         top authority; re-aligned round 13 to the existing public.manifest draft -> active ->
         deprecated lifecycle as the canonical completion boundary -- see enforcement_boundary
-        below). PR #612 Round 13 (2026-09-08, unrelated to this note's own "round 13" -- that is
-        PR #602's own internal round history, already historical by the time PR #612 exists)
-        further narrowed db-schema.yaml's applies_to to declared canonical fixed-navigation source
-        authority only (see that file's navigation_source_scoped_reinterpretation) -- this mirror's
-        own invariant/scope/seed_backfill_state_note text below still reads as the wider, original
-        "every hubs.topology_manifests row" wording in places; treat db-schema.yaml as authoritative
-        wherever the two differ, per this note's own "both are pointers to avoid
-        independently-drifting copies" rule. Generalizes the per-subBundle navigation_binding_authoring_and_verification /
+        below). PR #612 Round 13 and Round 14 (2026-09-08, unrelated to this note's own "round 10/
+        11/13" -- that is PR #602's own internal round history, already historical by the time PR
+        #612 exists) narrowed db-schema.yaml's applies_to to declared canonical fixed-navigation
+        source authority only, then re-derived the enforcement_boundary itself after confirming no
+        runtime-consumable authority exists to classify sources (see that file's
+        navigation_source_scoped_reinterpretation and runtime_source_authority_search_and_
+        enforcement_boundary_reconciliation). This mirror's invariant/enforcement_boundary/scope
+        fields below are synced to that current authority as of Round 14 -- db-schema.yaml remains
+        the canonical source and this stays a pointer, per this note's own "both are pointers to
+        avoid independently-drifting copies" rule, but no unsynced universal wording is left below.
+        The historical narrative in the rest of this note (Round 10-13, all PR #602's own
+        pre-PR-#612 history) is retained as-is; it describes decisions already superseded in
+        substance by the above, not the current forward contract. Generalizes the per-subBundle
+        navigation_binding_authoring_and_verification /
         navigation_binding_resolution_criterion gate already proven in
         docs/design/admin-normal-surface-projection-seed-ssot.yaml design_blocking.subbundle_status
         (and this contract's own test_proof_contract above) from a one-time seed-conversion
@@ -642,8 +648,24 @@ runtime_orchestration_ssot:
         elements from a real NavigationSequence, not source-string grep) -- see
         frontend/tests/projectionShellHubNavigationRenderProof.test.ts.
       enforcement_boundary: >-
-        The canonical completion boundary (round 13) is NpgsqlManifestRepository.PromoteAsync --
-        the existing public.manifest draft -> active transition, not a new concept. Before opening
+        PR #612 Round 14 (2026-09-08): as of db-schema.yaml hub_relations.
+        minimum_cardinality_completion_invariant.runtime_source_authority_search_and_
+        enforcement_boundary_reconciliation, PromoteAsync is no longer this invariant's own
+        canonical enforcement_boundary -- no runtime-consumable authority exists for it to
+        classify "is this manifest a declared canonical fixed-navigation source" before applying
+        its gate, so it cannot correctly serve as a SOURCE-SCOPED enforcement boundary without
+        inventing new classification authority (not done). The paragraph below remains an accurate
+        description of PromoteAsync's own real, unchanged code behavior (unconditional across
+        every promoted manifest) -- read it as that, not as this invariant's forward completion
+        authority. This invariant's actual enforcement_boundary is bootstrap seed completeness
+        (the same seed-row audit / live-DB+DOM proof already required for
+        axis_navigation_membership's own Bundle acceptance) plus the existing, unmodified last-
+        active-relation guard on hub_navigation:deprecate described later in this same field --
+        both already exist, cover the actual completion property without per-manifest role
+        classification, and require no new mechanism. The canonical completion boundary
+        (PR #602's own historical round 13, superseded above) was described as
+        NpgsqlManifestRepository.PromoteAsync -- the existing public.manifest draft -> active
+        transition, not a new concept. Before opening
         its transaction, PromoteAsync queries
         ContentBundleRepository.HasResolvableActiveHubRelationAsync (reusing
         LoadHubNavigationSequenceAsync's own resolution semantics; not a duplicated COUNT-only
@@ -673,10 +695,16 @@ runtime_orchestration_ssot:
         hub_navigation:reorder never changes status, so deprecate is the only other mutation able to
         reduce the active count).
       scope: >-
-        Applies to every hubs.topology_manifests row per db-schema.yaml
-        hub_relations.minimum_cardinality_completion_invariant.applies_to -- not limited to
-        admin-surface-topology-seed-conversion's five subBundles, though those remain the existing
-        concrete proof precedent. All five (admin-dashboard/admin-enum/credential-management/
+        Applies to whichever hubs.topology_manifests rows db-schema.yaml
+        hub_relations.minimum_cardinality_completion_invariant.applies_to designates today --
+        PR #612 Round 13/14: declared canonical fixed-navigation source manifests only
+        (admin-dashboard/ad200 alone today, per that field's navigation_source_scoped_
+        reinterpretation), not every active row indiscriminately. This scope field's own historical
+        wording (admin-surface-topology-seed-conversion's five subBundles as the concrete proof
+        precedent) remains relevant only for admin-dashboard/ad200 among those five -- ae200/
+        5c100/dd010/092 are Admin-axis navigation TARGETS, not declared sources, and this invariant
+        requires nothing of them (see db-schema.yaml's own per-row breakdown). All five
+        (admin-dashboard/admin-enum/credential-management/
         team-dashboard/scheduler-settings) have navigation_binding_authoring_and_verification
         marked resolved in docs/design/admin-normal-surface-projection-seed-ssot.yaml
         design_blocking target_surface_manifest_readiness.subbundle_status, the still-authoritative
