@@ -653,37 +653,65 @@ runtime_orchestration_ssot:
         seed_backfill_state_note below for what "resolved" does and does not mean for db/seed_empty.sql
         itself.
       seed_backfill_state_note: >-
-        PR #612 recursive audit finding (2026-09-08), recorded here rather than assumed resolved:
-        the resolved status above proves the per-subBundle authoring MECHANISM only -- each
-        subBundle's own *HubRelationUiProjectionLiveDbTests.cs creates a throwaway target Hub +
-        topology_manifest with a fresh random id, authors a relation from that subBundle's own
-        manifest via a real hub_navigation:create dispatch, asserts the resolution_chain, then
-        deletes all three rows in its own finally block -- it never leaves a lasting row. A
-        repo-wide count of db/seed_empty.sql found exactly one active hubs.hub_relations row in
-        the whole canonical seed (the canonical_default_entry_contract self-reference on manifest
-        092), while 15 of its 16 active hubs.topology_manifests rows -- 093, 5c100 (scheduler
-        settings), ad200 (admin-dashboard), ae200/ae210/ae220/ae230/ae240/ae250/ae260/ae270/ae280
-        (admin-enum), 0000a3, dd010/dd020 (team-dashboard) -- own zero active hub_relations rows in
-        the seed itself, because each was inserted directly as status='active' by raw SQL, never
-        through NpgsqlManifestRepository.PromoteAsync (the sole enforcement_boundary above), so the
-        promotion-time cardinality gate never ran against any of them. The gap predates the
-        current hub-relation-target-manifest-canonical-migration design_change:
-        db/seed_empty.sql's own comments for admin-dashboard/scheduler-settings/admin-enum/
-        credential-management each state plainly that the subBundle deliberately seeds no
-        hub_relations row of its own, leaving authoring to an ordinary post-deployment
-        /admin/manifests action -- a choice repeated across five separate seed sections and never
-        reconciled against this invariant once it was introduced. admin-dashboard is the only
-        manifest whose own seed_contract purpose (hub_relation_link_list bound to
-        emission.navigationSequence) and subbundle_status (subBundle_not_applicable -- source, not
-        target) point at it as the intended relation source for the other four, but no round has
-        decided the actual seed content (which targets, what sequence_position ordering, what
-        hub_relations.name values) that would close this invariant for the existing seed -- that is
-        an Owner product decision about a fresh deployment's default admin navigation topology, not
-        a fact already settled by this contract, so it is not decided here. This invariant's own
-        text stands unchanged; the seed's actual state does not meet it yet, and closing that gap
-        (by seeding real relations, or by scoping this invariant to exclude admin-authored-
-        post-deployment manifests the way draft_transient_state_carve_out excludes drafts) needs
-        that Owner decision.
+        PR #612 recursive audit finding (2026-09-08, corrected 2026-09-08 after a row-count and
+        proof-direction error was found in the first pass -- see below), recorded here rather than
+        assumed resolved: the resolved status above proves the per-subBundle authoring MECHANISM,
+        and for two of the five subBundles also proves target-side reachability mechanics, but
+        neither ever leaves a lasting seed row -- see the per-subBundle breakdown below. A row-level
+        count of db/seed_empty.sql's INSERT INTO hubs.topology_manifests statements (one statement
+        held a 6-row VALUES list -- 0000a3 through 0000a8 -- that a first-pass statement-count
+        undercounted as one row) found 21 active hubs.topology_manifests rows: 092, 093, 5c100
+        (scheduler-settings), ad200 (admin-dashboard), ae200/ae210/ae220/ae230/ae240/ae250/ae260/
+        ae270/ae280 (admin-enum, 9 rows), 0000a3/0000a4/0000a5/0000a6/0000a7/0000a8 (external-port
+        consumer projections, 6 rows), dd010/dd020 (team-dashboard). Exactly one active
+        hubs.hub_relations row exists in the whole canonical seed (the
+        canonical_default_entry_contract self-reference on manifest 092), so 20 of these 21 rows own
+        zero active hub_relations rows in the seed itself -- each was inserted directly as
+        status='active' by raw SQL, never through NpgsqlManifestRepository.PromoteAsync (the sole
+        enforcement_boundary above), so the promotion-time cardinality gate never ran against any of
+        them. Per-subBundle proof direction (re-audited individually per
+        admin-normal-surface-projection-seed-ssot.yaml design_blocking.target_surface_manifest_
+        readiness.navigation_binding_resolution_criterion, not generalized across all five as a
+        first pass wrongly did): credential-management (092, via
+        CredentialManagementHubRelationUiProjectionLiveDbTests.DispatchAsync_HubNavigationCreate_
+        AuthorsRelationTargetingManifest092_ResolutionChainReachesScalarEmission) and team-dashboard
+        (dd010, via TeamDashboardHubRelationUiProjectionLiveDbTests.DispatchAsync_HubNavigationCreate_
+        AuthorsRelationTargetingAdminManifest_ResolutionChainReachesScalarEmission) each have a
+        synthetic-source-to-real-target combined proof that resolves the full chain into that
+        subBundle's own real content; admin-enum and scheduler-settings each have only a
+        source-outbound authoring-mechanism proof (their own manifest as source, a content-less
+        synthetic manifest as target) -- their own target-side reachability mechanics have never
+        been exercised by any test, unlike credential-management/team-dashboard; admin-dashboard is
+        subBundle_not_applicable to this specific design_blocking id (per its own subbundle_status
+        note, that means the id does not gate admin-dashboard, not that admin-dashboard is a
+        decided relation source) and has only a separate display/propBinding proof
+        (AdminDashboardNavigationUiProjectionLiveDbTests.DispatchAsync_AdminDashboardNavigationManifest_
+        CardListItemsReflectRealAuthoredHubRelation, which authors its relation via a raw SQL
+        insert, not hub_navigation:create). The gap predates the current
+        hub-relation-target-manifest-canonical-migration design_change: db/seed_empty.sql's own
+        comments for admin-dashboard/scheduler-settings/admin-enum/credential-management each state
+        plainly that the subBundle deliberately seeds no hub_relations row of its own, leaving
+        authoring to an ordinary post-deployment /admin/manifests action -- a choice repeated across
+        five separate seed sections and never reconciled against this invariant once it was
+        introduced. admin-dashboard's own seed_contract purpose (hub_relation_link_list bound to
+        emission.navigationSequence, admin-normal-surface-projection-seed-ssot.yaml surface_axes.
+        admin.surfaces.dashboard data_authority_ref/projection_responsibility) makes it a plausible
+        product candidate for the other four's relation source, but admin-console-workflow-ssot.yaml
+        admin_hub_relation_navigation_contract.note explicitly states the relation source is
+        whichever existing topology_manifest an admin selects via /admin/manifests, "never required
+        to be /admin's own landing page specifically," and that same file's
+        connection_state_authority states a specific hub_relations row's existence is runtime/admin
+        data, never a fixed SSOT ledger -- so admin-dashboard is not an already-decided source, and
+        no round has decided the actual seed content (which targets, what sequence_position
+        ordering, what hub_relations.name values) that would close this invariant for the existing
+        seed. That is an Owner product decision about a fresh deployment's default admin navigation
+        topology, not a fact already settled by this contract, so it is not decided here. This
+        invariant's own text stands unchanged; the seed's actual state does not meet it yet, and
+        closing that gap (by seeding real relations, by scoping this invariant to exclude
+        admin-authored-post-deployment manifests the way draft_transient_state_carve_out excludes
+        drafts, or by folding relation-less bootstrap manifests into the draft->PromoteAsync
+        lifecycle) needs that Owner decision among comparable candidates, not a default choice made
+        here.
 
     canonical_default_entry_contract:
       note: >-
