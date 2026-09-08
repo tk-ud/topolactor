@@ -190,11 +190,22 @@ admin_console_workflow_ssot:
       This does not reopen or duplicate the design already settled by
       hub_navigation_only/thin_projection_wrapper retirement_kind's own "no static
       hubs.hub_relations seed row is ever shipped" convention noted on /admin/scheduler above --
-      that convention describes HOW those two subBundles' relations happen to be authored (via a
-      live-DB test proving the authoring path, not a literal SQL seed row), not a rule that seeding
-      a hub_relations row is categorically forbidden; axis_navigation_membership's own registration
-      may use either convention (a literal seed row, or a proven live-authoring path) since both are
-      the same physical mechanism under this resolution.
+      that convention describes HOW those two subBundles' OWN relations happen to be authored (via
+      a live-DB test proving the authoring path, not a literal SQL seed row); it is not a rule that
+      seeding a hub_relations row is categorically forbidden, and it governs /admin/scheduler and
+      /admin/enums specifically, not axis_navigation_membership. PR #612 Round 13 (2026-09-08):
+      axis_navigation_membership's own four relations (ad200 -> ae200/5c100/dd010/092) are
+      one-bench, not agent's-choice -- they MUST be registered as pre-built db/seed_empty.sql rows
+      at fresh bootstrap, not left to post-deployment live authoring as an equally-valid
+      alternative. This is the only one of the two conventions that gives admin-dashboard's own
+      card_list of links something to display the moment a fresh environment boots, matching
+      admin-dashboard's declared projection_responsibility (display_manifest_scoped_hub_relation_
+      links) -- an admin having to first visit /admin/manifests and author all four relations by
+      hand before admin-dashboard shows anything is not equivalent to team-dashboard/scheduler's
+      own already-reachable-by-other-means targets, since admin-dashboard's whole
+      production_reachability_precondition depends on these specific relations existing. Once
+      seeded, they remain ordinary, admin-editable hubs.hub_relations rows -- bootstrap fixes their
+      initial existence, not their mutability.
     axis_navigation_membership:
       note: >-
         Owner-confirmed design (this design_change, resolving what an earlier round of this same
@@ -255,7 +266,13 @@ admin_console_workflow_ssot:
         seed_contract.component_tree_note) -- never independently selected by a user via
         HubRelation navigation, and not first-class members of this axis's navigation target set
         merely because each is an active hubs.topology_manifests row. Nothing in this entry
-        authorizes listing them as hub_navigation:create targets.
+        authorizes listing them as hub_navigation:create targets. PR #612 Round 13: this same fact
+        (never declared a source or target by any existing SSOT navigation-membership authority)
+        is also why none of these 8 rows is subject to db-schema.yaml
+        hub_relations.minimum_cardinality_completion_invariant, whose applies_to now scopes to
+        declared canonical fixed-navigation SOURCE manifests only (navigation_source_scoped_
+        reinterpretation) -- registering an ae200 -> ae210 (or any sibling) relation to satisfy that
+        invariant would itself contradict this entry's own non-target declaration and is not done.
       normal_navigation_membership: >-
         docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.normal.
         normal_hub_relation_navigation_contract already defines the Normal-axis equivalent
@@ -270,7 +287,13 @@ admin_console_workflow_ssot:
         /dashboard, runtime-orchestration-ssot.yaml admin_route_retirement_matrix.routes
         /admin/team-dashboard entry) rather than a fabricated HubRelation source -- that decision
         is unchanged and this entry does not reopen it. No fake Normal-axis target is introduced
-        here.
+        here. PR #612 Round 13: dd020 is also not itself declared a canonical fixed-navigation
+        SOURCE by this contract or its Normal-axis equivalent (admin-normal-surface-projection-
+        seed-ssot.yaml surface_axes.normal.normal_hub_relation_navigation_contract) -- it is simply
+        the sole real surface, not a source of anything -- so db-schema.yaml
+        hub_relations.minimum_cardinality_completion_invariant (source-scoped under
+        navigation_source_scoped_reinterpretation) requires nothing of it either; no relation is
+        registered for dd020 for cardinality's sake.
       cross_axis_navigation: >-
         Not established by this entry. An Admin-axis source relation targets only Admin-axis
         manifests and a Normal-axis source relation targets only Normal-axis manifests, per each
@@ -288,16 +311,19 @@ admin_console_workflow_ssot:
         navigation membership. The same applies to manifest 093 (file-storage-bundle-export-job-
         dispatch, the same bundle_projection/consumer-evidence kind) and, for a different reason
         (dispatch-only, never independently navigated to), to ae210/ae220/ae230/ae240/ae250/ae260/
-        ae270/ae280 above. Whether any of these rows' active status without an outbound
-        hub_relations row of their own is consistent with db-schema.yaml
-        hub_relations.minimum_cardinality_completion_invariant is NOT resolved by this entry --
-        db-schema.yaml minimum_cardinality_completion_invariant.
-        active_row_semantic_role_reclassification (PR #612 Round 12) is the canonical answer: it
-        confirms none of these rows can be closed without either fabricating a relation or
-        authoring one for no reason but cardinality (both independently prohibited), and reports
-        the resulting conflict as Owner judgment required rather than leaving it unaddressed. It is
-        not closed by declaring any of them navigation targets, since none were ever designed as
-        ones.
+        ae270/ae280 above. RESOLVED (PR #612 Round 13, 2026-09-08, superseding Round 12's framing
+        below): db-schema.yaml hub_relations.minimum_cardinality_completion_invariant.applies_to
+        now scopes to declared canonical fixed-navigation SOURCE manifests only
+        (navigation_source_scoped_reinterpretation) -- none of these rows (0000a3-0000a8, 093,
+        ae210-ae280) is declared a source by this entry or any existing SSOT, so none is subject to
+        that invariant at all. This is not a manifest-kind exception grant; it follows directly
+        from this entry's own out-of-membership/non-target declarations above, which already
+        establish that no existing authority ever named any of these rows a navigation source. No
+        Owner judgment item remains here. (Superseded: db-schema.yaml minimum_cardinality_
+        completion_invariant.active_row_semantic_role_reclassification, PR #612 Round 12's earlier
+        finding, reported this as unresolved and requiring Owner judgment; that framing followed
+        from Round 12 not yet re-scoping applies_to and is retracted by the resolution above, kept
+        in db-schema.yaml only as a historical record.)
       production_reachability_precondition: >-
         RESOLVED (PR #612 Round 12, 2026-09-08): repo-wide grep found no frontend route, island, or
         backend code referencing 00000000-0000-0000-0000-0000000ad200 outside test files
@@ -324,6 +350,37 @@ admin_console_workflow_ssot:
         registering the HubRelation rows this entry defines membership for) remains a
         hub-relation-target-manifest-canonical-migration Bundle implementation_change item, not
         design_change work.
+      initial_relation_ordering_and_naming: >-
+        PR #612 Round 13 (2026-09-08): repo-wide search for an existing order/label authority for
+        ad200's four bootstrap relations (-> ae200/5c100/dd010/092), so the implementation Bundle
+        does not have to invent one. sequence_position: PARTIALLY RESOLVED. ae200 is fixed at
+        sequence_position=1 -- this is derivable from existing authority, not an arbitrary pick:
+        admin_navigation_targets above already singles ae200 out as "the manifest this PR's
+        original production symptom names," i.e. the one concrete surface this whole Bundle exists
+        to make reachable, and no other target carries any comparable existing distinction. The
+        relative order of 5c100/dd010/092 (positions 2-4) is NOT uniquely derivable: two existing
+        SSOT lists already disagree on it, and neither is declared authoritative for ordering
+        purposes -- admin_navigation_targets' own prose order above reads ae200, 5c100, dd010, 092,
+        while runtime-orchestration-ssot.yaml admin_route_retirement_matrix.routes lists (for the
+        subset with a dedicated route) ae200, dd010, 5c100, omitting 092 entirely (credential-
+        management has no dedicated route). This is reported as Owner judgment required for ONLY
+        these three's relative order -- not for axis membership or invariant scope, both of which
+        remain fully resolved -- with a non-committal default (assign 2/3/4 in the existing
+        admin_navigation_targets prose order: 5c100, dd010, 092) that the Owner may accept or
+        override without reopening anything else. name: RESOLVED -- leave unset for all four
+        bootstrap relations. No existing SSOT declares a userFacingTopologyLabel (or equivalent
+        human-readable caption) for ae200/5c100/dd010/092 at the manifest level -- each carries only
+        a machine manifestKey (e.g. "admin.enum.management.projection"), and reusing a machine key,
+        UUID, or topology.relation_registry.name as a relation's user-facing name is exactly what
+        this contract's own relation_name_authoring / relation_display_label_contract
+        (admin-normal-surface-projection-seed-ssot.yaml hub_relation_navigation_binding) prohibits.
+        That same contract already defines the correct behavior for exactly this case: when no
+        explicit name is authored, the effective label falls back to a sequence_position-derived
+        default ("Hub 1"/"Hub 2"/"Hub 3"/"Hub 4"), computed at read/projection time. Inventing a
+        human label (e.g. "Enum管理") for these four rows would not be reading off existing
+        authority, it would be fabricating one -- so bootstrap leaves name NULL for all four and
+        relies on the already-declared fallback, exactly as authored relations with no explicit
+        name already do today.
     subbundle_target_readiness:
       note: >-
         The only structural readiness gate this Bundle tracks per subBundle for STARTING that

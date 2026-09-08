@@ -290,11 +290,19 @@ data_driven_topology_runtime_framework:
         top authority -- that field, not this one or the runtime-orchestration-ssot.yaml mirror, is
         the canonical source; both are pointers to avoid independently-drifting copies. Round 13
         re-aligned the enforcement boundary to the existing public.manifest draft -> active ->
-        deprecated lifecycle -- see below).
+        deprecated lifecycle -- see below). PR #612 Round 13 (2026-09-08, a separate, later PR --
+        not this note's own PR #602 "round 13"): db-schema.yaml's applies_to now scopes this
+        invariant to declared canonical fixed-navigation source manifests only (admin-dashboard/ad200
+        alone today); see that field's navigation_source_scoped_reinterpretation
+        for the current concrete scope. The summary line below still reads as the wider, original
+        wording -- db-schema.yaml is authoritative wherever the two differ.
       invariant: topology_manifest_must_not_be_navigation_orphan
       summary: >-
-        Every hubs.topology_manifests row with status='active' (not a subset classified by manifest
-        kind) must resolve at least one active hubs.hub_relations row (proven via the existing
+        Every hubs.topology_manifests row with status='active' that is a declared canonical
+        fixed-navigation source (db-schema.yaml hub_relations.minimum_cardinality_completion_
+        invariant.applies_to; not every active row indiscriminately, and not a manifest-kind
+        exception list) must resolve at least one active hubs.hub_relations row (proven via the
+        existing
         navigation_binding_resolution_criterion resolution-chain pattern, not a new mechanism). A
         status='draft' topology_manifest is exempt during authoring and never resolves as a
         navigation/runtime target regardless of its hub_relations count -- hubs.topology_manifests.

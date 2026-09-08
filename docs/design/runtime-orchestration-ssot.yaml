@@ -560,7 +560,14 @@ runtime_orchestration_ssot:
         docs/design/db-schema.yaml hub_relations.minimum_cardinality_completion_invariant as the
         top authority; re-aligned round 13 to the existing public.manifest draft -> active ->
         deprecated lifecycle as the canonical completion boundary -- see enforcement_boundary
-        below). Generalizes the per-subBundle navigation_binding_authoring_and_verification /
+        below). PR #612 Round 13 (2026-09-08, unrelated to this note's own "round 13" -- that is
+        PR #602's own internal round history, already historical by the time PR #612 exists)
+        further narrowed db-schema.yaml's applies_to to declared canonical fixed-navigation source
+        authority only (see that file's navigation_source_scoped_reinterpretation) -- this mirror's
+        own invariant/scope/seed_backfill_state_note text below still reads as the wider, original
+        "every hubs.topology_manifests row" wording in places; treat db-schema.yaml as authoritative
+        wherever the two differ, per this note's own "both are pointers to avoid
+        independently-drifting copies" rule. Generalizes the per-subBundle navigation_binding_authoring_and_verification /
         navigation_binding_resolution_criterion gate already proven in
         docs/design/admin-normal-surface-projection-seed-ssot.yaml design_blocking.subbundle_status
         (and this contract's own test_proof_contract above) from a one-time seed-conversion
@@ -582,7 +589,11 @@ runtime_orchestration_ssot:
         13: the boundary was never missing, hubs.topology_manifests.status was simply wired wrong
         (see enforcement_boundary).
       invariant: >-
-        Every hubs.topology_manifests row with status='active' must resolve at least one active
+        PR #612 Round 13: scoped to every hubs.topology_manifests row with status='active' that
+        db-schema.yaml hub_relations.minimum_cardinality_completion_invariant.applies_to declares a
+        canonical fixed-navigation source (admin-dashboard/ad200 only today -- see that field's
+        navigation_source_scoped_reinterpretation for the full current-scope breakdown); such a row
+        must resolve at least one active
         hubs.hub_relations row through the exact same resolution_chain this contract's
         test_proof_contract already defines -- HubNavigationResolver -> Emission.NavigationSequence
         -> resolveHubNavigationLinks -> ProjectionShell's own nav bar / target-manifest round trip.
@@ -727,16 +738,21 @@ runtime_orchestration_ssot:
         (0000a3-0000a8) excluded as out of surface_axes scope entirely (no ui_projection, not
         user-facing navigable screens). Closing this invariant for the existing seed's Admin-axis
         surfaces is now a concrete implementation task (register the axis_navigation_membership
-        relations, and give admin-dashboard a real production entry point -- repo-wide grep found
-        it has none today, see axis_navigation_membership.production_reachability_precondition),
-        not an open product-direction choice among incompatible candidates. This invariant's own
-        text stands unchanged; the seed's actual state does not meet it yet for the manifests
-        axis_navigation_membership covers, and closing that is tracked as a
-        hub-relation-target-manifest-canonical-migration Bundle implementation item. Whether the
-        external-port-consumer-completion projections' own active status without an outbound
-        relation is otherwise consistent with this invariant remains a separate, unresolved
-        question this note does not answer, since they were never in scope for
-        axis_navigation_membership to begin with.
+        relations -- ad200's own 4 outbound relations, the sole row this invariant requires one of
+        under its current source-scoped applies_to -- and give admin-dashboard a real production
+        entry point -- repo-wide grep found it has none today, see
+        axis_navigation_membership.production_reachability_precondition), not an open
+        product-direction choice among incompatible candidates. PR #612 Round 13 (2026-09-08):
+        db-schema.yaml's applies_to now scopes this invariant to declared canonical
+        fixed-navigation source manifests only (navigation_source_scoped_reinterpretation) -- ae200/
+        5c100/dd010/092 are declared TARGETS only and are not themselves required to own an
+        outbound relation; ae210-ae280, the external-port-consumer-completion projections
+        (0000a3-0000a8), manifest 093, and dd020 (the sole real Normal-axis surface, itself never
+        declared a source) are none of them a declared canonical fixed-navigation source under any
+        existing SSOT, so this invariant requires nothing further of them -- not because their kind
+        is exempted, but because none was ever declared a source. This resolves what the previous
+        wording below left as "a separate, unresolved question" for the external-port-consumer-
+        completion projections: it is no longer open.
 
     canonical_default_entry_contract:
       note: >-

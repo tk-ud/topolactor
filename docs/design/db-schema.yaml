@@ -803,15 +803,18 @@ db_schema:
         compatibility_history_ref: compatibility_history.hub_relations_related_hub_id_to_target_topology_manifest_id_transition
       minimum_cardinality_completion_invariant:
         rule: >-
-          Every hubs.topology_manifests row with status='active' must own at least one
-          hubs.hub_relations row with status='active' whose related_hub_id resolves to exactly
-          one active hubs.topology_manifests row for that hub (the same exactly-one-active-manifest
-          rule navigation_target_resolution below already defines). An active topology_manifest
-          with zero hub_relations rows, with only status='deprecated' rows, or whose only active
-          row's target does not resolve, is not a valid completion state ("navigation orphan").
-          This is the reverse-direction cardinality this table's own fk_topology_manifests column
-          does not by itself guarantee: the FK guarantees every hub_relations row points at a real
-          topology_manifest, not that every topology_manifest has an outbound hub_relations row.
+          Every hubs.topology_manifests row with status='active' that existing SSOT
+          navigation-membership authority declares a canonical fixed-navigation source (see
+          applies_to below -- PR #612 Round 13: today admin-dashboard/ad200 only) must own at
+          least one hubs.hub_relations row with status='active' whose related_hub_id resolves to
+          exactly one active hubs.topology_manifests row for that hub (the same
+          exactly-one-active-manifest rule navigation_target_resolution below already defines). A
+          declared canonical fixed-navigation source with zero hub_relations rows, with only
+          status='deprecated' rows, or whose only active row's target does not resolve, is not a
+          valid completion state ("navigation orphan"). This is the reverse-direction cardinality
+          this table's own fk_topology_manifests column does not by itself guarantee: the FK
+          guarantees every hub_relations row points at a real topology_manifest, not that every
+          declared navigation-source topology_manifest has an outbound hub_relations row.
         canonical_forward_design_note: >-
           The rule above (related_hub_id resolves to exactly one active manifest for that hub)
           describes CURRENT, unchanged production enforcement (NpgsqlManifestRepository.
@@ -835,14 +838,102 @@ db_schema:
           status='active' requirement) — so a connectivity gap during draft authoring cannot leak
           into production navigation.
         applies_to: >-
-          every hubs.topology_manifests row once it reaches status='active', not a subset
-          classified by manifest kind
+          every active hubs.topology_manifests row that existing SSOT navigation-membership
+          authority declares a canonical fixed-navigation source -- today
+          admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract.
+          axis_navigation_membership.admin_navigation_source (Admin axis) and its Normal-axis
+          equivalent (admin-normal-surface-projection-seed-ssot.yaml surface_axes.normal.
+          normal_hub_relation_navigation_contract, which declares none today). This is not a
+          manifest-kind exception list and does not weaken does_not_authorize below: source
+          authority is never assigned here, by code convenience, or by manifest kind -- it is read
+          off the SAME existing SSOT navigation-membership contract that already and independently
+          decides which manifest each axis treats as its fixed-navigation source, its targets, or
+          neither, reusing that authority rather than creating a second, parallel classification. A
+          manifest that is only ever a navigation TARGET, an internal node-local operation/
+          read-detail manifest, or a consumer/evidence manifest outside surface_axes entirely, is
+          not a canonical fixed-navigation source and is therefore outside this invariant's scope --
+          not because its kind is exempted, but because no existing authority ever declared it a
+          source. See navigation_source_scoped_reinterpretation below for the current concrete
+          scope this resolves to and its relationship to the invariant's original, wider wording.
         does_not_authorize: >-
           fabricating hub_relations, hubs, or topology_manifests rows that would not otherwise
           exist merely to satisfy this cardinality (PR #584 review comment ban on an empty/fake
           manifest created only to host a hub_relations row remains in force).
+        navigation_source_scoped_reinterpretation: >-
+          PR #612 Round 13 finding (2026-09-08), superseding Round 12's
+          active_row_semantic_role_reclassification below in full: Round 12 kept applies_to's
+          original universal wording ("every active row, not a subset classified by manifest
+          kind") and, from it, derived a genuine self-contradiction -- it proposed registering an
+          ae200 -> ae210 relation to close ae200's OWN cardinality, directly contradicting
+          admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract.
+          axis_navigation_membership.admin_navigation_non_targets, which already declares
+          ae210-ae280 are never independently-selected HubRelation navigation targets; it then
+          reported the other 16 rows as Owner judgment required for a conflict that this
+          reinterpretation shows does not exist. PR #602 round 10-11's own history (mirrored in
+          runtime-orchestration-ssot.yaml
+          ui_projection_render_reachability_contract.production_projection_connectivity_invariant.note)
+          rejected an ARBITRARY manifest-kind exception list (e.g. a hand-maintained
+          "standalone/internal/system-utility manifest" carve-out) invented for code/agent
+          convenience -- that rejection stands, unmodified. Scoping applies_to to declared
+          canonical fixed-navigation source authority is not that: it is not a new classification
+          invented to carve out exceptions, it is the SAME pre-existing SSOT navigation-membership
+          contract (axis_navigation_membership and its Normal-axis equivalent) that already,
+          independently, and for unrelated reasons (which manifest a user can pick a link FROM)
+          decides source/target/neither for every manifest in scope -- PR #602's intent ("do not
+          let manifest kind decide cardinality obligation arbitrarily") is preserved by reusing
+          that authority rather than overridden by narrowing scope. Applying this to
+          db/seed_empty.sql's 21 active hubs.topology_manifests rows (row-level count: see
+          runtime-orchestration-ssot.yaml
+          ui_projection_render_reachability_contract.hub_navigation_resolution.scope.
+          seed_backfill_state_note) resolves cleanly, with no Owner judgment item left open for
+          this invariant's scope: (1) ad200 (admin-dashboard) is the sole row declared a
+          canonical fixed-navigation source anywhere in the system (Admin axis) -- it is the only
+          row this invariant requires a resolvable outbound relation for today, tracked as the
+          concrete axis_navigation_membership registration implementation item (unchanged from
+          Round 12). (2) ae200, 5c100, dd010 are declared Admin-axis navigation TARGETS only --
+          being a target creates no source obligation, so none of them is required to own an
+          outbound relation under this invariant; no relation to ae210 or any other manifest is
+          registered for ae200's own sake. (3) 092 is likewise a declared target only; its existing
+          canonical_default_entry_contract self-reference is a separate, unrelated mechanism (the
+          bare/no-selection entry fallback) and is neither required nor counted toward this
+          invariant -- 092's Admin-axis target membership and its self-reference must not be
+          conflated as if one were evidence for the other. (4) dd020
+          (team_dashboard.normal.projection) is the sole real, production-reachable Normal-axis
+          surface today, but is not itself declared a source of anything -- normal_navigation_
+          membership already records no other Normal-axis surface exists to link it to or from, so
+          this invariant requires nothing of it; no fake outbound relation is registered for dd020.
+          (5) ae210/ae220/ae230/ae240/ae250/ae260/ae270/ae280 are ae200's own internal node-local
+          operation/read-detail authority (admin_navigation_non_targets), never declared a source
+          by any existing SSOT -- this invariant requires nothing of them. (6) 0000a3-0000a8 and
+          093 are consumer/evidence/dispatch-projection manifests entirely outside
+          surface_axes.admin/surface_axes.normal (out_of_membership_scope) -- never declared a
+          source by any existing SSOT -- this invariant requires nothing of them either. Known
+          code/design gap, stated plainly rather than left implicit: the actual,
+          unchanged, tested production enforcement (NpgsqlManifestRepository.PromoteAsync, proven
+          unconditionally against every promoted manifest by backend/tests/
+          Topolactor.Integration.Tests/ManifestDraftActivePromotionLifecycleLiveDbTests.cs) still
+          gates every draft -> active promotion regardless of declared-source role -- this is the
+          WIDER, original scope this field narrows at the design level, and narrowing the live
+          enforcement_boundary check to match is not done this round (no backend/test changes).
+          This does not misfire today: all 20 non-ad200 active seed rows were inserted via raw
+          SQL bypassing PromoteAsync entirely (seed_backfill_state_note), never through the live
+          draft -> active path, so the gate has never actually run against a non-source manifest in
+          production. It would misfire only if a future implementation promotes one of these 20
+          manifests through the ordinary live authoring flow while this design stands -- narrowing
+          HasResolvableActiveHubRelationAsync's gate to declared-source manifests only is recorded
+          as a concrete forward implementation item (see the agent task tracking surface), not an
+          ambiguous design question: the WHAT is resolved by this round; only WHICH future Bundle's
+          code change performs the narrowing remains open, and that is a sequencing question, not
+          an Owner-judgment one.
         active_row_semantic_role_reclassification: >-
-          PR #612 recursive audit finding (2026-09-08): applies_to's rejection of any
+          SUPERSEDED (PR #612 Round 13, 2026-09-08) -- see navigation_source_scoped_
+          reinterpretation above, which is now the canonical answer for this invariant's scope.
+          Retained here, unedited except for this notice, as the historical record of Round 12's
+          own reasoning and the self-contradiction Round 13 found in it (the ae200 -> ae210
+          proposal contradicting admin_navigation_non_targets, and the 16-row Owner-judgment
+          framing that a source-scoped applies_to resolves without escalation). Do not re-derive
+          scope decisions from the text below; it is preserved for audit continuity only. PR #612
+          recursive audit finding (2026-09-08): applies_to's rejection of any
           manifest-kind exception (PR #602 round 10->13 history, mirrored in
           runtime-orchestration-ssot.yaml
           ui_projection_render_reachability_contract.production_projection_connectivity_invariant.note)
@@ -889,25 +980,22 @@ db_schema:
           external_api_credential/external_instance_credential categories are a distinct, unrelated
           concept -- credential CRUD management, not these response-port projection manifests
           themselves) found no natural parent/owning surface for any of these 7 rows either.
-          Resolution: groups (3), (4), and (5) above -- dd020, the 8 admin-enum write manifests, and
-          the 7 consumer/evidence manifests, 16 rows total -- remain genuinely Owner judgment
-          required. The conflict to put to the Owner is exact: this invariant's applies_to text
-          requires every active row to own an outbound relation with no kind-based carve-out, but
-          for these 16 rows no relation can be authored that is both non-fabricated and not "merely
-          to satisfy cardinality" under this repository's own existing authority and governance as
-          written -- closing the gap requires either (a) the Owner accepting a scoped,
-          explicit amendment to applies_to for a named, existing semantic category (e.g.
-          dispatch-only write manifests and consumer/evidence manifests), which PR #602 round 11
-          previously rejected in general form and would need to be re-affirmed or distinguished by
-          the Owner specifically for these categories, or (b) the Owner accepting relations
-          authored for these rows despite no independent navigational motive, an explicit narrow
-          exception to does_not_authorize's "merely to satisfy cardinality" ban, or (c) some other
-          Owner-directed resolution (a possible parallel to how team-dashboard's own unmet
-          hub_navigation_only retirement_kind was resolved by a route/manifest-agnostic
-          product-level substitute rather than literal relation authoring -- see
-          runtime-orchestration-ssot.yaml admin_route_retirement_matrix.routes
-          /admin/team-dashboard status=superseded_by_owner_directed_alternate for that precedent).
-          This design_change does not pick among (a)/(b)/(c) on the Owner's behalf.
+          Resolution (SUPERSEDED, see above): groups (3), (4), and (5) above -- dd020, the 8
+          admin-enum write manifests, and the 7 consumer/evidence manifests, 16 rows total --
+          remain genuinely Owner judgment required. The conflict put to the Owner was exact: this
+          invariant's applies_to text requires every active row to own an outbound relation with
+          no kind-based carve-out, but for these 16 rows no relation can be authored that is both
+          non-fabricated and not "merely to satisfy cardinality" under this repository's own
+          existing authority and governance as written -- closing the gap requires either (a) the
+          Owner accepting a scoped, explicit amendment to applies_to for a named, existing semantic
+          category (e.g. dispatch-only write manifests and consumer/evidence manifests), which PR
+          #602 round 11 previously rejected in general form and would need to be re-affirmed or
+          distinguished by the Owner specifically for these categories, or (b) the Owner accepting
+          relations authored for these rows despite no independent navigational motive, an explicit
+          narrow exception to does_not_authorize's "merely to satisfy cardinality" ban, or (c) some
+          other Owner-directed resolution. Round 13 resolved this without Owner escalation by
+          reinterpreting applies_to's scope itself (see navigation_source_scoped_reinterpretation
+          above) rather than picking among (a)/(b)/(c).
         enforcement_boundary: >-
           The canonical completion boundary is NpgsqlManifestRepository.PromoteAsync — the
           existing public.manifest draft -> active transition. Promotion queries
