@@ -424,19 +424,31 @@ Bundleの全受入条件を満たしたため、Status を `partial` → `implem
 
 relation行自身に任意編集可能な`name`（nullable）を持たせ、未指定時のみ`sequence_position`由来のdefault（"Hub 1"/"Hub 2"/"Hub 3"相当、非永続・reorder追従）を表示するeffective label契約を実装する。
 
-### 本ラウンド（design_change）で確定したSSOT契約
+### 本ラウンド（design_change 第1回）で確定したSSOT契約
 
-- `docs/design/db-schema.yaml`: `hub_relations.key_columns`に`name`（text, nullable, role: user_facing_relation_name）を追加し、`user_facing_name_contract`でsemantic role・effective label優先順位・prohibited fallback・uniqueness scope（active sibling under同一topology_manifest_id、deprecated行除外）・非identity境界を明示。`meaning_collision_guardrails`に`hubs_hub_relations_name_vs_relation_registry_name`を追加し、`relation_registry.name`（hub identity）との衝突境界を明示。`manifest_hub_chain.shape`ミラーにも`name`を反映。
+- `docs/design/db-schema.yaml`: `hub_relations.key_columns`に`name`（text, nullable, role: user_facing_relation_name）を追加し、`user_facing_name_contract`でsemantic role・非identity境界を明示。`meaning_collision_guardrails`に`hubs_hub_relations_name_vs_relation_registry_name`を追加し、`relation_registry.name`との衝突境界を明示。`manifest_hub_chain.shape`ミラーにも`name`を反映。
 - `docs/design/admin-console-workflow-ssot.yaml`: `admin_hub_relation_navigation_contract.authoring`に`relation_name_authoring`を追加し、`hub_navigation:create`/`update`への追加optional fieldとして位置づけ、新規route/新規relation editorを設計しないことを明示。
-- `docs/design/admin-normal-surface-projection-seed-ssot.yaml`: `hub_relation_navigation_binding.relation_display_label_contract`を新設し、effective label優先順位・prohibited fallback authorities・uniqueness scope・非identity境界・次implementation_changeのBundle acceptance条件（SQL schema / backend / Admin Manifests UI / runtime projection / live-DB・DOM proof）を明示。`selected_link_payload_required`は`[hub_relation_id, topology_manifest_id, related_hub_id]`のまま変更していない。
+- `docs/design/admin-normal-surface-projection-seed-ssot.yaml`: `hub_relation_navigation_binding.relation_display_label_contract`を新設。
+
+### 本ラウンド（design_change 第2回・矛盾解消パス、同一PR）で修正したSSOT契約
+
+第1回のcontractは (a) `prohibited_fallback_authorities`が`relation_registry.name`/`related_hub_id`へのfallbackを禁止する一方、`next_implementation_change_bundle_acceptance`自身の例示COALESCE式がそれらへfallbackする自己矛盾、(b) uniquenessを「将来のimplementation_change判断」へ先送りしたまま未確定、(c) `sequence_position`とは別に「active sibling内のordinal position」という新しいrank概念を暗黙導入、(d) `db-schema.yaml`内の`next_implementation_change_bundle_acceptance below`という実体のないlocal参照、という4件の内部矛盾を含んでいたため、同一PR内で以下へ収束した:
+
+- **唯一のeffective label authority**: `admin-normal-surface-projection-seed-ssot.yaml` `hub_relation_navigation_binding.relation_display_label_contract`を単一の正本とし、`db-schema.yaml`側は詳細を再掲せずそこを参照するのみに変更（二重定義のドリフト再発を防止）。
+- **default labelのN**: 新しいordinal/rank計算を廃止し、`sequence_position`列の実値をそのまま`"Hub {sequence_position}"`へ代入する（非連続・非1始まりでも実値をそのまま使う）ことを明示。
+- **prohibited fallback**: `relation_registry.name`/`related_hub_id`/target manifest UUID/manifestKeyへのfallbackを、`next_implementation_change_bundle_acceptance`の受入条件文からも完全除去し、既存の`COALESCE(rr.name, hr.related_hub_id::text)`は「拡張」ではなく「置換（廃止）」する契約へ修正。
+- **uniqueness**: 「将来判断」から本design_changeでの必須contract (`uniqueness_contract`) へ確定。active (`status='active'`) sibling under同一`topology_manifest_id`のみを境界とし、未指定（NULL/空文字）行とdeprecated行はscope外。
+- **未指定nameのcanonical semantics**: NULL と空文字("")を同一の「unspecified」として明示し、explicit name同士の比較は大小文字・trim等の正規化なしの厳密一致とすることを明記（新規normalization policyは発明していない）。
+- **relation_registryのsemantic role**: 既存宣言`abstract_space_definition`を維持し、現行実装が表示fallbackとして利用している事実は「implementation fact」であって「SSOT上のhub identity authority宣言」ではないと明記し、role拡張と誤読されないよう`meaning_collision_guardrails`の記述を修正。
+- **ローカル参照修正**: `db-schema.yaml`の`next_implementation_change_bundle_acceptance below`という実体のない参照を、正しいcross-file参照（`admin-normal-surface-projection-seed-ssot.yaml` `hub_relation_navigation_binding.relation_display_label_contract`）へ修正。
 
 ### 次段（implementation_change）の受入条件
 
 - [ ] SQL: `db/topology_tables.sql`の`hubs.hub_relations`へ`name text NULL`列を追加(destructive DROP CASCADE無し、bootstrap_policy維持)。
-- [ ] backend: `hub_navigation:create`/`hub_navigation:update`が任意の`name`を受理・永続化する。`NpgsqlContentBundleRepository.ListHubRelationsByManifestAsync`/`LoadHubNavigationSequenceAsync`のCOALESCE式を`COALESCE(hr.name, rr.name, hr.related_hub_id::text)`相当へ拡張し、`selected_link_payload_required`(identity)には`name`を追加しない。
-- [ ] Admin Manifests UI: `HubNavigationAdmin.tsx`(既存 `/admin/manifests` authoring surface、新規route/editorなし)に`name`入力と、有効ラベル(named or sequence-derived default)表示を追加。reorder後、name無し行のdefault表示が新しい`sequence_position`に追従することを確認。
+- [ ] backend: `hub_navigation:create`/`hub_navigation:update`が任意の`name`を受理・永続化し、`uniqueness_contract`（同一`topology_manifest_id`配下のactive sibling間でexplicit nameの重複を明示エラーで拒否、NULL/空文字は対象外）を実装する。`NpgsqlContentBundleRepository.ListHubRelationsByManifestAsync`/`LoadHubNavigationSequenceAsync`の既存`COALESCE(rr.name, hr.related_hub_id::text)`は**拡張ではなく置換**し、`effective_label_priority`（explicit `hr.name`、無ければ`"Hub " + hr.sequence_position`）のみに従う。`relation_registry`はこのlabel計算で一切参照しない。`selected_link_payload_required`(identity)には`name`を追加しない。
+- [ ] Admin Manifests UI: `HubNavigationAdmin.tsx`(既存 `/admin/manifests` authoring surface、新規route/editorなし)に`name`入力を追加し、backendの重複拒否を明示バリデーションエラーとして表示し(silent overwrite/silent renameは禁止)、有効ラベル(explicit name or `"Hub {sequence_position}"`)表示を追加。reorder後、name無し行のdefault表示が新しい`sequence_position`に追従することを確認。
 - [ ] runtime projection: `NavigationSequence`emissionの`relatedHubLabel`(またはその後継field)が上記effective label優先順位に従う。`ProjectionShell`/`CardList`/`frontend/runtime/projectionEntry.ts`が単一の解決経路のみを経由する。
-- [ ] live-DB/DOM proof: 明示nameを持つrelationはそのnameを表示し、name無しrelationはsequence_position由来のdefaultを表示し、name無し行のreorder後にdefaultが新しいsequence_positionへ追従し、name付き行のラベルが自身/兄弟行のreorderを経ても不変であることを実DOM/live-DB経由で証明する。
+- [ ] live-DB/DOM proof: 明示nameを持つrelationはそのnameを表示し、name無しrelationは自身の`sequence_position`実値による`"Hub {sequence_position}"`を表示し、name無し行のreorder後にdefaultが新しいsequence_positionへ追従し、name付き行のラベルが自身/兄弟行のreorderを経ても不変であり、同一`topology_manifest_id`配下で同名のactive sibling作成/更新が明示エラーで拒否される一方、異なる`topology_manifest_id`配下やdeprecated行では同名が許容されることを実DOM/live-DB経由で証明する。
 
 ### 対応資料
 

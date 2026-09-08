@@ -63,10 +63,13 @@ admin_console_workflow_ssot:
         additional optional field — it does not add a new dispatch axis, a new route, or a new
         relation editor: /admin/manifests + HubNavigationAdmin.tsx remain the sole authoring
         surface. A future implementation_change closing this design_change extends
-        hub_navigation:create/update to accept it and extends HubNavigationAdmin.tsx's existing
-        table/form with a name input and the resolved effective label (named or
-        sequence_position-derived default); hub_navigation:reorder/deprecate/get_hub_relations/
-        list_manifests need no new parameters for this field.
+        hub_navigation:create/update to accept it, enforce the required active-sibling-per-
+        topology_manifest_id uniqueness contract (see admin-normal-surface-projection-seed-ssot.yaml
+        hub_relation_navigation_binding.relation_display_label_contract.uniqueness_contract for
+        the full scope/exemptions), and extends HubNavigationAdmin.tsx's existing table/form with
+        a name input and the resolved effective label (named or sequence_position-derived
+        default); hub_navigation:reorder/deprecate/get_hub_relations/list_manifests need no new
+        parameters for this field.
       repository: >-
         NpgsqlContentBundleRepository (CreateHubRelationAsync / UpdateHubRelationAsync /
         DeprecateHubRelationAsync / ReorderHubRelationsAsync / ListHubRelationsByManifestAsync /
