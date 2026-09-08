@@ -640,6 +640,15 @@ admin_normal_surface_projection_seed_ssot:
           hub_relation_navigation_binding:
             relation_source: hubs.hub_relations joined through hubs.topology_manifests by explicit topology_manifest_id
             selected_link_payload_required: [hub_relation_id, topology_manifest_id, related_hub_id]
+            selected_link_payload_required_forward_note: >-
+              related_hub_id's presence here reflects CURRENT implementation (unchanged by this
+              design_change). Once docs/design/db-schema.yaml
+              hub_relations.target_reference_canonical_contract's target_topology_manifest_id is
+              physically implemented, a future implementation_change adds it to this identity
+              payload (additive — related_hub_id may remain present as a legacy field on the DTO
+              even after, per that contract's retirement_contract; it simply stops being read for
+              target resolution). This design_change does not change this payload's delivered
+              shape.
             selected_link_payload_delivery: >-
               Fully delivered as of this Bundle: hub_relation_id and the source topology_manifest_id
               were added to HubNavigationSequenceItemDto (backend/schema/ContentBundleContracts.cs)
@@ -661,7 +670,14 @@ admin_normal_surface_projection_seed_ssot:
               identity is available for any future onSelect wiring on this seed's card_list without
               a second resolution path.
             canonical_resolution_rule_ref: docs/design/admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract.resolution_rule
-            target_manifest_resolution: related_hub_id resolves only when exactly one active hubs.topology_manifests row exists for that hub; zero or multiple active rows fail-close to no target.
+            target_manifest_resolution: >-
+              CURRENT implementation (unchanged, still accurate today): related_hub_id resolves
+              only when exactly one active hubs.topology_manifests row exists for that hub; zero
+              or multiple active rows fail-close to no target. Canonical forward design: see
+              docs/design/db-schema.yaml hub_relations.target_reference_canonical_contract
+              (direct target_topology_manifest_id FK, no SQL DDL yet) and
+              docs/design/admin-console-workflow-ssot.yaml
+              admin_hub_relation_navigation_contract.canonical_forward_target_reference.
             runtime_fail_close_negative_cases:
               - missing_hub_relation
               - deprecated_hub_relation
@@ -669,6 +685,17 @@ admin_normal_surface_projection_seed_ssot:
               - multiple_active_target_manifests_for_related_hub_id
               - target_manifest_deprecated
               - first_match_oldest_or_implicit_surface_fallback_required
+            runtime_fail_close_negative_cases_note: >-
+              The six cases above describe CURRENT (related_hub_id-based) implementation and
+              remain accurate/required until physically replaced. Once
+              target_topology_manifest_id is implemented (see target_manifest_resolution above),
+              zero_active_target_manifest_for_related_hub_id and
+              multiple_active_target_manifests_for_related_hub_id no longer apply (a direct FK
+              cannot be zero-or-multiple) and are replaced by a single
+              target_manifest_missing_or_not_active case; missing_hub_relation,
+              deprecated_hub_relation, target_manifest_deprecated, and
+              first_match_oldest_or_implicit_surface_fallback_required carry over unchanged. This
+              list is updated in place by that future implementation_change, not duplicated.
             relation_display_label_contract:
               status: design_change
               revision_note: >-
@@ -1359,12 +1386,16 @@ admin_normal_surface_projection_seed_ssot:
           source or target (same prohibition as
           admin_hub_relation_navigation_contract.prohibited.empty_or_fake_topology_manifest_created_solely_as_a_hub_relation_connection_source).
         target_manifest_resolution: >-
-          Identical, non-negotiable rule as docs/design/runtime-orchestration-ssot.yaml
+          CURRENT implementation (unchanged, still accurate today), identical, non-negotiable
+          rule as docs/design/runtime-orchestration-ssot.yaml
           dispatcher_contract.hub_navigation_resolution and
           admin_hub_relation_navigation_contract.resolution_rule: a related_hub_id resolves to a
           target manifest only when exactly one active hubs.topology_manifests row exists for it.
           Zero or multiple active rows resolve to no target (null), never a first-match/oldest/MIN
-          implicit fallback.
+          implicit fallback. Canonical forward design (design_change, no SQL DDL yet): see
+          docs/design/db-schema.yaml hub_relations.target_reference_canonical_contract — this
+          normal-axis surface reuses the same admin-side canonical redesign and resolution rule,
+          not a separate one.
         capability_requirement: >-
           Pure navigation traversal (resolving and displaying a link) carries no
           capability_requirement.required_role — matching

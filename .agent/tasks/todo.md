@@ -14,6 +14,7 @@
 | `admin-console-workflow-step-wording-boundary` | Seed conversion後の admin console workflow wording boundary | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `ui-builder-schema-composed-override-delta-reachability` | schema-composed override-delta nodeがUI-Builder再オープン時に消失するnode-loss gap | not_started | 1 | 未割当（`frontend-canonical-surface-structure-label-boundary` PR#610 9ラウンド目監査からの新規発見、別scope） | `docs/design/runtime-orchestration-ssot.yaml` / `docs/design/react-schema-topology-seed-translator-ssot.yaml` |
 | `hub-relations-user-facing-name` | hubs.hub_relations に relation自身のuser-facing name authorityを追加する implementation_change | not_started | 1 | 未割当（design_change PRでSSOT契約のみ確定、実装は本Bundleの後段） | `docs/design/db-schema.yaml` / `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/admin-normal-surface-projection-seed-ssot.yaml` |
+| `hub-relation-target-manifest-canonical-migration` | `related_hub_id`をtarget-resolution authorityから退役させ、直接FKの`target_topology_manifest_id`へ物理移行する implementation_change | not_started | 1 | 未割当（design_change PRでcanonical契約とretirement sentinelのみ確定、物理移行は本Bundleの後段） | `docs/design/db-schema.yaml` / `docs/design/runtime-orchestration-ssot.yaml` / `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/admin-normal-surface-projection-seed-ssot.yaml` |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
 
@@ -455,3 +456,53 @@ relation行自身に任意編集可能な`name`（nullable）を持たせ、未�
 - `docs/design/db-schema.yaml`
 - `docs/design/admin-console-workflow-ssot.yaml`
 - `docs/design/admin-normal-surface-projection-seed-ssot.yaml`
+
+---
+
+## Bundle `hub-relation-target-manifest-canonical-migration`
+
+**Status:** `not_started`
+**Primary SSOT:** `docs/design/db-schema.yaml` `db_schema.tables.hub_relations.target_reference_canonical_contract`（正本）/ `docs/design/runtime-orchestration-ssot.yaml` `ui_projection_render_reachability_contract.hub_navigation_resolution` / `docs/design/admin-console-workflow-ssot.yaml` `admin_hub_relation_navigation_contract` / `docs/design/admin-normal-surface-projection-seed-ssot.yaml` `hub_relation_navigation_binding`
+**Position:** design_change（本PR、PR #612の同一design_changeの一部として追加）の後段 implementation_change。SQL DDL / backend / frontend / test実装はすべて未着手。
+
+### 問題点
+
+`hubs.hub_relations`のtarget resolution authorityが`related_hub_id`（target Hub UUID）経由の「そのHubに紐づくactive Manifestがexactly one」という推論であり、Owner設計意図（source Manifest → HubRelation → target Manifestの直接参照）と一致していなかった。全体監査により、Top SSOT（`docs/framework-core.yaml` `phase_attention_axis_mapping`）のcanonical Phase軸（`hub_relation_id -> topology_manifest_id -> hub_id`、常にrelationのSOURCE側から導出）は`related_hub_id`に一切依存しないことが確認され、`related_hub_id`はcanonical Phase Attention semanticsとは無関係な、target-resolutionのためだけの後付けfieldであることが判明した。
+
+### 目的
+
+`related_hub_id`をcanonical target-resolution authorityから退役させ、直接FKの`target_topology_manifest_id`（Manifest UUID）へ物理移行する。SQL Attentionのcanonical Phase軸・遠方探索semanticは変更しない。
+
+### 本ラウンド（design_change）で確定したSSOT契約
+
+- **retirement sentinel**: `HUB_RELATIONS_RELATED_HUB_ID__RETIREMENT_PENDING_SENTINEL__TARGET_TOPOLOGY_MANIFEST_ID`（non-production metadata専用。runtime/DB/UIへ混入させないこと）。この文字列でrepo全体（SSOT/TODO）をgrepすれば、本Bundleが追跡すべき記述箇所を再発見できる。
+- `docs/design/db-schema.yaml`: `hub_relations.key_columns`に`target_topology_manifest_id`（uuid, forward end-state NOT NULL, FK to hubs.topology_manifests, canonical）を追加し、`related_hub_id`のroleを`legacy_replacement_pending_no_canonical_authority`へ変更。新設`target_reference_canonical_contract`（`hub_relations`の`key_columns`と同階層）に、canonical target field・canonical resolution rule（direct FK existence+status check、exactly-one推論なし）・`related_hub_id`のretirement contract（permitted/prohibited uses、既知consumer一覧、SELF_LOOPガードの再判定要否をOwner判断へ明示委譲）・legacy_target_resolution（現行実装の正確な記述、削除ではなく「canonical forwardではない」というマーキングのみ）を格納。`minimum_cardinality_completion_invariant`・`manifest_hub_chain.shape`/`navigation_target_resolution`・`meaning_collision_guardrails`・`compatibility_history`・`phase_attention_axis_mapping`（`related_hub_id_derived_hub_axis_note`/`relation_vector_element_type_note`、既存`canonical_ID_space_axes`自体は不変）へ同様のcanonical-forward-vs-current-implementation層を追加。
+- `docs/design/runtime-orchestration-ssot.yaml`: `hub_navigation_resolution.target_manifest_resolution`（現行実装として保持）に`canonical_forward_target_reference`ポインタを追加。`test_proof_contract`に`canonical_forward_scope_note`を追加し、既存test（`HubRelationUiProjectionResolutionChainProof.cs`等）は本design_changeで一切変更されないことと、次implementation_changeでの更新方針（canonicalに追従させるか、旧semantic専用のtestはstale proofとして退役させるかを個別に再判定すること）を明示。`canonical_default_entry_contract`は本redesignと無関係であることを明示（`relation_config.transition`marker + 自身の`topology_manifest_id`のみを使用し、`related_hub_id`/target resolutionを一切経由しないため）。
+- `docs/design/admin-console-workflow-ssot.yaml`: `admin_hub_relation_navigation_contract.resolution_rule`（現行実装として保持）に`canonical_forward_target_reference`を追加し、次implementation_changeでHubNavigationAdminの authoring surfaceが「target Hubを選ぶ」から「target Manifestを直接選ぶ」へ変わること（既存の`ManifestsAdmin.tsx`のManifest一覧をSOURCE選択と同様に再利用、新規pickerUIコンセプトは不要）を明示。`topology_naming_ssot.user_facing_topology_label`に`hub_relation_target_picker_naming_note`を追加し、本design_changeが要求するManifest命名原則（explicit `userFacingTopologyLabel`のみがcanonical、未設定時はUI-only「`Manifest {ordinal}`」、`topologySystemName`/`manifestKey`/table name/UUIDへのpromotion禁止）を、既存の`display_rule`（`?? topologySystemName`）自体を書き換えずに、target-picker consumerへ限定して明示。既存`display_rule`との整合（app全体のManifest表示名fallbackポリシーの再検討）は明示的に別スコープとして本Bundleでは対応しない。
+- `docs/design/admin-normal-surface-projection-seed-ssot.yaml`: `hub_relation_navigation_binding.target_manifest_resolution`/`runtime_fail_close_negative_cases`（現行実装として保持）に同様のforward pointerと`runtime_fail_close_negative_cases_note`（`zero_active_target_manifest_for_related_hub_id`/`multiple_active_target_manifests_for_related_hub_id`は直接FK化により次implementation_changeで単一の`target_manifest_missing_or_not_active`へ統合される）を追加。`selected_link_payload_required`に`selected_link_payload_required_forward_note`を追加（`target_topology_manifest_id`は次implementation_changeでadditiveに追加、`related_hub_id`は即時削除ではなくlegacy fieldとしてDTOに残り得る）。normal-axis surfaceの`source_and_target_eligibility`直下の`target_manifest_resolution`にも同じcanonical forwardポインタを追加。
+
+### 次段（implementation_change）が開始する手順
+
+1. **retirement sentinel文字列でrepo全体をgrep**して、本design_changeが記録した追跡箇所（SSOT/TODOの上記記述）と、`db-schema.yaml` `target_reference_canonical_contract.related_hub_id_retirement_contract.known_current_consumers_to_replace`に列挙済みの既知consumer（backend: `NpgsqlContentBundleRepository.CreateHubRelationAsync`/`UpdateHubRelationAsync`/`LoadHubNavigationSequenceAsync`、`ContentBundleRepository.HasResolvableActiveHubRelationAsync`、`HubNavigationHubRelationItemDto`/`HubNavigationSequenceItemDto`/`HubNavigationCreateRequestDto`/`HubNavigationUpdateRequestDto`；frontend: `adminApi.ts`の`createHubRelation`/`updateHubRelation`、`dispatch.ts`の`HubNavigationSequenceItem`、`HubNavigationAdmin.tsx`の`draftRelatedHubId`；tests: `HubRelationUiProjectionResolutionChainProof.cs`と依存する各`*HubRelationUiProjectionLiveDbTests.cs`、`ManifestDraftActivePromotionLifecycleLiveDbTests.cs`、`HubNavigationFallbackLinksTests.cs`、`AdminRuntimeContentBundleTests.cs`のSELF_LOOP assertion、`InMemoryContentBundleRepository.cs`）から開始する。SEARCH/DISPLAY・SQLAT-EVIDENCE分類の消費者（`ListContentHubRelationsAsync`/`ListHubRelationsByManifestAsync`の表示専用read、`adminUxTerms.ts`、`NpgsqlSqlAttentionLogsRepository`/`HubAttractorExplorationRuntime.cs`）はこのreplacement scopeに含めない。
+2. **canonicalに置換した結果、発火するtest failureを影響検出器として使用する**。旧semanticを期待しているtest failureが見つかった場合、旧仕様（`related_hub_id`ベースのexactly-one推論）を復活させて回帰を消すのではなく、そのtestが実際にどのcanonical contract（例:「target Manifestは直接参照で解決される」）を証明しようとしていたかを再判定し、(a) canonicalな表現へ追従させて更新するか、(b) 旧semantic自体が証明対象だった場合はstale proofとして更新・退役させるか、のいずれかを個別に判断する。
+3. `target_topology_manifest_id`のSQL DDL追加とbackfill（既存rowは現行の`related_hub_id`ベース解決結果から一度だけbackfillしてからNOT NULL化する、具体的なDDL/backfill手順は本design_change未確定）。
+4. SELF_LOOPガードの新field向け再定義（本design_change未確定、Owner判断が必要 — `canonical_default_entry_contract`の自己参照シード行が新guardの下でも到達可能であることを再確認すること）。
+5. `phase_attention_axis_mapping.related_hub_id_derived_hub_axis_note`が指摘する`expandedHubIds`（`HubAttractorExplorationRuntime.cs`）の`RelatedHubId`折り込みについて、維持・`target_topology_manifest_id`由来へ差し替え・削除のいずれかをOwner判断で決定する（本design_changeでは判断しない）。
+
+### 次段（implementation_change）の受入条件
+
+- [ ] SQL: `hubs.hub_relations`へ`target_topology_manifest_id UUID`列を追加（FK to `hubs.topology_manifests`）。既存rowをbackfillしてから`NOT NULL`化する。destructive DROP CASCADE無し。
+- [ ] backend: `hub_navigation:create`/`hub_navigation:update`が`target_topology_manifest_id`を受理・永続化する。`LoadHubNavigationSequenceAsync`等のtarget解決を、`related_hub_id`ベースのexactly-one推論から`target_topology_manifest_id`の直接FK existence+status checkへ置換する（`related_hub_id`は物理削除せず、legacy fieldとして残す；読み取り専用の新規consumerは作らない）。SELF_LOOPガードを新field向けに再定義する（手順4参照）。
+- [ ] Admin Manifests UI: `HubNavigationAdmin.tsx`のauthoring formが、target Hub選択から既存Manifest一覧を再利用したtarget Manifest直接選択へ変わる。未命名Manifestの表示は`hub_relation_target_picker_naming_note`のUI-only「`Manifest {ordinal}`」に従う（永続化しない、新規index列を追加しない）。
+- [ ] runtime projection: `NavigationSequence`emissionが`target_topology_manifest_id`ベースの解決を反映する。`selected_link_payload_required`へ`target_topology_manifest_id`をadditiveに追加する。
+- [ ] SQL Attention: `phase_attention_axis_mapping.canonical_ID_space_axes`（w/x/y/z/i/j/k）と遠方探索/exploration_budget_gate semanticsが変更されていないことを回帰確認する。`related_hub_id_derived_hub_axis_note`の`expandedHubIds`折り込みについて、手順5の判断が実装へ反映されていることを確認する。
+- [ ] test判断: `known_current_consumers_to_replace`列挙のtestそれぞれについて、canonical契約へ追従させたか、stale proofとして退役させたかを明示し、いずれの場合も理由を記録する。旧仕様を復活させて回帰を消すことは禁止。
+- [ ] live-DB/DOM proof: `target_topology_manifest_id`による直接解決（zero/multiple-active-manifest推論の失敗モードが構造的に発生しないこと）、`target_manifest_missing_or_not_active`のfail-close、既存`canonical_default_entry_contract`（manifest 092自己参照行）が新guard下でも変わらず到達可能であることを実DOM/live-DB経由で証明する。
+
+### 対応資料
+
+- `docs/design/db-schema.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/admin-console-workflow-ssot.yaml`
+- `docs/design/admin-normal-surface-projection-seed-ssot.yaml`
+- `docs/framework-core.yaml`（`phase_attention_axis_mapping`は本Bundleの回帰確認対象、変更対象ではない）

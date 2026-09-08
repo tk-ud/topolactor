@@ -365,12 +365,23 @@ runtime_orchestration_ssot:
         runtime_destination via HubNavigationResolver, not only topology_transform_runtime
         (RuntimeExecutor already performed this for its own path prior to this addendum).
       target_manifest_resolution: >-
-        HubNavigationSequenceItemDto.TargetManifestId is resolved only when exactly one active
-        hubs.topology_manifests row exists for NavigationSequence[].RelatedHubId — no implicit
-        oldest/first-match fallback (mirrors topology.physical_table_manifest_bindings'
+        CURRENT implementation (unchanged by the design_change noted below, and still an
+        accurate description of production today): HubNavigationSequenceItemDto.TargetManifestId
+        is resolved only when exactly one active hubs.topology_manifests row exists for
+        NavigationSequence[].RelatedHubId — no implicit oldest/first-match fallback (mirrors
+        topology.physical_table_manifest_bindings'
         no_implicit_join_nullable_fallback_or_oldest_manifest_fallback invariant in
         db-schema.yaml). Null/absent means the frontend must treat the related hub as not
         directly callable, never guess a target.
+      canonical_forward_target_reference: >-
+        Owner canonical redesign (design_change, no SQL DDL/backend/frontend/test change yet):
+        docs/design/db-schema.yaml hub_relations.target_reference_canonical_contract is the sole
+        canonical definition of the forward target-resolution design -- a direct
+        target_topology_manifest_id FK, replacing the related_hub_id-based exactly-one-active-
+        manifest inference described in target_manifest_resolution above. This field is a
+        pointer, not a restatement; once physically implemented, target_manifest_resolution
+        above is updated in place to describe the new current behavior rather than kept as an
+        independently-drifting second copy.
     admin_runtime_structural_read_fallback:
       owner: manifest_dispatcher
       trigger: >-
@@ -494,6 +505,26 @@ runtime_orchestration_ssot:
             fallback)
         - this contract does not authorize a dedicated credential-management route, dedicated
             panel, or new runtime_destination
+      canonical_forward_scope_note: >-
+        test_input_shape / resolution_chain / proof_boundary above describe CURRENT
+        implementation and CURRENT passing proof (unchanged by this design_change — every test
+        listed in docs/design/db-schema.yaml
+        hub_relations.target_reference_canonical_contract.related_hub_id_retirement_contract.
+        known_current_consumers_to_replace remains valid and must keep passing as-is). The
+        canonical forward target-resolution design is
+        db-schema.yaml hub_relations.target_reference_canonical_contract (target_topology_manifest_id,
+        no SQL DDL yet). When a future implementation_change physically replaces related_hub_id
+        with target_topology_manifest_id, it must update this test_proof_contract (test_input_shape's
+        hub_ids[] becomes a manifest_ids[] vector, resolution_chain's RelatedHubId/TargetManifestId
+        steps are rewritten, proof_boundary's "exactly one ACTIVE manifest for a related hub"
+        clause is replaced by a direct target_topology_manifest_id existence+status check) in the
+        same change that updates the code — not leave this text describing a retired mechanism.
+        Where an existing test in the known_current_consumers_to_replace list turns out, on
+        inspection, to assert the OLD related_hub_id-based semantic as its actual point (rather
+        than incidentally using related_hub_id as test plumbing), that implementation_change must
+        judge what canonical contract the test is meant to prove and either update it to prove
+        the new canonical contract or retire it as stale proof — never keep the old semantic
+        alive by leaving the test unchanged and calling it done.
 
     production_projection_connectivity_invariant:
       note: >-
@@ -617,7 +648,12 @@ runtime_orchestration_ssot:
         explicit manifest, no pre-injected payload.target_ref) resolves an initial manifest.
         Distinct from hub_navigation_resolution above, which resolves OUTBOUND navigation links
         from an ALREADY-resolved manifest -- this contract is consulted BEFORE any manifest is
-        resolved, as the initial-resolution fallback itself.
+        resolved, as the initial-resolution fallback itself. Unaffected by
+        db-schema.yaml hub_relations.target_reference_canonical_contract (the related_hub_id ->
+        target_topology_manifest_id redesign): this contract resolves the marked relation's own
+        topology_manifest_id (its source/parent manifest field), never related_hub_id or any
+        outbound target field, so retiring related_hub_id's target-resolution authority does not
+        touch this mechanism.
       owner: hubs.hub_relations
       marker:
         field: relation_config.transition

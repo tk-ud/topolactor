@@ -117,7 +117,8 @@ admin_console_workflow_ssot:
         defined anywhere in this SSOT family and are explicitly out of this Bundle's scope; a future
         dedicated Bundle would need its own SSOT authority if that need ever arises.
     resolution_rule: >-
-      Identical, non-negotiable rule as
+      CURRENT implementation (unchanged by canonical_forward_target_reference below, and still
+      an accurate description of production today), identical, non-negotiable rule as
       docs/design/runtime-orchestration-ssot.yaml
       dispatcher_contract.hub_navigation_resolution.target_manifest_resolution: a related_hub_id
       resolves to a target manifest only when exactly one active hubs.topology_manifests row
@@ -125,6 +126,17 @@ admin_console_workflow_ssot:
       first-match/oldest/MIN implicit fallback. Source topology_manifest, related hub, and
       sequence_position must each be explicit; only active relations and active target manifests
       are reachable.
+    canonical_forward_target_reference: >-
+      Owner canonical redesign (design_change, no SQL DDL/backend/frontend/test change yet):
+      docs/design/db-schema.yaml hub_relations.target_reference_canonical_contract is the sole
+      canonical forward definition -- a direct target_topology_manifest_id FK the admin selects,
+      replacing the related-hub inference resolution_rule above describes. A future
+      implementation_change extends the authoring surface below so the admin picks a target
+      MANIFEST directly (reusing the same existing "list every hubs.topology_manifests row"
+      mechanism ManifestsAdmin.tsx already uses for SOURCE selection -- see authoring.surface
+      above; no new picker UI concept), instead of picking a target Hub via related_hub_id. Once
+      implemented, resolution_rule above is updated in place to match rather than kept as a
+      second, independently-drifting description.
     connection_state_authority: >-
       Whether any specific hubs.hub_relations row currently exists between two manifests is
       runtime/admin data, observed via /admin/manifests (HubNavigationAdmin.tsx) or a direct
@@ -424,6 +436,23 @@ admin_console_workflow_ssot:
       format: any string including Japanese
       meaning: optional human-readable display name; NOT used for route/table/key derivation
       display_rule: "visibleName = userFacingTopologyLabel ?? topologySystemName"
+      hub_relation_target_picker_naming_note: >-
+        Flag only, not a change to display_rule above (this design_change does not touch
+        topology_naming_ssot's existing, already-implemented, production display_rule -- doing
+        so has app-wide blast radius across /admin/manifests, UI-Builder, and the wiring
+        inspector, well beyond this HubRelation redesign's own scope). The new
+        admin_hub_relation_navigation_contract.canonical_forward_target_reference above needs a
+        naming principle for the Manifest-target-picker it introduces (reusing this same
+        userFacingTopologyLabel field, not a new one): canonical human name = explicit
+        userFacingTopologyLabel only; when unset, that specific picker's own UI-only fallback is
+        "Manifest {ordinal}" (ordinal = the manifest's own position within whatever list the
+        picker already displays -- no new persisted index/rank column), never a promotion of
+        topologySystemName, manifestKey, a table name, or a UUID to canonical human name. This
+        is narrower than, and does not attempt to redefine, this field's existing
+        "?? topologySystemName" display_rule for its other, already-implemented consumers
+        (ManifestsAdmin.tsx's general Manifest list included) -- reconciling the two rules into
+        one app-wide naming policy is an explicit, separate, Owner-scoped follow-up (see
+        .agent/tasks/todo.md), not decided here.
     additional_table_system_name:
       required: true for tables beyond primary
       format: same as topology_system_name (kebab-case)
