@@ -493,6 +493,25 @@ db_schema:
             phase_attention_axis_mapping.relation_vector_element_type_note). Neither this
             design_change nor its future implementation_change may replace sequence_position
             with a different ordinal/rank mechanism.
+          reorder_mutation_contract: >-
+            hub_navigation:reorder (NpgsqlContentBundleRepository.ReorderHubRelationsAsync) is a
+            persistence mutation, not a display-only reordering: it rewrites the real
+            sequence_position integer value stored on each affected hub_relations row within a
+            single source topology_manifest_id. There is exactly one sequence_position authority
+            per relation row -- the same persisted value UI ordering, the manifest-scoped
+            relation-vector test_input_shape (docs/design/runtime-orchestration-ssot.yaml
+            ui_projection_render_reachability_contract.test_proof_contract.test_input_shape), and
+            SQL Attention's far-search over that vector (see
+            phase_attention_axis_mapping.relation_vector_element_type_note) all read; reorder
+            changing this value is therefore a relation-vector coordinate change, not merely a
+            rendering change, and neither this design_change nor a future implementation_change
+            may introduce a second, separate ordinal/rank authority for UI display versus SQL
+            Attention consumption. sequence_position=0 (or any other specific integer value)
+            carries no special meaning beyond ordinary sequence order -- it is never promoted to
+            a control-row, default-entry, or other reserved marker; that role belongs solely to
+            relation_config.transition="canonical_default_entry" (see the canonical_default_entry_marker
+            note on relation_config below), which is deliberately independent of
+            sequence_position's numeric value.
         - name: relation_config
           type: jsonb
           role: optional_sequence_metadata
@@ -577,20 +596,34 @@ db_schema:
             related_hub_id loses canonical target-resolution authority as of this design_change's
             SSOT. It is NOT physically dropped, migrated, renamed, or stopped-being-read/written
             by this design_change -- no SQL DDL, backend, frontend, or test code changes here.
-            Every existing consumer listed below continues to function completely unchanged
-            until a future implementation_change performs the physical replacement.
+            Every existing consumer in full_retirement_tracking_inventory below (both tiers)
+            continues to function completely unchanged until a future implementation_change
+            performs the relevant physical replacement.
           permitted_uses_until_physical_migration: >-
-            Continued reads/writes by all existing, unmodified code paths (see known_current_
-            consumers below); migration-utility and historical/audit reference (e.g. search
-            listing display, COALESCE(rr.name, hr.related_hub_id::text) label fallback still in
-            place); SQL Attention evidence generation (unchanged, see
+            Continued reads/writes by all existing, unmodified code paths (see
+            full_retirement_tracking_inventory below); migration-utility and historical/audit
+            reference (e.g. search listing display, COALESCE(rr.name, hr.related_hub_id::text)
+            label fallback still in place); SQL Attention evidence generation (unchanged, see
             phase_attention_axis_mapping.related_hub_id_derived_hub_axis_note below).
           prohibited: >-
             No new code path introduced after this design_change may derive target-manifest
             resolution from related_hub_id; any new consumer needing the navigable target
             manifest must use target_topology_manifest_id (once physically added) or, until then,
             must not be built against related_hub_id as if it were canonical.
-          known_current_consumers_to_replace: >-
+          inventory_scope_note: >-
+            Two distinct scopes, not one -- this distinction exists specifically so that neither
+            tier is mistaken for the other: (1) first_implementation_change_replacement_scope is
+            what the next implementation_change actually replaces (the target-resolution
+            mechanism itself); (2) full_retirement_tracking_inventory is every consumer this
+            design_change's repo-wide research found reading or writing related_hub_id for ANY
+            reason, target-resolution or not. Being outside tier (1) is a sequencing decision
+            (handled by a later implementation_change once tier (1)'s replacement lands), never a
+            permanent exemption from tier (2) -- a consumer's SEARCH/DISPLAY or SQLAT-EVIDENCE
+            classification is a reason to defer it, not a reason to drop it from tracking, because
+            related_hub_id's own eventual physical removal (once every tier-(2) consumer has
+            somewhere else to read from) is the actual end state this retirement contract is
+            building toward.
+          first_implementation_change_replacement_scope: >-
             Enumerated by repo-wide research for this design_change (backend):
             NpgsqlContentBundleRepository.CreateHubRelationAsync/UpdateHubRelationAsync (read/write
             related_hub_id, SELF_LOOP guard comparing it to the source manifest's own hub_id),
@@ -611,14 +644,27 @@ db_schema:
             thorough direct proof of the exactly-one-active-manifest resolution semantics),
             HubNavigationFallbackLinksTests.cs, AdminRuntimeContentBundleTests.cs (SELF_LOOP
             assertions), InMemoryContentBundleRepository.cs (reimplements the same resolution and
-            SELF_LOOP guard in-memory). NOT in scope for this replacement (leave untouched, these
-            are the SEARCH/DISPLAY and SQLAT-EVIDENCE categories, not target-resolution):
+            SELF_LOOP guard in-memory). This tier is what "the next implementation_change" means
+            everywhere else in this contract refers to, unless stated otherwise.
+          full_retirement_tracking_inventory: >-
+            Every first_implementation_change_replacement_scope entry above, PLUS the consumers
+            that tier defers (SEARCH/DISPLAY and SQLAT-EVIDENCE, not target-resolution, per
+            inventory_scope_note above -- deferred to a later implementation_change, not excluded):
             ListContentHubRelationsAsync / ListHubRelationsByManifestAsync's display-only
-            related_hub_id/RelatedHubLabel reads, adminUxTerms.ts's raw-vocabulary label
-            dictionary entry, and NpgsqlSqlAttentionLogsRepository.
-            LoadHubRelationExplorationCandidatesAsync / HubAttractorExplorationRuntime.cs's
-            SQLAT/phaseAT evidence generation (see phase_attention_axis_mapping note below --
-            explicitly excluded from this redesign's replacement set).
+            related_hub_id/RelatedHubLabel reads (their eventual replacement source, once
+            related_hub_id is fully retired, is an Owner decision for that later
+            implementation_change -- e.g. deriving a display value from target_topology_manifest_id
+            instead -- not decided or assumed here), adminUxTerms.ts's raw-vocabulary label
+            dictionary entry, NpgsqlSqlAttentionLogsRepository.LoadHubRelationExplorationCandidatesAsync,
+            and HubAttractorExplorationRuntime.cs's expandedHubIds folding of RelatedHubId (this
+            last one is also tracked, with its own replace-or-remove judgment left open, under
+            phase_attention_axis_mapping.related_hub_id_derived_hub_axis_note below -- the two
+            notes describe the same tracked item from two entry points, not two different items).
+            A later implementation_change re-reads this full inventory (via the retirement_sentinel
+            grep, not by re-deriving it from scratch) once first_implementation_change_replacement_scope
+            has landed, and judges each entry still on the list on its own merits rather than
+            assuming any of them are already resolved just because target-resolution itself was
+            replaced.
           self_loop_guard_note: >-
             The existing SELF_LOOP guard (NpgsqlContentBundleRepository.CreateHubRelationAsync/
             UpdateHubRelationAsync, error code "SELF_LOOP") rejects an ordinary authored relation
@@ -1798,13 +1844,21 @@ phase_attention_axis_mapping:
     (backend/runtime/HubAttractorExplorationRuntime.cs expandedHubIds,
     ~lines 129-177) additionally folds related_hub_id (the relation's current/legacy TARGET
     hub) into the same evidence array alongside the canonical source-side hub_id, which is
-    broader than this canonical z-axis definition. This design_change does not change that
-    implementation (SQL Attention's far-search/exploration-budget semantics above are
-    untouched); it only records that related_hub_id's role here is a separate, additional
-    signal, distinct from the canonical Phase axis, whose replacement-need (keep as an
-    additional signal once target_topology_manifest_id exists, fold target_topology_manifest_id
-    in instead, or drop it) is an explicit open question for the next implementation_change to
-    judge -- not decided by this design_change.
+    broader than this canonical z-axis definition. This design_change does not change that code
+    (SQL Attention's far-search/exploration-budget semantics and the canonical x/y/z, i/j/k axes
+    above are untouched); it only records that related_hub_id's role here is a legacy/additional
+    dependency, never itself the canonical z/k axis, tracked (not excluded) in
+    hub_relations.target_reference_canonical_contract.related_hub_id_retirement_contract.
+    full_retirement_tracking_inventory. Its replacement-need (keep it as an additional signal once
+    target_topology_manifest_id exists, fold target_topology_manifest_id in instead, or drop it)
+    is an explicit open question left for a later implementation_change to judge, not decided by
+    this design_change. If an existing SQL Attention test is found asserting on this
+    related_hub_id-derived signal specifically, that is not, by itself, grounds to treat the
+    signal as canonical or to keep it unchanged forever -- the same judge-the-proof-target
+    discipline in runtime-orchestration-ssot.yaml
+    ui_projection_render_reachability_contract.hub_navigation_resolution.canonical_forward_scope_note
+    applies here too: re-derive what the test is meant to prove before deciding whether it still
+    applies once this signal's replacement-need question above is resolved.
   relation_vector_element_type_note: >-
     Clarification only (this design_change) -- distinct from canonical_ID_space_axes above.
     docs/design/runtime-orchestration-ssot.yaml

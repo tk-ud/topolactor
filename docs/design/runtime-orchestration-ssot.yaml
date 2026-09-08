@@ -506,12 +506,12 @@ runtime_orchestration_ssot:
         - this contract does not authorize a dedicated credential-management route, dedicated
             panel, or new runtime_destination
       canonical_forward_scope_note: >-
-        test_input_shape / resolution_chain / proof_boundary above describe CURRENT
-        implementation and CURRENT passing proof (unchanged by this design_change — every test
-        listed in docs/design/db-schema.yaml
+        test_input_shape / resolution_chain / proof_boundary above describe the mechanism already
+        built and its passing proof (unchanged by this design_change — every test listed in
+        docs/design/db-schema.yaml
         hub_relations.target_reference_canonical_contract.related_hub_id_retirement_contract.
-        known_current_consumers_to_replace remains valid and must keep passing as-is). The
-        canonical forward target-resolution design is
+        first_implementation_change_replacement_scope remains valid and must keep passing as-is).
+        The canonical forward target-resolution design is
         db-schema.yaml hub_relations.target_reference_canonical_contract (target_topology_manifest_id,
         no SQL DDL yet). When a future implementation_change physically replaces related_hub_id
         with target_topology_manifest_id, it must update this test_proof_contract (test_input_shape's
@@ -519,12 +519,18 @@ runtime_orchestration_ssot:
         steps are rewritten, proof_boundary's "exactly one ACTIVE manifest for a related hub"
         clause is replaced by a direct target_topology_manifest_id existence+status check) in the
         same change that updates the code — not leave this text describing a retired mechanism.
-        Where an existing test in the known_current_consumers_to_replace list turns out, on
-        inspection, to assert the OLD related_hub_id-based semantic as its actual point (rather
-        than incidentally using related_hub_id as test plumbing), that implementation_change must
-        judge what canonical contract the test is meant to prove and either update it to prove
-        the new canonical contract or retire it as stale proof — never keep the old semantic
-        alive by leaving the test unchanged and calling it done.
+        Where an existing test in that first_implementation_change_replacement_scope list turns
+        out, on inspection, to assert the OLD related_hub_id-based semantic as its actual point
+        (rather than incidentally using related_hub_id as test plumbing), that
+        implementation_change must judge what canonical contract the test is meant to prove and
+        either update it to prove the new canonical contract or retire it as stale proof — never
+        keep the old semantic alive by leaving the test unchanged and calling it done. This same
+        judge-don't-revert discipline applies to db-schema.yaml's
+        full_retirement_tracking_inventory (the broader tier covering SEARCH/DISPLAY and
+        SQLAT-EVIDENCE consumers deferred out of this first replacement) once a later
+        implementation_change reaches those entries — a test built against that deferred tier is
+        not exempt from the same judgment just because it wasn't touched by the first
+        implementation_change.
 
     production_projection_connectivity_invariant:
       note: >-
