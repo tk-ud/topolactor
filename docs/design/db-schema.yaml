@@ -699,9 +699,14 @@ db_schema:
             instead -- not decided or assumed here), adminUxTerms.ts's raw-vocabulary label
             dictionary entry, NpgsqlSqlAttentionLogsRepository.LoadHubRelationExplorationCandidatesAsync,
             and HubAttractorExplorationRuntime.cs's expandedHubIds folding of RelatedHubId (this
-            last one is also tracked, with its own replace-or-remove judgment left open, under
-            phase_attention_axis_mapping.related_hub_id_derived_hub_axis_note below -- the two
-            notes describe the same tracked item from two entry points, not two different items).
+            last one is also tracked, with its retirement already resolved as a firm decision --
+            not an open replace-or-remove judgment -- under
+            phase_attention_axis_mapping.related_hub_id_derived_hub_axis_note below: it is a
+            retirement target that converges onto the existing canonical source-side
+            relation-to-Manifest-to-Hub z/k derivation, never a candidate for continuation and
+            never to be replaced by a new target_topology_manifest_id-derived parallel signal --
+            the two notes describe the same tracked item and the same firm resolution from two
+            entry points, not two different items or two different answers).
             A later implementation_change re-reads this full inventory (via the retirement_sentinel
             grep, not by re-deriving it from scratch) once first_implementation_change_replacement_scope
             has landed, and judges each entry still on the list on its own merits rather than

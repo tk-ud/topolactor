@@ -426,6 +426,10 @@ Bundleの全受入条件を満たしたため、Status を `partial` → `implem
 
 relation行自身に任意編集可能な`name`（nullable）を持たせ、未指定時のみ`sequence_position`由来のdefault（"Hub 1"/"Hub 2"/"Hub 3"相当、非永続・reorder追従）を表示するeffective label契約を実装する。
 
+### 改善方針
+
+`hubs.hub_relations`へnullableな`name`列を追加し、既存の`COALESCE(rr.name, hr.related_hub_id::text)`によるfallback表示を、明示name優先・未指定時は`sequence_position`実値による`"Hub {sequence_position}"`という単一のeffective label優先順位へ置換する。以下の各ラウンドで、この方針が内包していた内部矛盾（fallback禁止と例示COALESCE式の不整合、uniquenessの先送り、暗黙rank概念の導入）を同一PR内で収束させた。
+
 ### 本ラウンド（design_change 第1回）で確定したSSOT契約
 
 - `docs/design/db-schema.yaml`: `hub_relations.key_columns`に`name`（text, nullable, role: user_facing_relation_name）を追加し、`user_facing_name_contract`でsemantic role・非identity境界を明示。`meaning_collision_guardrails`に`hubs_hub_relations_name_vs_relation_registry_name`を追加し、`relation_registry.name`との衝突境界を明示。`manifest_hub_chain.shape`ミラーにも`name`を反映。
@@ -452,6 +456,19 @@ relation行自身に任意編集可能な`name`（nullable）を持たせ、未�
 - [ ] runtime projection: `NavigationSequence`emissionの`relatedHubLabel`(またはその後継field)が上記effective label優先順位に従う。`ProjectionShell`/`CardList`/`frontend/runtime/projectionEntry.ts`が単一の解決経路のみを経由する。
 - [ ] live-DB/DOM proof: 明示nameを持つrelationはそのnameを表示し、name無しrelationは自身の`sequence_position`実値による`"Hub {sequence_position}"`を表示し、name無し行のreorder後にdefaultが新しいsequence_positionへ追従し、name付き行のラベルが自身/兄弟行のreorderを経ても不変であり、同一`topology_manifest_id`配下で同名のactive sibling作成/更新が明示エラーで拒否される一方、異なる`topology_manifest_id`配下やdeprecated行では同名が許容されることを実DOM/live-DB経由で証明する。
 
+### 対象ファイル名
+
+- `db/topology_tables.sql`（`hubs.hub_relations`テーブル定義）
+- `backend/repository/NpgsqlContentBundleRepository.cs`
+- `frontend/islands/HubNavigationAdmin.tsx`
+- `frontend/runtime/projectionEntry.ts`
+
+### 対象関数名
+
+- `NpgsqlContentBundleRepository.ListHubRelationsByManifestAsync`
+- `NpgsqlContentBundleRepository.LoadHubNavigationSequenceAsync`（`COALESCE(rr.name, hr.related_hub_id::text)`のeffective label計算箇所）
+- `NpgsqlContentBundleRepository.CreateHubRelationAsync`/`UpdateHubRelationAsync`（`uniqueness_contract`のバリデーション追加箇所）
+
 ### 対応資料
 
 - `docs/design/db-schema.yaml`
@@ -473,6 +490,10 @@ relation行自身に任意編集可能な`name`（nullable）を持たせ、未�
 ### 目的
 
 `related_hub_id`をcanonical target-resolution authorityから退役させ、直接FKの`target_topology_manifest_id`（Manifest UUID）へ物理移行する。既存fixed-navigation pipeline（`HubNavigationResolver`/`ManifestDispatcher`/`resolveHubNavigationLinks`/`ProjectionShell`）とSQL Attentionのcanonical Phase軸・遠方探索semanticは変更しない。
+
+### 改善方針
+
+`db-schema.yaml` `hub_relations.target_reference_canonical_contract`を正本として、`target_topology_manifest_id`を直接FKのcanonical target fieldとし、`related_hub_id`ベースのexactly-one-active-manifest推論を`first_implementation_change_replacement_scope`が列挙する各consumerで直接FK existence+status checkへ置換する。SEARCH/DISPLAY・SQLAT-EVIDENCE分類の消費者は`full_retirement_tracking_inventory`の後段deferred tierとして追跡は継続するが本Bundleの最初のimplementation_changeの手順・受入条件には含めない。以下の各ラウンドで、この方針を「新しいnavigation mechanismの構築」ではなく「既存fixed-navigation pipelineへのtarget identity正規化」として明確化した。
 
 ### 本ラウンド（design_change 第1回）で確定したSSOT契約
 
@@ -507,17 +528,18 @@ relation行自身に任意編集可能な`name`（nullable）を持たせ、未�
 2. **`related_hub_id_retirement_contract.retirement_completion_condition`のBundle結合を是正**: 前ラウンドでこの条件が誤って`manifest-canonical-human-name-remediation`Bundleの完了まで要求していた（`related_hub_id`自身のsemantic residueとは無関係なBundleへの不要な結合）ため、`related_hub_id`固有のsemantic residue（旧exactly-one解決・旧SELF_LOOP・旧RelatedHubId SQLAT signal）のみを対象とするよう明示的に訂正し、Manifest naming remediationは完全に独立したBundle・独立したcompletionとして扱うことを明記した。
 3. **legacy row disposition調査（investigation only、実装なし）**: `db/seed_empty.sql`（canonical bootstrap seed）は`hubs.hub_relations`行を1件のみ持ち（manifest 092自己参照のcanonical_default_entry行、`status='active'`）、`db/demo_seed.sql`も2件とも`status='active'`で、いずれもdraft/deprecated/dirtyな複雑ケースを含まない。この結果は次implementation_changeのbackfill設計の出発点として記録するが、任意の本番live-DB上の実データがこれと同じ形であることを保証するものではない — 次implementation_changeは自身のlive-DB調査で再確認すること。
 
-**本ラウンドで実装（SQL DDL / backend / frontend / test）は行っていない。** repo-wide調査の結果、target identity正規化それ自体はfixed-navigation pipelineの再利用により機械的である一方、(a) SQL DDL追加とbackfillの実データdisposition判断は本セッションからlive-DBへ接続しての確認を要し、(b) Admin Manifests target-picker UIは新規の対話的UI surfaceでありbrowserでの実動作確認を要し、(c) SELF_LOOP削除・DTO変更は関連する測定可能な数の既存test（backend unit/live-DB integration/frontend DOM、3フレームワーク横断）の個別判定・更新を要し、これら全てをBundle単位で同時に意味整合させる（NG軸: 小粒patchの積み重ね禁止）には、本ラウンドの範囲を超えるDocker/Postgres bootstrapと反復検証が必要と判断した。設計追加やparallel authorityの発明ではなく実装規模・検証手段の制約が理由であるため、SSOT/TODO側の収束のみを本ラウンドで完了し、実装は次のimplementation_change専用セッションへ引き継ぐ。
+**本ラウンドで実装（SQL DDL / backend / frontend / test）は行っていない。** repo-wide調査の結果、target identity正規化それ自体はfixed-navigation pipelineの再利用により機械的である一方、(a) SQL DDL追加とbackfillの実データdisposition判断は本セッションからlive-DBへ接続しての確認を要し、(b) Admin Manifests target-picker正規化（既存`/admin/manifests` + `HubNavigationAdmin.tsx` authoring surfaceのtarget field切り替え、新規surfaceではない）はDDL/backfill/DTO/runtime/Admin authoring/test-proofをBundle単位で同時に意味整合させる一括integrationが必要であり、(c) SELF_LOOP削除・DTO変更は関連する測定可能な数の既存test（backend unit/live-DB integration/frontend DOM、3フレームワーク横断）の個別判定・更新を要し、これら全てをBundle単位で同時に意味整合させる（NG軸: 小粒patchの積み重ね禁止）には、本ラウンドの範囲を超えるDocker/Postgres bootstrapと反復検証が必要と判断した。設計追加やparallel authorityの発明ではなく実装規模・検証手段の制約が理由であるため、SSOT/TODO側の収束のみを本ラウンドで完了し、実装は次のimplementation_change専用セッションへ引き継ぐ。
 
 ### 次段（implementation_change）が開始する手順
 
-1. **retirement sentinel文字列でrepo全体をgrep**して、`db-schema.yaml` `target_reference_canonical_contract.related_hub_id_retirement_contract.full_retirement_tracking_inventory`に列挙済みの全consumerを確認する。まず`first_implementation_change_replacement_scope`（target-resolution consumer: backend `NpgsqlContentBundleRepository.CreateHubRelationAsync`/`UpdateHubRelationAsync`/`LoadHubNavigationSequenceAsync`、`ContentBundleRepository.HasResolvableActiveHubRelationAsync`、`HubNavigationHubRelationItemDto`/`HubNavigationSequenceItemDto`/`HubNavigationCreateRequestDto`/`HubNavigationUpdateRequestDto`；frontend `adminApi.ts`の`createHubRelation`/`updateHubRelation`、`dispatch.ts`の`HubNavigationSequenceItem`、`HubNavigationAdmin.tsx`の`draftRelatedHubId`；tests `HubRelationUiProjectionResolutionChainProof.cs`と依存する各`*HubRelationUiProjectionLiveDbTests.cs`、`ManifestDraftActivePromotionLifecycleLiveDbTests.cs`、`HubNavigationFallbackLinksTests.cs`、`AdminRuntimeContentBundleTests.cs`のSELF_LOOP assertion、`InMemoryContentBundleRepository.cs`）から着手する。SEARCH/DISPLAY・SQLAT-EVIDENCE分類の消費者（`ListContentHubRelationsAsync`/`ListHubRelationsByManifestAsync`の表示専用read、`adminUxTerms.ts`、`NpgsqlSqlAttentionLogsRepository`/`HubAttractorExplorationRuntime.cs`）は本inventoryから除外されているのではなく、この最初のimplementation_changeでは着手順序が後段というだけであり、追跡自体は継続する。
+1. **retirement sentinel文字列でrepo全体をgrep**して、`db-schema.yaml` `target_reference_canonical_contract.related_hub_id_retirement_contract.full_retirement_tracking_inventory`に列挙済みの全consumerを確認する。まず`first_implementation_change_replacement_scope`（target-resolution consumer: backend `NpgsqlContentBundleRepository.CreateHubRelationAsync`/`UpdateHubRelationAsync`/`LoadHubNavigationSequenceAsync`、`ContentBundleRepository.HasResolvableActiveHubRelationAsync`、`HubNavigationHubRelationItemDto`/`HubNavigationSequenceItemDto`/`HubNavigationCreateRequestDto`/`HubNavigationUpdateRequestDto`；frontend `adminApi.ts`の`createHubRelation`/`updateHubRelation`、`dispatch.ts`の`HubNavigationSequenceItem`、`HubNavigationAdmin.tsx`の`draftRelatedHubId`；tests `HubRelationUiProjectionResolutionChainProof.cs`と依存する各`*HubRelationUiProjectionLiveDbTests.cs`、`ManifestDraftActivePromotionLifecycleLiveDbTests.cs`、`HubNavigationFallbackLinksTests.cs`、`AdminRuntimeContentBundleTests.cs`のSELF_LOOP assertion、`InMemoryContentBundleRepository.cs`）から着手する。SEARCH/DISPLAY・SQLAT-EVIDENCE分類の消費者（`ListContentHubRelationsAsync`/`ListHubRelationsByManifestAsync`の表示専用read、`adminUxTerms.ts`、`NpgsqlSqlAttentionLogsRepository`/`HubAttractorExplorationRuntime.cs`）は`full_retirement_tracking_inventory`から除外されているのではなく、`db-schema.yaml`が定義する二層のうち後段（deferred tier）として、この最初のimplementation_changeの手順・受入条件には含めず、`full_retirement_tracking_inventory`が定義する後段の別implementation_changeへ明確にdeferする。deferは除外ではなく、追跡自体は継続する。
 2. **canonicalに置換した結果、発火するtest failureを影響検出器として使用する**。旧semanticを期待しているtest failureが見つかった場合、旧仕様（`related_hub_id`ベースのexactly-one推論、または`expandedHubIds`のRelatedHubId折り込み）を復活させて回帰を消すのではなく、そのtestが実際にどのcanonical contractを証明しようとしていたかを再判定し、(a) canonicalな表現へ追従させて更新するか、(b) 旧semantic自体が証明対象だった場合はstale proofとして更新・退役させるか、のいずれかを個別に判断する。full_retirement_tracking_inventoryの後段consumer（SEARCH/DISPLAY・SQLAT-EVIDENCE）に着手する回でも同じ判断規律を適用する。
 3. `target_topology_manifest_id`のSQL DDL追加とbackfill（既存rowは現行の`related_hub_id`ベース解決結果から一度だけbackfillしてからNOT NULL化する、具体的なDDL/backfill手順は本design_change未確定）。source `topology_manifest_id`とtarget `target_topology_manifest_id`が同一UUIDであるrelationはvalidationで拒否しない（合法）。
 4. 旧SELF_LOOPガード（`CreateHubRelationAsync`/`UpdateHubRelationAsync`のHub-identity比較）を削除する。移植先・代替guardは作らない。`canonical_default_entry_contract`の自己参照シード行（manifest 092）は、ガード削除後も特別扱い不要でそのまま到達可能である。
-5. `full_retirement_tracking_inventory`が指摘する`expandedHubIds`（`HubAttractorExplorationRuntime.cs`）の`RelatedHubId`折り込みを削除し、既存canonical z/k軸（source-side derivation、`topology_manifest_id -> hub_id`）のみへ収束させる。`target_topology_manifest_id`由来の新しいadditional hub signalを追加しない。SQL Attentionのcanonical Phase軸（x/y/z, i/j/k）・far-search・exploration_budget_gate semanticsは変更しない。
-6. Manifest未命名時の`Manifest {n}`表示を、`canonical_human_name_principle`が定義するprojection-local counter（projection開始時に初期化、未命名itemのみincrement、永続化しない）としてAdmin Manifests target-pickerへ実装する。既存`display_rule`（`?? topologySystemName`）consumer全体の解消はBundle `manifest-canonical-human-name-remediation`（本ファイル下部）で別途扱う。
-7. 全replacement完了後、`retirement_completion_condition`が定義するrepo-wide re-searchを実行し、sentinel／`related_hub_id`／`RelatedHubId`／旧semantic equivalentがcanonical authorityまたはlive dependencyとして残存しないことを確認してから本Bundleをcloseする。
+5. Manifest未命名時の`Manifest {n}`表示を、`canonical_human_name_principle`が定義するprojection-local counter（projection開始時に初期化、未命名itemのみincrement、永続化しない）としてAdmin Manifests target-pickerへ実装する。既存`display_rule`（`?? topologySystemName`）consumer全体の解消はBundle `manifest-canonical-human-name-remediation`（本ファイル下部）で別途扱う。
+6. 全replacement完了後、`retirement_completion_condition`が定義するrepo-wide re-searchを実行し、sentinel／`related_hub_id`／`RelatedHubId`／旧semantic equivalentがcanonical authorityまたはlive dependencyとして残存しないことを確認してから本Bundleをcloseする（`expandedHubIds`のRelatedHubId折り込み除去はこのre-searchの対象ではない — 下記の後段deferred note参照）。
+
+**後段deferred（本Bundleの最初のimplementation_changeには含まれない）:** `full_retirement_tracking_inventory`が指摘する`expandedHubIds`（`HubAttractorExplorationRuntime.cs`）の`RelatedHubId`折り込み除去は、`phase_attention_axis_mapping.related_hub_id_derived_hub_axis_note`が既に確定した方針（既存canonical z/k軸、source-side derivation、`topology_manifest_id -> hub_id`のみへ収束させ、`target_topology_manifest_id`由来の新しいadditional hub signalを追加しない）に従って、後段の別implementation_changeで対応する。SQL Attentionのcanonical Phase軸（x/y/z, i/j/k）・far-search・exploration_budget_gate semanticsはいずれの段でも変更しない。
 
 ### 次段（implementation_change）の受入条件
 
@@ -525,12 +547,34 @@ relation行自身に任意編集可能な`name`（nullable）を持たせ、未�
 - [ ] backend: `hub_navigation:create`/`hub_navigation:update`が`target_topology_manifest_id`を受理・永続化する。`LoadHubNavigationSequenceAsync`等のtarget解決を、`related_hub_id`ベースのexactly-one推論から`target_topology_manifest_id`の直接FK existence+status checkへ置換する（`related_hub_id`は物理削除せず、legacy fieldとして残す；読み取り専用の新規consumerは作らない）。旧SELF_LOOPガードを削除し、代替guardを追加しない（手順4参照）。`source == target` Manifest UUIDのrelationがvalidationで拒否されないことを確認する。`hub_navigation:reorder`が`sequence_position`を書き換える既存の永続化mutation semanticsを回帰させないことを確認する。
 - [ ] Admin Manifests UI: `HubNavigationAdmin.tsx`のauthoring formが、target Hub選択から既存Manifest一覧を再利用したtarget Manifest直接選択へ変わる。未命名Manifestの表示は`canonical_human_name_principle`のUI-only projection-local counterによる「`Manifest {n}`」に従う（永続化しない、新規index列を追加しない、named Manifestはcounterを消費しない）。
 - [ ] runtime projection: `NavigationSequence`emissionが`target_topology_manifest_id`ベースの解決を反映する。`selected_link_payload_required`へ`target_topology_manifest_id`をadditiveに追加する。
-- [ ] SQL Attention: `phase_attention_axis_mapping.canonical_ID_space_axes`（w/x/y/z/i/j/k）と遠方探索/exploration_budget_gate semanticsが変更されていないことを回帰確認する。`expandedHubIds`の`RelatedHubId`折り込みが削除され、既存canonical z/k軸のみへ収束していること、`target_topology_manifest_id`由来の新規parallel signalが追加されていないことを確認する。
-- [ ] test判断: `first_implementation_change_replacement_scope`列挙のtestそれぞれについて、canonical契約へ追従させたか、stale proofとして退役させたかを明示し、いずれの場合も理由を記録する。旧仕様を復活させて回帰を消すことは禁止。`full_retirement_tracking_inventory`の残りconsumerは本Bundleで未着手のまま追跡を継続する（除外ではない）ことを明示する。
+- [ ] SQL Attention: `phase_attention_axis_mapping.canonical_ID_space_axes`（w/x/y/z/i/j/k）と遠方探索/exploration_budget_gate semanticsが変更されていないことを回帰確認する。本Bundleの最初のimplementation_changeでは`expandedHubIds`の`RelatedHubId`折り込みには着手しない（後段deferred、下記test判断項目参照）。
+- [ ] test判断: `first_implementation_change_replacement_scope`列挙のtestそれぞれについて、canonical契約へ追従させたか、stale proofとして退役させたかを明示し、いずれの場合も理由を記録する。旧仕様を復活させて回帰を消すことは禁止。`full_retirement_tracking_inventory`の残りconsumer（SEARCH/DISPLAY・SQLAT-EVIDENCE、`expandedHubIds`の`RelatedHubId`折り込み含む）は本Bundleで未着手のまま追跡を継続する（除外ではない）ことを明示する。それらに着手する後段の別implementation_changeでは、`expandedHubIds`の`RelatedHubId`折り込みが削除され既存canonical z/k軸のみへ収束していること、`target_topology_manifest_id`由来の新規parallel signalが追加されていないことを受入条件とする。
 - [ ] live-DB/DOM proof: `target_topology_manifest_id`による直接解決（zero/multiple-active-manifest推論の失敗モードが構造的に発生しないこと）、`target_manifest_missing_or_not_active`のfail-close、`source == target` Manifest UUIDのrelationが正常に機能すること、既存`canonical_default_entry_contract`（manifest 092自己参照行）がガード削除後も変わらず到達可能であること、reorder後の`sequence_position`永続値がUI表示とSQL Attention双方に反映されることを実DOM/live-DB経由で証明する。
 - [ ] retirement completion: `related_hub_id_retirement_contract.retirement_completion_condition`が定義するrepo-wide re-search（sentinel文字列・`related_hub_id`/`RelatedHubId`・旧exactly-one target-Hub解決・旧SELF_LOOP・旧RelatedHubId SQLAT signal）を実行し、canonical authorityまたはlive dependencyとしての残存がゼロであることを確認する（historical/compatibility_history記述は例外）。本条件は`related_hub_id`自身のsemantic residueのみを対象とし、`manifest-canonical-human-name-remediation`Bundle（独立Bundle、独立completion）の完了を前提条件としない。
 - [ ] 既存fixed-navigation pipeline（`HubNavigationResolver`/`ManifestDispatcher.EnrichWithHubNavigationAsync`/`resolveHubNavigationLinks`/`ProjectionShell.tsx`）が置換・複製されておらず、変更が`TargetManifestId`のsource column切り替えのみに収まっていることを確認する。新しいnavigation model・navigation store・parallel router・recommendation-as-fixed-route代替が追加されていないことを確認する。
 - [ ] 本Bundleの完了判定はCI greenのみを根拠にしない。SSOT契約・実装・testの意味的整合を監査役が個別に確認したうえで判定する。
+
+### 対象ファイル名
+
+- `db/topology_tables.sql`（`hubs.hub_relations`テーブル定義）
+- `backend/repository/NpgsqlContentBundleRepository.cs`
+- `backend/repository/ContentBundleRepository.cs`
+- `backend/tests/Topolactor.Runtime.Tests/InMemoryContentBundleRepository.cs`
+- `backend/schema/ContentBundleContracts.cs`（`HubNavigationHubRelationItemDto`/`HubNavigationSequenceItemDto`/`HubNavigationCreateRequestDto`/`HubNavigationUpdateRequestDto`）
+- `frontend/api/adminApi.ts`
+- `frontend/api/dispatch.ts`
+- `frontend/islands/HubNavigationAdmin.tsx`
+- `backend/tests/Topolactor.Integration.Tests/HubRelationUiProjectionResolutionChainProof.cs`・依存する`*HubRelationUiProjectionLiveDbTests.cs`
+- `backend/tests/Topolactor.Integration.Tests/ManifestDraftActivePromotionLifecycleLiveDbTests.cs`
+- `backend/tests/Topolactor.Runtime.Tests/HubNavigationFallbackLinksTests.cs`
+- `backend/tests/Topolactor.Runtime.Tests/AdminRuntimeContentBundleTests.cs`
+
+### 対象関数名
+
+- `NpgsqlContentBundleRepository.CreateHubRelationAsync`/`UpdateHubRelationAsync`（`related_hub_id`書き込み・旧SELF_LOOPガード）
+- `NpgsqlContentBundleRepository.LoadHubNavigationSequenceAsync`（旧exactly-one-active-manifest推論、`TargetManifestId`算出箇所）
+- `ContentBundleRepository.HasResolvableActiveHubRelationAsync`
+- `HubRelationUiProjectionResolutionChainProof.AssertNavigationSequenceResolvesHubVector`
 
 ### 対応資料
 
@@ -563,16 +607,17 @@ relation行自身に任意編集可能な`name`（nullable）を持たせ、未�
 - 未命名Manifestの表示はprojection-local counter（projection呼び出しごとに初期化、未命名itemのみincrement、named Manifestは消費しない、永続化しない、identity/sort/dispatch/target-resolution/SQL Attention authorityにしない）で`Manifest {n}`を生成する。新規永続index/rank列を追加しない。
 - `topologySystemName`・`manifestKey`・table name・UUIDをcanonical human nameへfallbackさせない。
 - hub-relation Manifest-target-pickerがこのBundleより先にcanonical_human_name_principleで構築されている場合、それを一次実装として再利用し、重複実装を作らない。
-- 本Bundle完了は`hub-relation-target-manifest-canonical-migration`の`retirement_completion_condition`（旧`display_rule`のsemantic equivalentがcanonical authorityとして残存しないこと）の一部として扱われる。
+- 本Bundleの完了は独立して判定する。`hub-relation-target-manifest-canonical-migration`の`retirement_completion_condition`は`related_hub_id`固有semantic residueのみを対象とし本Bundle完了を前提条件としない（同ファイル内`related_hub_id_retirement_completion_condition`参照）。本Bundleも同様にそちらの完了を自身の前提条件としない。両Bundleは互いに独立した問題・目的・completionを持つ。
 
 ### 対応資料
 
 - `docs/design/admin-console-workflow-ssot.yaml`
-- `docs/design/db-schema.yaml`（`hub_relations.target_reference_canonical_contract.related_hub_id_retirement_contract.retirement_completion_condition`が本Bundleの完了を前提条件として参照する）
-- `.agent/tasks/todo.md`（`hub-relation-target-manifest-canonical-migration`Bundle）
+- `docs/design/db-schema.yaml`（`hub_relations.target_reference_canonical_contract.related_hub_id_retirement_contract`は`related_hub_id`固有semantic residueのみを対象とし、本Bundleの完了を前提条件として参照しない）
+- `.agent/tasks/todo.md`（`hub-relation-target-manifest-canonical-migration`Bundle。target-picker実装の重複回避のみを参照し、completionの前提条件としない）
 
 ### 対象ファイル名
 
+- `frontend/lib/manifestTopologyExtensions.ts`（`hubNavigationManifestVisibleLabel`の定義箇所）
 - `frontend/islands/ManifestsAdmin.tsx`
 - `frontend/islands/HubNavigationAdmin.tsx`（新設target-pickerとの重複実装回避を確認）
 - UI-Builder Manifest/screen表示コンポーネント（`frontend/islands/UiBuilderAdmin.tsx`等、`frontend-canonical-surface-structure-label-boundary`がdisplay_ruleを配線した箇所）
@@ -582,7 +627,7 @@ relation行自身に任意編集可能な`name`（nullable）を持たせ、未�
 
 ### 対象関数名
 
-- Manifest一覧・Manifest選択UIのlabel解決関数（現行`visibleName = userFacingTopologyLabel ?? topologySystemName`を実装する箇所）
+- `frontend/lib/manifestTopologyExtensions.ts` `hubNavigationManifestVisibleLabel`（現行`visibleName = userFacingTopologyLabel ?? topologySystemName`を実装する関数。全consumerがこの単一関数経由で呼び出しているかを確認し、直接`?? topologySystemName`をinlineしている箇所があれば同様に置換する）
 - 新設projection-local counter関数（`Manifest {n}`生成、既存のHubRelation`Hub {sequence_position}`相当の実装パターンを踏襲）
 
 ### 受入条件
@@ -591,4 +636,4 @@ relation行自身に任意編集可能な`name`（nullable）を持たせ、未�
 - [ ] 未命名Manifestの`Manifest {n}`表示が永続化されず、named Manifestがcounterを消費しないことをDOM/live-DB経由で証明する。
 - [ ] `topologySystemName`/`manifestKey`/table name/UUIDがcanonical human nameとして表示されるパスが残っていないことをrepo-wide検索で確認する。
 - [ ] PR#610が達成した「raw internal vocabularyをnormal primaryへ露出しない」境界を回帰させない。
-- [ ] 本Bundle完了をもって`hub-relation-target-manifest-canonical-migration`の`retirement_completion_condition`のManifest naming側条件が満たされたことを記録する。
+- [ ] 本Bundleの完了は上記条件のみで自己完結して判定する。`hub-relation-target-manifest-canonical-migration`の`retirement_completion_condition`（`related_hub_id`固有semantic residueのみが対象）を本Bundleのcompletion条件として流用・参照しない。

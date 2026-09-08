@@ -484,13 +484,15 @@ admin_console_workflow_ssot:
         separate, larger-blast-radius implementation_change -- Bundle
         manifest-canonical-human-name-remediation in .agent/tasks/todo.md, Owner-scoped -- that
         this design_change does not perform (no backend/frontend code changed here). What this
-        design_change does decide beyond the general principle: the Manifest-target-picker
-        admin_hub_relation_navigation_contract.canonical_forward_target_reference introduces
-        (reusing this same userFacingTopologyLabel field, not a new one) is a NEW surface, not yet
-        built, so it is scoped to be built against canonical_human_name_principle from the start
-        rather than against display_rule, avoiding a second migration later -- but that is an
-        instance of the general principle applying to a not-yet-built surface, not a separate,
-        narrower rule of its own.
+        design_change does decide beyond the general principle: the target selector
+        admin_hub_relation_navigation_contract.canonical_forward_target_reference normalizes
+        (reusing this same userFacingTopologyLabel field, not a new one) is the existing
+        /admin/manifests + HubNavigationAdmin.tsx authoring surface's own target field switching
+        from a target-Hub picker to a target-Manifest picker -- not a new surface, route, or
+        editor -- so that normalized field is scoped to render against
+        canonical_human_name_principle from the start rather than against display_rule, avoiding
+        a second migration later. That is an instance of the general principle applying to an
+        existing surface's field, not a separate, narrower rule of its own.
     additional_table_system_name:
       required: true for tables beyond primary
       format: same as topology_system_name (kebab-case)
