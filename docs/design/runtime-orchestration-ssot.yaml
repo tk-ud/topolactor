@@ -693,25 +693,28 @@ runtime_orchestration_ssot:
         plainly that the subBundle deliberately seeds no hub_relations row of its own, leaving
         authoring to an ordinary post-deployment /admin/manifests action -- a choice repeated across
         five separate seed sections and never reconciled against this invariant once it was
-        introduced. admin-dashboard's own seed_contract purpose (hub_relation_link_list bound to
-        emission.navigationSequence, admin-normal-surface-projection-seed-ssot.yaml surface_axes.
-        admin.surfaces.dashboard data_authority_ref/projection_responsibility) makes it a plausible
-        product candidate for the other four's relation source, but admin-console-workflow-ssot.yaml
-        admin_hub_relation_navigation_contract.note explicitly states the relation source is
-        whichever existing topology_manifest an admin selects via /admin/manifests, "never required
-        to be /admin's own landing page specifically," and that same file's
-        connection_state_authority states a specific hub_relations row's existence is runtime/admin
-        data, never a fixed SSOT ledger -- so admin-dashboard is not an already-decided source, and
-        no round has decided the actual seed content (which targets, what sequence_position
-        ordering, what hub_relations.name values) that would close this invariant for the existing
-        seed. That is an Owner product decision about a fresh deployment's default admin navigation
-        topology, not a fact already settled by this contract, so it is not decided here. This
-        invariant's own text stands unchanged; the seed's actual state does not meet it yet, and
-        closing that gap (by seeding real relations, by scoping this invariant to exclude
-        admin-authored-post-deployment manifests the way draft_transient_state_carve_out excludes
-        drafts, or by folding relation-less bootstrap manifests into the draft->PromoteAsync
-        lifecycle) needs that Owner decision among comparable candidates, not a default choice made
-        here.
+        introduced. Owner-confirmed resolution (this design_change, retracting an earlier round
+        of this same PR's "three Owner-decision candidates to compare" framing):
+        admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract.
+        axis_navigation_membership now declares admin-dashboard (ad200) the canonical Admin-axis
+        fixed-navigation source (derived from its own positive data_authority_ref/
+        projection_responsibility, not from subBundle_not_applicable) with admin-enum (ae200),
+        scheduler-settings (5c100), team-dashboard admin (dd010), and credential-management (092)
+        as its Admin-axis navigation targets -- ae210-ae280 excluded as ae200's own internal
+        write/read operation authority, and the external-port-consumer-completion projections
+        (0000a3-0000a8) excluded as out of surface_axes scope entirely (no ui_projection, not
+        user-facing navigable screens). Closing this invariant for the existing seed's Admin-axis
+        surfaces is now a concrete implementation task (register the axis_navigation_membership
+        relations, and give admin-dashboard a real production entry point -- repo-wide grep found
+        it has none today, see axis_navigation_membership.production_reachability_precondition),
+        not an open product-direction choice among incompatible candidates. This invariant's own
+        text stands unchanged; the seed's actual state does not meet it yet for the manifests
+        axis_navigation_membership covers, and closing that is tracked as a
+        hub-relation-target-manifest-canonical-migration Bundle implementation item. Whether the
+        external-port-consumer-completion projections' own active status without an outbound
+        relation is otherwise consistent with this invariant remains a separate, unresolved
+        question this note does not answer, since they were never in scope for
+        axis_navigation_membership to begin with.
 
     canonical_default_entry_contract:
       note: >-

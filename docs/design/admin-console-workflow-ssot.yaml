@@ -151,6 +151,112 @@ admin_console_workflow_ssot:
       hubs.hub_relations query — never duplicated here as a fixed per-subBundle "wired"/"unconnected"
       SSOT status ledger. This document defines the authoring contract, schema, and resolution
       semantics; it does not track live connection state.
+    axis_navigation_membership:
+      note: >-
+        Owner-confirmed design (this design_change, resolving what an earlier round of this same
+        PR framed as three Owner-decision candidates to compare -- that framing is retracted):
+        docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin /
+        surface_axes.normal are the existing projection-surface axes (axis_kind:
+        projection_surface_axis, not_role_or_rbac -- unchanged, never converted into an auth role,
+        RBAC dimension, or a new hubs.hub_relations column). This entry defines concrete
+        HubRelation fixed-navigation membership per axis, reusing the existing mechanism this
+        contract already defines (hub_navigation:create/update/reorder/deprecate,
+        HubNavigationResolver, Emission.NavigationSequence, resolveHubNavigationLinks,
+        ProjectionShell) unchanged -- no new navigation model, global hub graph, parallel store,
+        or per-surface fallback is introduced.
+      admin_navigation_source: >-
+        db/seed_empty.sql manifest 00000000-0000-0000-0000-0000000ad200
+        ("admin.dashboard.navigation.projection", admin-normal-surface-projection-seed-ssot.yaml
+        surface_axes.admin.surfaces.dashboard) is the canonical Admin-axis fixed-navigation
+        source: its own data_authority_ref is literally hubs.hub_relations, and its
+        projection_responsibility (display_manifest_scoped_hub_relation_links,
+        use_selected_link_as_projection_change_trigger) is the only Admin-axis surface whose
+        declared purpose is to display outbound hub_relation links at all. This is derived from
+        admin-dashboard's own positive, already-declared responsibility, not from
+        subBundle_not_applicable -- that value only means this Bundle's
+        target_surface_manifest_readiness gate does not apply to admin-dashboard (see
+        admin-normal-surface-projection-seed-ssot.yaml design_blocking.
+        target_surface_manifest_readiness.subbundle_status.note), it is not source authority by
+        itself.
+      admin_navigation_targets:
+        - manifest: 00000000-0000-0000-0000-0000000ae200 (admin.enum.management.projection, admin-enum)
+          eligibility: >-
+            Real ui_projection, Admin-axis surface, own dedicated production route (/admin/enums,
+            retirement_kind=thin_projection_wrapper per runtime-orchestration-ssot.yaml
+            admin_route_retirement_matrix). First-class navigation target -- this is the manifest
+            this PR's original production symptom names.
+        - manifest: 00000000-0000-0000-0000-00000005c100 (scheduler.settings.projection, scheduler-settings)
+          eligibility: >-
+            Real ui_projection, Admin-axis surface, hub_navigation_only reachability per
+            admin_route_retirement_matrix (no dedicated route of its own -- /admin/scheduler keeps
+            mounting SchedulerJobSettingsPanel.tsx directly, unchanged by this entry). First-class
+            navigation target.
+        - manifest: 00000000-0000-0000-0000-0000000dd010 (team_dashboard.admin.projection, team-dashboard admin)
+          eligibility: >-
+            Real ui_projection, Admin-axis surface, own dedicated production route
+            (/admin/team-dashboard, thin wrapper). First-class navigation target.
+        - manifest: 00000000-0000-0000-0000-000000000092 (auth.external.credential_management.projection, credential-management)
+          eligibility: >-
+            Real ui_projection, Admin-axis surface, already reachable today via the separate
+            canonical_default_entry_contract bare-selection fallback (runtime-orchestration-ssot.yaml
+            canonical_default_entry_contract) and additionally eligible as an ordinary HubRelation
+            navigation target from admin-dashboard like the others -- the two reachability paths
+            are independent and do not conflict.
+      admin_navigation_non_targets: >-
+        00000000-0000-0000-0000-0000000ae210/ae220/ae230/ae240/ae250/ae260/ae270/ae280 (admin-enum's
+        7 per-operation write manifests plus its get_group read-detail manifest) are ae200's own
+        internal write/read operation authority, reached exclusively via node-local
+        admin_runtime_dispatch_override_wiring target_ref dispatches embedded in ae200's own
+        layout (admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.enum.
+        seed_contract.component_tree_note) -- never independently selected by a user via
+        HubRelation navigation, and not first-class members of this axis's navigation target set
+        merely because each is an active hubs.topology_manifests row. Nothing in this entry
+        authorizes listing them as hub_navigation:create targets.
+      normal_navigation_membership: >-
+        docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.normal.
+        normal_hub_relation_navigation_contract already defines the Normal-axis equivalent
+        (reusing the same mechanism, scoped to normal-axis manifests), and its own
+        current_target_readiness records the repo-wide result this entry confirms: manifest
+        00000000-0000-0000-0000-0000000dd020 (team_dashboard.normal.projection) is the only real,
+        production-reachable Normal-axis surface today (own dedicated route, /dashboard), and no
+        other Normal-axis surface exists to link it to or from -- self_account_capability remains
+        blocked pending its own ui_projection manifest, a separate, unrelated future item this
+        entry does not decide. The Owner already redirected the underlying "always get back to
+        Normal home" intent to ProjectionShell's fixed data-projection-home-link ("ホーム" ->
+        /dashboard, runtime-orchestration-ssot.yaml admin_route_retirement_matrix.routes
+        /admin/team-dashboard entry) rather than a fabricated HubRelation source -- that decision
+        is unchanged and this entry does not reopen it. No fake Normal-axis target is introduced
+        here.
+      cross_axis_navigation: >-
+        Not established by this entry. An Admin-axis source relation targets only Admin-axis
+        manifests and a Normal-axis source relation targets only Normal-axis manifests, per each
+        axis's own membership above; nothing here authorizes an Admin source -> Normal target or
+        Normal source -> Admin target relation as a canonical default. A future
+        implementation_change introducing genuine cross-axis navigation needs its own explicit
+        SSOT authority.
+      out_of_membership_scope: >-
+        db/seed_empty.sql's external-port-consumer-completion projections (email/stripe/
+        webhook_inbox/job_scheduler/audit_approval/export_sftp response-port manifests,
+        00000000-0000-0000-0000-0000000000a3 through 0000000000a8) are not declared under
+        surface_axes.admin or surface_axes.normal at all and carry no ui_projection topology entry
+        (a flat external-port-consumer-completion metadata object instead) -- they are not
+        user-facing navigable screens, and this entry does not include them in either axis's
+        navigation membership. Whether their own active status without an outbound hub_relations
+        row is consistent with db-schema.yaml hub_relations.minimum_cardinality_completion_
+        invariant is a separate question this entry does not resolve; it is not closed by
+        declaring them navigation targets, since they were never designed as ones.
+      production_reachability_precondition: >-
+        Repo-wide grep found no frontend route, island, or backend code referencing
+        00000000-0000-0000-0000-0000000ad200 outside test files
+        (backend/tests/Topolactor.Integration.Tests/AdminDashboardNavigationUiProjectionLiveDbTests.cs
+        and frontend/tests/adminWiringExecutionLane.test.ts) -- unlike ae200 (/admin/enums) and
+        dd010 (/admin/team-dashboard), admin-dashboard has no production route or entry point of
+        its own today. Declaring it the canonical Admin navigation source above does not by itself
+        make its card_list of links visible to any real admin user; a later implementation_change's
+        acceptance criteria must give admin-dashboard a real, reachable production entry point
+        (e.g. the same thin_projection_wrapper pattern /admin/enums already uses, or a link from
+        the existing static /admin index) in addition to registering the HubRelation rows this
+        entry defines membership for.
     subbundle_target_readiness:
       note: >-
         The only structural readiness gate this Bundle tracks per subBundle for STARTING that
