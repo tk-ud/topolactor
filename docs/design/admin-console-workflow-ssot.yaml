@@ -444,9 +444,22 @@ admin_console_workflow_ssot:
       format: any string including Japanese
       meaning: optional human-readable display name; NOT used for route/table/key derivation
       display_rule: "visibleName = userFacingTopologyLabel ?? topologySystemName"
+      display_rule_status: >-
+        Owner canonical decision (this design_change, resolving what the earlier round of this
+        same design_change left as "genuinely contradicts, not decided which wins"): display_rule
+        above is DEMOTED to legacy/replacement_pending as of this design_change's SSOT. It is not
+        physically changed by this design_change (no backend/frontend code touched here) and
+        remains exactly what every existing consumer (ManifestsAdmin.tsx's general Manifest list,
+        UI-Builder, the wiring inspector) actually runs today -- but it is no longer a canonical
+        authority standing alongside canonical_human_name_principle below. canonical_human_name_
+        principle is the sole canonical forward Manifest-naming authority; display_rule's
+        "?? topologySystemName" fallback is what a dedicated remediation implementation_change
+        (Bundle manifest-canonical-human-name-remediation, .agent/tasks/todo.md) replaces across
+        every one of its consumers, not merely acknowledges as conflicting and leaves standing.
       canonical_human_name_principle: >-
-        Owner canonical redesign (design_change; no backend/frontend change here). This is a
-        universal principle for a Manifest's canonical human name, not a rule scoped to one
+        Owner canonical redesign (design_change; no backend/frontend change here) -- the SOLE
+        canonical forward authority for a Manifest's human name, superseding display_rule above
+        (see display_rule_status). This is a universal principle, not a rule scoped to one
         consumer: the canonical human name of a hubs.topology_manifests row is its explicit
         userFacingTopologyLabel and nothing else. When it is unset (NULL/empty), the fallback for
         any surface that must still show a label is a projection-local counter, not a system
@@ -459,21 +472,25 @@ admin_console_workflow_ssot:
         cross-request or cross-session identity, never used for sorting, runtime dispatch, target
         resolution, or SQL Attention. topologySystemName, manifestKey, a physical table name, and
         a raw UUID are never promoted to canonical human name under this principle, for any
-        surface.
+        surface, present or future.
       canonical_human_name_principle_vs_display_rule_conflict: >-
         This principle genuinely CONTRADICTS display_rule above ("?? topologySystemName") as
-        currently built and in production use across /admin/manifests (ManifestsAdmin.tsx's
+        already built and in production use across /admin/manifests (ManifestsAdmin.tsx's
         general Manifest list included), UI-Builder, and the wiring inspector -- this is not a
-        narrower, non-overlapping scope, and this design_change does not claim the two rules are
-        compatible. Reconciling every existing display_rule consumer to this principle is a
-        separate, larger-blast-radius implementation_change (tracked in .agent/tasks/todo.md,
-        Owner-scoped) that this design_change does not perform. What this design_change does
-        decide: the Manifest-target-picker admin_hub_relation_navigation_contract.
-        canonical_forward_target_reference introduces (reusing this same userFacingTopologyLabel
-        field, not a new one) is a NEW surface, not yet built, so it is scoped to be built against
-        canonical_human_name_principle above from the start rather than against display_rule --
-        it is the one surface this design_change can settle without touching any
-        already-built consumer, not evidence that the wider conflict is resolved.
+        narrower, non-overlapping scope, and (per display_rule_status above) this design_change
+        does not leave the two standing as equally-valid alternatives: canonical_human_name_
+        principle wins as the design authority, display_rule is legacy/replacement_pending.
+        Physically reconciling every existing display_rule consumer to this principle is a
+        separate, larger-blast-radius implementation_change -- Bundle
+        manifest-canonical-human-name-remediation in .agent/tasks/todo.md, Owner-scoped -- that
+        this design_change does not perform (no backend/frontend code changed here). What this
+        design_change does decide beyond the general principle: the Manifest-target-picker
+        admin_hub_relation_navigation_contract.canonical_forward_target_reference introduces
+        (reusing this same userFacingTopologyLabel field, not a new one) is a NEW surface, not yet
+        built, so it is scoped to be built against canonical_human_name_principle from the start
+        rather than against display_rule, avoiding a second migration later -- but that is an
+        instance of the general principle applying to a not-yet-built surface, not a separate,
+        narrower rule of its own.
     additional_table_system_name:
       required: true for tables beyond primary
       format: same as topology_system_name (kebab-case)

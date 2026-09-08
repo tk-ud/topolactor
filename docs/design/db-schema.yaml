@@ -584,6 +584,12 @@ db_schema:
           (e.g. admin-normal-surface-projection-seed-ssot.yaml
           hub_relation_navigation_binding.runtime_fail_close_negative_cases) no longer apply to
           this field; only a single "target_manifest_missing_or_not_active" case remains.
+          topology_manifest_id == target_topology_manifest_id is explicitly LEGAL on this
+          contract -- a relation whose source and target Manifest are the same row is an
+          ordinary, valid relation, not a special or rejected case; see
+          related_hub_id_retirement_contract.self_loop_guard_note below for why the retired
+          Hub-identity SELF_LOOP guard is not ported here and no equivalent source==target
+          Manifest guard is introduced.
         related_hub_id_retirement_contract:
           retirement_sentinel: HUB_RELATIONS_RELATED_HUB_ID__RETIREMENT_PENDING_SENTINEL__TARGET_TOPOLOGY_MANIFEST_ID
           sentinel_usage_boundary: >-
@@ -666,18 +672,64 @@ db_schema:
             assuming any of them are already resolved just because target-resolution itself was
             replaced.
           self_loop_guard_note: >-
-            The existing SELF_LOOP guard (NpgsqlContentBundleRepository.CreateHubRelationAsync/
-            UpdateHubRelationAsync, error code "SELF_LOOP") rejects an ordinary authored relation
-            whose related_hub_id equals its own source manifest's hub_id -- this is why manifest
-            092's canonical_default_entry_contract row (which IS self-referencing at the
-            hub/manifest level) had to be seeded via direct SQL rather than the ordinary
-            hub_navigation:create path. This design_change does NOT define what the analogous
-            guard should be for target_topology_manifest_id (e.g. whether an ordinary relation
-            may have target_topology_manifest_id equal to its own topology_manifest_id) --
-            that is an Owner-level decision left to the next implementation_change, which must
-            also re-confirm canonical_default_entry_contract's seeded self-reference remains
-            reachable under whatever new guard is chosen. Inventing that guard's exact semantics
-            here would be adding a new authority beyond this design_change's scope.
+            Owner canonical decision (this design_change, resolving the open question the earlier
+            round of this same design_change left to "the next implementation_change"):
+            topology_manifest_id == target_topology_manifest_id on a hub_relations row is LEGAL
+            under the canonical forward contract -- a relation whose source and target Manifest
+            are the same row is not, by itself, an error. The existing SELF_LOOP guard
+            (NpgsqlContentBundleRepository.CreateHubRelationAsync/UpdateHubRelationAsync, error
+            code "SELF_LOOP") rejects related_hub_id equal to the source manifest's own hub_id --
+            a Hub-identity-equality check that belongs entirely to the retired target-Hub model
+            (this is why manifest 092's canonical_default_entry_contract row, which IS
+            self-referencing at the hub/manifest level, had to be seeded via direct SQL rather
+            than the ordinary hub_navigation:create path: the guard would otherwise have rejected
+            it). This guard is NOT ported to the new field: no future implementation_change may
+            add a mechanically-equivalent guard rejecting topology_manifest_id ==
+            target_topology_manifest_id, and no new guard of any shape may be invented to
+            prohibit an ordinary relation's source and target Manifest from being the same row --
+            that would be inventing a new authority this design_change does not grant. The
+            existing SELF_LOOP guard implementation, its InMemoryContentBundleRepository
+            reimplementation, and its AdminRuntimeContentBundleTests.cs assertions (already listed
+            in first_implementation_change_replacement_scope above) are retirement-inventory
+            items like every other related_hub_id consumer, not a mechanism to carry forward in
+            any form: the implementation_change that replaces them must judge, per this
+            contract's canonical_forward_scope_note discipline (see
+            docs/design/runtime-orchestration-ssot.yaml
+            ui_projection_render_reachability_contract.hub_navigation_resolution.canonical_forward_scope_note),
+            whether each SELF_LOOP-specific test is actually proving "an ordinary relation must
+            not target-link to its own source hub" (the retired semantic -- retire the test as
+            stale proof) or something else entirely incidental to SELF_LOOP. canonical_default_entry_contract
+            remains the existing, independent relation_config.transition="canonical_default_entry"
+            marker authority throughout this change: removing the SELF_LOOP guard does not move
+            any of its semantics onto sequence_position or onto canonical_default_entry_contract,
+            and canonical_default_entry_contract's seeded self-reference needs no special-case
+            handling once the guard is gone, since nothing was ever guarding against it going
+            forward -- the guard's removal is a simplification, not a re-homing of its intent.
+          retirement_completion_condition: >-
+            Defines when related_hub_id's retirement is CLOSED, not just started. Closure
+            requires a repo-wide re-search (literal retirement_sentinel string above, literal
+            related_hub_id / RelatedHubId identifiers, and the semantic equivalents this contract
+            names: the old exactly-one-active-manifest-for-a-hub target resolution, the old
+            Hub-identity SELF_LOOP guard, the old RelatedHubId-folded SQLAT/phaseAT additional
+            hub signal, and the old topologySystemName-fallback display rule this same
+            design_change's canonical_human_name_principle_vs_display_rule_conflict tracks in
+            docs/design/admin-console-workflow-ssot.yaml) finding NONE of them present as a
+            canonical authority or live production/runtime/DTO/API/UI dependency in current SSOT,
+            code, or test/proof surfaces. Historical record is explicitly exempt from this
+            zero-residue bar: compatibility_history entries (this table's own
+            hub_relations_related_hub_id_to_target_topology_manifest_id_transition and
+            hub_relations_legacy_global_graph above), this contract's own text describing what
+            was retired and why, and any dated changelog/audit-trail narrative are legacy
+            references BY DESIGN and are not counted as residue. Until that repo-wide re-search
+            comes back clean, related_hub_id retirement is NOT complete regardless of how many
+            individual Bundle acceptance checklists have been marked done -- first_implementation_
+            change_replacement_scope landing does not by itself close this condition, since
+            full_retirement_tracking_inventory's deferred tier and the wider Manifest-naming
+            remediation this contract cross-references both remain open until their own
+            implementation_change(s) land too. Once the re-search comes back clean, the
+            retirement_sentinel stops being an active tracking key (there is nothing left to grep
+            for) and the record of that final clean search becomes the completion evidence itself
+            -- the sentinel is not reused for a new tracking purpose afterward.
         legacy_target_resolution: >-
           Current (unchanged by this design_change) implementation behavior, retained here
           verbatim as an accurate description of what the code still actually does today:
@@ -1849,16 +1901,24 @@ phase_attention_axis_mapping:
     above are untouched); it only records that related_hub_id's role here is a legacy/additional
     dependency, never itself the canonical z/k axis, tracked (not excluded) in
     hub_relations.target_reference_canonical_contract.related_hub_id_retirement_contract.
-    full_retirement_tracking_inventory. Its replacement-need (keep it as an additional signal once
-    target_topology_manifest_id exists, fold target_topology_manifest_id in instead, or drop it)
-    is an explicit open question left for a later implementation_change to judge, not decided by
-    this design_change. If an existing SQL Attention test is found asserting on this
-    related_hub_id-derived signal specifically, that is not, by itself, grounds to treat the
-    signal as canonical or to keep it unchanged forever -- the same judge-the-proof-target
-    discipline in runtime-orchestration-ssot.yaml
+    full_retirement_tracking_inventory. Owner canonical decision (this design_change, resolving
+    what the earlier round of this same design_change left as an open question): this signal is
+    a RETIREMENT TARGET, not a candidate for indefinite continuation under any name. There is no
+    canonical basis to keep an additional target-side hub signal at all once related_hub_id is
+    gone -- the implementation_change that performs this replacement converges expandedHubIds
+    (and any equivalent SQLAT/phaseAT evidence path) onto the existing canonical
+    relation-to-Manifest-to-Hub derivation this table's z/k axis already defines (source-side,
+    via hubs.topology_manifests.hub_id for hub_relations.topology_manifest_id), rather than
+    manufacturing a NEW parallel additional-hub signal derived from target_topology_manifest_id
+    as a like-for-like replacement. "Fold target_topology_manifest_id in as a new additional
+    signal instead" is explicitly NOT an available option -- that would just re-create the same
+    canonical/legacy-axis conflation this note exists to close, under a new field name. If an
+    existing SQL Attention test is found asserting on the retired related_hub_id-derived signal
+    specifically, that is not, by itself, grounds to treat the signal as canonical or to keep it
+    unchanged -- the same judge-the-proof-target discipline in runtime-orchestration-ssot.yaml
     ui_projection_render_reachability_contract.hub_navigation_resolution.canonical_forward_scope_note
-    applies here too: re-derive what the test is meant to prove before deciding whether it still
-    applies once this signal's replacement-need question above is resolved.
+    applies here too: re-derive what the test is meant to prove, then update it to prove
+    convergence onto the canonical source-side derivation or retire it as stale proof.
   relation_vector_element_type_note: >-
     Clarification only (this design_change) -- distinct from canonical_ID_space_axes above.
     docs/design/runtime-orchestration-ssot.yaml
