@@ -562,6 +562,42 @@ db_schema:
           related_hub_id's retirement contract; db-schema.yaml key_columns above only points
           here to avoid two copies drifting apart (the same pattern already used for
           hub_relations.name's effective-label contract).
+        existing_fixed_navigation_pipeline_reuse_contract: >-
+          Owner retraction (this design_change, same PR): earlier rounds' "canonical forward
+          design" framing must not be read as inventing a new navigation mechanism -- it is not
+          one. docs/framework-core.yaml runtime_route_attention_boundary already establishes
+          hubs.hub_relations as the fixed_route tier (hubs.relation_route_is_fixed_business_
+          route_between_hubs, business_mandatory_fixed_path) with top resolver_priority, strictly
+          senior to and never overridden by the attention_recommendation_tab (SQL Attention /
+          topology recommendation candidates -- attention_score_must_not_override_fixed_route,
+          SQL_Attention_or_recommendation_must_not_overwrite_route_state_automatically). This
+          redesign stays entirely inside that existing fixed_route tier; it does not touch,
+          replace, or need to touch the recommendation lane's own resolver_priority position.
+          The existing runtime pipeline this redesign reuses UNCHANGED, verified by reading the
+          actual code (not assumed): HubNavigationResolver.ResolveAsync
+          (backend/runtime/HubNavigationResolver.cs) is a thin delegate to
+          ContentBundleRepository.LoadHubNavigationSequenceAsync and never re-derives a target
+          itself -- every other method on that class (ResolveFallbackNavigationLinksAsync
+          included) only ever branches on whether TargetManifestId is already present, never
+          re-resolves it. ManifestDispatcher.EnrichWithHubNavigationAsync calls
+          HubNavigationResolver.ResolveAsync and assigns the result verbatim to
+          Emission.NavigationSequence -- RuntimeExecutor's own topology_transform_runtime path
+          performs the identical enrichment. frontend/runtime/projectionEntry.ts
+          resolveHubNavigationLinks treats item.targetManifestId as an opaque, already-resolved
+          value: present -> "?manifest=<uuid>" href, absent -> unresolvable; it contains no
+          target-derivation logic of its own to change. ProjectionShell.tsx's nav bar renders
+          whatever resolveHubNavigationLinks returns. NONE of this call chain is replaced,
+          forked, or supplemented by a parallel path -- the only thing this redesign changes is
+          WHICH COLUMN feeds TargetManifestId inside LoadHubNavigationSequenceAsync (and the
+          sibling CreateHubRelationAsync/UpdateHubRelationAsync writes): the exactly-one-active-
+          manifest-for-related_hub_id inference is replaced by a direct
+          target_topology_manifest_id read, and every caller above keeps consuming the identical
+          DTO field it already consumes today. No new navigation model, prev/current/next
+          storage, navigation store, parallel router, persistent rank/index beyond the existing
+          sequence_position, or recommendation-as-fixed-route-substitute is introduced or implied
+          by this contract -- if any future implementation_change under this Bundle appears to
+          require one, that is a signal that change has drifted outside this contract's actual
+          scope and needs its own Owner-level design review, not silent inclusion here.
         canonical_target_field: >-
           target_topology_manifest_id (uuid, FK to hubs.topology_manifests.topology_manifest_id).
           Forward end-state is NOT NULL — every hub_relations row always names an explicit target
@@ -706,17 +742,25 @@ db_schema:
             handling once the guard is gone, since nothing was ever guarding against it going
             forward -- the guard's removal is a simplification, not a re-homing of its intent.
           retirement_completion_condition: >-
-            Defines when related_hub_id's retirement is CLOSED, not just started. Closure
-            requires a repo-wide re-search (literal retirement_sentinel string above, literal
-            related_hub_id / RelatedHubId identifiers, and the semantic equivalents this contract
-            names: the old exactly-one-active-manifest-for-a-hub target resolution, the old
-            Hub-identity SELF_LOOP guard, the old RelatedHubId-folded SQLAT/phaseAT additional
-            hub signal, and the old topologySystemName-fallback display rule this same
-            design_change's canonical_human_name_principle_vs_display_rule_conflict tracks in
-            docs/design/admin-console-workflow-ssot.yaml) finding NONE of them present as a
-            canonical authority or live production/runtime/DTO/API/UI dependency in current SSOT,
-            code, or test/proof surfaces. Historical record is explicitly exempt from this
-            zero-residue bar: compatibility_history entries (this table's own
+            Defines when related_hub_id's retirement is CLOSED, not just started. Scope
+            boundary (Owner correction, this design_change): this condition owns ONLY
+            related_hub_id semantic-residue closure -- it is not a bundling point for unrelated
+            Bundles. The Manifest-naming display_rule remediation
+            (docs/design/admin-console-workflow-ssot.yaml
+            canonical_human_name_principle_vs_display_rule_conflict, Bundle
+            manifest-canonical-human-name-remediation) is an independent Bundle with its own
+            independent completion, tracked separately in the repository's task-tracking surface
+            (.agent/tasks/) -- it is never a
+            prerequisite for THIS condition, and this condition is never a prerequisite for it.
+            Closure of related_hub_id's own retirement requires a repo-wide re-search (literal
+            retirement_sentinel string above; literal related_hub_id / RelatedHubId identifiers;
+            and the related_hub_id-specific semantic equivalents this contract names: the old
+            exactly-one-active-manifest-for-a-hub target resolution, the old Hub-identity
+            SELF_LOOP guard, the old RelatedHubId-folded SQLAT/phaseAT additional hub signal)
+            finding NONE of them present as a canonical authority or live
+            production/runtime/DTO/API/UI dependency in current SSOT, code, or test/proof
+            surfaces. Historical record is explicitly exempt from this zero-residue bar:
+            compatibility_history entries (this table's own
             hub_relations_related_hub_id_to_target_topology_manifest_id_transition and
             hub_relations_legacy_global_graph above), this contract's own text describing what
             was retired and why, and any dated changelog/audit-trail narrative are legacy
@@ -724,8 +768,7 @@ db_schema:
             comes back clean, related_hub_id retirement is NOT complete regardless of how many
             individual Bundle acceptance checklists have been marked done -- first_implementation_
             change_replacement_scope landing does not by itself close this condition, since
-            full_retirement_tracking_inventory's deferred tier and the wider Manifest-naming
-            remediation this contract cross-references both remain open until their own
+            full_retirement_tracking_inventory's deferred tier remains open until its own
             implementation_change(s) land too. Once the re-search comes back clean, the
             retirement_sentinel stops being an active tracking key (there is nothing left to grep
             for) and the record of that final clean search becomes the completion evidence itself
