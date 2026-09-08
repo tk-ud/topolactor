@@ -560,7 +560,7 @@ db_schema:
           existence+status check, not an inference over a set: it structurally cannot produce a
           "zero active manifests" or "multiple active manifests" ambiguity the way the legacy
           related_hub_id-based resolution can (see legacy_target_resolution below) -- once
-          physically implemented, the zero_active_target_manifest_for_related_hub_id and
+          physically built, the zero_active_target_manifest_for_related_hub_id and
           multiple_active_target_manifests_for_related_hub_id failure modes documented elsewhere
           (e.g. admin-normal-surface-projection-seed-ssot.yaml
           hub_relation_navigation_binding.runtime_fail_close_negative_cases) no longer apply to
@@ -569,8 +569,8 @@ db_schema:
           retirement_sentinel: HUB_RELATIONS_RELATED_HUB_ID__RETIREMENT_PENDING_SENTINEL__TARGET_TOPOLOGY_MANIFEST_ID
           sentinel_usage_boundary: >-
             The retirement_sentinel string above is non-production metadata only: it exists so a
-            future implementation_change can grep SSOT/TODO surfaces to find every place this
-            retirement was tracked. It must never appear in runtime code, DB schema/data, API
+            future implementation_change can grep SSOT and task-tracking surfaces to find every
+            place this retirement was tracked. It must never appear in runtime code, DB schema/data, API
             payloads, or any user-visible UI string -- it is a governance/tracking token, not a
             code identifier, error code, or column value.
           authority_as_of_this_design_change: >-
@@ -618,7 +618,7 @@ db_schema:
             dictionary entry, and NpgsqlSqlAttentionLogsRepository.
             LoadHubRelationExplorationCandidatesAsync / HubAttractorExplorationRuntime.cs's
             SQLAT/phaseAT evidence generation (see phase_attention_axis_mapping note below --
-            explicitly out of scope for this redesign).
+            explicitly excluded from this redesign's replacement set).
           self_loop_guard_note: >-
             The existing SELF_LOOP guard (NpgsqlContentBundleRepository.CreateHubRelationAsync/
             UpdateHubRelationAsync, error code "SELF_LOOP") rejects an ordinary authored relation
@@ -664,7 +664,7 @@ db_schema:
           PromoteAsync via ContentBundleRepository.HasResolvableActiveHubRelationAsync /
           LoadHubNavigationSequenceAsync) -- this design_change does not alter runtime behavior.
           The canonical forward design is target_reference_canonical_contract above: once
-          target_topology_manifest_id is physically implemented, this rule's resolution clause
+          target_topology_manifest_id is physically built, this rule's resolution clause
           simplifies to "whose target_topology_manifest_id references an active
           hubs.topology_manifests row" (a direct FK existence+status check, no exactly-one
           inference), and this field/rule text is updated in place to match rather than kept as
@@ -1309,9 +1309,9 @@ db_schema:
           hub_id — mirroring physical_table_manifest_binding's
           no_implicit_join_nullable_fallback_or_oldest_manifest_fallback invariant above. Zero
           or multiple manifests under the related hub resolve to no target (null), never a
-          guessed/oldest/first row. This is the CURRENT implementation, not the canonical
-          forward design (see canonical_forward_rule above) -- it remains true of production
-          today and is what a future implementation_change replaces.
+          guessed/oldest/first row. This is the mechanism already built and in production use
+          today, not the canonical forward design (see canonical_forward_rule above) -- it
+          remains true of production today and is what a future implementation_change replaces.
 
     sql_attention_targets:
       target_space: hubs
@@ -1794,7 +1794,7 @@ phase_attention_axis_mapping:
     UNCHANGED and NOT part of the hub_relations.target_reference_canonical_contract redesign:
     z ("hub_id registered by y") is derived from the relation's SOURCE side --
     hubs.topology_manifests.hub_id for the manifest at y (hub_relations.topology_manifest_id)
-    -- never from hub_relations.related_hub_id. Current implementation
+    -- never from hub_relations.related_hub_id. The code already built
     (backend/runtime/HubAttractorExplorationRuntime.cs expandedHubIds,
     ~lines 129-177) additionally folds related_hub_id (the relation's current/legacy TARGET
     hub) into the same evidence array alongside the canonical source-side hub_id, which is
@@ -1813,7 +1813,7 @@ phase_attention_axis_mapping:
     values) ordered by sequence_position. sequence_position remains the unchanged 1-dimensional
     coordinate/ordering authority for this vector either way (see
     hub_relations.key_columns sequence_position note) -- this design_change does not touch
-    sequence_position's role. Once target_topology_manifest_id is physically implemented, the
+    sequence_position's role. Once target_topology_manifest_id is physically built, the
     vector's ELEMENT TYPE is expected to shift from Hub UUIDs (related_hub_id) to Manifest UUIDs
     (target_topology_manifest_id); that test_proof_contract text is current/legacy-accurate
     today and is updated in place by the next implementation_change, per the same

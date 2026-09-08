@@ -365,7 +365,7 @@ runtime_orchestration_ssot:
         runtime_destination via HubNavigationResolver, not only topology_transform_runtime
         (RuntimeExecutor already performed this for its own path prior to this addendum).
       target_manifest_resolution: >-
-        CURRENT implementation (unchanged by the design_change noted below, and still an
+        The mechanism already built and unchanged by the design_change noted below (still an
         accurate description of production today): HubNavigationSequenceItemDto.TargetManifestId
         is resolved only when exactly one active hubs.topology_manifests row exists for
         NavigationSequence[].RelatedHubId — no implicit oldest/first-match fallback (mirrors
@@ -379,7 +379,7 @@ runtime_orchestration_ssot:
         canonical definition of the forward target-resolution design -- a direct
         target_topology_manifest_id FK, replacing the related_hub_id-based exactly-one-active-
         manifest inference described in target_manifest_resolution above. This field is a
-        pointer, not a restatement; once physically implemented, target_manifest_resolution
+        pointer, not a restatement; once physically built, target_manifest_resolution
         above is updated in place to describe the new current behavior rather than kept as an
         independently-drifting second copy.
     admin_runtime_structural_read_fallback:
