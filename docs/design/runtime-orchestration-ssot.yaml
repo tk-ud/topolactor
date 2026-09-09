@@ -134,23 +134,17 @@ runtime_orchestration_ssot:
           replacement: same_url_seed_backed
           status: design_resolved_not_started
           precondition: >-
-            PR #612 Round 12 design_change resolution (2026-09-08): admin-console-workflow-ssot.yaml
-            admin_hub_relation_navigation_contract.axis_navigation_membership.
-            production_reachability_precondition resolves the open "new route vs. link from static
-            index" fork an earlier round of this same PR left unresolved -- /admin has no other
-            available registry slot and inventing a new route is prohibited, so it collapses to this
-            same thin_projection_wrapper pattern /admin/enums already uses: route file and URL
-            unchanged, frontend/routes/admin/index.tsx's current hardcoded AdminIndex body (static
-            step-guide/checklist/route-card content, see frontend/content/adminGuides.ts) is replaced
-            by a same-URL ProjectionShell thin wrapper pinned to manifest ad200
+            admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract.
+            axis_navigation_membership.production_reachability_precondition resolves the target
+            route: /admin has no other available registry slot and inventing a new route is
+            prohibited, so /admin/index.tsx's current hardcoded body is replaced by a same-URL
+            ProjectionShell thin wrapper pinned to manifest ad200
             (00000000-0000-0000-0000-0000000ad200), the same convention enums.tsx already
             established for ae200. This design_change performs no SQL DDL/backend/frontend/test
-            work; status is design_resolved_not_started (the design fork is closed, production work
-            has not begun) rather than done, to avoid conflating design convergence with
-            implementation completion (see the agent task tracking surface's PR #612 vs. downstream
-            implementation_change Bundle boundary note). Closing this route entry to status=done is
-            a hub-relation-target-manifest-canonical-migration Bundle acceptance item, alongside
-            registering axis_navigation_membership's HubRelation rows.
+            work; status is design_resolved_not_started (the design is closed, production work
+            has not begun). Closing this route entry to status=done and registering
+            axis_navigation_membership's HubRelation rows are
+            hub-relation-target-manifest-canonical-migration Bundle implementation items.
         - route: /admin/enums
           retirement_kind: thin_projection_wrapper
           replacement: same_url_seed_backed
@@ -529,30 +523,20 @@ runtime_orchestration_ssot:
             panel, or new runtime_destination
       canonical_forward_scope_note: >-
         test_input_shape / resolution_chain / proof_boundary above describe the mechanism already
-        built and its passing proof (unchanged by this design_change — every test listed in
-        docs/design/db-schema.yaml
-        hub_relations.target_reference_canonical_contract.related_hub_id_retirement_contract.
-        first_implementation_change_replacement_scope remains valid and must keep passing as-is).
-        The canonical forward target-resolution design is
-        db-schema.yaml hub_relations.target_reference_canonical_contract (target_topology_manifest_id,
-        no SQL DDL yet). When a future implementation_change physically replaces related_hub_id
-        with target_topology_manifest_id, it must update this test_proof_contract (test_input_shape's
-        hub_ids[] becomes a manifest_ids[] vector, resolution_chain's RelatedHubId/TargetManifestId
-        steps are rewritten, proof_boundary's "exactly one ACTIVE manifest for a related hub"
-        clause is replaced by a direct target_topology_manifest_id existence+status check) in the
-        same change that updates the code — not leave this text describing a retired mechanism.
-        Where an existing test in that first_implementation_change_replacement_scope list turns
+        built and its passing proof (unchanged by this design_change). The canonical forward
+        target-resolution design is db-schema.yaml hub_relations.target_reference_canonical_contract
+        (target_topology_manifest_id, no SQL DDL yet). When a future implementation_change
+        physically replaces related_hub_id with target_topology_manifest_id, it must update this
+        test_proof_contract (test_input_shape's hub_ids[] becomes a manifest_ids[] vector,
+        resolution_chain's RelatedHubId/TargetManifestId steps are rewritten, proof_boundary's
+        "exactly one ACTIVE manifest for a related hub" clause is replaced by a direct
+        target_topology_manifest_id existence+status check) in the same change that updates the
+        code — not leave this text describing a retired mechanism. Where an existing test turns
         out, on inspection, to assert the OLD related_hub_id-based semantic as its actual point
         (rather than incidentally using related_hub_id as test plumbing), that
         implementation_change must judge what canonical contract the test is meant to prove and
         either update it to prove the new canonical contract or retire it as stale proof — never
-        keep the old semantic alive by leaving the test unchanged and calling it done. This same
-        judge-don't-revert discipline applies to db-schema.yaml's
-        full_retirement_tracking_inventory (the broader tier covering SEARCH/DISPLAY and
-        SQLAT-EVIDENCE consumers deferred out of this first replacement) once a later
-        implementation_change reaches those entries — a test built against that deferred tier is
-        not exempt from the same judgment just because it wasn't touched by the first
-        implementation_change.
+        keep the old semantic alive by leaving the test unchanged and calling it done.
 
     production_projection_connectivity_invariant:
       note: >-
@@ -560,20 +544,7 @@ runtime_orchestration_ssot:
         docs/design/db-schema.yaml hub_relations.minimum_cardinality_completion_invariant as the
         top authority; re-aligned round 13 to the existing public.manifest draft -> active ->
         deprecated lifecycle as the canonical completion boundary -- see enforcement_boundary
-        below). PR #612 Round 13 and Round 14 (2026-09-08, unrelated to this note's own "round 10/
-        11/13" -- that is PR #602's own internal round history, already historical by the time PR
-        #612 exists) narrowed db-schema.yaml's applies_to to declared canonical fixed-navigation
-        source authority only, then re-derived the enforcement_boundary itself after confirming no
-        runtime-consumable authority exists to classify sources (see that file's
-        navigation_source_scoped_reinterpretation and runtime_source_authority_search_and_
-        enforcement_boundary_reconciliation). This mirror's invariant/enforcement_boundary/scope
-        fields below are synced to that current authority as of Round 14 -- db-schema.yaml remains
-        the canonical source and this stays a pointer, per this note's own "both are pointers to
-        avoid independently-drifting copies" rule, but no unsynced universal wording is left below.
-        The historical narrative in the rest of this note (Round 10-13, all PR #602's own
-        pre-PR-#612 history) is retained as-is; it describes decisions already superseded in
-        substance by the above, not the current forward contract. Generalizes the per-subBundle
-        navigation_binding_authoring_and_verification /
+        below). Generalizes the per-subBundle navigation_binding_authoring_and_verification /
         navigation_binding_resolution_criterion gate already proven in
         docs/design/admin-normal-surface-projection-seed-ssot.yaml design_blocking.subbundle_status
         (and this contract's own test_proof_contract above) from a one-time seed-conversion
@@ -595,11 +566,7 @@ runtime_orchestration_ssot:
         13: the boundary was never missing, hubs.topology_manifests.status was simply wired wrong
         (see enforcement_boundary).
       invariant: >-
-        PR #612 Round 13: scoped to every hubs.topology_manifests row with status='active' that
-        db-schema.yaml hub_relations.minimum_cardinality_completion_invariant.applies_to declares a
-        canonical fixed-navigation source (admin-dashboard/ad200 only today -- see that field's
-        navigation_source_scoped_reinterpretation for the full current-scope breakdown); such a row
-        must resolve at least one active
+        Every hubs.topology_manifests row with status='active' must resolve at least one active
         hubs.hub_relations row through the exact same resolution_chain this contract's
         test_proof_contract already defines -- HubNavigationResolver -> Emission.NavigationSequence
         -> resolveHubNavigationLinks -> ProjectionShell's own nav bar / target-manifest round trip.
@@ -648,24 +615,8 @@ runtime_orchestration_ssot:
         elements from a real NavigationSequence, not source-string grep) -- see
         frontend/tests/projectionShellHubNavigationRenderProof.test.ts.
       enforcement_boundary: >-
-        PR #612 Round 14 (2026-09-08): as of db-schema.yaml hub_relations.
-        minimum_cardinality_completion_invariant.runtime_source_authority_search_and_
-        enforcement_boundary_reconciliation, PromoteAsync is no longer this invariant's own
-        canonical enforcement_boundary -- no runtime-consumable authority exists for it to
-        classify "is this manifest a declared canonical fixed-navigation source" before applying
-        its gate, so it cannot correctly serve as a SOURCE-SCOPED enforcement boundary without
-        inventing new classification authority (not done). The paragraph below remains an accurate
-        description of PromoteAsync's own real, unchanged code behavior (unconditional across
-        every promoted manifest) -- read it as that, not as this invariant's forward completion
-        authority. This invariant's actual enforcement_boundary is bootstrap seed completeness
-        (the same seed-row audit / live-DB+DOM proof already required for
-        axis_navigation_membership's own Bundle acceptance) plus the existing, unmodified last-
-        active-relation guard on hub_navigation:deprecate described later in this same field --
-        both already exist, cover the actual completion property without per-manifest role
-        classification, and require no new mechanism. The canonical completion boundary
-        (PR #602's own historical round 13, superseded above) was described as
-        NpgsqlManifestRepository.PromoteAsync -- the existing public.manifest draft -> active
-        transition, not a new concept. Before opening
+        The canonical completion boundary (round 13) is NpgsqlManifestRepository.PromoteAsync --
+        the existing public.manifest draft -> active transition, not a new concept. Before opening
         its transaction, PromoteAsync queries
         ContentBundleRepository.HasResolvableActiveHubRelationAsync (reusing
         LoadHubNavigationSequenceAsync's own resolution semantics; not a duplicated COUNT-only
@@ -695,92 +646,12 @@ runtime_orchestration_ssot:
         hub_navigation:reorder never changes status, so deprecate is the only other mutation able to
         reduce the active count).
       scope: >-
-        Applies to whichever hubs.topology_manifests rows db-schema.yaml
-        hub_relations.minimum_cardinality_completion_invariant.applies_to designates today --
-        PR #612 Round 13/14: declared canonical fixed-navigation source manifests only
-        (admin-dashboard/ad200 alone today, per that field's navigation_source_scoped_
-        reinterpretation), not every active row indiscriminately. This scope field's own historical
-        wording (admin-surface-topology-seed-conversion's five subBundles as the concrete proof
-        precedent) remains relevant only for admin-dashboard/ad200 among those five -- ae200/
-        5c100/dd010/092 are Admin-axis navigation TARGETS, not declared sources, and this invariant
-        requires nothing of them (see db-schema.yaml's own per-row breakdown). All five
-        (admin-dashboard/admin-enum/credential-management/
-        team-dashboard/scheduler-settings) have navigation_binding_authoring_and_verification
-        marked resolved in docs/design/admin-normal-surface-projection-seed-ssot.yaml
-        design_blocking target_surface_manifest_readiness.subbundle_status, the still-authoritative
-        per-Bundle tracking record this scope field defers to rather than restating -- this line
-        previously read team-dashboard/scheduler-settings as unresolved_before_seed, stale since
-        both were built (2026-08-16/2026-08-17) after that wording was written; see
-        seed_backfill_state_note below for what "resolved" does and does not mean for db/seed_empty.sql
-        itself.
-      seed_backfill_state_note: >-
-        PR #612 recursive audit finding (2026-09-08, corrected 2026-09-08 after a row-count and
-        proof-direction error was found in the first pass -- see below), recorded here rather than
-        assumed resolved: the resolved status above proves the per-subBundle authoring MECHANISM,
-        and for two of the five subBundles also proves target-side reachability mechanics, but
-        neither ever leaves a lasting seed row -- see the per-subBundle breakdown below. A row-level
-        count of db/seed_empty.sql's INSERT INTO hubs.topology_manifests statements (one statement
-        held a 6-row VALUES list -- 0000a3 through 0000a8 -- that a first-pass statement-count
-        undercounted as one row) found 21 active hubs.topology_manifests rows: 092, 093, 5c100
-        (scheduler-settings), ad200 (admin-dashboard), ae200/ae210/ae220/ae230/ae240/ae250/ae260/
-        ae270/ae280 (admin-enum, 9 rows), 0000a3/0000a4/0000a5/0000a6/0000a7/0000a8 (external-port
-        consumer projections, 6 rows), dd010/dd020 (team-dashboard). Exactly one active
-        hubs.hub_relations row exists in the whole canonical seed (the
-        canonical_default_entry_contract self-reference on manifest 092), so 20 of these 21 rows own
-        zero active hub_relations rows in the seed itself -- each was inserted directly as
-        status='active' by raw SQL, never through NpgsqlManifestRepository.PromoteAsync (the sole
-        enforcement_boundary above), so the promotion-time cardinality gate never ran against any of
-        them. Per-subBundle proof direction (re-audited individually per
-        admin-normal-surface-projection-seed-ssot.yaml design_blocking.target_surface_manifest_
-        readiness.navigation_binding_resolution_criterion, not generalized across all five as a
-        first pass wrongly did): credential-management (092, via
-        CredentialManagementHubRelationUiProjectionLiveDbTests.DispatchAsync_HubNavigationCreate_
-        AuthorsRelationTargetingManifest092_ResolutionChainReachesScalarEmission) and team-dashboard
-        (dd010, via TeamDashboardHubRelationUiProjectionLiveDbTests.DispatchAsync_HubNavigationCreate_
-        AuthorsRelationTargetingAdminManifest_ResolutionChainReachesScalarEmission) each have a
-        synthetic-source-to-real-target combined proof that resolves the full chain into that
-        subBundle's own real content; admin-enum and scheduler-settings each have only a
-        source-outbound authoring-mechanism proof (their own manifest as source, a content-less
-        synthetic manifest as target) -- their own target-side reachability mechanics have never
-        been exercised by any test, unlike credential-management/team-dashboard; admin-dashboard is
-        subBundle_not_applicable to this specific design_blocking id (per its own subbundle_status
-        note, that means the id does not gate admin-dashboard, not that admin-dashboard is a
-        decided relation source) and has only a separate display/propBinding proof
-        (AdminDashboardNavigationUiProjectionLiveDbTests.DispatchAsync_AdminDashboardNavigationManifest_
-        CardListItemsReflectRealAuthoredHubRelation, which authors its relation via a raw SQL
-        insert, not hub_navigation:create). The gap predates the current
-        hub-relation-target-manifest-canonical-migration design_change: db/seed_empty.sql's own
-        comments for admin-dashboard/scheduler-settings/admin-enum/credential-management each state
-        plainly that the subBundle deliberately seeds no hub_relations row of its own, leaving
-        authoring to an ordinary post-deployment /admin/manifests action -- a choice repeated across
-        five separate seed sections and never reconciled against this invariant once it was
-        introduced. Owner-confirmed resolution (this design_change, retracting an earlier round
-        of this same PR's "three Owner-decision candidates to compare" framing):
-        admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract.
-        axis_navigation_membership now declares admin-dashboard (ad200) the canonical Admin-axis
-        fixed-navigation source (derived from its own positive data_authority_ref/
-        projection_responsibility, not from subBundle_not_applicable) with admin-enum (ae200),
-        scheduler-settings (5c100), team-dashboard admin (dd010), and credential-management (092)
-        as its Admin-axis navigation targets -- ae210-ae280 excluded as ae200's own internal
-        write/read operation authority, and the external-port-consumer-completion projections
-        (0000a3-0000a8) excluded as out of surface_axes scope entirely (no ui_projection, not
-        user-facing navigable screens). Closing this invariant for the existing seed's Admin-axis
-        surfaces is now a concrete implementation task (register the axis_navigation_membership
-        relations -- ad200's own 4 outbound relations, the sole row this invariant requires one of
-        under its current source-scoped applies_to -- and give admin-dashboard a real production
-        entry point -- repo-wide grep found it has none today, see
-        axis_navigation_membership.production_reachability_precondition), not an open
-        product-direction choice among incompatible candidates. PR #612 Round 13 (2026-09-08):
-        db-schema.yaml's applies_to now scopes this invariant to declared canonical
-        fixed-navigation source manifests only (navigation_source_scoped_reinterpretation) -- ae200/
-        5c100/dd010/092 are declared TARGETS only and are not themselves required to own an
-        outbound relation; ae210-ae280, the external-port-consumer-completion projections
-        (0000a3-0000a8), manifest 093, and dd020 (the sole real Normal-axis surface, itself never
-        declared a source) are none of them a declared canonical fixed-navigation source under any
-        existing SSOT, so this invariant requires nothing further of them -- not because their kind
-        is exempted, but because none was ever declared a source. This resolves what the previous
-        wording below left as "a separate, unresolved question" for the external-port-consumer-
-        completion projections: it is no longer open.
+        Applies to every hubs.topology_manifests row per db-schema.yaml
+        hub_relations.minimum_cardinality_completion_invariant.applies_to -- not limited to
+        admin-surface-topology-seed-conversion's five subBundles, though those remain the existing
+        concrete proof precedent (admin-dashboard/admin-enum/credential-management already resolved
+        per navigation_binding_resolution_criterion; team-dashboard/scheduler-settings remain
+        unresolved_before_seed).
 
     canonical_default_entry_contract:
       note: >-

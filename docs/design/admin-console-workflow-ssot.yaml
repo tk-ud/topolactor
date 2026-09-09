@@ -9,10 +9,8 @@ admin_console_workflow_ssot:
       This document is subordinate to runtime orchestration. It describes the admin UI
       responsibility split but MUST NOT add canonical admin routes outside that registry.
     canonical_routes:
-      # PR #612 Round 12: re-synced against runtime-orchestration-ssot.yaml frontend_routes.admin
-      # (2026-09-08) -- this mirror had drifted stale, missing /admin/team-markdown, /admin/enums,
-      # and /admin/users. Kept only as a readability mirror; the file listed in
-      # canonical_admin_route_registry above remains the sole authority on order/membership.
+      # Readability mirror only; the file listed in canonical_admin_route_registry above remains
+      # the sole authority on order/membership.
       - /admin
       - /admin/manifests
       - /admin/contents
@@ -59,32 +57,6 @@ admin_console_workflow_ssot:
       dispatcher_mapping_status: >-
         All six axes already have active production dispatcher_mapping rows in db/seed_empty.sql
         (unlike auth_users/team_markdown before this Bundle's fix) — no wiring gap here.
-      relation_name_authoring: >-
-        design_change (SSOT only; no backend/frontend change yet — see
-        docs/design/db-schema.yaml db_schema.tables.hub_relations.key_columns and
-        docs/design/admin-normal-surface-projection-seed-ssot.yaml
-        hub_relation_navigation_binding.relation_display_label_contract for the full name/label
-        contract this note points at). hubs.hub_relations gains an optional, nullable
-        user-facing name field owned by the relation row itself. This is authored on the
-        existing hub_navigation:create / hub_navigation:update dispatch actions above as an
-        additional optional field — it does not add a new dispatch axis, a new route, or a new
-        relation editor: /admin/manifests + HubNavigationAdmin.tsx remain the sole authoring
-        surface. A future implementation_change closing this design_change extends
-        hub_navigation:create/update to accept it, enforce the required active-sibling-per-
-        topology_manifest_id uniqueness contract (see admin-normal-surface-projection-seed-ssot.yaml
-        hub_relation_navigation_binding.relation_display_label_contract.uniqueness_contract for
-        the full scope/exemptions), and extends HubNavigationAdmin.tsx's existing table/form with
-        a name input and the resolved effective label (named or sequence_position-derived
-        default); hub_navigation:reorder/deprecate/get_hub_relations/list_manifests need no new
-        parameters for this field.
-      reorder_semantics: >-
-        hub_navigation:reorder (ReorderHubRelationsAsync) persists a real change to each
-        affected row's sequence_position column, not a display-only reordering. The full
-        contract (single shared authority across UI order / relation-vector coordinate / SQL
-        Attention far-search, no separate ordinal for any one consumer, sequence_position=0
-        carrying no reserved meaning) lives in docs/design/db-schema.yaml
-        hub_relations.key_columns sequence_position.reorder_mutation_contract — this entry does
-        not restate it.
       repository: >-
         NpgsqlContentBundleRepository (CreateHubRelationAsync / UpdateHubRelationAsync /
         DeprecateHubRelationAsync / ReorderHubRelationsAsync / ListHubRelationsByManifestAsync /
@@ -159,66 +131,25 @@ admin_console_workflow_ssot:
       SSOT status ledger. This document defines the authoring contract, schema, and resolution
       semantics; it does not track live connection state.
     bootstrap_seed_vs_runtime_authoring_boundary: >-
-      RESOLVED (PR #612 Round 12, 2026-09-08): cross-checked against
-      docs/design/admin-normal-surface-projection-seed-ssot.yaml
-      seed_physical_hierarchy_and_definition.seed_definition.rule, which defines "seed" for this
-      whole Bundle as "the physical DB rows across hub_relation / topology / hub / package ...
-      pre-built initial sample data, equivalent in shape to what an admin would obtain by actually
-      using /admin/contents + /admin/ui-builder + /admin/manifests -- not an independently-designed
-      artifact class with a separate authoring lifecycle of its own", and against that same file's
-      physical_hierarchy.hub_relation entry, which defines a seeded hub_relation row as ordinary
-      "an outbound navigation row from a source topology_manifest ... to a target hub" -- the exact
-      same row shape and table (hubs.hub_relations) connection_state_authority above already
-      governs. Read together, seed_definition and connection_state_authority do not conflict: they
-      answer different questions (seed_definition says WHAT PHYSICAL FORM pre-built content takes;
-      connection_state_authority says WHERE the live ledger of that content's current state lives,
-      namely the DB itself, never a parallel SSOT status field) rather than competing over one
-      question. There is no separate "bootstrap-only" persistence authority distinct from ordinary
-      runtime hub_relations rows -- a seeded hub_relations row IS a runtime hub_relations row,
-      merely pre-authored before deployment instead of authored later by an admin through
-      /admin/manifests; both are written through the identical table and, once
-      hub-relation-target-manifest-canonical-migration lands, the identical
-      NpgsqlManifestRepository.PromoteAsync-adjacent authoring path. Applied to axis_navigation_
-      membership below: the four relations it defines (ad200 -> ae200/5c100/dd010/092) are meant to
-      be registered as pre-built db/seed_empty.sql rows -- consistent with every other
-      already-closed subBundle in this Bundle (092's canonical_default_entry self-reference and,
-      per the precedent /admin/scheduler and /admin/enums already establish, relations authored
-      through the same live hub_navigation:create path proven by
-      SchedulerSettingsHubRelationUiProjectionLiveDbTests.cs and
-      AdminEnumHubRelationUiProjectionLiveDbTests.cs) -- and remain ordinary, admin-editable
-      hubs.hub_relations rows after bootstrap, never locked or exempted from later admin authoring.
-      This does not reopen or duplicate the design already settled by
-      hub_navigation_only/thin_projection_wrapper retirement_kind's own "no static
-      hubs.hub_relations seed row is ever shipped" convention noted on /admin/scheduler above --
-      that convention describes HOW those two subBundles' OWN relations happen to be authored (via
-      a live-DB test proving the authoring path, not a literal SQL seed row); it is not a rule that
-      seeding a hub_relations row is categorically forbidden, and it governs /admin/scheduler and
-      /admin/enums specifically, not axis_navigation_membership. PR #612 Round 13 (2026-09-08):
-      axis_navigation_membership's own four relations (ad200 -> ae200/5c100/dd010/092) are
-      one-bench, not agent's-choice -- they MUST be registered as pre-built db/seed_empty.sql rows
-      at fresh bootstrap, not left to post-deployment live authoring as an equally-valid
-      alternative. This is the only one of the two conventions that gives admin-dashboard's own
-      card_list of links something to display the moment a fresh environment boots, matching
-      admin-dashboard's declared projection_responsibility (display_manifest_scoped_hub_relation_
-      links) -- an admin having to first visit /admin/manifests and author all four relations by
-      hand before admin-dashboard shows anything is not equivalent to team-dashboard/scheduler's
-      own already-reachable-by-other-means targets, since admin-dashboard's whole
-      production_reachability_precondition depends on these specific relations existing. Once
-      seeded, they remain ordinary, admin-editable hubs.hub_relations rows -- bootstrap fixes their
-      initial existence, not their mutability.
+      Single-ledger contract: axis_navigation_membership's four relations (ad200 -> ae200/5c100/
+      dd010/092, below) exist as pre-built db/seed_empty.sql physical rows at fresh bootstrap, so
+      admin-dashboard's card_list has something to display the moment a fresh environment boots.
+      After bootstrap they are ordinary hubs.hub_relations rows, editable through the same
+      /admin/manifests authoring mechanism (hub_navigation:create/update/reorder/deprecate)
+      connection_state_authority above already governs -- one ledger, not a separate bootstrap-only
+      store and a separate runtime-authoring store.
     axis_navigation_membership:
       note: >-
-        Owner-confirmed design (this design_change, resolving what an earlier round of this same
-        PR framed as three Owner-decision candidates to compare -- that framing is retracted):
-        docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin /
-        surface_axes.normal are the existing projection-surface axes (axis_kind:
-        projection_surface_axis, not_role_or_rbac -- unchanged, never converted into an auth role,
-        RBAC dimension, or a new hubs.hub_relations column). This entry defines concrete
-        HubRelation fixed-navigation membership per axis, reusing the existing mechanism this
-        contract already defines (hub_navigation:create/update/reorder/deprecate,
-        HubNavigationResolver, Emission.NavigationSequence, resolveHubNavigationLinks,
-        ProjectionShell) unchanged -- no new navigation model, global hub graph, parallel store,
-        or per-surface fallback is introduced.
+        Owner-confirmed design (this design_change): docs/design/admin-normal-surface-projection-
+        seed-ssot.yaml surface_axes.admin / surface_axes.normal are the existing
+        projection-surface axes (axis_kind: projection_surface_axis, not_role_or_rbac --
+        unchanged, never converted into an auth role, RBAC dimension, or a new
+        hubs.hub_relations column). This entry defines concrete HubRelation fixed-navigation
+        membership per axis, reusing the existing mechanism this contract already defines
+        (hub_navigation:create/update/reorder/deprecate, HubNavigationResolver,
+        Emission.NavigationSequence, resolveHubNavigationLinks, ProjectionShell) unchanged -- no
+        new navigation model, global hub graph, parallel store, or per-surface fallback is
+        introduced.
       admin_navigation_source: >-
         db/seed_empty.sql manifest 00000000-0000-0000-0000-0000000ad200
         ("admin.dashboard.navigation.projection", admin-normal-surface-projection-seed-ssot.yaml
@@ -266,13 +197,7 @@ admin_console_workflow_ssot:
         seed_contract.component_tree_note) -- never independently selected by a user via
         HubRelation navigation, and not first-class members of this axis's navigation target set
         merely because each is an active hubs.topology_manifests row. Nothing in this entry
-        authorizes listing them as hub_navigation:create targets. PR #612 Round 13: this same fact
-        (never declared a source or target by any existing SSOT navigation-membership authority)
-        is also why none of these 8 rows is subject to db-schema.yaml
-        hub_relations.minimum_cardinality_completion_invariant, whose applies_to now scopes to
-        declared canonical fixed-navigation SOURCE manifests only (navigation_source_scoped_
-        reinterpretation) -- registering an ae200 -> ae210 (or any sibling) relation to satisfy that
-        invariant would itself contradict this entry's own non-target declaration and is not done.
+        authorizes listing them as hub_navigation:create targets.
       normal_navigation_membership: >-
         docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.normal.
         normal_hub_relation_navigation_contract already defines the Normal-axis equivalent
@@ -287,13 +212,7 @@ admin_console_workflow_ssot:
         /dashboard, runtime-orchestration-ssot.yaml admin_route_retirement_matrix.routes
         /admin/team-dashboard entry) rather than a fabricated HubRelation source -- that decision
         is unchanged and this entry does not reopen it. No fake Normal-axis target is introduced
-        here. PR #612 Round 13: dd020 is also not itself declared a canonical fixed-navigation
-        SOURCE by this contract or its Normal-axis equivalent (admin-normal-surface-projection-
-        seed-ssot.yaml surface_axes.normal.normal_hub_relation_navigation_contract) -- it is simply
-        the sole real surface, not a source of anything -- so db-schema.yaml
-        hub_relations.minimum_cardinality_completion_invariant (source-scoped under
-        navigation_source_scoped_reinterpretation) requires nothing of it either; no relation is
-        registered for dd020 for cardinality's sake.
+        here.
       cross_axis_navigation: >-
         Not established by this entry. An Admin-axis source relation targets only Admin-axis
         manifests and a Normal-axis source relation targets only Normal-axis manifests, per each
@@ -311,86 +230,28 @@ admin_console_workflow_ssot:
         navigation membership. The same applies to manifest 093 (file-storage-bundle-export-job-
         dispatch, the same bundle_projection/consumer-evidence kind) and, for a different reason
         (dispatch-only, never independently navigated to), to ae210/ae220/ae230/ae240/ae250/ae260/
-        ae270/ae280 above. RESOLVED (PR #612 Round 13, 2026-09-08, superseding Round 12's framing
-        below): db-schema.yaml hub_relations.minimum_cardinality_completion_invariant.applies_to
-        now scopes to declared canonical fixed-navigation SOURCE manifests only
-        (navigation_source_scoped_reinterpretation) -- none of these rows (0000a3-0000a8, 093,
-        ae210-ae280) is declared a source by this entry or any existing SSOT, so none is subject to
-        that invariant at all. This is not a manifest-kind exception grant; it follows directly
-        from this entry's own out-of-membership/non-target declarations above, which already
-        establish that no existing authority ever named any of these rows a navigation source. No
-        Owner judgment item remains here. (Superseded: db-schema.yaml minimum_cardinality_
-        completion_invariant.active_row_semantic_role_reclassification, PR #612 Round 12's earlier
-        finding, reported this as unresolved and requiring Owner judgment; that framing followed
-        from Round 12 not yet re-scoping applies_to and is retracted by the resolution above, kept
-        in db-schema.yaml only as a historical record.)
+        ae270/ae280 above.
       production_reachability_precondition: >-
-        RESOLVED (PR #612 Round 12, 2026-09-08): repo-wide grep found no frontend route, island, or
-        backend code referencing 00000000-0000-0000-0000-0000000ad200 outside test files
+        RESOLVED: repo-wide grep found no frontend route, island, or backend code referencing
+        00000000-0000-0000-0000-0000000ad200 outside test files
         (backend/tests/Topolactor.Integration.Tests/AdminDashboardNavigationUiProjectionLiveDbTests.cs
         and frontend/tests/adminWiringExecutionLane.test.ts) -- unlike ae200 (/admin/enums) and
         dd010 (/admin/team-dashboard), admin-dashboard has no production route or entry point of
-        its own today. An earlier round of this same PR left the closing move as an open fork
-        ("the same thin_projection_wrapper pattern /admin/enums already uses, or a link from the
-        existing static /admin index") for a later implementation agent to pick; that fork does not
-        survive cross-checking runtime-orchestration-ssot.yaml frontend_routes.admin (the sole
-        canonical admin route registry, 9 entries, re-synced above): none of the other 8 routes is
-        an available slot for admin-dashboard, and authoring_this_entry's own NG-axis governance
-        forbids inventing a new route (e.g. /admin/dashboard) outside that registry. /admin itself
-        is already the canonical landing route in that registry and is not assigned to any other
-        subBundle's surface, so "a link from the existing static /admin index" collapses to the
-        same route as the thin_projection_wrapper option -- there is no second, distinct URL for it
-        to point at. The unique, existing-authority-derived resolution is therefore: /admin becomes
-        admin-dashboard's (ad200's) production entry point via the same thin_projection_wrapper
-        retirement_kind runtime-orchestration-ssot.yaml admin_route_retirement_matrix already used
-        for /admin/enums (route file and URL unchanged, route body swapped from the current
-        hardcoded frontend/routes/admin/index.tsx content to a seed-backed ProjectionShell
-        projection of manifest ad200) -- see admin_route_retirement_matrix.routes' new /admin entry
-        for the design-side registration; production implementation (swapping index.tsx's body,
+        its own today. Cross-checking runtime-orchestration-ssot.yaml frontend_routes.admin (the
+        sole canonical admin route registry, 9 entries) shows none of the other 8 routes is an
+        available slot for admin-dashboard, and inventing a new route (e.g. /admin/dashboard)
+        outside that registry is prohibited. /admin itself is already the canonical landing route
+        in that registry and is not assigned to any other subBundle's surface. The unique,
+        existing-authority-derived resolution is therefore: /admin becomes admin-dashboard's
+        (ad200's) production entry point via the same thin_projection_wrapper retirement_kind
+        runtime-orchestration-ssot.yaml admin_route_retirement_matrix already used for
+        /admin/enums (route file and URL unchanged, route body swapped from the current hardcoded
+        frontend/routes/admin/index.tsx content to a seed-backed ProjectionShell projection of
+        manifest ad200) -- see admin_route_retirement_matrix.routes' /admin entry for the
+        design-side registration; production implementation (swapping index.tsx's body,
         registering the HubRelation rows this entry defines membership for) remains a
         hub-relation-target-manifest-canonical-migration Bundle implementation_change item, not
         design_change work.
-      initial_relation_ordering_and_naming: >-
-        sequence_position: RESOLVED (PR #612 Round 14, 2026-09-08, superseding Round 13's partial
-        Owner-judgment framing below in full). Round 13 treated admin_navigation_targets' own
-        prose order and runtime-orchestration-ssot.yaml admin_route_retirement_matrix.routes' list
-        order as two competing, equally-weighted "existing SSOT lists" that happened to disagree,
-        and escalated the disagreement to the Owner. Re-examined: admin_route_retirement_matrix is
-        a route-RETIREMENT tracking table keyed by route, never declared anywhere as an ordering
-        authority for anything -- its list order is incidental to retirement bookkeeping, not a
-        competing claim about navigation sequence. admin_navigation_targets, by contrast, is the
-        SAME SSOT entry that declares axis membership itself (this entry, immediately above) --
-        promoting its own existing list order to also serve as the bootstrap sequence_position
-        authority does not conflict with db-schema.yaml hub_relations.key_columns
-        sequence_position.reorder_mutation_contract (which governs how the value CHANGES over
-        time via hub_navigation:reorder, not what its INITIAL bootstrap value is) or with any other
-        existing ordering contract -- there is no genuine second authority to reconcile, only a
-        non-authoritative list that coincidentally reads differently. sequence_position is
-        therefore fixed directly: ae200=1, 5c100=2, dd010=3, 092=4 (unchanged reasoning for ae200's
-        own primacy: admin_navigation_targets already singles it out as "the manifest this PR's
-        original production symptom names"; 5c100/dd010/092 keep the same relative order
-        admin_navigation_targets already lists them in). No Owner judgment item remains for
-        ordering. name: RESOLVED (PR #612 Round 14, refining Round 13's blanket "leave unset for
-        all four" below). Round 13's search for an existing human-label authority checked
-        manifest-level fields only and found none for any of the four targets; a further
-        repo-wide check of each target's own db/seed_empty.sql manifest.topology array (not just
-        SSOT prose) found manifest 092's OWN topology already carries a
-        screen_data_shape.userFacingTopologyLabel entry: "Auth / external credential management"
-        -- an existing, already-authored human label, not one invented for this relation. Per this
-        contract's own relation_name_authoring / relation_display_label_contract
-        (admin-normal-surface-projection-seed-ssot.yaml hub_relation_navigation_binding), an
-        existing canonical human label takes priority over the sequence-derived default, so the
-        ad200 -> 092 relation's bootstrap name is set to "Auth / external credential management"
-        verbatim (not a machine key, UUID, or topology.relation_registry.name -- an
-        already-existing, manifest-authored, human-facing caption). ae200/5c100/dd010 have no
-        equivalent userFacingTopologyLabel or any other human-readable caption anywhere in their
-        own manifest.topology arrays (each carries only machine manifestKey values, e.g.
-        "admin.enum.management.projection") -- for these three, Round 13's conclusion stands
-        unchanged: name is left NULL and the already-declared sequence_position-derived fallback
-        ("Hub 1"/"Hub 2"/"Hub 3") applies, since inventing a human label for them would not be
-        reading off existing authority. This asymmetry (092 named, the other three defaulted) is
-        deliberate and derived per-relation from what actually exists, not applied uniformly for
-        consistency's own sake.
     subbundle_target_readiness:
       note: >-
         The only structural readiness gate this Bundle tracks per subBundle for STARTING that
@@ -684,55 +545,6 @@ admin_console_workflow_ssot:
       format: any string including Japanese
       meaning: optional human-readable display name; NOT used for route/table/key derivation
       display_rule: "visibleName = userFacingTopologyLabel ?? topologySystemName"
-      display_rule_status: >-
-        Owner canonical decision (this design_change, resolving what the earlier round of this
-        same design_change left as "genuinely contradicts, not decided which wins"): display_rule
-        above is DEMOTED to legacy/replacement_pending as of this design_change's SSOT. It is not
-        physically changed by this design_change (no backend/frontend code touched here) and
-        remains exactly what every existing consumer (ManifestsAdmin.tsx's general Manifest list,
-        UI-Builder, the wiring inspector) actually runs today -- but it is no longer a canonical
-        authority standing alongside canonical_human_name_principle below. canonical_human_name_
-        principle is the sole canonical forward Manifest-naming authority; display_rule's
-        "?? topologySystemName" fallback is what a dedicated remediation implementation_change
-        (Bundle manifest-canonical-human-name-remediation, .agent/tasks/todo.md) replaces across
-        every one of its consumers, not merely acknowledges as conflicting and leaves standing.
-      canonical_human_name_principle: >-
-        Owner canonical redesign (design_change; no backend/frontend change here) -- the SOLE
-        canonical forward authority for a Manifest's human name, superseding display_rule above
-        (see display_rule_status). This is a universal principle, not a rule scoped to one
-        consumer: the canonical human name of a hubs.topology_manifests row is its explicit
-        userFacingTopologyLabel and nothing else. When it is unset (NULL/empty), the fallback for
-        any surface that must still show a label is a projection-local counter, not a system
-        identifier: at the point some code builds a list of Manifests to project/render, it
-        initializes a counter to zero before iterating that list; for each Manifest in the list
-        whose userFacingTopologyLabel is NULL/empty, it increments the counter and renders
-        "Manifest {counter}" for that item; a Manifest that DOES carry an explicit
-        userFacingTopologyLabel is rendered with that label and never touches the counter. The
-        counter is scoped to that one projection call -- it is never persisted, never a
-        cross-request or cross-session identity, never used for sorting, runtime dispatch, target
-        resolution, or SQL Attention. topologySystemName, manifestKey, a physical table name, and
-        a raw UUID are never promoted to canonical human name under this principle, for any
-        surface, present or future.
-      canonical_human_name_principle_vs_display_rule_conflict: >-
-        This principle genuinely CONTRADICTS display_rule above ("?? topologySystemName") as
-        already built and in production use across /admin/manifests (ManifestsAdmin.tsx's
-        general Manifest list included), UI-Builder, and the wiring inspector -- this is not a
-        narrower, non-overlapping scope, and (per display_rule_status above) this design_change
-        does not leave the two standing as equally-valid alternatives: canonical_human_name_
-        principle wins as the design authority, display_rule is legacy/replacement_pending.
-        Physically reconciling every existing display_rule consumer to this principle is a
-        separate, larger-blast-radius implementation_change -- Bundle
-        manifest-canonical-human-name-remediation in .agent/tasks/todo.md, Owner-scoped -- that
-        this design_change does not perform (no backend/frontend code changed here). What this
-        design_change does decide beyond the general principle: the target selector
-        admin_hub_relation_navigation_contract.canonical_forward_target_reference normalizes
-        (reusing this same userFacingTopologyLabel field, not a new one) is the existing
-        /admin/manifests + HubNavigationAdmin.tsx authoring surface's own target field switching
-        from a target-Hub picker to a target-Manifest picker -- not a new surface, route, or
-        editor -- so that normalized field is scoped to render against
-        canonical_human_name_principle from the start rather than against display_rule, avoiding
-        a second migration later. That is an instance of the general principle applying to an
-        existing surface's field, not a separate, narrower rule of its own.
     additional_table_system_name:
       required: true for tables beyond primary
       format: same as topology_system_name (kebab-case)

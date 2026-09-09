@@ -13,9 +13,7 @@
 | `test-orchestration-review` | Seed conversion後の proof / test orchestration review | not_started | 1 | proof surface carry-over | `docs/design/pipeline-continuity-ssot.yaml` |
 | `admin-console-workflow-step-wording-boundary` | Seed conversion後の admin console workflow wording boundary | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `ui-builder-schema-composed-override-delta-reachability` | schema-composed override-delta nodeがUI-Builder再オープン時に消失するnode-loss gap | not_started | 1 | 未割当（`frontend-canonical-surface-structure-label-boundary` PR#610 9ラウンド目監査からの新規発見、別scope） | `docs/design/runtime-orchestration-ssot.yaml` / `docs/design/react-schema-topology-seed-translator-ssot.yaml` |
-| `hub-relations-user-facing-name` | hubs.hub_relations に relation自身のuser-facing name authorityを追加する implementation_change | not_started | 1 | 未割当（design_change PRでSSOT契約のみ確定、実装は本Bundleの後段） | `docs/design/db-schema.yaml` / `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/admin-normal-surface-projection-seed-ssot.yaml` |
-| `hub-relation-target-manifest-canonical-migration` | `related_hub_id`をtarget-resolution authorityから退役させ、直接FKの`target_topology_manifest_id`へ物理移行する implementation_change | not_started | 1 | 未割当（design_change PRでcanonical契約とretirement sentinelのみ確定、物理移行は本Bundleの後段） | `docs/design/db-schema.yaml` / `docs/design/runtime-orchestration-ssot.yaml` / `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/admin-normal-surface-projection-seed-ssot.yaml` |
-| `manifest-canonical-human-name-remediation` | `topology_naming_ssot.user_facing_topology_label.display_rule`（`?? topologySystemName`）の全既存consumerを`canonical_human_name_principle`（explicit name only、未命名時はUI-only projection-local counter）へ置換する implementation_change | not_started | 1 | `product.admin_topology_authoring`（`frontend-canonical-surface-structure-label-boundary` PR#610でこのdisplay_ruleをproduction projectionへ配線した後段の再収束） | `docs/design/admin-console-workflow-ssot.yaml` |
+| `hub-relation-target-manifest-canonical-migration` | (1) Admin Enum (`ae200`) をHubRelation fixed-navigationからjump可能にする、(2) `related_hub_id` をfixed-navigation target-resolution authorityから退役させ直接FKの `target_topology_manifest_id` へ移行する、の2目的を扱う implementation_change | not_started | 1 | 未割当（design_change PRでSSOT契約のみ確定、実装は本Bundleの後段） | `docs/design/db-schema.yaml` / `docs/design/runtime-orchestration-ssot.yaml` / `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/admin-normal-surface-projection-seed-ssot.yaml` |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
 
@@ -412,291 +410,80 @@ Bundleの全受入条件を満たしたため、Status を `partial` → `implem
 
 ---
 
-## Bundle `hub-relations-user-facing-name`
-
-**Status:** `not_started`
-**Primary SSOT:** `docs/design/db-schema.yaml` `db_schema.tables.hub_relations.key_columns`（name欄）/ `docs/design/admin-console-workflow-ssot.yaml` `admin_hub_relation_navigation_contract.authoring.relation_name_authoring` / `docs/design/admin-normal-surface-projection-seed-ssot.yaml` `hub_relation_navigation_binding.relation_display_label_contract`
-**Position:** design_change 完了（本PR、SSOT契約確定のみ）の後段 implementation_change。SQL DDL / backend / frontend / seed / test実装はすべて未着手。
-
-### 問題点
-
-`hubs.hub_relations`（`hubs.hub -> hubs.topology_manifests -> hubs.hub_relations` 親子階層のnavigation sequence行）に、relation行自身のuser-facing name authorityが存在しなかった。productionの表示ラベル（`HubNavigationSequenceItem.relatedHubLabel`）は `topology.relation_registry.name`（related hubの抽象identity名）または `related_hub_id` UUIDへの `COALESCE` fallbackのみで構成されており、relation edge自身に固有の名前を付けられなかった。
-
-### 目的
-
-relation行自身に任意編集可能な`name`（nullable）を持たせ、未指定時のみ`sequence_position`由来のdefault（"Hub 1"/"Hub 2"/"Hub 3"相当、非永続・reorder追従）を表示するeffective label契約を実装する。
-
-### 改善方針
-
-`hubs.hub_relations`へnullableな`name`列を追加し、既存の`COALESCE(rr.name, hr.related_hub_id::text)`によるfallback表示を、明示name優先・未指定時は`sequence_position`実値による`"Hub {sequence_position}"`という単一のeffective label優先順位へ置換する。以下の各ラウンドで、この方針が内包していた内部矛盾（fallback禁止と例示COALESCE式の不整合、uniquenessの先送り、暗黙rank概念の導入）を同一PR内で収束させた。
-
-### 本ラウンド（design_change 第1回）で確定したSSOT契約
-
-- `docs/design/db-schema.yaml`: `hub_relations.key_columns`に`name`（text, nullable, role: user_facing_relation_name）を追加し、`user_facing_name_contract`でsemantic role・非identity境界を明示。`meaning_collision_guardrails`に`hubs_hub_relations_name_vs_relation_registry_name`を追加し、`relation_registry.name`との衝突境界を明示。`manifest_hub_chain.shape`ミラーにも`name`を反映。
-- `docs/design/admin-console-workflow-ssot.yaml`: `admin_hub_relation_navigation_contract.authoring`に`relation_name_authoring`を追加し、`hub_navigation:create`/`update`への追加optional fieldとして位置づけ、新規route/新規relation editorを設計しないことを明示。
-- `docs/design/admin-normal-surface-projection-seed-ssot.yaml`: `hub_relation_navigation_binding.relation_display_label_contract`を新設。
-
-### 本ラウンド（design_change 第2回・矛盾解消パス、同一PR）で修正したSSOT契約
-
-第1回のcontractは (a) `prohibited_fallback_authorities`が`relation_registry.name`/`related_hub_id`へのfallbackを禁止する一方、`next_implementation_change_bundle_acceptance`自身の例示COALESCE式がそれらへfallbackする自己矛盾、(b) uniquenessを「将来のimplementation_change判断」へ先送りしたまま未確定、(c) `sequence_position`とは別に「active sibling内のordinal position」という新しいrank概念を暗黙導入、(d) `db-schema.yaml`内の`next_implementation_change_bundle_acceptance below`という実体のないlocal参照、という4件の内部矛盾を含んでいたため、同一PR内で以下へ収束した:
-
-- **唯一のeffective label authority**: `admin-normal-surface-projection-seed-ssot.yaml` `hub_relation_navigation_binding.relation_display_label_contract`を単一の正本とし、`db-schema.yaml`側は詳細を再掲せずそこを参照するのみに変更（二重定義のドリフト再発を防止）。
-- **default labelのN**: 新しいordinal/rank計算を廃止し、`sequence_position`列の実値をそのまま`"Hub {sequence_position}"`へ代入する（非連続・非1始まりでも実値をそのまま使う）ことを明示。
-- **prohibited fallback**: `relation_registry.name`/`related_hub_id`/target manifest UUID/manifestKeyへのfallbackを、`next_implementation_change_bundle_acceptance`の受入条件文からも完全除去し、既存の`COALESCE(rr.name, hr.related_hub_id::text)`は「拡張」ではなく「置換（廃止）」する契約へ修正。
-- **uniqueness**: 「将来判断」から本design_changeでの必須contract (`uniqueness_contract`) へ確定。active (`status='active'`) sibling under同一`topology_manifest_id`のみを境界とし、未指定（NULL/空文字）行とdeprecated行はscope外。
-- **未指定nameのcanonical semantics**: NULL と空文字("")を同一の「unspecified」として明示し、explicit name同士の比較は大小文字・trim等の正規化なしの厳密一致とすることを明記（新規normalization policyは発明していない）。
-- **relation_registryのsemantic role**: 既存宣言`abstract_space_definition`を維持し、現行実装が表示fallbackとして利用している事実は「implementation fact」であって「SSOT上のhub identity authority宣言」ではないと明記し、role拡張と誤読されないよう`meaning_collision_guardrails`の記述を修正。
-- **ローカル参照修正**: `db-schema.yaml`の`next_implementation_change_bundle_acceptance below`という実体のない参照を、正しいcross-file参照（`admin-normal-surface-projection-seed-ssot.yaml` `hub_relation_navigation_binding.relation_display_label_contract`）へ修正。
-
-### 次段（implementation_change）の受入条件
-
-- [ ] SQL: `db/topology_tables.sql`の`hubs.hub_relations`へ`name text NULL`列を追加(destructive DROP CASCADE無し、bootstrap_policy維持)。
-- [ ] backend: `hub_navigation:create`/`hub_navigation:update`が任意の`name`を受理・永続化し、`uniqueness_contract`（同一`topology_manifest_id`配下のactive sibling間でexplicit nameの重複を明示エラーで拒否、NULL/空文字は対象外）を実装する。`NpgsqlContentBundleRepository.ListHubRelationsByManifestAsync`/`LoadHubNavigationSequenceAsync`の既存`COALESCE(rr.name, hr.related_hub_id::text)`は**拡張ではなく置換**し、`effective_label_priority`（explicit `hr.name`、無ければ`"Hub " + hr.sequence_position`）のみに従う。`relation_registry`はこのlabel計算で一切参照しない。`selected_link_payload_required`(identity)には`name`を追加しない。
-- [ ] Admin Manifests UI: `HubNavigationAdmin.tsx`(既存 `/admin/manifests` authoring surface、新規route/editorなし)に`name`入力を追加し、backendの重複拒否を明示バリデーションエラーとして表示し(silent overwrite/silent renameは禁止)、有効ラベル(explicit name or `"Hub {sequence_position}"`)表示を追加。reorder後、name無し行のdefault表示が新しい`sequence_position`に追従することを確認。
-- [ ] runtime projection: `NavigationSequence`emissionの`relatedHubLabel`(またはその後継field)が上記effective label優先順位に従う。`ProjectionShell`/`CardList`/`frontend/runtime/projectionEntry.ts`が単一の解決経路のみを経由する。
-- [ ] live-DB/DOM proof: 明示nameを持つrelationはそのnameを表示し、name無しrelationは自身の`sequence_position`実値による`"Hub {sequence_position}"`を表示し、name無し行のreorder後にdefaultが新しいsequence_positionへ追従し、name付き行のラベルが自身/兄弟行のreorderを経ても不変であり、同一`topology_manifest_id`配下で同名のactive sibling作成/更新が明示エラーで拒否される一方、異なる`topology_manifest_id`配下やdeprecated行では同名が許容されることを実DOM/live-DB経由で証明する。
-
-### 対象ファイル名
-
-- `db/topology_tables.sql`（`hubs.hub_relations`テーブル定義）
-- `backend/repository/NpgsqlContentBundleRepository.cs`
-- `frontend/islands/HubNavigationAdmin.tsx`
-- `frontend/runtime/projectionEntry.ts`
-
-### 対象関数名
-
-- `NpgsqlContentBundleRepository.ListHubRelationsByManifestAsync`
-- `NpgsqlContentBundleRepository.LoadHubNavigationSequenceAsync`（`COALESCE(rr.name, hr.related_hub_id::text)`のeffective label計算箇所）
-- `NpgsqlContentBundleRepository.CreateHubRelationAsync`/`UpdateHubRelationAsync`（`uniqueness_contract`のバリデーション追加箇所）
-
-### 対応資料
-
-- `docs/design/db-schema.yaml`
-- `docs/design/admin-console-workflow-ssot.yaml`
-- `docs/design/admin-normal-surface-projection-seed-ssot.yaml`
-
----
-
 ## Bundle `hub-relation-target-manifest-canonical-migration`
 
 **Status:** `not_started`
-**Primary SSOT:** `docs/design/db-schema.yaml` `db_schema.tables.hub_relations.target_reference_canonical_contract`（正本）/ `docs/design/runtime-orchestration-ssot.yaml` `ui_projection_render_reachability_contract.hub_navigation_resolution` / `docs/design/admin-console-workflow-ssot.yaml` `admin_hub_relation_navigation_contract` / `docs/design/admin-normal-surface-projection-seed-ssot.yaml` `hub_relation_navigation_binding`
-**Position:** design_change（本PR、PR #612の同一design_changeの一部として追加）の後段 implementation_change。SQL DDL / backend / frontend / test実装はすべて未着手。**本Bundleは新しいnavigation mechanismを構築するBundleではない。** `docs/framework-core.yaml` `runtime_route_attention_boundary`が既に定義するfixed_route層（`hubs.relation_route_is_fixed_business_route_between_hubs`、`business_mandatory_fixed_path`、resolver_priority最上位）はそのまま維持し、既存の`HubNavigationResolver` → `ManifestDispatcher.EnrichWithHubNavigationAsync` → `Emission.NavigationSequence` → `frontend/runtime/projectionEntry.ts resolveHubNavigationLinks` → `ProjectionShell.tsx`というproduction pipelineを一切置換・複製しない。本Bundleが変更するのは、このpipelineの中で`TargetManifestId`へどのcolumnから値を注ぐかという一点（target identity normalization）のみである。
+**Primary SSOT:** `docs/design/db-schema.yaml` `db_schema.tables.hub_relations.target_reference_canonical_contract`（正本）/ `docs/design/admin-console-workflow-ssot.yaml` `admin_hub_relation_navigation_contract`（`axis_navigation_membership` 含む）/ `docs/design/runtime-orchestration-ssot.yaml` `ui_projection_render_reachability_contract` / `docs/design/admin-normal-surface-projection-seed-ssot.yaml` `hub_relation_navigation_binding`
+**Position:** design_change（本PR）の後段 implementation_change。SQL DDL / backend / frontend / test実装はすべて未着手。
 
 ### 問題点
 
-`hubs.hub_relations`のtarget resolution authorityが`related_hub_id`（target Hub UUID）経由の「そのHubに紐づくactive Manifestがexactly one」という推論であり、Owner設計意図（source Manifest → HubRelation → target Manifestの直接参照）と一致していなかった。全体監査により、Top SSOT（`docs/framework-core.yaml` `phase_attention_axis_mapping`）のcanonical Phase軸（`hub_relation_id -> topology_manifest_id -> hub_id`、常にrelationのSOURCE側から導出）は`related_hub_id`に一切依存しないことが確認され、`related_hub_id`はcanonical Phase Attention semanticsとは無関係な、target-resolutionのためだけの後付けfieldであることが判明した。同じくTop SSOT（`docs/framework-core.yaml` `runtime_route_attention_boundary`）は`hubs.hub_relations`をfixed_route業務必須経路として既に定義しており、SQL Attention / recommendationはこのfixed routeを上書きしない別laneであることも確認済み — 本Bundleはこのfixed routeの内部target identityのみを是正する。
+1. **Enum jumpできない**: Admin Enum管理画面（manifest `ae200`）が既存HubRelation fixed-navigationから到達できない。Admin axisのnavigation sourceとして使えるmanifestが本番route上に存在しないため。
+2. **target resolutionの二重設計**: `hubs.hub_relations`のfixed-navigation target解決が`related_hub_id`（target Hub UUID）経由の「そのHubに紐づくactive Manifestがexactly one」という推論に依存しており、Owner設計意図（source Manifest → HubRelation → target Manifestの直接参照）と一致していない。
 
 ### 目的
 
-`related_hub_id`をcanonical target-resolution authorityから退役させ、直接FKの`target_topology_manifest_id`（Manifest UUID）へ物理移行する。既存fixed-navigation pipeline（`HubNavigationResolver`/`ManifestDispatcher`/`resolveHubNavigationLinks`/`ProjectionShell`）とSQL Attentionのcanonical Phase軸・遠方探索semanticは変更しない。
+1. 既存Admin/Normal projection surface axisと既存fixed-navigation mechanismを使って、Enum (`ae200`) をAdmin axisのnavigation targetとして到達可能にする。
+2. `related_hub_id`をcanonical target-resolution authorityから退役させ、直接FKの`target_topology_manifest_id`（Manifest UUID）へ物理移行する。
 
-### 改善方針
+いずれも既存fixed-navigation pipeline（`HubNavigationResolver`/`ManifestDispatcher`/`resolveHubNavigationLinks`/`ProjectionShell`）とSQL Attentionのcanonical Phase軸・遠方探索semanticsは変更しない。新しいnavigation mechanism、navigation store、parallel router、manifest kind分類、`is_navigation_source`等のflagは作らない。
 
-`db-schema.yaml` `hub_relations.target_reference_canonical_contract`を正本として、`target_topology_manifest_id`を直接FKのcanonical target fieldとし、`related_hub_id`ベースのexactly-one-active-manifest推論を`first_implementation_change_replacement_scope`が列挙する各consumerで直接FK existence+status checkへ置換する。SEARCH/DISPLAY・SQLAT-EVIDENCE分類の消費者は`full_retirement_tracking_inventory`の後段deferred tierとして追跡は継続するが本Bundleの最初のimplementation_changeの手順・受入条件には含めない。以下の各ラウンドで、この方針を「新しいnavigation mechanismの構築」ではなく「既存fixed-navigation pipelineへのtarget identity正規化」として明確化した。
+### 改善方針・確定したSSOT契約
 
-### 本ラウンド（design_change 第1回）で確定したSSOT契約
+**(1) Admin axis navigation membership（目的1）**
 
-- **retirement sentinel**: `HUB_RELATIONS_RELATED_HUB_ID__RETIREMENT_PENDING_SENTINEL__TARGET_TOPOLOGY_MANIFEST_ID`（non-production metadata専用。runtime/DB/UIへ混入させないこと）。この文字列でrepo全体（SSOT/TODO）をgrepすれば、本Bundleが追跡すべき記述箇所を再発見できる。
-- `docs/design/db-schema.yaml`: `hub_relations.key_columns`に`target_topology_manifest_id`（uuid, forward end-state NOT NULL, FK to hubs.topology_manifests, canonical）を追加し、`related_hub_id`のroleを`legacy_replacement_pending_no_canonical_authority`へ変更。新設`target_reference_canonical_contract`（`hub_relations`の`key_columns`と同階層）に、canonical target field・canonical resolution rule（direct FK existence+status check、exactly-one推論なし）・`related_hub_id`のretirement contract・legacy_target_resolution（現行実装の正確な記述、削除ではなく「canonical forwardではない」というマーキングのみ）を格納。`minimum_cardinality_completion_invariant`・`manifest_hub_chain.shape`/`navigation_target_resolution`・`meaning_collision_guardrails`・`compatibility_history`・`phase_attention_axis_mapping`へ同様のcanonical-forward-vs-既存実装層を追加。
-- `docs/design/runtime-orchestration-ssot.yaml`/`docs/design/admin-console-workflow-ssot.yaml`/`docs/design/admin-normal-surface-projection-seed-ssot.yaml`: 各resolution ruleへ同様のforward pointerを追加。`canonical_default_entry_contract`は本redesignと無関係であることを明示。
+`admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract.axis_navigation_membership`で確定:
+- Admin navigation source: `ad200`（admin-dashboard, `admin.dashboard.navigation.projection`）。根拠は`data_authority_ref: hubs.hub_relations`と`projection_responsibility`という同surfaceの既存の積極的責務。
+- Admin navigation targets: `ae200`（admin-enum、当初症状の対象）、`5c100`（scheduler-settings）、`dd010`（team-dashboard admin）、`092`（credential-management）。
+- Admin navigation non-targets: `ae210`〜`ae280`（admin-enumの内部write/read operation manifest）。ae200自身のnode-local dispatch対象であり、独立したnavigation targetではない。
+- Normal axis: 既存`surface_axes.normal.normal_hub_relation_navigation_contract`を維持。`dd020`が唯一のreal Normal surfaceで、他にlink先/元は存在しない。fake targetは作らない。
+- `ad200`のproduction entry: `runtime-orchestration-ssot.yaml admin_route_retirement_matrix.routes`の新設`/admin`エントリ（`thin_projection_wrapper`、`/admin/enums`と同じpattern）。`frontend/routes/admin/index.tsx`の現行static bodyを、manifest `ad200`にpinしたProjectionShell thin wrapperへ置換する。
+- Bootstrap契約: axis_navigation_membershipの4relationは`db/seed_empty.sql`のpre-built physical rowとして存在する（fresh bootstrap時点で`ad200`のcard_listに何か表示されるようにするため）。bootstrap後は通常の`hubs.hub_relations` rowとして`/admin/manifests`から編集可能な単一ledger。
 
-### 本ラウンド（design_change 第2回・最終収束パス、同一PR）で確定したSSOT契約
+**(2) target_topology_manifest_id migration（目的2）**
 
-前ラウンドに4件の未収束点が残っていたため、同一design_change内で以下へ収束した:
+`db-schema.yaml hub_relations.target_reference_canonical_contract`で確定:
+- `hubs.hub_relations.target_topology_manifest_id`（uuid, FK to `hubs.topology_manifests`）が canonical forward target reference。Forward end-stateはNOT NULL。
+- Target resolution rule: `target_topology_manifest_id`が参照する行が`status='active'`ならresolve、それ以外はfail-close（null）。Hub配下のManifest集合からの推論ではない。
+- `related_hub_id`はCURRENT実装のtarget推論fieldとして残る（`related_hub_id`が指すHubに紐づくactive Manifestがexactly oneという既存推論）が、fixed-navigation target-resolution authorityとしては退役。物理削除・停止はこのPRでは行わない。
+- `related_hub_id`のtarget-resolution以外の用途（表示/検索/SQL Attention evidence等）の最終処分は本design_changeでは決定しない。
+- 既存fixed-navigation pipeline（`HubNavigationResolver.ResolveAsync` → `LoadHubNavigationSequenceAsync` → `ManifestDispatcher.EnrichWithHubNavigationAsync` → `Emission.NavigationSequence` → `frontend/runtime/projectionEntry.ts resolveHubNavigationLinks` → `ProjectionShell.tsx`）を再利用する。変更するのは`TargetManifestId`へどのcolumnから値を注ぐかという一点のみ。
+- SELF_LOOP: `topology_manifest_id == target_topology_manifest_id`は合法（manifest 092の`canonical_default_entry_contract`自己参照が既にこれに依存）。旧Hub-identity SELF_LOOPガードは新fieldへ機械移植しない。新しいguardも作らない。
 
-1. **retirement inventoryの二層化**: `related_hub_id_retirement_contract.known_current_consumers_to_replace`（単一list、SEARCH/DISPLAY・SQLAT-EVIDENCEを「このreplacementの対象外」と記述）は、SEARCH/DISPLAY・SQLAT-EVIDENCE分類のconsumerを最終retirement inventoryから恒久的に除外しているように読めたため、`first_implementation_change_replacement_scope`（次implementation_changeが実際に置換するtarget-resolution consumer）と`full_retirement_tracking_inventory`（target-resolutionか否かを問わず、related_hub_idを読み書きする全consumerの恒久追跡list — `ListContentHubRelationsAsync`/`ListHubRelationsByManifestAsync`の表示専用read、`adminUxTerms.ts`、`NpgsqlSqlAttentionLogsRepository.LoadHubRelationExplorationCandidatesAsync`、`HubAttractorExplorationRuntime.cs`のexpandedHubIds折り込みを含む）の二層へ分離。「対象外」は「後段のimplementation_changeで扱う」という順序上の判断であり、「追跡しない」という意味ではないことを`inventory_scope_note`で明示。
-2. **sequence_position / reorder契約の明確化**: `hub_navigation:reorder`（`ReorderHubRelationsAsync`）が実relation rowの`sequence_position`を書き換える永続化mutationであり、その同一persisted値をUI順序・relation-vector test_input_shape・SQL Attention far-searchが共有すること、reorder後の位置変更は表示変化ではなくvector座標変更であること、UI用とSQL Attention用に別のordinal/rank authorityを新設しないこと、`sequence_position = 0`が`canonical_default_entry`等の新semanticを帯びないこと（そのroleは既存の`relation_config.transition="canonical_default_entry"` markerに独立して属する）を、`db-schema.yaml` `hub_relations.key_columns` `sequence_position.reorder_mutation_contract`（正本）と`admin-console-workflow-ssot.yaml` `admin_hub_relation_navigation_contract.authoring.reorder_semantics`（ポインタ）へ明示。
-3. **Manifest naming原則のconsumer限定解消**: `topology_naming_ssot.user_facing_topology_label.hub_relation_target_picker_naming_note`（target-picker consumer限定）を、`canonical_human_name_principle`（explicit `userFacingTopologyLabel`のみがcanonical human name、未設定時はprojection-local counterで`Manifest {n}`を生成 — counterはprojection開始時に初期化し未命名itemのみincrement、named Manifestはconsumeしない、永続化せずidentity/sort/dispatch/target-resolution/SQL Attention authorityにしない、という原則を全surface共通のものとして明示）と`canonical_human_name_principle_vs_display_rule_conflict`（既存`display_rule`＝`?? topologySystemName`と本原則が「scope が異なるだけで両立する」のではなく**真に矛盾する**ことを明示し、新設Manifest-target-pickerのみを本原則で構築する一方、既存display_rule consumer全体の解消は別Bundle・別Owner判断として.agent/tasks/todo.mdで追跡する）へ置き換え。
-4. **SQL AttentionのRelatedHubId折り込みの位置づけ強化**: `phase_attention_axis_mapping.related_hub_id_derived_hub_axis_note`を、`expandedHubIds`の`RelatedHubId`折り込みが「legacy/additional dependencyであり、canonical z/k軸そのものではない」ことを明示し、`full_retirement_tracking_inventory`との相互参照を追加。旧testがこのadditional axisを期待している場合でもtestをauthorityとして旧semanticを復活させず、証明対象を再判定する指針を明示（`runtime-orchestration-ssot.yaml` `canonical_forward_scope_note`と同じ判断規律を適用）。
+### 対応資料
 
-### 本ラウンド（design_change 第3回・最終収束パス、同一PR）で確定したSSOT契約
-
-前ラウンドで「Owner判断へ委譲」のまま残っていた3件を、本ラウンドで確定判断へ収束した:
-
-1. **SELF_LOOP guardは移植しない、新guardも作らない**: 旧SELF_LOOP（`source hub_id == related_hub_id`、target-Hub model由来）は`target_topology_manifest_id`へ移植せず、`topology_manifest_id == target_topology_manifest_id`を禁止する新guardも追加しないことを確定。source ManifestとtargetManifestが同一UUIDであるrelationは合法な通常のrelationであることを`target_reference_canonical_contract.canonical_target_resolution_rule`本文へ明示し、`related_hub_id_retirement_contract.self_loop_guard_note`を「Owner判断待ち」から「確定した設計判断とその根拠」へ書き換えた。旧SELF_LOOP実装・test（`AdminRuntimeContentBundleTests.cs`等）はfirst_implementation_change_replacement_scopeのconsumerとして退役対象のまま、「移植先を作る」のではなく「削除して終わり」であることを明示。
-2. **RelatedHubId由来SQLAT additional hub signalはretirement対象として確定**: `phase_attention_axis_mapping.related_hub_id_derived_hub_axis_note`を「keep/replace/dropのopen question」から「retirement対象として確定、ただし`target_topology_manifest_id`由来の新しいadditional hub signalへの単純な置き換え（parallel signal化）は禁止」という確定方針へ書き換え。次implementation_changeは`expandedHubIds`等を既存canonical z/k軸（source-side derivation）のみへ収束させる。
-3. **Manifest naming: `display_rule`をlegacy降格し、実体のあるremediation Bundleを新設**: `admin-console-workflow-ssot.yaml` `topology_naming_ssot.user_facing_topology_label`に`display_rule_status`を追加し、既存`display_rule`（`?? topologySystemName`）を「`canonical_human_name_principle`と並立するcanonical」から「legacy/replacement_pending」へ明示的に降格。新設Bundle `manifest-canonical-human-name-remediation`（本ファイル下部）で、`ManifestsAdmin.tsx`・UI-Builder・wiring inspectorを含む全既存`display_rule` consumerのremediationを実体のあるBundleとして追跡する（target-pickerだけを直して終わりにしない）。
-
-さらに、`related_hub_id_retirement_contract`へ`retirement_completion_condition`を新設し、sentinel／`related_hub_id`／`RelatedHubId`／旧exactly-one解決／旧SELF_LOOP／旧RelatedHubId SQLAT signal／旧`display_rule`のsemantic equivalentがrepo全体でcanonical authorityまたはlive dependencyとして残存しないことを最終closure条件として明示した（historical/compatibility_history記述は例外）。
-
-### 本ラウンド（design_change 第4回・既存fixed-navigation pipeline reuseの再確認、同一PR）で確定したSSOT契約
-
-前ラウンドまでの議論が「新しいtarget resolution mechanismを作る」という誤読を招きかねない書き方になっていたため、本ラウンドでOwner指示に基づき撤回・再確認した:
-
-1. **既存fixed-navigation pipelineの再利用を明文化**: `target_reference_canonical_contract`へ`existing_fixed_navigation_pipeline_reuse_contract`を新設し、`docs/framework-core.yaml` `runtime_route_attention_boundary`（`hubs.relation_route_is_fixed_business_route_between_hubs`、resolver_priority最上位、SQL Attention/recommendationはfixed routeを上書きしない別lane）をTop SSOT authorityとして引用した上で、実コード読解により確認した事実を明示: `HubNavigationResolver.ResolveAsync`は`LoadHubNavigationSequenceAsync`への薄いdelegateでtarget再導出を一切行わない、`ManifestDispatcher.EnrichWithHubNavigationAsync`はその結果をそのまま`Emission.NavigationSequence`へ代入するのみ、`frontend/runtime/projectionEntry.ts resolveHubNavigationLinks`は`item.targetManifestId`をopaqueな値として扱い独自のtarget解決ロジックを持たない、`ProjectionShell.tsx`は解決済みhrefを描画するのみ。本Bundleが変更するのは`LoadHubNavigationSequenceAsync`（および`CreateHubRelationAsync`/`UpdateHubRelationAsync`の書き込み）内で`TargetManifestId`へ値を注ぐcolumnのみであり、このpipeline全体を置換・複製する新設計ではないことを明示した。
-2. **`related_hub_id_retirement_contract.retirement_completion_condition`のBundle結合を是正**: 前ラウンドでこの条件が誤って`manifest-canonical-human-name-remediation`Bundleの完了まで要求していた（`related_hub_id`自身のsemantic residueとは無関係なBundleへの不要な結合）ため、`related_hub_id`固有のsemantic residue（旧exactly-one解決・旧SELF_LOOP・旧RelatedHubId SQLAT signal）のみを対象とするよう明示的に訂正し、Manifest naming remediationは完全に独立したBundle・独立したcompletionとして扱うことを明記した。
-3. **legacy row disposition調査（investigation only、実装なし）**: `db/seed_empty.sql`（canonical bootstrap seed）は`hubs.hub_relations`行を1件のみ持ち（manifest 092自己参照のcanonical_default_entry行、`status='active'`）、`db/demo_seed.sql`も2件とも`status='active'`で、いずれもdraft/deprecated/dirtyな複雑ケースを含まない。この結果は次implementation_changeのbackfill設計の出発点として記録するが、任意の本番live-DB上の実データがこれと同じ形であることを保証するものではない — 次implementation_changeは自身のlive-DB調査で再確認すること。
-
-**本ラウンドで実装（SQL DDL / backend / frontend / test）は行っていない。** repo-wide調査の結果、target identity正規化それ自体はfixed-navigation pipelineの再利用により機械的である一方、(a) SQL DDL追加とbackfillの実データdisposition判断は本セッションからlive-DBへ接続しての確認を要し、(b) Admin Manifests target-picker正規化（既存`/admin/manifests` + `HubNavigationAdmin.tsx` authoring surfaceのtarget field切り替え、新規surfaceではない）はDDL/backfill/DTO/runtime/Admin authoring/test-proofをBundle単位で同時に意味整合させる一括integrationが必要であり、(c) SELF_LOOP削除・DTO変更は関連する測定可能な数の既存test（backend unit/live-DB integration/frontend DOM、3フレームワーク横断）の個別判定・更新を要し、これら全てをBundle単位で同時に意味整合させる（NG軸: 小粒patchの積み重ね禁止）には、本ラウンドの範囲を超えるDocker/Postgres bootstrapと反復検証が必要と判断した。設計追加やparallel authorityの発明ではなく実装規模・検証手段の制約が理由であるため、SSOT/TODO側の収束のみを本ラウンドで完了し、実装は次のimplementation_change専用セッションへ引き継ぐ。
-
-### 本ラウンド（design_change 第9回・当初症状「Enumがfixed navigationに出ない」の再帰監査、同一PR）で判明した production connectivity gapと、その後の確定（第11回でaxis別navigation membership contractとして解決）
-
-**第10回で3件のfactual driftを訂正済み（訂正後の内容を以下に反映）。** 元のRound 9記述は(a)active `hubs.topology_manifests`をSQL文数で16件と誤カウントし、multi-row `VALUES`（external-port consumer projection `a3`〜`a8`の6行）を1件として数えていた、(b) 5つのHubRelation live-DB proofを全て同型（source-outbound authoring mechanismのみ）と一般化していたが、Credential Management（092）とTeam Dashboard（dd010）にはsynthetic source→subBundle自身のreal target Manifestという別方向のcombined proofが存在した、(c)`subbundle_status.admin-dashboard: subBundle_not_applicable`を「sourceである」根拠として使っていたが、同SSOTはこの値を「この`target_surface_manifest_readiness` blocking idがadmin-dashboardをgateしない」という意味としてのみ定義しており、source authorityの根拠ではない。以下は訂正後の内容。
-
-Owner指示により、本PRの設計正規化（`related_hub_id` → `target_topology_manifest_id`、relation-self `name`等）が完了しても、当初のproduction症状「Enum管理画面（manifest ae200）がfixed navigationに出てこない」がproductionで解消されるまで本PR全体をcompletion扱いにしない、という条件で再帰監査した。結果、以下を確認した（production SQL/backend/frontend/seed/testは今回も変更していない — 判断根拠を参照）。
-
-1. **症状は現在のcanonical seedの実データとして再現する、PR #612の設計変更とは無関係な既存gap（訂正済み数値）**: `db/seed_empty.sql`の`INSERT INTO hubs.topology_manifests`を実row単位で数え直した結果、active row数は**21件**（`092`、`093`、`5c100`＝scheduler-settings、`ad200`＝admin-dashboard、`ae200`/`ae210`/`ae220`/`ae230`/`ae240`/`ae250`/`ae260`/`ae270`/`ae280`＝admin-enum一式9件、`0000a3`/`0000a4`/`0000a5`/`0000a6`/`0000a7`/`0000a8`＝external-port consumer projection 6件（1つのmulti-row `VALUES`にまとめて投入されている）、`dd010`/`dd020`＝team-dashboard）。`hubs.hub_relations`のactive行は全体でちょうど1件（manifest 092の`canonical_default_entry_contract`自己参照マーカー行、`sequence_position=1`、`topology_manifest_id`=`related_hub_id`=092自身のhub `...a1`）のみで、21件中**20件**がseed内でactive `hub_relations`行を1件も持たない（relation-less）。全て`NpgsqlManifestRepository.PromoteAsync`（`docs/design/db-schema.yaml` `hub_relations.minimum_cardinality_completion_invariant`の唯一のenforcement_boundary）を経由せずraw SQL `INSERT ... status='active'`で直接投入されているため、promotion時cardinality gateが一度も適用されていない。`frontend/islands/ProjectionShell.tsx`のnav barは`resolveHubNavigationLinks(emission?.navigationSequence)`が空ならリンクを一切描画しない（固定の「ホーム」リンクのみ）ため、Enumに限らずこれら20manifestは全てproduction上「他画面から辿れない」状態にある。
-2. **既存proofのproof-directionをsubBundleごとに再分類（訂正済み）**: `docs/design/admin-normal-surface-projection-seed-ssot.yaml` `design_blocking.target_surface_manifest_readiness.navigation_binding_resolution_criterion`を正本として、5つの`*HubRelationUiProjectionLiveDbTests.cs`を個別に再監査した結果、一括で同型と扱っていたRound 9の一般化は誤りだった。
-   - **`criterion_satisfied_target_side_combined_proof`（synthetic source → subBundle自身のreal target Manifest、full resolution chain証明済み）**: Credential Management（`CredentialManagementHubRelationUiProjectionLiveDbTests.DispatchAsync_HubNavigationCreate_AuthorsRelationTargetingManifest092_ResolutionChainReachesScalarEmission`、092を実targetとしてLayoutId/PackageId/`instance_settings_import_form`等の実content resolutionまで検証）、Team Dashboard（`TeamDashboardHubRelationUiProjectionLiveDbTests.DispatchAsync_HubNavigationCreate_AuthorsRelationTargetingAdminManifest_ResolutionChainReachesScalarEmission`、dd010を実targetとして`team_dashboard_admin_save_button`等の実content resolutionまで検証）。
-   - **`source_outbound_authoring_mechanism_only`（subBundle自身のmanifestをsourceとして、内容の無いsynthetic targetへoutbound relationをauthor。target側のreachability/resolutionは一切検証していない）**: Admin Enum（`AdminEnumHubRelationUiProjectionLiveDbTests.DispatchAsync_AdminEnumManagementManifest_HubNavigationCreate_RealAuthoringPath_ThenResolutionChainReflectsIt`）、Scheduler Settings（`SchedulerSettingsHubRelationUiProjectionLiveDbTests.DispatchAsync_SchedulerSettingsManifest_HubNavigationCreate_RealAuthoringPath_ThenResolutionChainReflectsIt`）。**Enum自身のtarget-side reachabilityは、Credential Management/Team Dashboardと異なり、mechanicsのレベルでも一度も証明されていない。**
-   - **`not_applicable_to_this_gate`（`target_surface_manifest_readiness.subbundle_status`が明示的に`subBundle_not_applicable`）**: Admin Dashboard。ただし別途、raw SQL insert（`hub_navigation:create`ではない）でad200からsynthetic targetへrelationを直接投入し、`hub_relation_link_list`のcard_list propBinding（`emission.navigationSequence` → `navigationLinksToCardItems`）が反映されることだけを検証する`AdminDashboardNavigationUiProjectionLiveDbTests.DispatchAsync_AdminDashboardNavigationManifest_CardListItemsReflectRealAuthoredHubRelation`が存在する（`other_if_evidence_requires`：authoring-mechanism proofでもtarget-side combined proofでもない、純粋なdisplay/propBinding render proof）。
-   - Credential Managementにはこれとは別に、source/targetとも完全にsyntheticな汎用authoring-mechanism proof（`DispatchAsync_HubNavigationCreate_RealAuthoringPath_SourceManifestDispatchReflectsRelationInNavigationSequence_AndFailClosesOnZeroActiveTarget`）も存在するが、092自身をsource/targetいずれとしても使っていないため、092固有の証拠ではなく`hub_navigation:create`一般のmechanism proofとして扱う。
-   - `navigation_binding_authoring_and_verification: resolved`は5subBundle全てに付与されているが、上記の通り実際に証明している内容はsubBundleごとに異なる。admin-enum自身の記述も「it does not by itself mean the admin-enum subBundle is fully implemented」と明示しているので、SSOT文言自体はこの意味で過大主張していない（誤読の危険はあったが、文言は正確）。
-3. **この不一致はPR #612より前から存在する既知のgapである**: `docs/design/runtime-orchestration-ssot.yaml` `ui_projection_render_reachability_contract.production_projection_connectivity_invariant`は2026-08-16のOwner設計決定（PR #602 round 10-13）としてこの完了要件を明文化しているが、round 13の結論は「enforcement boundaryは`NpgsqlManifestRepository.PromoteAsync`（新規manifestの今後のauthoring/promotionに対する gate）」に留まり、既存seedデータへのbackfillは行っていない。`db/seed_empty.sql`のadmin-dashboard/scheduler-settings/admin-enum/credential-management各節のコメントは「deliberately seeds NO hubs.hub_relations row」「owns ZERO hubs.hub_relations rows of its own」と明示し、authoringをpost-deployment管理者操作へ委ねる設計を複数PRにわたり繰り返し明言している。この設計判断自体を本invariant導入後に再照合した記録は見つからなかった。
-4. **（第10回の記録、履歴として保持）`admin-dashboard`（`ad200`）は当時「妥当な製品候補」に留め、canonical sourceとして断定しなかった**: `ad200`は`data_authority_ref: hubs.hub_relations`、`projection_responsibility: [display_manifest_scoped_hub_relation_links, use_selected_link_as_projection_change_trigger, ...]`（`admin-normal-surface-projection-seed-ssot.yaml` `surface_axes.admin.surfaces.dashboard`）を持つ唯一の「navigation landing surface」であり、`target_surface_manifest_readiness.subbundle_status.admin-dashboard: subBundle_not_applicable`は「この blocking id が admin-dashboardをgateしない」という意味であって「sourceであると決定された」という意味ではないことは第10回で正しく訂正済み（Round 9の誤読）。ただし第10回はここから「ad200をsourceにするかはOwner製品判断が必要」という結論へ進んだ。**この結論は第11回で撤回した — 下記5参照。**
-5. **（第11回で確定）Admin/Normal projection surface axisを正本としたaxis別navigation membership contractへ収束**: Owner指示により、第10回のA/B/C比較（実relationをseedするか／invariantのscopeを変えるか／promotion lifecycleへ統合するか、をOwnerが選ぶ）という問題設定を撤回した。理由: 既存`docs/design/admin-normal-surface-projection-seed-ssot.yaml` `surface_axes.admin` / `surface_axes.normal`（`axis_kind: projection_surface_axis`、`not_role_or_rbac: true`）が既に存在し、新しいnavigation方式の選択は不要で、既存surfaceを既存axisへ正しく所属させるだけで良いと判明したため。`docs/design/admin-console-workflow-ssot.yaml` `admin_hub_relation_navigation_contract`へ新設した`axis_navigation_membership`で以下を確定した。
-   - **Admin navigation source**: `ad200`（admin-dashboard）。根拠は`subBundle_not_applicable`ではなく、`data_authority_ref: hubs.hub_relations`と`projection_responsibility`という同surfaceの既存の積極的責務そのもの。
-   - **Admin navigation targets**: `ae200`（admin-enum、本PRの当初症状の対象）、`5c100`（scheduler-settings）、`dd010`（team-dashboard admin）、`092`（credential-management、`canonical_default_entry_contract`による既存到達性とは独立に追加）。
-   - **Admin navigation non-targets**: `ae210`〜`ae280`（admin-enumの7 write manifest + get_group read-detail manifest）。これらは`ae200`自身の内部write/read operation authorityであり、`admin_runtime_dispatch_override_wiring`によるnode-local target_ref dispatchでのみ到達する。ユーザーがHubRelation navigationから直接選ぶsurfaceではないため、単純にactive topology_manifestだからという理由でnavigation targetへ含めない。
-   - **Normal navigation membership**: `docs/design/admin-normal-surface-projection-seed-ssot.yaml` `surface_axes.normal.normal_hub_relation_navigation_contract`（既存）が既にNormal-axis相当の契約を持ち、その`current_target_readiness`は「`dd020`（team_dashboard.normal.projection）のみが現在production-reachableなNormal-axis surfaceであり、他にlink先/link元となるNormal surfaceは存在しない」ことと「round-trip-to-home意図は既にOwnerがProjectionShellの固定「ホーム」リンクへ委譲済み（fabricated sourceは作らない）」ことを既に記録している。今回はこれを追認し、fake targetは作らない。
-   - **Cross-axis navigation**: 未確立。Admin source→Normal target、Normal source→Admin targetをcanonical defaultとして今回定義しない。
-   - **Out of membership scope**: external-port consumer projection（`0000a3`〜`0000a8`）は`surface_axes.admin`/`surface_axes.normal`いずれにも属さず、`ui_projection` topology entryを持たない（flat external-port-consumer-completion metadataのみ）。user-facing navigable screenではないため、navigation membershipの対象外。これらのactive状態が`minimum_cardinality_completion_invariant`と整合するかは別問題として未解決のまま残す（今回のnavigation membership確定では解決しない、決して「navigation targetに含めてcardinalityを満たす」ことはしない）。
-   - **Production reachability precondition（新規判明、repo-wide grep確認済み）**: `ad200`は現在、test file以外のどこからも参照されていない — `frontend/routes`にも`backend`にも本番route/mount pointが無い（`ae200`の`/admin/enums`、`dd010`の`/admin/team-dashboard`とは対照的）。axis_navigation_membershipで`ad200`をsourceと確定しても、そこに登録されるHubRelation linkを実際に見るための production entry pointが`ad200`自身に無ければ意味をなさない。これは後段implementation Bundleの受入条件に明記する（下記参照）。
-6. **Bundle境界の扱い（第10回の「Owner分割判断」枠組みは撤回、実装依存関係として記録）**: bootstrap connectivity registration（axis別HubRelation行の実登録・`ad200`のproduction mount追加）は、`hub-relation-target-manifest-canonical-migration`が扱うtarget-identity column正規化（`related_hub_id` → `target_topology_manifest_id`）とは意味的に独立した実装scopeである。両者は同じseed/proof層に触れるため、今回も同一Bundle内のsemantic dependencyとして記録し、新しいBundleは追加しない。target_topology_manifest_id migration（DDL/backfill/DTO/runtime/Admin authoring正規化）が先行し、axis navigation registrationはそのcolumnへ値を書く形で実装するのが自然な順序である、という実装順序の依存関係として明示する（Ownerの追加判断待ちではない）。
-7. **結論、本PRの扱い**: axis別navigation membership contractはSSOTとして確定した（Owner判断待ちの設計選択肢ではない）。**本Bundle（`hub-relation-target-manifest-canonical-migration`）のcompletion判定**は、この確定したcontract通りのHubRelation行registration・`ad200`のproduction mount追加・`target_topology_manifest_id`migrationを含むproduction実装とlive-DB/navigation DOM proofが揃うまで、`not_started`のimplementation_change Bundleとして残る（設計上の未決事項ではなく、実装が未着手であることを理由とする）。既存の設計normalization（`hub-relations-user-facing-name`/`hub-relation-target-manifest-canonical-migration`のSSOT契約確定/`manifest-canonical-human-name-remediation`）はそれ自体としては正しく完了しているが、それらの完了だけで本Bundleを完了扱いにしない。
-
-8. **（第12回で分離・確定）PR #612自身のdesign_change completionと、後段implementation_change Bundleのcompletionは別軸である**: 前項7の文言は本Bundleと「PR #612全体」を同一のstatus判定として並記しており、PR #612（`worktype: design_change`）自身にはロードマップ表（本ファイル冒頭）上の独立したstatus行が存在しないにもかかわらず、あたかもPR #612自身が`not_started`のimplementation_change Bundleであるかのように読める誤りがあった。訂正: PR #612自身の完了基準は「対象範囲のSSOT間semantic tensionが既存authorityへ収束しているか（収束できない箇所はOwner判断事項として明示されているか）」のみであり、SQL DDL/backend/frontend/seed/test production実装の有無を一切問わない。逆に、`hub-relations-user-facing-name`/`hub-relation-target-manifest-canonical-migration`/`manifest-canonical-human-name-remediation`の3 implementation_change Bundleは、design SSOT契約が確定したことだけをもって`implemented`とはみなさない — production実装とlive-DB/test proofが揃って初めて完了する、ロードマップ表の`not_started`のまま。第12回で監査した4論点の結論:
-   - **(1) `ad200`のcanonical production entry**: RESOLVED。`/admin`自身（既存canonical route registryの一員、既存の`thin_projection_wrapper`前例が適用可能）が唯一の既存authority一致解であり、「新route vs. static indexからのlink」というforkは新routeの発明がNG軸で禁止されているため実質的に同一の帰結へ収束する。`docs/design/runtime-orchestration-ssot.yaml` `admin_route_retirement_matrix.routes`の新設`/admin`エントリ（`status: design_resolved_not_started`）と`docs/design/admin-console-workflow-ssot.yaml` `axis_navigation_membership.production_reachability_precondition`へ記録済み。production実装（`frontend/routes/admin/index.tsx`のbody差し替え）は`hub-relation-target-manifest-canonical-migration`Bundleの実装項目。
-   - **(2) `minimum_cardinality_completion_invariant`の適用scope**: 第12回はここをOwner判断事項として残したが、**第13回で撤回・再解決した**（下記9番参照）。RESOLVED（Owner判断不要）: `applies_to`を「既存SSOT navigation-membership authorityがcanonical fixed-navigation sourceと宣言したmanifestのみ」へ再解釈収束。現時点でこの条件を満たすのは`ad200`（Admin axis）唯一件であり、Normal axisは宣言済みsourceが存在しない。よって本invariantが実際に要求するのは`ad200`自身の4本の実登録のみ。`ae200`/`5c100`/`dd010`/`092`はtargetのみでsource義務なし、`ae210`〜`ae280`/`0000a3`〜`0000a8`/`093`/`dd020`はいずれもsourceと宣言されたことが無くscope外——manifest kind例外ではなく、そもそもsourceと宣言されていないという既存事実に基づく。詳細は`db-schema.yaml` `hub_relations.minimum_cardinality_completion_invariant.navigation_source_scoped_reinterpretation`参照。
-   - **(3) canonical axis membership relationのbootstrap seed vs. runtime authoring境界**: RESOLVED。`admin-normal-surface-projection-seed-ssot.yaml` `seed_physical_hierarchy_and_definition.seed_definition`と`admin-console-workflow-ssot.yaml` `connection_state_authority`は競合する権威ではなく、前者は「seedの物理的な形」、後者は「live状態の唯一のledgerはDBそのもの」という別々の問いに答えている。並行persistence authorityは存在しない — seedされたhub_relations行も後からadminが`/admin/manifests`で作る行も、同一tableの同一物である。`admin-console-workflow-ssot.yaml`新設`bootstrap_seed_vs_runtime_authoring_boundary`参照。
-   - **(4) PR #612 design completion と後段Bundle completion の境界**: RESOLVED（本項目自身）。PR #612は本ラウンドをもってdesign_change scopeとしての収束が完了した（上記(1)〜(3)の通り、収束できる箇所は収束させ、収束できない箇所はOwner判断事項として明示した）。これは3つのimplementation_change Bundleいずれかの実装完了を意味しない。
-
-9. **（第13回で発見・撤回）第12回の`minimum_cardinality_completion_invariant`対応は自己矛盾していた**: 第12回は`applies_to`の旧文言（「every active manifest, manifest kind例外なし」）を維持したまま、`ae200`自身のcardinalityを閉じる手段として「`ae200 -> ae210`のhub_navigation:create relationを永続化登録する」ことを提案していた。これは同じ`axis_navigation_membership.admin_navigation_non_targets`が既に確定している「`ae210`〜`ae280`はae200の内部operation authorityであり、独立したnavigation targetとして選択されることはない」という宣言と直接矛盾する——targetとして選ばれないと言っておきながら、その同じrelationを別の目的（cardinality充足）のためにhub_navigation:createで登録するのは矛盾している。また第12回は残り16件をOwner判断事項として上申したが、これも「宣言済みsourceでないmanifestにこの invariantは何も要求しない」と気づけば上申自体が不要だった。**第13回の対応**: `applies_to`を「既存SSOT navigation-membership authorityが宣言したcanonical fixed-navigation sourceのみ」へ再解釈することで両方を同時に解消した（PR #602 round 10-11がmanifest kind例外を拒否した意図は、恣意的な例外リストを作らないことであり、既存のaxis membership authority自体を再利用することとは矛盾しない——新しい分類を発明していない）。`ae200 -> ae210`の登録提案は完全に撤回し、`ae200`/`5c100`/`dd010`/`092`はいずれもtargetのみでsource義務が無いことを確認した。**既知の未解消ギャップ（隠さず明記）**: 実際の本番enforcement（`NpgsqlManifestRepository.PromoteAsync`、`ManifestDraftActivePromotionLifecycleLiveDbTests.cs`で証明済み）は依然として無条件に全manifestのdraft→active昇格を同じgateで縛っており、宣言済みsourceかどうかを区別しない——これは今回のbackend変更禁止の範囲内では是正しない、design側の意図がcodeより先行した状態として明示する（db-schema.yaml側に記録済み）。現状は20件の非`ad200`行が全て生SQL経由でこのgateを経由せず投入されているため実害は無いが、将来これらのいずれかを通常のdraft→active経路で昇格しようとすると誤ってrelationを要求される——`HasResolvableActiveHubRelationAsync`のgateを宣言済みsource manifestのみへ絞り込むことを、後段Bundleの具体的な実装項目として記録する（Owner判断事項ではなく、順序未定の実装タスク）。**この「ギャップ」認定自体が第14回で撤回された — 下記10番参照。**
-
-10. **（第14回で再監査・撤回）「PromoteAsyncをsource-onlyへ絞る」という前提そのものが誤りだった**: 第13回はPromoteAsyncの無条件gateを「narrowing対象の未解消ギャップ」として後段実装へ委ねたが、これは「PromoteAsyncがsource判定をできるようになる」ことを暗黙の前提としていた。第14回でrepo-wide探索した結果、runtimeが「このManifestはcanonical fixed-navigation sourceか」を判定できる既存authorityは存在しないと確認した（`manifest`/`hubs.topology_manifests`のkey_columnsにrole/kind/source列なし、`data_authority_ref`/`projection_responsibility`はSSOT YAML内のみで一切永続化・runtime参照されない、`canonical_default_entry_contract`のmarkerは既存relation行に付くものでrelationが無い段階のmanifestには使えない、frontend route registryはbackendから到達不可。詳細探索記録は`db-schema.yaml` `hub_relations.minimum_cardinality_completion_invariant.runtime_source_authority_search_and_enforcement_boundary_reconciliation`）。既存authorityが無い以上、`ad200`のUUIDハードコードや新しい`is_navigation_source`flag/tableを発明しない限りPromoteAsyncをsource-onlyへ絞ることはできず、それらの発明はNG軸で禁止されている。**再結論**: PromoteAsyncを本invariantのenforcement_boundaryとして扱うこと自体をやめる（PromoteAsyncのcodeは変更しない、無条件のまま）。本invariantの実際のcompletion保証は、(a) bootstrap seed完全性（axis_navigation_membership自身の受入条件である seed-row audit / live-DB+DOM proof で既に検証される）と、(b) 既存の`hub_navigation:deprecate`のlast-active-relation fail-close guard（`HUB_RELATION_LAST_ACTIVE_FOR_MANIFEST`、role判定不要でどのmanifestにも既に適用される）の組み合わせが担う——どちらも既存・無変更のmechanismであり、新設なし。PromoteAsyncの無条件gate自体は「独立した、より厳しい既存のadmin authoring安全策」として再分類する——source manifestをlive経路で昇格する場合は元々relationを要求されるので矛盾せず、non-source manifestをlive経路で昇格する場合は設計上不要なrelationを求められるauthoring上の不便に留まり、fail-openにはならない（over-enforcementは常にsafe）。よって「どのBundleがいつPromoteAsyncを絞るか」というsequencing課題は消滅し、絞り込み自体が任意のauthoring利便性改善（completion要件ではない）へ格下げされる。
-   - **sequence_position/nameの初期値**: 第14回で全件RESOLVED（第13回の一部Owner判断framingを撤回）。`sequence_position`: `admin_route_retirement_matrix.routes`はroute retirement追跡tableでありordering authorityとして宣言されたことが無く、`admin_navigation_targets`（membership自体を宣言する同一SSOT entry）の記述順と「衝突する2つの権威」ではなく「権威ではないlistとの偶然の不一致」に過ぎないと判明したため、`ae200=1, 5c100=2, dd010=3, 092=4`へ確定（`reorder_mutation_contract`はsequence_positionの事後変更契約でありinitial bootstrap値とは無関係、衝突なし）。relation-self `name`: `092`のみ、そのmanifest.topology自身が既に持つ`screen_data_shape.userFacingTopologyLabel`（「Auth / external credential management」）を既存authorityとして採用し、bootstrap `name`へ設定する。`ae200`/`5c100`/`dd010`は同等のlabelがmanifest.topologyに存在しないため、Round 13の結論通りNULLのまま`sequence_position`由来default「Hub {n}」に委ねる（4件一律ではなく、各relationごとに存在するauthorityのみ使う非対称な結論）。詳細は`admin-console-workflow-ssot.yaml` `axis_navigation_membership.initial_relation_ordering_and_naming`参照。Owner判断事項は残らない。
+- `docs/design/db-schema.yaml` `hub_relations.key_columns` / `hub_relations.target_reference_canonical_contract`
+- `docs/design/admin-console-workflow-ssot.yaml` `admin_hub_relation_navigation_contract`（`resolution_rule` / `canonical_forward_target_reference` / `bootstrap_seed_vs_runtime_authoring_boundary` / `axis_navigation_membership`）
+- `docs/design/runtime-orchestration-ssot.yaml` `ui_projection_render_reachability_contract.hub_navigation_resolution`（`canonical_forward_target_reference` / `canonical_forward_scope_note`）、`admin_route_retirement_matrix.routes`（`/admin`エントリ）
+- `docs/design/admin-normal-surface-projection-seed-ssot.yaml` `hub_relation_navigation_binding`
 
 ### 次段（implementation_change）が開始する手順
 
-1. **retirement sentinel文字列でrepo全体をgrep**して、`db-schema.yaml` `target_reference_canonical_contract.related_hub_id_retirement_contract.full_retirement_tracking_inventory`に列挙済みの全consumerを確認する。まず`first_implementation_change_replacement_scope`（target-resolution consumer: backend `NpgsqlContentBundleRepository.CreateHubRelationAsync`/`UpdateHubRelationAsync`/`LoadHubNavigationSequenceAsync`、`ContentBundleRepository.HasResolvableActiveHubRelationAsync`、`HubNavigationHubRelationItemDto`/`HubNavigationSequenceItemDto`/`HubNavigationCreateRequestDto`/`HubNavigationUpdateRequestDto`；frontend `adminApi.ts`の`createHubRelation`/`updateHubRelation`、`dispatch.ts`の`HubNavigationSequenceItem`、`HubNavigationAdmin.tsx`の`draftRelatedHubId`；tests `HubRelationUiProjectionResolutionChainProof.cs`と依存する各`*HubRelationUiProjectionLiveDbTests.cs`、`ManifestDraftActivePromotionLifecycleLiveDbTests.cs`、`HubNavigationFallbackLinksTests.cs`、`AdminRuntimeContentBundleTests.cs`のSELF_LOOP assertion、`InMemoryContentBundleRepository.cs`）から着手する。SEARCH/DISPLAY・SQLAT-EVIDENCE分類の消費者（`ListContentHubRelationsAsync`/`ListHubRelationsByManifestAsync`の表示専用read、`adminUxTerms.ts`、`NpgsqlSqlAttentionLogsRepository`/`HubAttractorExplorationRuntime.cs`）は`full_retirement_tracking_inventory`から除外されているのではなく、`db-schema.yaml`が定義する二層のうち後段（deferred tier）として、この最初のimplementation_changeの手順・受入条件には含めず、`full_retirement_tracking_inventory`が定義する後段の別implementation_changeへ明確にdeferする。deferは除外ではなく、追跡自体は継続する。
-2. **canonicalに置換した結果、発火するtest failureを影響検出器として使用する**。旧semanticを期待しているtest failureが見つかった場合、旧仕様（`related_hub_id`ベースのexactly-one推論、または`expandedHubIds`のRelatedHubId折り込み）を復活させて回帰を消すのではなく、そのtestが実際にどのcanonical contractを証明しようとしていたかを再判定し、(a) canonicalな表現へ追従させて更新するか、(b) 旧semantic自体が証明対象だった場合はstale proofとして更新・退役させるか、のいずれかを個別に判断する。full_retirement_tracking_inventoryの後段consumer（SEARCH/DISPLAY・SQLAT-EVIDENCE）に着手する回でも同じ判断規律を適用する。
-3. `target_topology_manifest_id`のSQL DDL追加とbackfill（既存rowは現行の`related_hub_id`ベース解決結果から一度だけbackfillしてからNOT NULL化する、具体的なDDL/backfill手順は本design_change未確定）。source `topology_manifest_id`とtarget `target_topology_manifest_id`が同一UUIDであるrelationはvalidationで拒否しない（合法）。
-4. 旧SELF_LOOPガード（`CreateHubRelationAsync`/`UpdateHubRelationAsync`のHub-identity比較）を削除する。移植先・代替guardは作らない。`canonical_default_entry_contract`の自己参照シード行（manifest 092）は、ガード削除後も特別扱い不要でそのまま到達可能である。
-5. Manifest未命名時の`Manifest {n}`表示を、`canonical_human_name_principle`が定義するprojection-local counter（projection開始時に初期化、未命名itemのみincrement、永続化しない）としてAdmin Manifests target-pickerへ実装する。既存`display_rule`（`?? topologySystemName`）consumer全体の解消はBundle `manifest-canonical-human-name-remediation`（本ファイル下部）で別途扱う。
-6. `first_implementation_change_replacement_scope`（target-resolution tier、手順1-5）の完了は、それ自体では本Bundle（parent retirement）をcloseしない。`db-schema.yaml` `retirement_completion_condition`が明示する通り、"first_implementation_change_replacement_scope landing does not by itself close this condition" — `full_retirement_tracking_inventory`の後段deferred tier（SEARCH/DISPLAY・SQLAT-EVIDENCE、`expandedHubIds`の`RelatedHubId`折り込み含む）が残っている限り、本Bundleは`partial`/`open`のまま、そのevidence（手順1-5の完了記録）とともにdeferred tierへcarry-overされる。`retirement_completion_condition`が定義するrepo-wide re-search（sentinel／`related_hub_id`／`RelatedHubId`／旧exactly-one target-Hub解決／旧SELF_LOOP／旧RelatedHubId-folded SQLAT/phaseAT additional hub signal — `expandedHubIds`折り込み除去を含む）を実行し、これら全てがcanonical authorityまたはlive dependencyとして残存しないことを確認できて初めて本Bundleをcloseできる。
-7. **axis別navigation registration（第11回で確定した`axis_navigation_membership`の実装、手順3完了後に着手する順序依存）**: `docs/design/admin-console-workflow-ssot.yaml` `admin_hub_relation_navigation_contract.axis_navigation_membership`が定義するAdmin navigation source（`ad200`）→targets（`ae200`/`5c100`/`dd010`/`092`）の実HubRelation行を、`hub_navigation:create`経由で（生SQL insertではなく）登録する。target identityは手順3で追加された`target_topology_manifest_id`を使用する。`sequence_position`は`reorder_mutation_contract`が定義する既存の単一authority（UI順序・relation-vector座標・SQL Attention far-searchの共有値）に従う。relation-self `name`（Bundle`hub-relations-user-facing-name`が確定したuser-facing label authority）は未指定でも良く、その場合`Hub {sequence_position}`のdefaultが適用される。`ae210`〜`ae280`・external-port consumer projectionへは登録しない（`axis_navigation_membership.admin_navigation_non_targets`/`out_of_membership_scope`参照 — 第13回で`db-schema.yaml` `minimum_cardinality_completion_invariant.navigation_source_scoped_reinterpretation`としてRESOLVED、これらはいずれもcanonical fixed-navigation sourceと宣言されたことが無く、そもそも本invariantの対象外。第12回が提案した`ae200 -> ae210`登録は撤回済み — `ae210`をnavigation targetとして扱うことになり`admin_navigation_non_targets`と矛盾するため）。`ae200`/`5c100`/`dd010`/`092`はtargetのみでsource義務が無く、これら自身の出力方向のrelationは本Bundleの受入条件に含めない。`ad200`自身は現在production上どこからも到達できない（repo-wide grepで`00000000-0000-0000-0000-0000000ad200`がtest file以外に出現しないことを確認済み）ため、`/admin/enums`と同じ`thin_projection_wrapper`パターンで`ad200`用のroute/mount pointを追加する（**第12回でforkを解消済み**: `runtime-orchestration-ssot.yaml` `admin_route_retirement_matrix.routes`の`/admin`エントリ参照 — 新route発明は禁止でregistry上に他の空きslotが無いため、既存の静的`/admin` index自体を`frontend/routes/admin/index.tsx`のbody差し替えでthin wrapper化する、これが唯一の選択肢であり「新routeを足すかlinkするか」のOwner判断は不要）。この production entry point追加なしに、登録したHubRelation linkは実際のadmin userに見えない。`sequence_position`の初期値は`ae200=1`（既存authorityから導出済み）、`5c100`/`dd010`/`092`の相対順序（2-4）はOwner判断事項（非拘束的defaultは`admin_navigation_targets`記述順）——`initial_relation_ordering_and_naming`参照。relation-self `name`は4件とも未設定のまま登録し、既存の`sequence_position`由来default labelに委ねる（新規human labelを発明しない）。
+1. `target_topology_manifest_id`のSQL DDL追加とbackfill（既存rowは現行の`related_hub_id`ベース解決結果から一度だけbackfillしてからNOT NULL化する、具体的なDDL/backfill手順は本design_change未確定）。source `topology_manifest_id`とtarget `target_topology_manifest_id`が同一UUIDであるrelationはvalidationで拒否しない（合法）。
+2. 旧SELF_LOOPガード（`NpgsqlContentBundleRepository.CreateHubRelationAsync`/`UpdateHubRelationAsync`のHub-identity比較）を削除する。移植先・代替guardは作らない。`canonical_default_entry_contract`の自己参照シード行（manifest 092）は、ガード削除後も特別扱い不要でそのまま到達可能である。
+3. `LoadHubNavigationSequenceAsync`等のtarget解決を、`related_hub_id`ベースのexactly-one推論から`target_topology_manifest_id`の直接FK existence+status checkへ置換する。`related_hub_id`は物理削除せず、legacy fieldとして残す。
+4. Admin Manifests UI（`HubNavigationAdmin.tsx`、既存`/admin/manifests`）のauthoring formを、target Hub選択から既存Manifest一覧を再利用したtarget Manifest直接選択へ変更する。
+5. `admin_hub_relation_navigation_contract.axis_navigation_membership`が定義するAdmin source（`ad200`）→4 targets（`ae200`/`5c100`/`dd010`/`092`）のHubRelation行を、`db/seed_empty.sql`へのpre-built rowとして実登録し、`target_topology_manifest_id`をtarget identityとして使用する。`ae210`〜`ae280`・external-port consumer projectionへは登録しない。
+6. `/admin`の現行static body（`frontend/routes/admin/index.tsx`）を、`/admin/enums`が確立した`thin_projection_wrapper`パターンと同じ形（同一URL、manifest `ad200`にpinしたProjectionShell thin wrapper）で置換する。
 
-**後段deferred（本Bundleの最初のimplementation_changeには含まれない、ただし本Bundleのclosureに必須）:** `full_retirement_tracking_inventory`が指摘する`expandedHubIds`（`HubAttractorExplorationRuntime.cs`）の`RelatedHubId`折り込み除去は、`phase_attention_axis_mapping.related_hub_id_derived_hub_axis_note`が既に確定した方針（既存canonical z/k軸、source-side derivation、`topology_manifest_id -> hub_id`のみへ収束させ、`target_topology_manifest_id`由来の新しいadditional hub signalを追加しない）に従って、後段の別implementation_changeで対応する。この後段implementation_changeでのRelatedHubId折り込み除去は任意ではなく必須の受入条件であり、これが完了して初めて手順6の`retirement_completion_condition`re-searchをclean判定でき、本Bundleをcloseできる。SQL Attentionのcanonical Phase軸（x/y/z, i/j/k）・far-search・exploration_budget_gate semanticsはいずれの段でも変更しない。
-
-**任意の将来改善（第14回で「必須deferred item」から格下げ、本Bundleのclosureとは無関係）:** `NpgsqlManifestRepository.PromoteAsync`の`HasResolvableActiveHubRelationAsync`gateは現在、宣言済みcanonical fixed-navigation sourceかどうかを区別せず全manifestのdraft→active昇格を無条件に縛っている（`ManifestDraftActivePromotionLifecycleLiveDbTests.cs`で証明済みの現行動作）。第13回はこれを「narrowingが必要な未解消ギャップ」として後段Bundleへ委ねたが、第14回のrepo-wide探索でnarrowingに使える既存source判定authorityが存在しないと確認し（`db-schema.yaml` `runtime_source_authority_search_and_enforcement_boundary_reconciliation`参照）、本invariantのenforcement_boundary自体をbootstrap seed完全性 + 既存`hub_navigation:deprecate`guardへ再定義した。この結果、PromoteAsyncのnarrowingは本invariantのcorrectnessに一切影響しない——over-enforcement（source以外のmanifestにも誤ってrelationを要求する）はauthoring上の不便に留まりfail-openにはならないため。将来、admin authoringの利便性向上として着手する分には構わないが、いつ・どのBundleが行うかを追跡する必要のあるdeferred必須項目ではない。
+対象ファイル名/対象関数名（初期スコープの目安、実装順・内部作業境界はAgent判断）:
+- `db/topology_tables.sql`（`hubs.hub_relations`テーブル定義）
+- `db/seed_empty.sql`（axis navigation registration・`/admin`エントリ）
+- `backend/repository/NpgsqlContentBundleRepository.cs`（`CreateHubRelationAsync`/`UpdateHubRelationAsync`/`LoadHubNavigationSequenceAsync`/`DeprecateHubRelationAsync`）
+- `backend/repository/ContentBundleContracts.cs`（`HubNavigationHubRelationItemDto`/`HubNavigationSequenceItemDto`/`HubNavigationCreateRequestDto`/`HubNavigationUpdateRequestDto`）
+- `frontend/api/adminApi.ts`（`createHubRelation`/`updateHubRelation`）
+- `frontend/islands/HubNavigationAdmin.tsx`（target picker）
+- `frontend/routes/admin/index.tsx`（thin wrapper化）
+- `backend/tests/Topolactor.Integration.Tests/*HubRelationUiProjectionLiveDbTests.cs`、`ManifestDraftActivePromotionLifecycleLiveDbTests.cs`、`AdminRuntimeContentBundleTests.cs`（SELF_LOOP assertion）、`backend/tests/Topolactor.Runtime.Tests/InMemoryContentBundleRepository.cs`
 
 ### 次段（implementation_change）の受入条件
 
 - [ ] SQL: `hubs.hub_relations`へ`target_topology_manifest_id UUID`列を追加（FK to `hubs.topology_manifests`）。既存rowをbackfillしてから`NOT NULL`化する。destructive DROP CASCADE無し。
-- [ ] backend: `hub_navigation:create`/`hub_navigation:update`が`target_topology_manifest_id`を受理・永続化する。`LoadHubNavigationSequenceAsync`等のtarget解決を、`related_hub_id`ベースのexactly-one推論から`target_topology_manifest_id`の直接FK existence+status checkへ置換する（`related_hub_id`は物理削除せず、legacy fieldとして残す；読み取り専用の新規consumerは作らない）。旧SELF_LOOPガードを削除し、代替guardを追加しない（手順4参照）。`source == target` Manifest UUIDのrelationがvalidationで拒否されないことを確認する。`hub_navigation:reorder`が`sequence_position`を書き換える既存の永続化mutation semanticsを回帰させないことを確認する。
-- [ ] Admin Manifests UI: `HubNavigationAdmin.tsx`のauthoring formが、target Hub選択から既存Manifest一覧を再利用したtarget Manifest直接選択へ変わる。未命名Manifestの表示は`canonical_human_name_principle`のUI-only projection-local counterによる「`Manifest {n}`」に従う（永続化しない、新規index列を追加しない、named Manifestはcounterを消費しない）。
-- [ ] runtime projection: `NavigationSequence`emissionが`target_topology_manifest_id`ベースの解決を反映する。`selected_link_payload_required`へ`target_topology_manifest_id`をadditiveに追加する。
-- [ ] SQL Attention: `phase_attention_axis_mapping.canonical_ID_space_axes`（w/x/y/z/i/j/k）と遠方探索/exploration_budget_gate semanticsが変更されていないことを回帰確認する。本Bundleの最初のimplementation_changeでは`expandedHubIds`の`RelatedHubId`折り込みには着手しない（後段deferred、下記test判断項目参照）。
-- [ ] test判断: `first_implementation_change_replacement_scope`列挙のtestそれぞれについて、canonical契約へ追従させたか、stale proofとして退役させたかを明示し、いずれの場合も理由を記録する。旧仕様を復活させて回帰を消すことは禁止。`full_retirement_tracking_inventory`の残りconsumer（SEARCH/DISPLAY・SQLAT-EVIDENCE、`expandedHubIds`の`RelatedHubId`折り込み含む）は本Bundleで未着手のまま追跡を継続する（除外ではない）ことを明示する。それらに着手する後段の別implementation_changeでは、`expandedHubIds`の`RelatedHubId`折り込みが削除され既存canonical z/k軸のみへ収束していること、`target_topology_manifest_id`由来の新規parallel signalが追加されていないことを受入条件とする。
-- [ ] live-DB/DOM proof: `target_topology_manifest_id`による直接解決（zero/multiple-active-manifest推論の失敗モードが構造的に発生しないこと）、`target_manifest_missing_or_not_active`のfail-close、`source == target` Manifest UUIDのrelationが正常に機能すること、既存`canonical_default_entry_contract`（manifest 092自己参照行）がガード削除後も変わらず到達可能であること、reorder後の`sequence_position`永続値がUI表示とSQL Attention双方に反映されることを実DOM/live-DB経由で証明する。
-- [ ] retirement completion: `related_hub_id_retirement_contract.retirement_completion_condition`が定義するrepo-wide re-search（sentinel文字列・`related_hub_id`/`RelatedHubId`・旧exactly-one target-Hub解決・旧SELF_LOOP・旧RelatedHubId-folded SQLAT/phaseAT additional hub signal、すなわち`expandedHubIds`の`RelatedHubId`折り込み除去を含む）を実行し、canonical authorityまたはlive dependencyとしての残存がゼロであることを確認する（historical/compatibility_history記述は例外）。本条件は`related_hub_id`自身のsemantic residueのみを対象とし、`manifest-canonical-human-name-remediation`Bundle（独立Bundle、独立completion）の完了を前提条件としない。`first_implementation_change_replacement_scope`（本チェックリストの他項目）の完了はこの項目を自動的には満たさない — `full_retirement_tracking_inventory`の後段deferred tier（`expandedHubIds`折り込み除去を含む）が別のimplementation_changeで完了し、このre-searchがclean判定を返すまで、本Bundleは`partial`のまま残る。
-- [ ] 既存fixed-navigation pipeline（`HubNavigationResolver`/`ManifestDispatcher.EnrichWithHubNavigationAsync`/`resolveHubNavigationLinks`/`ProjectionShell.tsx`）が置換・複製されておらず、変更が`TargetManifestId`のsource column切り替えのみに収まっていることを確認する。新しいnavigation model・navigation store・parallel router・recommendation-as-fixed-route代替が追加されていないことを確認する。
-- [ ] axis navigation registration: `admin_hub_relation_navigation_contract.axis_navigation_membership`が定義するAdmin source（`ad200`）→4 targets（`ae200`/`5c100`/`dd010`/`092`）のHubRelation行を、`db/seed_empty.sql`へのpre-built rowとして（`bootstrap_seed_vs_runtime_authoring_boundary`参照、post-deployment live authoring任せにしない）実登録し、`target_topology_manifest_id`をtarget identityとして使用する。`sequence_position`は`ae200=1, 5c100=2, dd010=3, 092=4`で確定登録する（第14回でOwner判断不要のRESOLVEDへ収束済み）。relation-self `name`は`092`のみ`"Auth / external credential management"`（`092`自身のmanifest.topology screen_data_shape.userFacingTopologyLabelと同一文字列）を設定し、`ae200`/`5c100`/`dd010`は未設定のまま登録する（`initial_relation_ordering_and_naming`参照）。`ae200`/`5c100`/`dd010`/`092`自身が出力方向のrelationを持つことは要求しない。`ae210`〜`ae280`・external-port consumer projectionへは登録しないことを確認する。
-- [ ] `ad200`のproduction reachability: `frontend/routes/admin/index.tsx`の現行static body（`AdminIndex`、`ADMIN_ROUTE_CARDS`等）を、`/admin/enums`が既に確立した`thin_projection_wrapper`パターンと同じ形（同一URL、manifest `ad200`にpinしたProjectionShell thin wrapper）で置換する。repo-wide grep（`00000000-0000-0000-0000-0000000ad200`）でtest file以外からの参照（`frontend/routes/admin/index.tsx`）が新たに見つかることを確認する。追加前はtest fileのみだったことをbefore/after証跡として残す。
-- [ ] frontend DOM proof: `ad200`を実際に開いたときの`ProjectionShell`が`Emission.NavigationSequence` → `resolveHubNavigationLinks` → `hub_relation_link_list`のcard/nav linkとして少なくとも`ae200`（本PRの当初症状対象）を実DOM上に表示し、そのlinkをクリックすると`ae200`のprojectionへ実際に遷移することを証明する。
+- [ ] backend: `hub_navigation:create`/`hub_navigation:update`が`target_topology_manifest_id`を受理・永続化する。target解決を直接FK existence+status checkへ置換する（`related_hub_id`は物理削除せず残す）。旧SELF_LOOPガードを削除し、代替guardを追加しない。`source == target` Manifest UUIDのrelationがvalidationで拒否されないことを確認する。
+- [ ] Admin Manifests UI: `HubNavigationAdmin.tsx`のauthoring formが、target Hub選択から既存Manifest一覧を再利用したtarget Manifest直接選択へ変わる。
+- [ ] runtime projection: `NavigationSequence` emissionが`target_topology_manifest_id`ベースの解決を反映する。
+- [ ] 既存fixed-navigation pipeline（`HubNavigationResolver`/`ManifestDispatcher.EnrichWithHubNavigationAsync`/`resolveHubNavigationLinks`/`ProjectionShell.tsx`）が置換・複製されておらず、変更が`TargetManifestId`のsource column切り替えのみに収まっていることを確認する。
+- [ ] axis navigation registration: Admin source（`ad200`）→4 targets（`ae200`/`5c100`/`dd010`/`092`）のHubRelation行を`db/seed_empty.sql`へのpre-built rowとして実登録し、`target_topology_manifest_id`をtarget identityとして使用する。`ae210`〜`ae280`・external-port consumer projectionへは登録しないことを確認する。
+- [ ] `ad200`のproduction reachability: `frontend/routes/admin/index.tsx`の現行static bodyを、`/admin/enums`が確立した`thin_projection_wrapper`パターンと同じ形で置換する。
+- [ ] frontend DOM proof: `ad200`を実際に開いたときの`ProjectionShell`が`Emission.NavigationSequence` → `resolveHubNavigationLinks` → `hub_relation_link_list`のcard/nav linkとして`ae200`を実DOM上に表示し、そのlinkをクリックすると`ae200`のprojectionへ実際に遷移することを証明する。
 - [ ] 本Bundleの完了判定はCI greenのみを根拠にしない。SSOT契約・実装・testの意味的整合を監査役が個別に確認したうえで判定する。
-
-### 対象ファイル名
-
-- `db/topology_tables.sql`（`hubs.hub_relations`テーブル定義）
-- `db/seed_empty.sql`（bootstrap connectivity gapの実データ）
-- `backend/repository/NpgsqlContentBundleRepository.cs`
-- `backend/repository/ContentBundleRepository.cs`
-- `backend/repository/NpgsqlManifestRepository.cs`（`PromoteAsync`、唯一のminimum-cardinality enforcement boundary）
-- `backend/runtime/HubNavigationResolver.cs`
-- `backend/runtime/ManifestDispatcher.cs`
-- `backend/tests/Topolactor.Runtime.Tests/InMemoryContentBundleRepository.cs`
-- `backend/schema/ContentBundleContracts.cs`（`HubNavigationHubRelationItemDto`/`HubNavigationSequenceItemDto`/`HubNavigationCreateRequestDto`/`HubNavigationUpdateRequestDto`）
-- `frontend/api/adminApi.ts`
-- `frontend/api/dispatch.ts`
-- `frontend/runtime/projectionEntry.ts`（`resolveHubNavigationLinks`）
-- `frontend/islands/ProjectionShell.tsx`（nav bar rendering、固定「ホーム」リンク+`hubNavigationLinks`）
-- `frontend/islands/HubNavigationAdmin.tsx`
-- `frontend/routes/admin/enums.tsx`（`ad200`用route追加時の参照パターン、`ProjectionShell manifestId={...}`によるthin_projection_wrapperの実例）
-- `frontend/routes/admin/index.tsx`（静的`/admin` index。`ad200`への導線追加候補）
-- `frontend/content/adminGuides.ts`（`ADMIN_ROUTE_CARDS`、`/admin` indexのhardcoded route一覧）
-- `backend/tests/Topolactor.Integration.Tests/HubRelationUiProjectionResolutionChainProof.cs`
-- `backend/tests/Topolactor.Integration.Tests/AdminEnumHubRelationUiProjectionLiveDbTests.cs`
-- `backend/tests/Topolactor.Integration.Tests/CredentialManagementHubRelationUiProjectionLiveDbTests.cs`
-- `backend/tests/Topolactor.Integration.Tests/AdminDashboardNavigationUiProjectionLiveDbTests.cs`
-- `backend/tests/Topolactor.Integration.Tests/TeamDashboardHubRelationUiProjectionLiveDbTests.cs`
-- `backend/tests/Topolactor.Integration.Tests/SchedulerSettingsHubRelationUiProjectionLiveDbTests.cs`
-- `backend/tests/Topolactor.Integration.Tests/ManifestDraftActivePromotionLifecycleLiveDbTests.cs`
-- `backend/tests/Topolactor.Runtime.Tests/HubNavigationFallbackLinksTests.cs`
-- `backend/tests/Topolactor.Runtime.Tests/AdminRuntimeContentBundleTests.cs`
-
-### 対象関数名
-
-- `NpgsqlContentBundleRepository.CreateHubRelationAsync`/`UpdateHubRelationAsync`（`related_hub_id`書き込み・旧SELF_LOOPガード）
-- `NpgsqlContentBundleRepository.LoadHubNavigationSequenceAsync`（旧exactly-one-active-manifest推論、`TargetManifestId`算出箇所）
-- `ContentBundleRepository.HasResolvableActiveHubRelationAsync`
-- `NpgsqlManifestRepository.PromoteAsync`（minimum-cardinality invariantの唯一のenforcement boundary。bootstrap seedはこれを経由しない）
-- `HubNavigationResolver.ResolveAsync`（`LoadHubNavigationSequenceAsync`への薄いdelegate）
-- `ManifestDispatcher.EnrichWithHubNavigationAsync`（`Emission.NavigationSequence`への代入箇所）
-- `resolveHubNavigationLinks`（`frontend/runtime/projectionEntry.ts`）
-- `HubRelationUiProjectionResolutionChainProof.AssertNavigationSequenceResolvesHubVector`
-- `HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync`
-- 各`*HubRelationUiProjectionLiveDbTests`の`DispatchAsync_..._HubNavigationCreate_...`系test（source-outbound authoring proofとtarget-side combined proofの区別は上記round記録を参照）
-
-### 対応資料
-
-- `docs/design/db-schema.yaml`
-- `docs/design/runtime-orchestration-ssot.yaml`
-- `docs/design/admin-console-workflow-ssot.yaml`
-- `docs/design/admin-normal-surface-projection-seed-ssot.yaml`
-- `docs/framework-core.yaml`（`phase_attention_axis_mapping`は本Bundleの回帰確認対象、変更対象ではない）
-
----
-
-## Bundle `manifest-canonical-human-name-remediation`
-
-**Status:** `not_started`
-**Primary SSOT:** `docs/design/admin-console-workflow-ssot.yaml` `topology_naming_ssot.user_facing_topology_label`（`canonical_human_name_principle`が正本、`display_rule`は`display_rule_status`によりlegacy/replacement_pending）
-**Position:** design_change（PR #612の同一design_change、hub-relation canonical redesignの一部として新設）の後段 implementation_change。`frontend-canonical-surface-structure-label-boundary`（PR#610）がこの`display_rule`を`/admin/manifests` / hub_navigation production projectionへ配線した後段の再収束であり、PR#610の成果を破棄するのではなく、そのconsumer全体を新しいcanonical principleへ置換する。
-
-### 問題点
-
-`topology_naming_ssot.user_facing_topology_label.display_rule`（`visibleName = userFacingTopologyLabel ?? topologySystemName`）は、`userFacingTopologyLabel`未設定時にsystem identifier（`topologySystemName`、kebab-case、route/table/UI-Builder-key導出専用のmachine identity）をuser-facing表示名へ昇格させるfallbackであり、`ManifestsAdmin.tsx`の一般Manifest一覧・UI-Builder・wiring inspectorで既にproduction配線済み（PR#610 4ラウンド目）。一方、hub-relation canonical redesignで確定した`canonical_human_name_principle`（explicit `userFacingTopologyLabel`のみがcanonical human name、未命名時はUI-only projection-local counterによる`Manifest {n}`、system namespaceへのfallback禁止）はこのdisplay_ruleと構造的に矛盾しており、両者を並立させたままでは「どちらがcanonicalか」が読み手ごとに異なる状態になる。
-
-### 目的
-
-`display_rule`の全既存consumerを`canonical_human_name_principle`へ物理的に置換し、Manifest表示名のcanonical authorityを一意にする。
-
-### 改善方針
-
-- `canonical_human_name_principle`をcanonical、`display_rule`をlegacy/replacement_pendingとするSSOT上の優先順位（本design_changeで確定済み）に従って実装する。
-- 置換対象は`ManifestsAdmin.tsx`の一般Manifest一覧、UI-Builderのnode/screen表示、wiring inspectorのManifest表示 — `frontend-canonical-surface-structure-label-boundary`（PR#610）がdisplay_ruleを配線した箇所全て。
-- 未命名Manifestの表示はprojection-local counter（projection呼び出しごとに初期化、未命名itemのみincrement、named Manifestは消費しない、永続化しない、identity/sort/dispatch/target-resolution/SQL Attention authorityにしない）で`Manifest {n}`を生成する。新規永続index/rank列を追加しない。
-- `topologySystemName`・`manifestKey`・table name・UUIDをcanonical human nameへfallbackさせない。
-- hub-relation Manifest-target-pickerがこのBundleより先にcanonical_human_name_principleで構築されている場合、それを一次実装として再利用し、重複実装を作らない。
-- 本Bundleの完了は独立して判定する。`hub-relation-target-manifest-canonical-migration`の`retirement_completion_condition`は`related_hub_id`固有semantic residueのみを対象とし本Bundle完了を前提条件としない（同ファイル内`related_hub_id_retirement_completion_condition`参照）。本Bundleも同様にそちらの完了を自身の前提条件としない。両Bundleは互いに独立した問題・目的・completionを持つ。
-
-### 対応資料
-
-- `docs/design/admin-console-workflow-ssot.yaml`
-- `docs/design/db-schema.yaml`（`hub_relations.target_reference_canonical_contract.related_hub_id_retirement_contract`は`related_hub_id`固有semantic residueのみを対象とし、本Bundleの完了を前提条件として参照しない）
-- `.agent/tasks/todo.md`（`hub-relation-target-manifest-canonical-migration`Bundle。target-picker実装の重複回避のみを参照し、completionの前提条件としない）
-
-### 対象ファイル名
-
-- `frontend/lib/manifestTopologyExtensions.ts`（`hubNavigationManifestVisibleLabel`の定義箇所）
-- `frontend/islands/ManifestsAdmin.tsx`
-- `frontend/islands/HubNavigationAdmin.tsx`（新設target-pickerとの重複実装回避を確認）
-- UI-Builder Manifest/screen表示コンポーネント（`frontend/islands/UiBuilderAdmin.tsx`等、`frontend-canonical-surface-structure-label-boundary`がdisplay_ruleを配線した箇所）
-- wiring inspector Manifest表示コンポーネント（`WiringGraphPanel`関連）
-- `backend/schema/ContentBundleContracts.cs`・関連DTO（`userFacingTopologyLabel`/`topologySystemName`を運ぶ型）
-- `frontend/tests/`配下のManifest表示ラベルに関するtest（PR#610で追加されたもの含む）
-
-### 対象関数名
-
-- `frontend/lib/manifestTopologyExtensions.ts` `hubNavigationManifestVisibleLabel`（現行`visibleName = userFacingTopologyLabel ?? topologySystemName`を実装する関数。全consumerがこの単一関数経由で呼び出しているかを確認し、直接`?? topologySystemName`をinlineしている箇所があれば同様に置換する）
-- 新設projection-local counter関数（`Manifest {n}`生成、既存のHubRelation`Hub {sequence_position}`相当の実装パターンを踏襲）
-
-### 受入条件
-
-- [ ] `display_rule`（`?? topologySystemName`）を参照する既存consumer全てが`canonical_human_name_principle`（explicit name only + projection-local counter fallback）へ置換されている。
-- [ ] 未命名Manifestの`Manifest {n}`表示が永続化されず、named Manifestがcounterを消費しないことをDOM/live-DB経由で証明する。
-- [ ] `topologySystemName`/`manifestKey`/table name/UUIDがcanonical human nameとして表示されるパスが残っていないことをrepo-wide検索で確認する。
-- [ ] PR#610が達成した「raw internal vocabularyをnormal primaryへ露出しない」境界を回帰させない。
-- [ ] 本Bundleの完了は上記条件のみで自己完結して判定する。`hub-relation-target-manifest-canonical-migration`の`retirement_completion_condition`（`related_hub_id`固有semantic residueのみが対象）を本Bundleのcompletion条件として流用・参照しない。
