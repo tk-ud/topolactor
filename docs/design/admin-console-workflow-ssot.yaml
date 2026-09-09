@@ -189,35 +189,17 @@ admin_console_workflow_ssot:
             navigation target from admin-dashboard like the others -- the two reachability paths
             are independent and do not conflict.
       reachability_after_target_transition: >-
-        Recursive audit finding (this design_change): HubNavigationResolver.ResolveAsync and
-        ManifestDispatcher.EnrichWithHubNavigationAsync (backend/runtime/HubNavigationResolver.cs,
-        backend/runtime/ManifestDispatcher.cs) source Emission.NavigationSequence from whichever
-        manifest is CURRENTLY being dispatched, never from ad200 persistently -- confirmed against
-        the real code, not assumed. frontend/islands/ProjectionShell.tsx's nav bar renders
-        resolveHubNavigationLinks(emission.navigationSequence), the per-dispatch value only; its
-        one hardcoded link ("ホーム" -> /dashboard) is the Normal-axis home link this same contract's
-        normal_navigation_membership already describes and does not return to /admin. So once a
-        user has navigated from ad200 to one of the four admin_navigation_targets above, that
-        target's OWN hub_relations rows -- not ad200's -- source the nav bar shown next. For the
-        original production symptom (092 credential-management -> ae200 admin-enum) to stay
-        reachable via fixed navigation after actually landing on 092, each of the four targets
-        above must therefore ALSO carry its own outbound hub_relations edge back to ad200
-        (sequence_position=1), authored through the identical existing mechanism this contract
-        already defines (hub_navigation:create, or a pre-built bootstrap seed row per this
-        contract's own bootstrap_seed_vs_runtime_authoring_boundary) -- not a new authority, not a fake
-        relation, and not a full mesh between targets: ad200 is simultaneously this axis's declared
-        source (of the four forward edges above) and, from each target's own outbound relation set,
-        an ordinary navigation target like any other -- the same dual source/target role manifest
-        092's own canonical_default_entry_contract self-loop already demonstrates is legal. A
-        repo-wide search for an existing mechanism that supplies a fixed-navigation source
-        independent of the currently-dispatched manifest found no applicable candidate:
-        HubNavigationResolver.ResolveFallbackNavigationLinksAsync (the closest match) is scoped to
-        canonical_default_entry_contract's single manifest, documented for authenticated surfaces
-        WITH NO business projection of their own (its own doc comment names Normal Dashboard Home),
-        is not consumed by ProjectionShell today, and is not Admin-axis-scoped -- repurposing it for
-        this axis would also change Normal-axis behavior, which this design_change does not
-        authorize. The minimal closure is therefore the return-edge requirement above, using the
-        mechanism this contract already reuses everywhere else, not a new one.
+        SUPERSEDED (Owner redirection, this design_change): the return-edge requirement previously
+        recorded here (each of the four admin_navigation_targets below also carrying its own
+        outbound hub_relations edge back to ad200) is retracted. Reachability across a target-surface
+        transition is now a presentation/read-projection concern owned by
+        docs/design/runtime-orchestration-ssot.yaml ui_projection_render_reachability_contract.
+        bidirectional_relation_candidate_and_navigation_island_contract -- a bidirectional
+        (source-and-target-direction) read over the SAME four forward edges below already finds
+        ad200 as a candidate from any of them, with no extra hubs.hub_relations row required. This
+        field is retained only so the retraction itself is discoverable at the point Round 16 left
+        it; the canonical design for this axis's four members is admin_navigation_source /
+        admin_navigation_targets below, unchanged by this retraction.
       admin_navigation_non_targets: >-
         00000000-0000-0000-0000-0000000ae210/ae220/ae230/ae240/ae250/ae260/ae270/ae280 (admin-enum's
         7 per-operation write manifests plus its get_group read-detail manifest) are ae200's own

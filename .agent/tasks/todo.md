@@ -413,21 +413,22 @@ Bundleの全受入条件を満たしたため、Status を `partial` → `implem
 ## Bundle `hub-relation-target-manifest-canonical-migration`
 
 **Status:** `not_started`
-**Primary SSOT:** `docs/design/db-schema.yaml` `db_schema.tables.hub_relations.target_reference_canonical_contract`（正本）/ `docs/design/admin-console-workflow-ssot.yaml` `admin_hub_relation_navigation_contract`（`axis_navigation_membership` 含む）/ `docs/design/runtime-orchestration-ssot.yaml` `ui_projection_render_reachability_contract` / `docs/design/admin-normal-surface-projection-seed-ssot.yaml` `hub_relation_navigation_binding`
+**Primary SSOT:** `docs/design/db-schema.yaml` `db_schema.tables.hub_relations.target_reference_canonical_contract`（正本）/ `docs/design/admin-console-workflow-ssot.yaml` `admin_hub_relation_navigation_contract`（`axis_navigation_membership` 含む）/ `docs/design/runtime-orchestration-ssot.yaml` `ui_projection_render_reachability_contract`（`hub_navigation_resolution` / `bidirectional_relation_candidate_and_navigation_island_contract`）/ `docs/design/admin-normal-surface-projection-seed-ssot.yaml` `hub_relation_navigation_binding`
 **Position:** design_change（本PR）の後段 implementation_change。SQL DDL / backend / frontend / test実装はすべて未着手。
 
 ### 問題点
 
 1. **Enum jumpできない**: Admin Enum管理画面（manifest `ae200`）が既存HubRelation fixed-navigationから到達できない。Admin axisのnavigation sourceとして使えるmanifestが本番route上に存在しないため。
 2. **target resolutionの二重設計**: `hubs.hub_relations`のfixed-navigation target解決が`related_hub_id`（target Hub UUID）経由の「そのHubに紐づくactive Manifestがexactly one」という推論に依存しており、Owner設計意図（source Manifest → HubRelation → target Manifestの直接参照）と一致していない。
-3. **遷移後のreachability断絶（recursive audit finding）**: `Emission.NavigationSequence`は常にCURRENTLYディスパッチ中のmanifest自身の`hub_relations`から生成される（`HubNavigationResolver.ResolveAsync`/`ManifestDispatcher.EnrichWithHubNavigationAsync`を実コードで確認）。`ad200`の4本の出方向relationだけでは、`ad200`から`ae200`/`5c100`/`dd010`/`092`のいずれかへ一度遷移した後、そのtarget自身が独自の`hub_relations`行を持たない限りfixed-navigationで`ad200`へ戻る手段がない（`ProjectionShell.tsx`の固定「ホーム」linkは`/dashboard`＝Normal axis行きでAdmin側には戻らない）。元症状の「092 → ae200」のようにtarget surface遷移後の到達性を閉じるには、4 targetそれぞれが`ad200`への復路edgeを自分自身の`hub_relations`行として持つ必要がある。
+3. **navigation presentationとread projectionの所在誤り（Owner redirection, Round 17）**: HubRelation fixed-navigationは navbar専用edgeでもUI-Builder/ProjectionShell固有責務でもなく、既存`hubs.hub_relations`をordinary directed graphとして辿る一般mechanismであるべきというOwner設計に対し、現行`ProjectionShell.tsx`はfixed-navigationを自分のper-dispatch renderingへ埋め込んでおり、かつ既存read（`LoadHubNavigationSequenceAsync`等）はsource方向（`topology_manifest_id`基点）のみで、current topologyがtargetとして所属するrelationを拾えない（repo-wide確認済み、target方向のreverse read projectionがどこにも存在しない）。この2点が、target surface遷移後の到達性喪失という表面症状の実体であり、Round 16のreturn-edge workaround（各targetから`ad200`への復路rowを物理的に追加する案）はこの実体への対処ではなく回避策だったため撤回する。
 
 ### 目的
 
 1. 既存Admin/Normal projection surface axisと既存fixed-navigation mechanismを使って、Enum (`ae200`) をAdmin axisのnavigation targetとして到達可能にする。
 2. `related_hub_id`をcanonical target-resolution authorityから退役させ、直接FKの`target_topology_manifest_id`（Manifest UUID）へ物理移行する。
+3. HubRelation fixed-navigationの提示責務をProjectionShellからapp-shell navigation Islandへ収束し、current topologyをcross-island shared boundary経由で共有したうえで、`hubs.hub_relations`に対するbidirectional（source方向+target方向）candidate readにより、current topologyが複数relation系列に所属する場合の複数candidateを失わず提示する。
 
-いずれも既存fixed-navigation pipeline（`HubNavigationResolver`/`ManifestDispatcher`/`resolveHubNavigationLinks`/`ProjectionShell`）とSQL Attentionのcanonical Phase軸・遠方探索semanticsは変更しない。新しいnavigation mechanism、navigation store、parallel router、manifest kind分類、`is_navigation_source`等のflagは作らない。
+いずれも既存fixed-navigation pipeline（`HubNavigationResolver`/`ManifestDispatcher`/`resolveHubNavigationLinks`）とSQL Attentionのcanonical Phase軸・遠方探索semanticsは変更しない。新しいaxis列/dimension列/navigation kind/role flag、新relation table、新graph store、Redux/Zustand等の新Storeは作らない。
 
 ### 改善方針・確定したSSOT契約
 
@@ -439,24 +440,32 @@ Bundleの全受入条件を満たしたため、Status を `partial` → `implem
 - Admin navigation non-targets: `ae210`〜`ae280`（admin-enumの内部write/read operation manifest）。ae200自身のnode-local dispatch対象であり、独立したnavigation targetではない。
 - Normal axis: 既存`surface_axes.normal.normal_hub_relation_navigation_contract`を維持。`dd020`が唯一のreal Normal surfaceで、他にlink先/元は存在しない。fake targetは作らない。
 - `ad200`のproduction entry: `runtime-orchestration-ssot.yaml admin_route_retirement_matrix.routes`の新設`/admin`エントリ（`thin_projection_wrapper`、`/admin/enums`と同じpattern）。`frontend/routes/admin/index.tsx`の現行static bodyを、manifest `ad200`にpinしたProjectionShell thin wrapperへ置換する。
-- 遷移後reachability（`axis_navigation_membership.reachability_after_target_transition`で確定）: `ae200`/`5c100`/`dd010`/`092`の4 targetそれぞれが、`ad200`への復路edge（`sequence_position=1`の`hub_relations`行、target identityは`ad200`）を自分自身のoutbound relationとして持つ。既存mechanism（`hub_navigation:create`/bootstrap seed row）をそのまま使い、新しいauthorityやfull mesh（target同士の直接link）は作らない。`ad200`は自分の4本の出方向relationのsourceであると同時に、各targetの復路relationのtargetにもなる（`092`の`canonical_default_entry_contract`自己参照と同種のsource/target両立）。
-- Bootstrap契約: axis_navigation_membershipの4relation（`ad200`→targets）＋4復路relation（各target→`ad200`）は`db/seed_empty.sql`のpre-built physical rowとして存在する（fresh bootstrap時点で`ad200`のcard_listに何か表示され、かつ各targetから`ad200`へ戻れるようにするため）。bootstrap後は通常の`hubs.hub_relations` rowとして`/admin/manifests`から編集可能な単一ledger。
+- Round 16のreturn-edge要件（4 target→`ad200`の復路row、8-row bootstrap）は撤回済み。`ad200`→4 targetsの既存4 forward rowは、(3)のbidirectional candidate readにより target側からも`ad200`が候補として得られるため、追加rowなしで遷移後reachabilityを満たす。
 
 **(2) target_topology_manifest_id migration（目的2）**
 
-`db-schema.yaml hub_relations.target_reference_canonical_contract`で確定:
+`db-schema.yaml hub_relations.target_reference_canonical_contract`で確定（本Roundで変更なし）:
 - `hubs.hub_relations.target_topology_manifest_id`（uuid, FK to `hubs.topology_manifests`）が canonical forward target reference。Forward end-stateはNOT NULL。
 - Target resolution rule: `target_topology_manifest_id`が参照する行が`status='active'`ならresolve、それ以外はfail-close（null）。Hub配下のManifest集合からの推論ではない。
 - `related_hub_id`はCURRENT実装のtarget推論fieldとして残る（`related_hub_id`が指すHubに紐づくactive Manifestがexactly oneという既存推論）が、fixed-navigation target-resolution authorityとしては退役。物理削除・停止はこのPRでは行わない。
 - `related_hub_id`のtarget-resolution以外の用途（表示/検索/SQL Attention evidence等）の最終処分は本design_changeでは決定しない。
-- 既存fixed-navigation pipeline（`HubNavigationResolver.ResolveAsync` → `LoadHubNavigationSequenceAsync` → `ManifestDispatcher.EnrichWithHubNavigationAsync` → `Emission.NavigationSequence` → `frontend/runtime/projectionEntry.ts resolveHubNavigationLinks` → `ProjectionShell.tsx`）を再利用する。変更するのは`TargetManifestId`へどのcolumnから値を注ぐかという一点のみ。
 - SELF_LOOP: `topology_manifest_id == target_topology_manifest_id`は合法（manifest 092の`canonical_default_entry_contract`自己参照が既にこれに依存）。旧Hub-identity SELF_LOOPガードは新fieldへ機械移植しない。新しいguardも作らない。
+
+**(3) Bidirectional relation candidate read + navigation Island（目的3、Round 17新設）**
+
+`runtime-orchestration-ssot.yaml ui_projection_render_reachability_contract.bidirectional_relation_candidate_and_navigation_island_contract`で確定:
+- semantic role mapping: current topology = ProjectionShellがadoptしたbackend-resolved manifest identity、relation membership = current topologyを`topology_manifest_id`または`target_topology_manifest_id`として持つ`hubs.hub_relations`行、relation sequence = 各sourceの`sequence_position`、candidate = current topologyから見た行の反対側endpoint、attractor resolution = 既存`OperationVectorResolver → AttractorResolver → StructureMapResolver → PackageResolver/SchemaResolver → EmissionBuilder`。
+- 複数candidate（複数relation系列への同時所属）は既存`hubs.hub_relations`の複数row許容（sourceごとの一意性は`(topology_manifest_id, sequence_position)`のみ）で既に表現可能。新しいaxis/dimension/role flag列は不要。
+- CURRENT実装はsource方向のみ（`topology_manifest_id = 該当id`）のread。target方向のreverse readはrepo-wide確認の結果どこにも存在しない。次段implementation_changeで、同じcanonical persistence（`hubs.hub_relations`）に対するadditiveなbidirectional read（source方向+target方向）を追加する。新table/新column/新parallel authorityは作らない。
+- app-shell navigation Island: UI Builder非依存・ProjectionShell非依存。`frontend/routes/_app.tsx`をapp shellとして使う。current topologyをcross-island shared boundaryから読み、bidirectional candidate readへ問い合わせ、複数candidateを単一candidateへ縮退させず提示する。target選択後の遷移は既存`?manifest=`遷移entryを再利用し、frontend側でattractor/structure-map解決を複製しない。
+- cross-island shared current-topology boundary: Fresh 1.7.3のIslandは各々独立したPreact rootとしてhydrateされ（`frontend/_fresh/snapshot.json`でisland毎に別JS chunkが出ることを確認済み）、この codebaseには既存の`createContext`/`useContext`使用例が一件も無い。そのため文字通りの`Context.Provider`はnavigation IslandとProjectionShellという別々のislandをまたいで機能しない。既存`frontend/runtime/uiEventEffectRunner.ts`の`createRuntimeLocalStateStore`/`NotifyingRuntimeLocalStateStore`と同型の、module-scopeなsubscribable storeを採用する（新Store frameworkではなく既存patternのmodule-scope再利用）。最小shapeはbackend-resolved current topology identity + 明示的なupdate boundary一つ。ProjectionShellは`adoptResolvedManifestIdentity`/`adoptedManifestIdRef`確定後にのみこのboundaryを更新するproducerであり、Context側がURL/backend resolutionより上位のauthorityにはならない。
+- ProjectionShell役割縮小: dispatch/loading/error/emission/specs/node-value/local runtime state/SSE lifecycleは維持したまま、`resolveHubNavigationLinks(emission.navigationSequence)`によるnav bar表示は撤退し、navigation Islandとの二重表示を避ける。撤退作業自体は次段implementation_changeの対象。
 
 ### 対応資料
 
 - `docs/design/db-schema.yaml` `hub_relations.key_columns` / `hub_relations.target_reference_canonical_contract`
 - `docs/design/admin-console-workflow-ssot.yaml` `admin_hub_relation_navigation_contract`（`resolution_rule` / `canonical_forward_target_reference` / `bootstrap_seed_vs_runtime_authoring_boundary` / `axis_navigation_membership`）
-- `docs/design/runtime-orchestration-ssot.yaml` `ui_projection_render_reachability_contract.hub_navigation_resolution`（`canonical_forward_target_reference` / `canonical_forward_scope_note`）、`admin_route_retirement_matrix.routes`（`/admin`エントリ）
+- `docs/design/runtime-orchestration-ssot.yaml` `ui_projection_render_reachability_contract.hub_navigation_resolution`（`canonical_forward_target_reference`）、`ui_projection_render_reachability_contract.bidirectional_relation_candidate_and_navigation_island_contract`、`admin_route_retirement_matrix.routes`（`/admin`エントリ）
 - `docs/design/admin-normal-surface-projection-seed-ssot.yaml` `hub_relation_navigation_binding`
 
 ### 次段（implementation_change）が開始する手順
@@ -464,29 +473,41 @@ Bundleの全受入条件を満たしたため、Status を `partial` → `implem
 1. `target_topology_manifest_id`のSQL DDL追加とbackfill（既存rowは現行の`related_hub_id`ベース解決結果から一度だけbackfillしてからNOT NULL化する、具体的なDDL/backfill手順は本design_change未確定）。source `topology_manifest_id`とtarget `target_topology_manifest_id`が同一UUIDであるrelationはvalidationで拒否しない（合法）。
 2. 旧SELF_LOOPガード（`NpgsqlContentBundleRepository.CreateHubRelationAsync`/`UpdateHubRelationAsync`のHub-identity比較）を削除する。移植先・代替guardは作らない。`canonical_default_entry_contract`の自己参照シード行（manifest 092）は、ガード削除後も特別扱い不要でそのまま到達可能である。
 3. `LoadHubNavigationSequenceAsync`等のtarget解決を、`related_hub_id`ベースのexactly-one推論から`target_topology_manifest_id`の直接FK existence+status checkへ置換する。`related_hub_id`は物理削除せず、legacy fieldとして残す。
-4. Admin Manifests UI（`HubNavigationAdmin.tsx`、既存`/admin/manifests`）のauthoring formを、target Hub選択から既存Manifest一覧を再利用したtarget Manifest直接選択へ変更する。
-5. `admin_hub_relation_navigation_contract.axis_navigation_membership`が定義するAdmin source（`ad200`）→4 targets（`ae200`/`5c100`/`dd010`/`092`）のHubRelation行、および同membershipの`reachability_after_target_transition`が定義する4 targetそれぞれ→`ad200`の復路HubRelation行（計8行）を、`db/seed_empty.sql`へのpre-built rowとして実登録し、`target_topology_manifest_id`をtarget identityとして使用する。`ae210`〜`ae280`・external-port consumer projectionへは登録しない。
-6. `/admin`の現行static body（`frontend/routes/admin/index.tsx`）を、`/admin/enums`が確立した`thin_projection_wrapper`パターンと同じ形（同一URL、manifest `ad200`にpinしたProjectionShell thin wrapper）で置換する。
+4. `NpgsqlContentBundleRepository.cs`へ、current topologyを入力にbidirectional（source方向+target方向）candidateを返す新しいread projectionを追加する（既存`LoadHubNavigationSequenceAsync`のsource方向読み取りに、target方向の対称なクエリを足す形。新table/新columnは作らない。メソッド名はAgent判断）。
+5. Admin Manifests UI（`HubNavigationAdmin.tsx`、既存`/admin/manifests`）のauthoring formを、target Hub選択から既存Manifest一覧を再利用したtarget Manifest直接選択へ変更する。
+6. `admin_hub_relation_navigation_contract.axis_navigation_membership`が定義するAdmin source（`ad200`）→4 targets（`ae200`/`5c100`/`dd010`/`092`）のHubRelation行のみ（復路rowは不要）を、`db/seed_empty.sql`へのpre-built rowとして実登録し、`target_topology_manifest_id`をtarget identityとして使用する。`ae210`〜`ae280`・external-port consumer projectionへは登録しない。
+7. `frontend/routes/_app.tsx`をapp shellとして、current topologyのcross-island shared boundary（`uiEventEffectRunner.ts`の`createRuntimeLocalStateStore`と同型のmodule-scope subscribable store、具体的なfile/関数名はAgent判断）を新設する。
+8. app-shell navigation Island（UI Builder非依存・ProjectionShell非依存、具体的なfile名はAgent判断）を新設し、上記boundaryからcurrent topologyを読み、手順4のbidirectional candidate readへ問い合わせて複数candidateを提示し、選択後は既存`?manifest=`遷移を再利用する。
+9. `ProjectionShell.tsx`が手順7のboundaryを`adoptResolvedManifestIdentity`確定後に更新するproducerとして接続し、`resolveHubNavigationLinks(emission.navigationSequence)`によるnav bar表示を撤退してnavigation Islandとの二重表示を避ける。
+10. `/admin`の現行static body（`frontend/routes/admin/index.tsx`）を、`/admin/enums`が確立した`thin_projection_wrapper`パターンと同じ形（同一URL、manifest `ad200`にpinしたProjectionShell thin wrapper）で置換する。
 
 対象ファイル名/対象関数名（初期スコープの目安、実装順・内部作業境界はAgent判断）:
 - `db/topology_tables.sql`（`hubs.hub_relations`テーブル定義）
-- `db/seed_empty.sql`（axis navigation registration・`/admin`エントリ）
-- `backend/repository/NpgsqlContentBundleRepository.cs`（`CreateHubRelationAsync`/`UpdateHubRelationAsync`/`LoadHubNavigationSequenceAsync`/`DeprecateHubRelationAsync`）
-- `backend/schema/ContentBundleContracts.cs`（`HubNavigationHubRelationItemDto`/`HubNavigationSequenceItemDto`/`HubNavigationCreateRequestDto`/`HubNavigationUpdateRequestDto`）
+- `db/seed_empty.sql`（axis navigation registration・`/admin`エントリ、4 forward rowのみ）
+- `backend/repository/NpgsqlContentBundleRepository.cs`（`CreateHubRelationAsync`/`UpdateHubRelationAsync`/`LoadHubNavigationSequenceAsync`/`DeprecateHubRelationAsync`、および新設bidirectional candidate read）
+- `backend/schema/ContentBundleContracts.cs`（`HubNavigationHubRelationItemDto`/`HubNavigationSequenceItemDto`/`HubNavigationCreateRequestDto`/`HubNavigationUpdateRequestDto`、および新設candidate DTO）
 - `frontend/api/adminApi.ts`（`createHubRelation`/`updateHubRelation`）
 - `frontend/islands/HubNavigationAdmin.tsx`（target picker）
 - `frontend/routes/admin/index.tsx`（thin wrapper化）
+- `frontend/routes/_app.tsx`（app shell、shared boundaryの配線）
+- 新設: current topology shared boundaryモジュール（`frontend/runtime/`配下、file名はAgent判断）
+- 新設: app-shell navigation Island（`frontend/islands/`配下、file名はAgent判断）
+- `frontend/islands/ProjectionShell.tsx`（current topology publication接続、nav bar表示の撤退）
 - `backend/tests/Topolactor.Integration.Tests/*HubRelationUiProjectionLiveDbTests.cs`、`ManifestDraftActivePromotionLifecycleLiveDbTests.cs`、`AdminRuntimeContentBundleTests.cs`（SELF_LOOP assertion）、`backend/tests/Topolactor.Runtime.Tests/InMemoryContentBundleRepository.cs`
 
 ### 次段（implementation_change）の受入条件
 
 - [ ] SQL: `hubs.hub_relations`へ`target_topology_manifest_id UUID`列を追加（FK to `hubs.topology_manifests`）。既存rowをbackfillしてから`NOT NULL`化する。destructive DROP CASCADE無し。
 - [ ] backend: `hub_navigation:create`/`hub_navigation:update`が`target_topology_manifest_id`を受理・永続化する。target解決を直接FK existence+status checkへ置換する（`related_hub_id`は物理削除せず残す）。旧SELF_LOOPガードを削除し、代替guardを追加しない。`source == target` Manifest UUIDのrelationがvalidationで拒否されないことを確認する。
+- [ ] backend: current topologyを入力にbidirectional candidateを返す新read projectionが、既存`hubs.hub_relations`のみを情報源とし、新table/新columnを作らずに実装されている。
 - [ ] Admin Manifests UI: `HubNavigationAdmin.tsx`のauthoring formが、target Hub選択から既存Manifest一覧を再利用したtarget Manifest直接選択へ変わる。
-- [ ] runtime projection: `NavigationSequence` emissionが`target_topology_manifest_id`ベースの解決を反映する。
-- [ ] 既存fixed-navigation pipeline（`HubNavigationResolver`/`ManifestDispatcher.EnrichWithHubNavigationAsync`/`resolveHubNavigationLinks`/`ProjectionShell.tsx`）が置換・複製されておらず、変更が`TargetManifestId`のsource column切り替えのみに収まっていることを確認する。
-- [ ] axis navigation registration: Admin source（`ad200`）→4 targets（`ae200`/`5c100`/`dd010`/`092`）のHubRelation行に加え、4 targetそれぞれ→`ad200`の復路HubRelation行（計8行）を`db/seed_empty.sql`へのpre-built rowとして実登録し、`target_topology_manifest_id`をtarget identityとして使用する。`ae210`〜`ae280`・external-port consumer projectionへは登録しないことを確認する。
+- [ ] axis navigation registration: Admin source（`ad200`）→4 targets（`ae200`/`5c100`/`dd010`/`092`）のHubRelation行のみを`db/seed_empty.sql`へのpre-built rowとして実登録し、`target_topology_manifest_id`をtarget identityとして使用する。復路rowは追加しない。`ae210`〜`ae280`・external-port consumer projectionへは登録しないことを確認する。
 - [ ] `ad200`のproduction reachability: `frontend/routes/admin/index.tsx`の現行static bodyを、`/admin/enums`が確立した`thin_projection_wrapper`パターンと同じ形で置換する。
-- [ ] frontend DOM proof（単発click）: `ad200`を実際に開いたときの`ProjectionShell`が`Emission.NavigationSequence` → `resolveHubNavigationLinks` → `hub_relation_link_list`のcard/nav linkとして`ae200`を実DOM上に表示し、そのlinkをクリックすると`ae200`のprojectionへ実際に遷移することを証明する。
-- [ ] frontend DOM proof（遷移後reachability、元症状の直接再現）: `092`（credential-management）を実際に開いたとき、その`ProjectionShell`が`092`自身の`hub_relations`復路行から`ad200`へのlinkを実DOM上に表示し、それをクリックして`ad200`へ戻った後、そこから`ae200`へのlinkをクリックして実際に`ae200`のprojectionへ到達できることを証明する（`ad200`の初回表示だけでなく、target surface遷移後の到達性そのものを再現する）。
+- [ ] frontend: current topology shared boundaryが新設され、`ProjectionShell.tsx`が`adoptResolvedManifestIdentity`確定後にそれを更新するproducerとして接続されている。
+- [ ] frontend: app-shell navigation IslandがUI Builder layout/component treeに依存せず新設され、shared boundaryからcurrent topologyを読み、bidirectional candidate readを呼び出す。
+- [ ] frontend DOM proof 1: `092`（credential-management）等のAdmin projectionを表示中、app-shell navigation Islandが存在し、UI Builder layout/component treeに依存していないことを証明する。
+- [ ] frontend DOM proof 2: current topologyがcross-island shared boundaryで共有されており、`ProjectionShell.tsx`が採用したidentityとnavigation Islandが読むidentityが一致することを証明する。
+- [ ] frontend DOM proof 3: current topologyが複数relation系列に所属するfixture（例: `ad200`のような複数outbound edgeを持つmanifest）で、複数candidateが失われず提示されることを証明する。
+- [ ] frontend DOM proof 4: Enum candidate `ae200`をnavigation Islandから選択し、実際に`ae200`のprojectionへ到達できることを証明する（`ad200`初回表示だけでなく、target surface遷移後の到達性そのものを再現する）。
+- [ ] frontend DOM proof 5: navigation IslandがProjectionShellと同じfixed-navigationを二重表示していないことを証明する（`ProjectionShell.tsx`の`resolveHubNavigationLinks`によるnav bar表示が撤退済みであることを含む）。
 - [ ] 本Bundleの完了判定はCI greenのみを根拠にしない。SSOT契約・実装・testの意味的整合を監査役が個別に確認したうえで判定する。

@@ -398,6 +398,100 @@ runtime_orchestration_ssot:
         pointer, not a restatement; once physically built, target_manifest_resolution
         above is updated in place to describe the new current behavior rather than kept as an
         independently-drifting second copy.
+    bidirectional_relation_candidate_and_navigation_island_contract:
+      status: design_change
+      note: >-
+        Owner redirection (this design_change, supersedes Round 16's return-edge requirement
+        formerly in docs/design/admin-console-workflow-ssot.yaml
+        admin_hub_relation_navigation_contract.axis_navigation_membership -- removed there,
+        recorded here as the current canonical design): HubRelation fixed-navigation is not a
+        navbar-only edge type or a UI-Builder/ProjectionShell-specific concern. It is the existing
+        hubs.hub_relations relation space, read as an ordinary directed graph from whichever
+        manifest is presently adopted, and presented by a dedicated app-shell navigation consumer
+        rather than embedded per-projection rendering. No new axis column, relation-kind flag, or
+        parallel relation table is introduced.
+      semantic_role_mapping: >-
+        current topology = the manifest identity actually adopted by ProjectionShell after a
+        backend dispatch resolves it (frontend/islands/ProjectionShell.tsx adoptedManifestIdRef /
+        adoptResolvedManifestIdentity -- confirmed the existing canonical frontend observation
+        point, not a new concept). relation membership = which hubs.hub_relations rows name the
+        current topology as either topology_manifest_id (source) or target_topology_manifest_id
+        (target, per db-schema.yaml hub_relations.target_reference_canonical_contract -- pointer
+        only, that contract is unchanged by this entry). relation sequence = sequence_position
+        within one source manifest's own outbound rows (unchanged, existing column). candidate = a
+        row's own opposite endpoint relative to current topology (target when current topology is
+        the source, source when current topology is the target). attractor resolution = the
+        existing OperationVectorResolver -> AttractorResolver -> StructureMapResolver ->
+        PackageResolver/SchemaResolver -> EmissionBuilder chain a candidate's topology already goes
+        through once selected, via the existing ?manifest= projection-entry route -- not
+        reimplemented on the frontend.
+      relation_branching_is_native: >-
+        Repo-wide check confirmed hubs.hub_relations already permits multiple active rows sharing
+        the same topology_manifest_id (the only uniqueness constraint is per
+        (topology_manifest_id, sequence_position), not one-row-per-source) -- a source manifest
+        belonging to several informal "series" simply owns several outbound rows, each an ordinary
+        edge. The Owner's illustrative A=[1,5,7,9,15] / B=[4,2,3,8,9,6] example (current topology 9
+        candidates: 15 from A, 6 from B) maps directly onto this without any new
+        axis/dimension/role-flag column: each series is just a chain of existing rows, and a node
+        with edges into more than one chain already returns more than one candidate from the
+        existing per-source read alone.
+      forward_read_projection_gap: >-
+        A fact about production today, confirmed by reading NpgsqlContentBundleRepository.cs and
+        every other repository/SQL-Attention query touching hubs.hub_relations: every existing
+        query filters on topology_manifest_id = the given id (source/outbound direction only) --
+        HubAttractorExplorationRuntime.cs's expandedHubIds (SQL Attention, left unmodified by this
+        entry) reads the same source-scoped row set for phase-vector expansion, not a reverse
+        lookup. No query anywhere in the repository reads by target_topology_manifest_id (or, before
+        that field exists, an equivalent related_hub_id-based reverse join). This is a
+        read-projection gap over the SAME canonical persistence, not a data-model limitation:
+        nothing in the schema prevents a second, target-scoped read over the identical
+        table/columns. The next implementation_change adds this bidirectional read (source-direction
+        candidates plus target-direction candidates, each ordered by their own row's
+        sequence_position) as an additive query, not a new authority, new table, or new column --
+        and it is what makes Round 16's ad200 return-edge requirement unnecessary: standing on any
+        of axis_navigation_membership's four existing targets, the target-direction half of this
+        same read already finds ad200 as a candidate via the SAME forward edge Round 15 already
+        defined, with no extra row required.
+      navigation_island_contract: >-
+        Fixed-navigation presentation moves to a dedicated app-shell navigation consumer -- UI
+        Builder-independent and ProjectionShell-independent -- reusing frontend/routes/_app.tsx as
+        the app shell per existing Fresh convention; the exact concrete component/file split is an
+        implementation_change decision made against Fresh's actual island rules (see
+        cross_island_shared_state_boundary below), not invented here. It reads current topology from
+        the shared boundary below, queries the bidirectional candidate read for that identity, and
+        renders every returned candidate (never collapsed to a single assumed target) as a
+        navigation option; selecting one dispatches through the existing ?manifest=
+        projection-entry route, never a frontend-duplicated attractor/structure-map resolution.
+      cross_island_shared_state_boundary: >-
+        Repo-wide check confirmed no createContext/useContext usage exists anywhere in frontend/
+        today, and Fresh is pinned at 1.7.3 (deno.json), whose islands architecture hydrates each
+        top-level Island as an independently-mounted Preact root (confirmed via
+        frontend/_fresh/snapshot.json, which emits one separate island-<name>.js bundle per island
+        file) -- a literal preact Context.Provider rendered inside one island (e.g. a navigation
+        Island) does not reach useContext() calls inside a separately-hydrated sibling island (e.g.
+        ProjectionShell), even when one is nested as the other's JSX children server-side, because
+        each island hydrates its own isolated component tree at runtime. A literal
+        "useState + useContext" implementation would therefore silently fail to share state across
+        the navigation Island and ProjectionShell. The functionally equivalent mechanism -- a single
+        shared value plus an explicit update boundary, consumed via a hook, never a general-purpose
+        dispatcher/reducer framework -- is instead a plain module-scoped subscribable store, the
+        same shape frontend/runtime/uiEventEffectRunner.ts's
+        createRuntimeLocalStateStore/NotifyingRuntimeLocalStateStore already establishes in this
+        codebase for cross-cutting reactive state without adopting Redux/Zustand; this entry reuses
+        that existing convention at module scope instead of per-ProjectionShell-instance scope, not
+        a new state-management dependency. Its minimal shape is the backend-resolved current
+        topology identity plus one update function; ProjectionShell calls the update function only
+        after adoptResolvedManifestIdentity/adoptedManifestIdRef confirms a backend-resolved
+        identity, and never receives routing/resolution authority back from it -- URL selection and
+        backend dispatch resolution remain the sole identity authorities, exactly as today.
+      projection_shell_role_narrowing: >-
+        ProjectionShell.tsx keeps every non-navigation responsibility unchanged (dispatch,
+        loading/error/emission/specs state, node-value tracking, local runtime state, SSE
+        lifecycle) and becomes a producer into cross_island_shared_state_boundary above, not the
+        fixed-navigation presentation owner. Its existing
+        resolveHubNavigationLinks(emission.navigationSequence) nav-bar rendering is retired in
+        favor of the navigation Island so the same relation candidates are never presented twice;
+        this retirement is an implementation_change item, not performed by this design_change.
     admin_runtime_structural_read_fallback:
       owner: manifest_dispatcher
       trigger: >-
