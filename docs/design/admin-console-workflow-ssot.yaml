@@ -147,9 +147,11 @@ admin_console_workflow_ssot:
         hubs.hub_relations column). This entry defines concrete HubRelation fixed-navigation
         membership per axis, reusing the existing mechanism this contract already defines
         (hub_navigation:create/update/reorder/deprecate, HubNavigationResolver,
-        Emission.NavigationSequence, resolveHubNavigationLinks, ProjectionShell) unchanged -- no
-        new navigation model, global hub graph, parallel store, or per-surface fallback is
-        introduced.
+        Emission.NavigationSequence, resolveHubNavigationLinks) unchanged -- no new navigation
+        model, global hub graph, parallel store, or per-surface fallback is introduced.
+        Presentation of this membership is NOT part of that unchanged list: see
+        fixed_navigation_presentation_ownership below for the current canonical owner (an
+        app-shell navigation Island, not ProjectionShell).
       admin_navigation_source: >-
         db/seed_empty.sql manifest 00000000-0000-0000-0000-0000000ad200
         ("admin.dashboard.navigation.projection", admin-normal-surface-projection-seed-ssot.yaml

@@ -524,10 +524,21 @@ db_schema:
           HubNavigationResolver.ResolveAsync and assigns the result verbatim to
           Emission.NavigationSequence. frontend/runtime/projectionEntry.ts
           resolveHubNavigationLinks treats item.targetManifestId as an opaque, already-resolved
-          value: present -> "?manifest=<uuid>" href, absent -> unresolvable. ProjectionShell.tsx's
-          nav bar renders whatever resolveHubNavigationLinks returns. None of this call chain is
-          replaced, forked, or supplemented by a parallel path -- the only thing this redesign
-          changes is WHICH COLUMN feeds TargetManifestId inside LoadHubNavigationSequenceAsync
+          value: present -> "?manifest=<uuid>" href, absent -> unresolvable. This backend
+          target-resolution call chain -- HubNavigationResolver.ResolveAsync ->
+          LoadHubNavigationSequenceAsync -> Emission.NavigationSequence -> resolveHubNavigationLinks
+          -- is unaffected by, and outlives, any change in WHICH frontend surface presents the
+          resolved links: docs/design/runtime-orchestration-ssot.yaml
+          ui_projection_render_reachability_contract.
+          hub_relation_sequence_membership_and_navigation_island_contract is the sole canonical
+          authority for the presentation owner (an app-shell navigation Island, not
+          ProjectionShell.tsx's nav bar -- see that contract's navigation_island_contract and
+          docs/design/admin-console-workflow-ssot.yaml
+          admin_hub_relation_navigation_contract.axis_navigation_membership.
+          fixed_navigation_presentation_ownership); this entry does not restate or independently
+          decide that split. None of this call chain is replaced, forked, or supplemented by a
+          parallel path -- the only thing this redesign changes is WHICH COLUMN feeds
+          TargetManifestId inside LoadHubNavigationSequenceAsync
           (and the sibling CreateHubRelationAsync/UpdateHubRelationAsync writes): the
           exactly-one-active-manifest-for-related_hub_id inference is replaced by a direct
           target_topology_manifest_id read, and every caller above keeps consuming the identical

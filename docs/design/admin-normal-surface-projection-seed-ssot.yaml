@@ -665,10 +665,17 @@ admin_normal_surface_projection_seed_ssot:
               audited and found stripping them via an id/title/body/footer/variant-only
               reconstruction -- fixed; see frontend/tests/cardListFactoryIdentityPassthrough.test.tsx
               for the regression proof). All three identity fields are available at the point a
-              link is actually rendered/selected; no gap remains. ProjectionShell's own <a href>
-              nav bar continues to use only the resolved href for actual navigation -- the fuller
-              identity is available for any future onSelect wiring on this seed's card_list without
-              a second resolution path.
+              link is actually rendered/selected; no gap remains. CURRENT implementation still uses
+              only the resolved href for actual navigation, via ProjectionShell's own <a href> nav
+              bar; the canonical forward presentation owner for this navigation is the app-shell
+              navigation Island (docs/design/runtime-orchestration-ssot.yaml
+              ui_projection_render_reachability_contract.
+              hub_relation_sequence_membership_and_navigation_island_contract), not ProjectionShell
+              -- see that contract and admin-console-workflow-ssot.yaml
+              admin_hub_relation_navigation_contract.axis_navigation_membership.
+              fixed_navigation_presentation_ownership. The fuller identity is available for any
+              future onSelect wiring on this seed's card_list without a second resolution path,
+              regardless of which surface ends up presenting it.
             canonical_resolution_rule_ref: docs/design/admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract.resolution_rule
             target_manifest_resolution: >-
               CURRENT implementation (unchanged, still accurate today): related_hub_id resolves
@@ -736,11 +743,17 @@ admin_normal_surface_projection_seed_ssot:
                     boundary: >-
                       emission.navigationSequence is the canonical_route_tab hub_relations lane
                       (docs/framework-core.yaml runtime_route_attention_boundary) — the same data
-                      ProjectionShell's own automatic nav bar already renders
-                      (resolveHubNavigationLinks). Never emission.recommendNavigationProjection
-                      (SQL Attention / attention_recommendation_tab); that stays unreachable from
-                      propBindings so attention/recommendation scoring never blends into this
-                      projected fixed-route list.
+                      production today renders via ProjectionShell's own automatic nav bar
+                      (resolveHubNavigationLinks), with the canonical forward presentation owner
+                      being the app-shell navigation Island instead (docs/design/
+                      runtime-orchestration-ssot.yaml ui_projection_render_reachability_contract.
+                      hub_relation_sequence_membership_and_navigation_island_contract) — this seed
+                      node's own read-only card_list projection of the same data is independent of
+                      which surface presents the click-to-navigate affordance. Never
+                      emission.recommendNavigationProjection (SQL Attention /
+                      attention_recommendation_tab); that stays unreachable from propBindings so
+                      attention/recommendation scoring never blends into this projected fixed-route
+                      list.
               - node_key: target_projection_shell
                 component_key: panel.alias
             event_bindings:
@@ -749,17 +762,23 @@ admin_normal_surface_projection_seed_ssot:
                 trigger: projection_change
                 fail_close_on_ambiguous_target: true
                 implementation_ref: >-
-                  Satisfied by frontend/islands/ProjectionShell.tsx's own automatic hub navigation
-                  nav bar (resolveHubNavigationLinks, frontend/runtime/projectionEntry.ts), which
-                  every successfully-dispatched manifest already renders as real <a href> links
-                  from the same emission.navigationSequence data -- not by an onSelect handler
-                  authored on the seeded hub_relation_link_list node itself. The seed's card_list
-                  has no runtimeInteractions/eventBinding of its own: it is a read-only projection
-                  of the identical navigationSequence data, coexisting with (not duplicating) the
-                  nav bar's real click-to-navigate behavior. fail_close_on_ambiguous_target is
-                  enforced backend-side by the existing exactly-one-active-manifest resolution rule
-                  (ManifestDispatcher / HubNavigationResolver), independent of which UI surface
-                  renders the resulting link.
+                  Canonical forward owner: the app-shell navigation Island (docs/design/
+                  runtime-orchestration-ssot.yaml ui_projection_render_reachability_contract.
+                  hub_relation_sequence_membership_and_navigation_island_contract), which renders
+                  every current-topology candidate as a real click-to-navigate option from the
+                  same underlying hub_relations sequence data -- not by an onSelect handler
+                  authored on the seeded hub_relation_link_list node itself. CURRENT production
+                  (unchanged until that Island's own implementation_change lands) still satisfies
+                  this via frontend/islands/ProjectionShell.tsx's own automatic hub navigation nav
+                  bar (resolveHubNavigationLinks, frontend/runtime/projectionEntry.ts), which every
+                  successfully-dispatched manifest already renders as real <a href> links from the
+                  same emission.navigationSequence data. Either way, the seed's card_list has no
+                  runtimeInteractions/eventBinding of its own: it is a read-only projection of the
+                  identical navigationSequence data, coexisting with (not duplicating) whichever
+                  surface currently owns real click-to-navigate behavior. fail_close_on_ambiguous_
+                  target is enforced backend-side by the existing exactly-one-active-manifest
+                  resolution rule (ManifestDispatcher / HubNavigationResolver), independent of
+                  which UI surface renders the resulting link.
             loading_empty_error_projection: [loading_links, empty_links, target_manifest_resolution_error]
         scheduler:
           status: added_2026_07_22_design_change_owner_confirmed_split

@@ -496,27 +496,118 @@ runtime_orchestration_ssot:
         chosen_boundary: >-
           GET /hub-navigation/relations (backend/Program.cs), extended with an optional explicit
           topologyManifestId query parameter. When present and it parses as a GUID, the handler
-          calls HubNavigationResolver.ResolveAsync(topologyManifestId) directly -- the same
-          unfiltered, sequence_position-ordered read RuntimeExecutor/ManifestDispatcher already
-          perform for that manifest during its own dispatch -- and returns it in the existing
-          HubRelationNavigationLinksResponseDto envelope (links / success / errors), with
-          fallbackReason distinguishing this explicit-current-topology read from the endpoint's
-          existing fallback mode. When topologyManifestId is absent, the endpoint's existing
-          behavior (ResolveFallbackNavigationLinksAsync's canonical-default-entry, role-filtered
-          fallback) is entirely unchanged, so its existing callers are not regressed. Auth boundary
-          is unchanged: any authenticated JWT (ValidateActiveSessionAsync), not admin-gated -- the
+          validates it against existing Manifest lifecycle/capability authority (see
+          explicit_current_topology_trust_boundary below -- a client-supplied query parameter is
+          request input, never backend-side proof of an already-authorized dispatch, so it is
+          validated the same way any other explicit Manifest identity reaching this backend is)
+          and, once validated, calls HubNavigationResolver.ResolveAsync(topologyManifestId) --
+          the same unfiltered, sequence_position-ordered read RuntimeExecutor/ManifestDispatcher
+          already perform for that manifest during its own dispatch -- and returns it, filtered
+          per-target exactly as explicit_current_topology_trust_boundary's target_filtering
+          describes, in the existing HubRelationNavigationLinksResponseDto envelope (links /
+          success / errors), with fallbackReason distinguishing this explicit-current-topology
+          read from the endpoint's existing fallback mode. When topologyManifestId is absent, the
+          endpoint's existing behavior (ResolveFallbackNavigationLinksAsync's
+          canonical-default-entry, role-filtered fallback) is entirely unchanged, so its existing
+          callers are not regressed -- only presence of the parameter selects the explicit branch;
+          a malformed value is never treated as absent (see
+          explicit_current_topology_trust_boundary's malformed_input rule). Auth boundary is
+          unchanged: any authenticated JWT (ValidateActiveSessionAsync), not admin-gated -- the
           same boundary the endpoint already enforces -- so the navigation Island works on both
-          Admin and Normal surfaces without a new token authority. The explicit-current-topology
-          branch does not apply ResolveFallbackNavigationLinksAsync's per-target role filter: that
-          filter exists only to gate the canonical-default-entry manifest's own outbound relations
-          for a caller who has not yet reached any manifest, and does not apply once a caller
-          already stands on current topology by virtue of an already-authorized dispatch. A current
-          topology with zero active outbound rows returns an explicit empty links array; the handler
-          never substitutes the canonical-default-entry fallback for an explicit request that
-          legitimately resolves to zero rows. The frontend client function reaching this boundary
-          (a new plain-fetch client, not routed through queueClientCommand/dispatchOperation's
-          /dispatch POST lane, since this is a distinct GET boundary with its own existing auth
-          check) is an implementation_change addition, not defined by this design_change.
+          Admin and Normal surfaces without a new token authority; source/target Manifest
+          visibility is additionally gated by existing capability authority as described below,
+          the same authority every other explicit-Manifest-identity backend path already applies.
+          The frontend client function reaching this boundary (a new plain-fetch client, not
+          routed through queueClientCommand/dispatchOperation's /dispatch POST lane, since this is
+          a distinct GET boundary with its own existing auth check) is an implementation_change
+          addition, not defined by this design_change.
+        explicit_current_topology_trust_boundary:
+          note: >-
+            A backend-resolved current topology identity living in frontend Context is still,
+            once it crosses an HTTP boundary, ordinary client-supplied request input -- Context
+            membership proves the frontend believes it once received this identity from a
+            dispatch response, never that THIS request is authorized to read THIS Manifest's
+            navigation sequence right now. "Already-authorized current topology" is not by itself
+            sufficient justification to skip the fallback resolver's per-target role filter on the
+            explicit branch -- that assumption does not hold and is retracted here. The explicit
+            branch instead reuses the identical Manifest lifecycle/capability authority every
+            other explicit-Manifest-identity backend path already applies -- no Navigation-only
+            RBAC, session-to-current-manifest ledger, or parallel authorization table is
+            introduced.
+          authentication: >-
+            Unchanged: JwtGuard.ValidateActiveSessionAsync gates the whole endpoint before either
+            branch is reached, exactly as today. A valid session proves the caller is
+            authenticated; it does not by itself prove the caller may read any specific Manifest's
+            navigation sequence -- that is a separate, per-Manifest question answered below.
+          source_manifest_existence_and_lifecycle: >-
+            Reuses ManifestRepository.LoadByIdAsync(topologyManifestId) -- the identical call
+            ManifestDispatcher.DispatchAsync's target_ref path already uses to resolve an explicit
+            Manifest identity, and the identical call HubNavigationResolver.
+            ResolveFallbackNavigationLinksAsync already uses for its own canonical-default-entry
+            source manifest. A null result (no such row) or a non-active Status fails closed --
+            same active_status_requirement discipline ManifestDispatcher's target_ref TOCTOU
+            re-check and ResolveFallbackNavigationLinksAsync's own source-manifest check already
+            apply. No new repository method or existence query is introduced.
+          source_manifest_capability_authorization: >-
+            Reuses ManifestDispatcher.ResolveRequiredRole(sourceManifest.Topology) -- called with
+            layer/action omitted, exactly as its own doc comment already specifies it is shared
+            with HubNavigationResolver read-only role filtering ("always called with layer/action
+            omitted, so it only ever sees the unscoped/inferred resolution, since link-visibility
+            filtering has no single specific action to scope against") -- compared against
+            callerRole (JwtGuard.TryGetRole(token)). A required role the caller's JWT role does
+            not match fails closed (AUTH_CAPABILITY_DENIED-shaped ValidationError, same code
+            family /dispatch already uses). Because layer/action are omitted, a
+            layer_action_scoped_override entry (auth-db-session-credential-ssot.yaml
+            manifest_capability_requirement.layer_action_scoped_override) never participates in
+            this resolution -- navigation read has no single business action of its own to scope
+            against, so an action-scoped capability_requirement is never widened into a
+            manifest-wide deny; only an unscoped explicit capability_requirement entry or
+            runtime_destination=admin_runtime inference applies, identically to how
+            ResolveFallbackNavigationLinksAsync already gates target manifests today. A
+            non-admin_runtime manifest (e.g. the Normal axis's team_dashboard.normal.projection,
+            dd020) with no explicit unscoped capability_requirement entry resolves no requirement
+            at all -- any authenticated caller may read its navigation sequence, unchanged from
+            today's structural/projection read openness. An admin_runtime manifest (e.g.
+            admin-dashboard, ad200, or any of axis_navigation_membership's four Admin-axis
+            targets) without an explicit unscoped override still infers required_role=admin,
+            matching the admin-gated surfaces those manifests already dispatch behind.
+          target_filtering: >-
+            The explicit branch must never disclose more than the existing fallback branch already
+            discloses (NG-axis requirement). ResolveFallbackNavigationLinksAsync already filters
+            each candidate's target Manifest for existence (LoadByIdAsync non-null),
+            active_status_requirement, and ManifestDispatcher.ResolveRequiredRole-based capability
+            visibility before including it -- the explicit branch reuses that identical per-target
+            filter (extracting/sharing the implementation is an implementation_change concern, not
+            decided here), so a Navigation Island never pre-renders a candidate the caller cannot
+            actually navigate to. This is not a new judgment: it is the existing fallback
+            resolver's own target-visibility rule applied uniformly to both branches of the same
+            resolver.
+          malformed_input: >-
+            A topologyManifestId query parameter that is present but does not parse as a GUID is
+            an explicit validation failure (ValidationError, same envelope/code-family convention
+            /dispatch and this endpoint's own 401 branch already use -- e.g.
+            TOPOLOGY_MANIFEST_ID_INVALID), never silently treated as absent and never routed into
+            the canonical-default-entry fallback. Only true absence of the parameter selects the
+            fallback branch.
+          missing_inactive_unauthorized_source: >-
+            present-but-source-missing, present-but-source-inactive, and
+            present-but-source-unauthorized are each an explicit fail-close response (a
+            ValidationError, not a success), never silently collapsed into an empty-links success
+            and never resolved against a different (default-entry or guessed) Manifest.
+          valid_source_empty_and_multiple_rows: >-
+            A validated, authorized source Manifest with zero active outbound hub_relations rows
+            is an ordinary success with an explicit empty links array -- indistinguishable in
+            shape from any other empty result, but reached only after source validity is already
+            established, never as a stand-in for a validation failure. A validated, authorized
+            source Manifest with multiple active outbound rows returns all of them, ordered by
+            sequence_position, uncollapsed -- unchanged from relation_branching_is_native above.
+          response_envelope: >-
+            Reuses the existing HubRelationNavigationLinksResponseDto (success / links / errors /
+            requestedSurface / fallbackReason) for both branches -- no new DTO is introduced by
+            this design_change. Whether fallbackReason needs a distinct explicit-branch value (as
+            already noted in chosen_boundary above) or another minimal-compatible envelope
+            adjustment is an implementation_change decision against existing DTO/consumer
+            conventions, not decided here.
         rejected_boundaries:
           hub_navigation_get_hub_relations_dispatch_action: >-
             /dispatch layer=hub_navigation action=get_hub_relations
