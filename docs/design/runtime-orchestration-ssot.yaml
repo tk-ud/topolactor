@@ -401,18 +401,18 @@ runtime_orchestration_ssot:
     hub_relation_sequence_membership_and_navigation_island_contract:
       status: design_change
       note: >-
-        Canonical design; supersedes the bidirectional-graph-read design this section previously
-        held, and supersedes Round 16's return-edge requirement formerly in
-        docs/design/admin-console-workflow-ssot.yaml
-        admin_hub_relation_navigation_contract.axis_navigation_membership (removed there). Fixed
-        navigation is not a navbar-only edge type or a UI-Builder/ProjectionShell-specific concern.
-        It is the existing hubs.hub_relations manifest-scoped sequence authority
-        (db/topology_tables.sql's own hub_relations table comment: "Manifest-scoped hub sequence /
-        UI transition order... sequence_position is the sequence authority... Not a global
-        hub-to-hub relation graph"), read for whichever manifest is presently adopted, and presented
-        by a dedicated app-shell navigation consumer rather than embedded per-projection rendering.
-        No new axis column, relation-kind flag, or parallel relation table is introduced, and
-        hubs.hub_relations is not reframed as a generic bidirectional graph.
+        Canonical design. Fixed navigation is not a navbar-only edge type or a
+        UI-Builder/ProjectionShell-specific concern. It is the existing hubs.hub_relations
+        manifest-scoped sequence authority (db/topology_tables.sql's own hub_relations table
+        comment: "Manifest-scoped hub sequence / UI transition order... sequence_position is the
+        sequence authority... Not a global hub-to-hub relation graph"), read for whichever
+        manifest is presently adopted, and presented by a dedicated app-shell navigation consumer
+        rather than embedded per-projection rendering. No new axis column, relation-kind flag, or
+        parallel relation table is introduced, and hubs.hub_relations is not reframed as a generic
+        bidirectional graph. A manifest with no outbound sequence of its own resolves an explicit
+        empty candidate set (see no_return_edge_bootstrap_requirement below); a return path back
+        to any other manifest is ordinary hub_navigation:create authoring, never bootstrap-mandatory
+        content.
       semantic_role_mapping: >-
         current topology = the manifest identity actually adopted by ProjectionShell after a
         backend dispatch resolves it (frontend/islands/ProjectionShell.tsx adoptedManifestIdRef /
@@ -445,45 +445,111 @@ runtime_orchestration_ssot:
         read is needed for this example.
       no_new_read_projection_required: >-
         The existing ContentBundleRepository.LoadHubNavigationSequenceAsync(topologyManifestId) --
-        source-scoped by design, confirmed by db/topology_tables.sql's own "Not a global hub-to-hub
-        relation graph" comment -- already reads exactly current topology's own sequence and already
-        returns every member (unbounded row count, ordered by sequence_position), so it already
-        satisfies semantic_role_mapping and relation_branching_is_native above verbatim. The
-        bidirectional (source-direction plus target-direction) read this section previously proposed
-        is retracted: reading hubs.hub_relations by target_topology_manifest_id to find a manifest's
-        membership inside a DIFFERENT manifest's sequence would treat the table as a traversable
-        graph, which db/topology_tables.sql's own comment rules out. No new backend read projection,
-        table, or column is required for the navigation Island to resolve candidates from current
-        topology -- the existing pipeline (HubNavigationResolver.ResolveAsync ->
-        LoadHubNavigationSequenceAsync -> ManifestDispatcher.EnrichWithHubNavigationAsync ->
-        Emission.NavigationSequence) already computes exactly this for whichever manifest is
-        dispatched; the navigation Island's own candidate read (see navigation_island_contract
-        below) reuses the identical HubNavigationResolver.ResolveAsync call keyed by current
-        topology from the shared boundary, not a parallel implementation.
-      round_16_retraction_basis: >-
-        Round 16's requirement that each of axis_navigation_membership's four targets also carry its
-        own outbound row back to ad200 (an eight-row bootstrap) is retracted, not because a reverse
-        read finds ad200 without it, but because requiring it at all was scope creep: a manifest
-        with no outbound sequence of its own (e.g. ae200, until an admin authors one) resolves an
-        explicit empty candidate set from the navigation Island, the same
+        source-scoped by design, per db/topology_tables.sql's own "Not a global hub-to-hub relation
+        graph" comment -- already reads exactly current topology's own sequence and already returns
+        every member (unbounded row count, ordered by sequence_position), so it already satisfies
+        semantic_role_mapping and relation_branching_is_native above verbatim. Reading
+        hubs.hub_relations by target_topology_manifest_id to find a manifest's membership inside a
+        DIFFERENT manifest's sequence would treat the table as a traversable graph, which
+        db/topology_tables.sql's own comment rules out, and is not how candidates are resolved. No
+        new backend read projection, table, or column is required for the navigation Island to
+        resolve candidates from current topology: HubNavigationResolver.ResolveAsync ->
+        LoadHubNavigationSequenceAsync is the sole backend semantic owner, reached from the frontend
+        only through navigation_island_transport_boundary below -- never through a new parallel
+        repository call, and never by the navigation Island holding a frontend-side reference to a
+        backend class (frontend code cannot call HubNavigationResolver directly; only an HTTP
+        boundary can carry current topology identity across that layer).
+      no_return_edge_bootstrap_requirement: >-
+        A manifest with no outbound sequence of its own (e.g. ae200, until an admin authors one)
+        resolves an explicit empty candidate set from the navigation Island, the same
         explicit-empty-list-never-guessed discipline
         HubNavigationResolver.ResolveFallbackNavigationLinksAsync already uses elsewhere in this
-        file. Authoring a return sequence entry from ae200 back to ad200 (or anywhere else) is
-        ordinary future hub_navigation:create authoring through the existing /admin/manifests
-        surface, identical to authoring any other relation -- it is not bootstrap-mandatory content,
-        and this design_change does not require it to exist for axis_navigation_membership's four
-        targets.
+        file -- never a synthesized/guessed return target. Authoring a return sequence entry from
+        ae200 back to ad200 (or anywhere else) is ordinary hub_navigation:create authoring through
+        the existing /admin/manifests surface, identical to authoring any other relation -- it is
+        not bootstrap-mandatory content, and axis_navigation_membership's four targets are not
+        required to each carry a return row back to their source.
       navigation_island_contract: >-
         Fixed-navigation presentation moves to a dedicated app-shell navigation consumer -- UI
         Builder-independent and ProjectionShell-independent -- reusing frontend/routes/_app.tsx as
         the app shell per existing Fresh convention; the exact concrete component/file split is an
         implementation_change decision made against Fresh's actual island rules (see
-        cross_island_shared_state_boundary below), not invented here. It reads current topology from
-        the shared boundary below, resolves current topology's own sequence via the existing
-        HubNavigationResolver.ResolveAsync/LoadHubNavigationSequenceAsync pipeline, and renders every
-        returned member (never collapsed to a single assumed target) as a navigation option;
-        selecting one dispatches through the existing ?manifest= projection-entry route, never a
-        frontend-duplicated attractor/structure-map resolution.
+        cross_island_shared_state_boundary below), not invented here. It reads current topology
+        identity from the shared Context boundary below and resolves that identity's own sequence
+        exclusively through navigation_island_transport_boundary below -- the sole frontend->backend
+        transport reaching HubNavigationResolver.ResolveAsync/LoadHubNavigationSequenceAsync, never
+        a second/parallel implementation of the read. It renders every returned member (never
+        collapsed to a single assumed target) as a navigation option; selecting one dispatches
+        through the existing ?manifest= projection-entry route, never a frontend-duplicated
+        attractor/structure-map resolution.
+      navigation_island_transport_boundary:
+        canonical_chain: >-
+          Context (current topology Manifest identity, backend-resolved) -> navigation Island
+          issues a request carrying that identity as explicit input -> backend resolves that
+          Manifest's own active hubs.hub_relations sequence via the existing
+          HubNavigationResolver.ResolveAsync -> ContentBundleRepository.LoadHubNavigationSequenceAsync
+          (unfiltered, ordered by sequence_position, 0..N items) -> navigation Island renders every
+          returned candidate -> selecting one uses the existing ?manifest= projection-entry route.
+          No repository query, table, column, or parallel resolver is added; the read authority is
+          the identical one ManifestDispatcher/RuntimeExecutor already call for every manifest
+          dispatch.
+        chosen_boundary: >-
+          GET /hub-navigation/relations (backend/Program.cs), extended with an optional explicit
+          topologyManifestId query parameter. When present and it parses as a GUID, the handler
+          calls HubNavigationResolver.ResolveAsync(topologyManifestId) directly -- the same
+          unfiltered, sequence_position-ordered read RuntimeExecutor/ManifestDispatcher already
+          perform for that manifest during its own dispatch -- and returns it in the existing
+          HubRelationNavigationLinksResponseDto envelope (links / success / errors), with
+          fallbackReason distinguishing this explicit-current-topology read from the endpoint's
+          existing fallback mode. When topologyManifestId is absent, the endpoint's existing
+          behavior (ResolveFallbackNavigationLinksAsync's canonical-default-entry, role-filtered
+          fallback) is entirely unchanged, so its existing callers are not regressed. Auth boundary
+          is unchanged: any authenticated JWT (ValidateActiveSessionAsync), not admin-gated -- the
+          same boundary the endpoint already enforces -- so the navigation Island works on both
+          Admin and Normal surfaces without a new token authority. The explicit-current-topology
+          branch does not apply ResolveFallbackNavigationLinksAsync's per-target role filter: that
+          filter exists only to gate the canonical-default-entry manifest's own outbound relations
+          for a caller who has not yet reached any manifest, and does not apply once a caller
+          already stands on current topology by virtue of an already-authorized dispatch. A current
+          topology with zero active outbound rows returns an explicit empty links array; the handler
+          never substitutes the canonical-default-entry fallback for an explicit request that
+          legitimately resolves to zero rows. The frontend client function reaching this boundary
+          (a new plain-fetch client, not routed through queueClientCommand/dispatchOperation's
+          /dispatch POST lane, since this is a distinct GET boundary with its own existing auth
+          check) is an implementation_change addition, not defined by this design_change.
+        rejected_boundaries:
+          hub_navigation_get_hub_relations_dispatch_action: >-
+            /dispatch layer=hub_navigation action=get_hub_relations
+            (backend/runtime/AdminRuntime.cs HubNavigationGetHubRelationsAsync) takes an explicit
+            topologyManifestId input but calls ContentBundleRepository.ListHubRelationsByManifestAsync,
+            not LoadHubNavigationSequenceAsync -- a broader, admin-authoring-shaped read (includes
+            inactive/deprecated rows, returns a related-hub display label for the
+            HubNavigationAdmin.tsx CRUD editing screen) rather than the active-only,
+            sequence_position-ordered runtime read semantic_role_mapping requires. It is also
+            reachable only through the admin-authenticated session boundary
+            (frontend/api/adminApi.ts callHubNavigation, the same token AdminAuthGate/super_auth
+            issues), so it cannot serve the Normal-axis surfaces axis_navigation_membership also
+            covers without giving the navigation Island a second, admin-only auth path. Reusing it
+            would also point a second, semantically-different read at the same table this design
+            already keeps single-owner (LoadHubNavigationSequenceAsync).
+          new_dedicated_endpoint: >-
+            Rejected as redundant: the explicit-current-topology semantic is already fully
+            expressible as a minimal extension of the existing GET /hub-navigation/relations
+            boundary (same resolver, same repository call, same response envelope, same auth), so
+            a second endpoint would only duplicate that boundary rather than close a real gap.
+          dispatch_business_projection_reuse: >-
+            The projection dispatch ProjectionShell already performs (queueClientCommand -> POST
+            /dispatch -> ManifestDispatcher/RuntimeExecutor) already embeds this same manifest's
+            NavigationSequence in its own Emission (RuntimeExecutor.ExecuteAsync step 11 /
+            ManifestDispatcher.EnrichWithHubNavigationAsync), but that Emission is
+            ProjectionShell-internal state; carrying it into Context would put
+            loading/error/emission-shaped data into the shared boundary and make ProjectionShell
+            the de facto source of navigation presentation data again -- both excluded by
+            cross_island_shared_state_boundary's minimal-Context contract and by
+            navigation_island_contract's ProjectionShell-independence requirement. The navigation
+            Island's own read above is therefore a deliberate, additional read of data the backend
+            already computes once per dispatch elsewhere -- not a new authority, and not a second
+            write/business dispatch.
       cross_island_shared_state_boundary: >-
         Verified against Fresh 1.7.3's actual client hydration algorithm
         (src/runtime/entrypoints/main.ts's revive()/_walkInner(), fetched and read directly from the

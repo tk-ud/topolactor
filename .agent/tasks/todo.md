@@ -440,7 +440,7 @@ Bundleの全受入条件を満たしたため、Status を `partial` → `implem
 - Admin navigation non-targets: `ae210`〜`ae280`（admin-enumの内部write/read operation manifest）。ae200自身のnode-local dispatch対象であり、独立したnavigation targetではない。
 - Normal axis: 既存`surface_axes.normal.normal_hub_relation_navigation_contract`を維持。`dd020`が唯一のreal Normal surfaceで、他にlink先/元は存在しない。fake targetは作らない。
 - `ad200`のproduction entry: `runtime-orchestration-ssot.yaml admin_route_retirement_matrix.routes`の新設`/admin`エントリ（`thin_projection_wrapper`、`/admin/enums`と同じpattern）。`frontend/routes/admin/index.tsx`の現行static bodyを、manifest `ad200`にpinしたProjectionShell thin wrapperへ置換する。
-- Round 16のreturn-edge要件（4 target→`ad200`の復路row、8-row bootstrap）は撤回済み。ae200等のtargetが自分自身のoutbound sequenceを持たない場合、navigation Islandはそのmanifestについて明示的な空candidateを解決する（既存`ResolveFallbackNavigationLinksAsync`と同じ「推測しない明示的空リスト」の作法）。`ad200`への復路を作るかどうかは通常のhub_navigation:create authoring（`/admin/manifests`）に委ねられる、bootstrap必須ではない後回し事項である。
+- 4 target→`ad200`の復路rowは登録しない（8-row bootstrapは行わない）。ae200等のtargetが自分自身のoutbound sequenceを持たない場合、navigation Islandはそのmanifestについて明示的な空candidateを解決する（既存`ResolveFallbackNavigationLinksAsync`と同じ「推測しない明示的空リスト」の作法）。`ad200`への復路を作るかどうかは通常のhub_navigation:create authoring（`/admin/manifests`）に委ねられる、bootstrap必須ではない後回し事項である。
 
 **(2) target_topology_manifest_id migration（目的2）**
 
@@ -457,7 +457,8 @@ Bundleの全受入条件を満たしたため、Status を `partial` → `implem
 - sequence semantics: `db/topology_tables.sql`が正本。sequenceは1つのmanifest（`topology_manifest_id`）が自分自身で持つ`hubs.hub_relations`行集合そのものであり、`sequence_position`がその中の順序authority。1つのmanifestが他のmanifestのsequenceを所有することはない（global graphではない）。
 - 複数candidate: 既存`hubs.hub_relations`はsourceごとの一意性制約が`(topology_manifest_id, sequence_position)`のみで、1つのmanifestが複数のown outbound行を持つことを既に許容している。Ownerの例（A=[1,5,7,9,15]、B=[4,2,3,8,9,6]、current=9で候補15と6）は、manifest 9が自分自身のsequenceとして2行（9→15、9→6）を持つことでそのまま表現できる。新しいaxis/dimension/role flag列は不要。
 - read projection: 既存`ContentBundleRepository.LoadHubNavigationSequenceAsync(topologyManifestId)`（source-scoped、`db/topology_tables.sql`の「Not a global hub-to-hub relation graph」に整合）が、current topology自身のsequenceを過不足なく返す。target方向のreverse read（他manifestのsequence内での自分のmembership位置を探す読み方）は追加しない — それはtableをgraphとして扱うことになり、schemaのcanonical定義と矛盾する。新しいbackend read projectionは不要。
-- app-shell navigation Island: UI Builder非依存・ProjectionShell非依存。`frontend/routes/_app.tsx`をapp shellとして使う。current topologyをContextから読み、既存`HubNavigationResolver.ResolveAsync`/`LoadHubNavigationSequenceAsync`パイプラインでcurrent topology自身のsequenceを解決し、複数candidateを単一へ縮退させず提示する。target選択後の遷移は既存`?manifest=`遷移entryを再利用し、frontend側でattractor/structure-map解決を複製しない。
+- frontend→backend transport wiring: navigation Island（frontend）は`HubNavigationResolver`というbackend C#クラスを直接呼べない — 到達には既存HTTP boundaryが要る。`runtime-orchestration-ssot.yaml`の`navigation_island_transport_boundary`で確定: 既存`GET /hub-navigation/relations`（`backend/Program.cs`、現状は`ResolveFallbackNavigationLinksAsync`によるcanonical-default-entry fallback専用）へ、任意の明示`topologyManifestId` query paramを追加する最小extensionとして再利用する。paramが有る場合は`HubNavigationResolver.ResolveAsync(topologyManifestId)`を直接呼び（role filter無し、`LoadHubNavigationSequenceAsync`と同じunfiltered/`sequence_position`順）、無い場合は既存fallback挙動を無変更で維持し既存callerを回帰させない。auth境界は既存JWT/session（admin限定ではない）のまま変更しない。`/dispatch`の`hub_navigation:get_hub_relations`（admin限定・`ListHubRelationsByManifestAsync`ベースでinactive行を含むauthoring用read）は不採用 — semanticも認可境界も一致しない。新しいbackend read projection/endpoint/dispatcherは追加しない。
+- app-shell navigation Island: UI Builder非依存・ProjectionShell非依存。`frontend/routes/_app.tsx`をapp shellとして使う。current topology identityをContextから読み、上記の拡張済み`GET /hub-navigation/relations`（`?topologyManifestId=<current>`）を呼んでcurrent topology自身のsequenceを取得し、複数candidateを単一へ縮退させず提示する。target選択後の遷移は既存`?manifest=`遷移entryを再利用し、frontend側でattractor/structure-map解決を複製しない。
 - Context boundary: Fresh 1.7.3の実際のclient hydration algorithm（`src/runtime/entrypoints/main.ts`の`revive()`/`_walkInner()`、`deno.json`固定バージョンから直接取得して確認）を根拠とする。islandの閉じmarkerが独立した`render()`呼び出し（別Preact root）になるのは、その時点で他のislandのmarkerがmarker stack上に開いていない場合のみ。あるislandが別のislandの subtree内にnestされている場合（outer islandが自分のJSX内で直接renderする場合、またはrouteからouter islandのchildrenとして渡す場合の両方 — 既存`frontend/islands/AdminAuthGate.tsx`が`frontend/islands/ProjectionShell.tsx`を包む現行patternが正にこれ）、そのislandはouter islandと同じvnode treeに畳み込まれ、1回の`render()`で一緒にhydrateされる。したがって文字通りの`createContext`/`Context.Provider`は、outer top-level islandからnestされたislandの`useContext`へ正しく伝播する。canonical designはOwner指定通り: `frontend/routes/_app.tsx`から`{Component}`を包む新しいtop-level app-shell Islandをmountし、そこで`useState`によりcurrent topology identityを所有して`Context.Provider`で公開する。navigation Islandと（既存route nestingを通じた）ProjectionShellはそのnested descendantとして`useContext`で読む。module-scope subscribable storeやRedux/Zustandは使わない。Contextの値は最小限（current topology identity + 明示的なupdate関数）とし、URL selection/backend dispatch resolutionのauthorityを上書きしない。ProjectionShellは`adoptResolvedManifestIdentity`/`adoptedManifestIdRef`確定後にのみupdate関数を呼ぶ。
 - ProjectionShell役割縮小: dispatch/loading/error/emission/specs/node-value/local runtime state/SSE lifecycleは維持したまま、`resolveHubNavigationLinks(emission.navigationSequence)`によるnav bar表示は撤退し、navigation Islandとの二重表示を避ける。撤退作業自体は次段implementation_changeの対象。
 
@@ -465,7 +466,7 @@ Bundleの全受入条件を満たしたため、Status を `partial` → `implem
 
 - `docs/design/db-schema.yaml` `hub_relations.key_columns` / `hub_relations.target_reference_canonical_contract`
 - `docs/design/admin-console-workflow-ssot.yaml` `admin_hub_relation_navigation_contract`（`resolution_rule` / `canonical_forward_target_reference` / `bootstrap_seed_vs_runtime_authoring_boundary` / `axis_navigation_membership`）
-- `docs/design/runtime-orchestration-ssot.yaml` `ui_projection_render_reachability_contract.hub_navigation_resolution`（`canonical_forward_target_reference`）、`ui_projection_render_reachability_contract.hub_relation_sequence_membership_and_navigation_island_contract`、`admin_route_retirement_matrix.routes`（`/admin`エントリ）
+- `docs/design/runtime-orchestration-ssot.yaml` `ui_projection_render_reachability_contract.hub_navigation_resolution`（`canonical_forward_target_reference`）、`ui_projection_render_reachability_contract.hub_relation_sequence_membership_and_navigation_island_contract`（`navigation_island_transport_boundary`含む）、`admin_route_retirement_matrix.routes`（`/admin`エントリ）
 - `docs/design/admin-normal-surface-projection-seed-ssot.yaml` `hub_relation_navigation_binding`
 - `db/topology_tables.sql`（`hubs.hub_relations`のsequence semantics正本コメント）
 
@@ -476,10 +477,12 @@ Bundleの全受入条件を満たしたため、Status を `partial` → `implem
 3. `LoadHubNavigationSequenceAsync`等のtarget解決を、`related_hub_id`ベースのexactly-one推論から`target_topology_manifest_id`の直接FK existence+status checkへ置換する。`related_hub_id`は物理削除せず、legacy fieldとして残す。新しいread projectionは追加しない（既存メソッドのsource column切り替えのみ）。
 4. Admin Manifests UI（`HubNavigationAdmin.tsx`、既存`/admin/manifests`）のauthoring formを、target Hub選択から既存Manifest一覧を再利用したtarget Manifest直接選択へ変更する。
 5. `admin_hub_relation_navigation_contract.axis_navigation_membership`が定義するAdmin source（`ad200`）→4 targets（`ae200`/`5c100`/`dd010`/`092`）のHubRelation行のみ（復路rowは不要）を、`db/seed_empty.sql`へのpre-built rowとして実登録し、`target_topology_manifest_id`をtarget identityとして使用する。`ae210`〜`ae280`・external-port consumer projectionへは登録しない。
-6. `frontend/routes/_app.tsx`から`{Component}`を包む新しいtop-level app-shell Islandを新設し、`useState`でcurrent topology identityを所有して`Context.Provider`で公開する（file/component名はAgent判断。既存`frontend/islands/AdminAuthGate.tsx`のchildren-wrapping patternを踏襲してよい）。
-7. app-shell navigation Island（UI Builder非依存・ProjectionShell非依存、具体的なfile名はAgent判断）を新設し、手順6のContextからcurrent topologyを`useContext`で読み、既存`HubNavigationResolver.ResolveAsync`/`LoadHubNavigationSequenceAsync`パイプラインでそのmanifest自身のsequenceを解決して複数candidateを提示し、選択後は既存`?manifest=`遷移を再利用する。
-8. `ProjectionShell.tsx`が手順6のContext更新関数を`adoptResolvedManifestIdentity`確定後に呼ぶproducerとして接続し、`resolveHubNavigationLinks(emission.navigationSequence)`によるnav bar表示を撤退してnavigation Islandとの二重表示を避ける。
-9. `/admin`の現行static body（`frontend/routes/admin/index.tsx`）を、`/admin/enums`が確立した`thin_projection_wrapper`パターンと同じ形（同一URL、manifest `ad200`にpinしたProjectionShell thin wrapper）で置換する。
+6. `backend/Program.cs`の既存`GET /hub-navigation/relations`を、`navigation_island_transport_boundary`が定義する最小extensionへ拡張する: 任意の明示`topologyManifestId` query paramを追加し、有る場合は`HubNavigationResolver.ResolveAsync(topologyManifestId)`を直接呼ぶ（role filter無し）。無い場合は既存`ResolveFallbackNavigationLinksAsync`によるfallback挙動を無変更で維持する。auth境界（任意の認証済みJWT、admin限定ではない）は変更しない。
+7. `frontend/routes/_app.tsx`から`{Component}`を包む新しいtop-level app-shell Islandを新設し、`useState`でcurrent topology identityを所有して`Context.Provider`で公開する（file/component名はAgent判断。既存`frontend/islands/AdminAuthGate.tsx`のchildren-wrapping patternを踏襲してよい）。
+8. 手順6の拡張済み`GET /hub-navigation/relations`を呼ぶfrontend API client関数を新設する（`queueClientCommand`/`dispatchOperation`の`/dispatch` POST経路は使わない、独立したGET boundary。配置ファイルはAgent判断）。
+9. app-shell navigation Island（UI Builder非依存・ProjectionShell非依存、具体的なfile名はAgent判断）を新設し、手順7のContextからcurrent topology identityを`useContext`で読み、手順8のclient関数で`?topologyManifestId=<current>`を呼んでそのmanifest自身のsequenceを取得して複数candidateを提示し、選択後は既存`?manifest=`遷移を再利用する。
+10. `ProjectionShell.tsx`が手順7のContext更新関数を`adoptResolvedManifestIdentity`確定後に呼ぶproducerとして接続し、`resolveHubNavigationLinks(emission.navigationSequence)`によるnav bar表示を撤退してnavigation Islandとの二重表示を避ける。
+11. `/admin`の現行static body（`frontend/routes/admin/index.tsx`）を、`/admin/enums`が確立した`thin_projection_wrapper`パターンと同じ形（同一URL、manifest `ad200`にpinしたProjectionShell thin wrapper）で置換する。
 
 対象ファイル名/対象関数名（初期スコープの目安、実装順・内部作業境界はAgent判断）:
 - `db/topology_tables.sql`（`hubs.hub_relations`テーブル定義）
@@ -490,10 +493,14 @@ Bundleの全受入条件を満たしたため、Status を `partial` → `implem
 - `frontend/islands/HubNavigationAdmin.tsx`（target picker）
 - `frontend/routes/admin/index.tsx`（thin wrapper化）
 - `frontend/routes/_app.tsx`（app-shell top-level Islandの配線）
+- `backend/Program.cs`（`GET /hub-navigation/relations`ハンドラへの明示`topologyManifestId` query param extension。既存fallback分岐は無変更）
+- `backend/schema/ContentBundleContracts.cs`（`HubRelationNavigationLinksResponseDto`の`fallbackReason`値追加。新規DTOは作らない）
+- 新設: frontend hub-navigation read client（`frontend/api/`配下、拡張済み`GET /hub-navigation/relations`を呼ぶ独立fetch関数、`/dispatch`経路は使わない、file名はAgent判断）
 - 新設: app-shell top-level Island（`frontend/islands/`配下、`useState`+`Context.Provider`所有、file名はAgent判断）
 - 新設: app-shell navigation Island（`frontend/islands/`配下、file名はAgent判断）
 - `frontend/islands/ProjectionShell.tsx`（current topology publication接続、nav bar表示の撤退）
 - `backend/tests/Topolactor.Integration.Tests/*HubRelationUiProjectionLiveDbTests.cs`、`ManifestDraftActivePromotionLifecycleLiveDbTests.cs`、`AdminRuntimeContentBundleTests.cs`（SELF_LOOP assertion）、`backend/tests/Topolactor.Runtime.Tests/InMemoryContentBundleRepository.cs`
+- `backend/tests/Topolactor.Runtime.Tests/HubNavigationFallbackLinksTests.cs`（既存fallback回帰防止、`topologyManifestId`明示branchの新規test追加）
 
 ### 次段（implementation_change）の受入条件
 
@@ -502,11 +509,14 @@ Bundleの全受入条件を満たしたため、Status を `partial` → `implem
 - [ ] Admin Manifests UI: `HubNavigationAdmin.tsx`のauthoring formが、target Hub選択から既存Manifest一覧を再利用したtarget Manifest直接選択へ変わる。
 - [ ] axis navigation registration: Admin source（`ad200`）→4 targets（`ae200`/`5c100`/`dd010`/`092`）のHubRelation行のみを`db/seed_empty.sql`へのpre-built rowとして実登録し、`target_topology_manifest_id`をtarget identityとして使用する。復路rowは追加しない。`ae210`〜`ae280`・external-port consumer projectionへは登録しないことを確認する。
 - [ ] `ad200`のproduction reachability: `frontend/routes/admin/index.tsx`の現行static bodyを、`/admin/enums`が確立した`thin_projection_wrapper`パターンと同じ形で置換する。
+- [ ] backend: `GET /hub-navigation/relations`が任意の明示`topologyManifestId` query paramを受理する。有る場合は`HubNavigationResolver.ResolveAsync(topologyManifestId)`をrole filter無しで直接呼び、`sequence_position`順の全candidateを返す。無い場合は既存`ResolveFallbackNavigationLinksAsync`によるcanonical-default-entry fallback挙動が無変更であることを既存test（`HubNavigationFallbackLinksTests.cs`）で回帰確認する。auth境界（admin限定ではない既存JWT/session）は変更しない。新しいbackend read projection/endpoint/dispatcherは追加しない。
 - [ ] frontend: `frontend/routes/_app.tsx`から`{Component}`を包む新しいtop-level app-shell Islandが新設され、`useState`+`Context.Provider`でcurrent topology identityを所有している。`ProjectionShell.tsx`が`adoptResolvedManifestIdentity`確定後にContext更新関数を呼ぶproducerとして接続されている。
-- [ ] frontend: app-shell navigation IslandがUI Builder layout/component treeに依存せず新設され、Contextからcurrent topologyを読み、既存`HubNavigationResolver.ResolveAsync`パイプラインを呼び出す（新しいbackend read projectionを作らない）。
+- [ ] frontend: 拡張済み`GET /hub-navigation/relations`を呼ぶ独立fetch client関数が新設される（`/dispatch`経路を使わない）。
+- [ ] frontend: app-shell navigation IslandがUI Builder layout/component treeに依存せず新設され、Contextからcurrent topology identityを読み、上記client関数で`?topologyManifestId=<current>`を呼び出す（新しいbackend read projectionを作らない）。
 - [ ] frontend DOM proof 1: `092`（credential-management）等のAdmin projectionを表示中、app-shell navigation Islandが存在し、UI Builder layout/component treeに依存していないことを証明する。
-- [ ] frontend DOM proof 2: current topologyがContextで共有されており、`ProjectionShell.tsx`が採用したidentityとnavigation Islandが読むidentityが一致することを証明する。
-- [ ] frontend DOM proof 3: current topology自身が複数のown outbound行を持つfixture（Owner例のA/B/9/15/6と同型: あるmanifestが2行の自分自身のsequence行を持つ）で、複数candidateが失われず提示されることを証明する。
+- [ ] frontend DOM proof 2: current topology identityがContextで共有されており、`ProjectionShell.tsx`が採用したidentityとnavigation Islandが読むidentityが一致し、navigation Islandのrequestが同一Manifest IDを`topologyManifestId`として送っていることを証明する。
+- [ ] frontend DOM proof 3: current topology自身が複数のown outbound行を持つfixture（Owner例のA/B/9/15/6と同型: あるmanifestが2行の自分自身のsequence行を持つ）で、複数candidateが失われず、`sequence_position`順のまま提示されることを証明する。
 - [ ] frontend DOM proof 4: Enum candidate `ae200`をnavigation Islandから選択し、実際に`ae200`のprojectionへ到達できることを証明する。
+- [ ] frontend negative proof: current topologyのoutbound sequenceが0件のとき、navigation Islandが空を表示し、canonical default entry（`ResolveFallbackNavigationLinksAsync`側の挙動）やad200等へ暗黙fallbackしていないことを証明する。
 - [ ] frontend DOM proof 5: navigation IslandがProjectionShellと同じfixed-navigationを二重表示していないことを証明する（`ProjectionShell.tsx`の`resolveHubNavigationLinks`によるnav bar表示が撤退済みであることを含む）。
 - [ ] 本Bundleの完了判定はCI greenのみを根拠にしない。SSOT契約・実装・testの意味的整合を監査役が個別に確認したうえで判定する。
