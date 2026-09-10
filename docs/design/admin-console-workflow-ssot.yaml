@@ -188,18 +188,16 @@ admin_console_workflow_ssot:
             canonical_default_entry_contract) and additionally eligible as an ordinary HubRelation
             navigation target from admin-dashboard like the others -- the two reachability paths
             are independent and do not conflict.
-      reachability_after_target_transition: >-
-        SUPERSEDED (Owner redirection, this design_change): the return-edge requirement previously
-        recorded here (each of the four admin_navigation_targets below also carrying its own
-        outbound hub_relations edge back to ad200) is retracted. Reachability across a target-surface
-        transition is now a presentation/read-projection concern owned by
+      fixed_navigation_presentation_ownership: >-
+        Presentation of this axis's membership (source and targets alike) is owned by
         docs/design/runtime-orchestration-ssot.yaml ui_projection_render_reachability_contract.
-        bidirectional_relation_candidate_and_navigation_island_contract -- a bidirectional
-        (source-and-target-direction) read over the SAME four forward edges below already finds
-        ad200 as a candidate from any of them, with no extra hubs.hub_relations row required. This
-        field is retained only so the retraction itself is discoverable at the point Round 16 left
-        it; the canonical design for this axis's four members is admin_navigation_source /
-        admin_navigation_targets below, unchanged by this retraction.
+        hub_relation_sequence_membership_and_navigation_island_contract's app-shell navigation
+        Island, not by ProjectionShell or UI Builder. Each manifest's own outbound sequence
+        (resolved via the existing HubNavigationResolver.ResolveAsync pipeline) is what the
+        navigation Island presents when that manifest is the current topology; a target with no
+        outbound sequence of its own resolves an explicit empty candidate set rather than a fixed
+        return path, and authoring one is ordinary future hub_navigation:create work, not a
+        bootstrap requirement of this entry.
       admin_navigation_non_targets: >-
         00000000-0000-0000-0000-0000000ae210/ae220/ae230/ae240/ae250/ae260/ae270/ae280 (admin-enum's
         7 per-operation write manifests plus its get_group read-detail manifest) are ae200's own
