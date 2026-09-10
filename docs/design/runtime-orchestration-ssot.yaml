@@ -138,9 +138,16 @@ runtime_orchestration_ssot:
             axis_navigation_membership.production_reachability_precondition resolves the target
             route: /admin has no other available registry slot and inventing a new route is
             prohibited, so /admin/index.tsx's current hardcoded body is replaced by a same-URL
-            ProjectionShell thin wrapper pinned to manifest ad200
-            (00000000-0000-0000-0000-0000000ad200), the same convention enums.tsx already
-            established for ae200. This design_change performs no SQL DDL/backend/frontend/test
+            ProjectionShell thin wrapper pinned by manifestKey="admin.dashboard.navigation.projection"
+            (manifest_key_target_ref_resolution_contract below) -- the same pattern
+            frontend/routes/admin/team-dashboard/index.tsx and frontend/routes/dashboard/index.tsx
+            already establish as this repo's current, preferred route-pin convention (a stable
+            human-readable manifest_key, not a raw manifest_id UUID constant embedded in route
+            source). /admin/enums' own raw-UUID pin predates that convention and was deliberately
+            left unmigrated by the round that introduced manifest_key_target_ref_resolution_contract
+            (to avoid an unrelated repo-wide route migration on an already-built route) -- that
+            precedent does not apply here, since /admin is new work, not an existing pin being
+            preserved. This design_change performs no SQL DDL/backend/frontend/test
             work; status is design_resolved_not_started (the design is closed, production work
             has not begun). Closing this route entry to status=done and registering
             axis_navigation_membership's HubRelation rows are
@@ -460,15 +467,52 @@ runtime_orchestration_ssot:
         backend class (frontend code cannot call HubNavigationResolver directly; only an HTTP
         boundary can carry current topology identity across that layer).
       no_return_edge_bootstrap_requirement: >-
-        A manifest with no outbound sequence of its own (e.g. ae200, until an admin authors one)
-        resolves an explicit empty candidate set from the navigation Island, the same
+        Scope of this entry: a RETURN edge specifically (e.g. ae200 -> ad200) is not
+        bootstrap-mandatory content for this Bundle -- axis_navigation_membership's four targets
+        are not required to each carry a return row back to their source, and this Bundle does not
+        author one. This is narrower than "zero outbound relations is a fine end state": see
+        minimum_cardinality_completion_invariant_relationship below for what a target's own
+        zero-outbound state does and does not mean, since db-schema.yaml's
+        minimum_cardinality_completion_invariant already governs that question and this entry does
+        not override, weaken, or restate it. Whatever a manifest's own outbound-relation count
+        actually is (zero, one, or many), the navigation Island's READ behavior is unconditional:
+        it resolves an explicit empty candidate set when there are none, the same
         explicit-empty-list-never-guessed discipline
         HubNavigationResolver.ResolveFallbackNavigationLinksAsync already uses elsewhere in this
-        file -- never a synthesized/guessed return target. Authoring a return sequence entry from
-        ae200 back to ad200 (or anywhere else) is ordinary hub_navigation:create authoring through
-        the existing /admin/manifests surface, identical to authoring any other relation -- it is
-        not bootstrap-mandatory content, and axis_navigation_membership's four targets are not
-        required to each carry a return row back to their source.
+        file -- never a synthesized/guessed return target, regardless of whether that emptiness is
+        itself a completeness gap under the older invariant. Authoring a return sequence entry from
+        ae200 back to ad200 (or authoring any other outbound relation on ae200/5c100/dd010/092) is
+        ordinary hub_navigation:create authoring through the existing /admin/manifests surface,
+        identical to authoring any other relation.
+      minimum_cardinality_completion_invariant_relationship: >-
+        db-schema.yaml hub_relations.minimum_cardinality_completion_invariant (mirrored in
+        docs/framework-core.yaml runtime_route_attention_boundary
+        production_projection_connectivity_invariant) is the unweakened, canonical authority on
+        whether an active topology_manifest's own zero-outbound-relations state is a valid
+        completion state -- it is not: that invariant calls it a "navigation orphan," enforced
+        going forward at NpgsqlManifestRepository.PromoteAsync (the draft -> active transition) and
+        guarded against regression by hub_navigation:deprecate's own last-active-relation check.
+        This contract does not reopen, narrow, or create an exception to that invariant. What this
+        contract's own no_return_edge_bootstrap_requirement and
+        explicit_current_topology_trust_boundary.valid_source_empty_and_multiple_rows actually decide
+        is orthogonal: the RUNTIME READ contract for whatever outbound-relation count a manifest
+        happens to have, never a judgment on whether that count is itself authoring-complete.
+        axis_navigation_membership's four Admin-axis targets (ae200, 5c100, dd010, 092) are
+        pre-existing rows already seeded directly as status='active' (like the large majority of
+        this repo's seeded manifests), predating PromoteAsync's enforcement mechanism and never
+        promoted through it -- under a literal reading of minimum_cardinality_completion_invariant
+        each is, right now, already a navigation orphan (zero of its OWN outbound active
+        hub_relations rows) -- a pre-existing fact independent of this Bundle's own work.
+        Registering axis_navigation_membership's four ad200 -> {ae200, 5c100, dd010, 092} rows
+        gives ad200 itself a resolvable outbound relation (satisfying the invariant for ad200,
+        the SOURCE), but does not, and is not required to, retroactively resolve the four TARGETS'
+        own pre-existing orphan status -- that is a separate, repo-wide seed-completeness
+        condition shared by most already-active seeded manifests, not something Goal 1
+        (ae200 reachable as a navigation target) depends on, and not something this Bundle
+        introduces, worsens, or is scoped to remediate. Closing it for any specific manifest
+        remains ordinary future hub_navigation:create authoring on that manifest, or a separate,
+        dedicated seed-remediation item covering the repo's existing orphaned manifests generally
+        -- out of this Bundle's scope either way.
       navigation_island_contract: >-
         Fixed-navigation presentation moves to a dedicated app-shell navigation consumer -- UI
         Builder-independent and ProjectionShell-independent -- reusing frontend/routes/_app.tsx as

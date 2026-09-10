@@ -607,6 +607,19 @@ admin_normal_surface_projection_seed_ssot:
             - display_manifest_scoped_hub_relation_links
             - use_selected_link_as_projection_change_trigger
             - project_current_resolution_state_and_fail_close_errors
+          projection_responsibility_forward_ownership_note: >-
+            use_selected_link_as_projection_change_trigger's actual click-to-navigate mechanism is
+            the same one hub_relation_navigation_binding.event_bindings.select_hub_relation_link
+            below already documents: the app-shell navigation Island (docs/design/
+            runtime-orchestration-ssot.yaml ui_projection_render_reachability_contract.
+            hub_relation_sequence_membership_and_navigation_island_contract) is the canonical
+            forward owner, not this surface's own seeded hub_relation_link_list card_list. This
+            avoids a double-authority risk specific to this surface (unlike other surfaces' own
+            read-only hub_relation_link_list projections, this one's own declared responsibility
+            explicitly includes the select-to-navigate trigger): once the navigation Island lands,
+            this card_list's selection affordance is retired to a read-only projection of the same
+            data (identical to how every other surface's own hub_relation_link_list already is),
+            never a second, competing click-to-navigate implementation alongside the Island.
           not_authority_for:
             - rbac
             - authentication

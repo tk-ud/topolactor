@@ -546,12 +546,43 @@ db_schema:
           router, or recommendation-as-fixed-route-substitute is introduced.
         canonical_target_field: >-
           target_topology_manifest_id (uuid, FK to hubs.topology_manifests.topology_manifest_id).
-          Forward end-state is NOT NULL -- every hub_relations row always names an explicit target
-          manifest directly, no inference. During the physical migration (next
-          implementation_change), existing rows are backfilled from today's related_hub_id-based
-          resolution (see legacy_target_resolution below) before the column is made NOT NULL; this
-          design_change does not prescribe the exact DDL/backfill mechanism, only this sequencing
-          constraint.
+          Forward end-state is NOT NULL for status='active' rows -- every ACTIVE hub_relations row
+          always names an explicit target manifest directly, no inference. During the physical
+          migration (next implementation_change), existing rows are backfilled from today's
+          related_hub_id-based resolution (see legacy_target_resolution below) before the
+          not-null requirement is enforced; this design_change does not prescribe the exact
+          DDL/backfill mechanism, only the sequencing and disposition constraints below.
+        legacy_ambiguous_row_migration_disposition: >-
+          related_hub_id's own resolution (legacy_target_resolution below) already treats a hub
+          with zero or multiple active hubs.topology_manifests rows as unresolvable -- both are
+          existing entries in runtime_fail_close_negative_cases
+          (zero_active_target_manifest_for_related_hub_id /
+          multiple_active_target_manifests_for_related_hub_id), meaning a hub_relations row in
+          either state already resolves to no navigable target under every current read path,
+          identically to a row with no target at all. The migration's canonical disposition,
+          derived from that existing fact rather than inventing a new judgment: (1) a row whose
+          related_hub_id resolves to EXACTLY ONE active target manifest backfills
+          target_topology_manifest_id to that manifest's id -- the clean, unambiguous case. (2) A
+          status='active' row whose related_hub_id resolves to ZERO or MULTIPLE active target
+          manifests cannot be backfilled with a real, non-fabricated target (PR #584's
+          does_not_authorize ban applies here identically) -- the migration transitions such a row
+          to status='deprecated' as part of the same migration, using the existing
+          hub_navigation:deprecate status value, never a new lifecycle state; this changes nothing
+          observable to any caller, since such a row was already functionally unresolvable
+          (excluded from every candidate list) under current read semantics -- deprecating it only
+          makes the schema state honest about what the read layer already treats as inert. (3) A
+          deprecated row (whether already deprecated, or deprecated by step 2) is exempt from the
+          not-null requirement -- the constraint is a CHECK scoped to status='active'
+          (status <> 'active' OR target_topology_manifest_id IS NOT NULL), never a blanket
+          column-level NOT NULL, precisely so an inert legacy row need not carry a fabricated
+          target to satisfy schema shape. (4) Step 2 must never silently create a NEW
+          minimum_cardinality_completion_invariant orphan: if deprecating a row would leave ITS
+          OWN source topology_manifest_id with zero surviving active outbound relations, the
+          migration fails that row closed for explicit admin remediation (author a replacement
+          relation, or resolve the ambiguity by hand) rather than auto-deprecating past the
+          existing hub_navigation:deprecate last-active-relation guard -- the migration respects
+          that guard's existing invariant rather than working around it via a raw
+          migration-time write.
         canonical_target_resolution_rule: >-
           The navigable target manifest for a hub_relations row is target_topology_manifest_id
           itself when that referenced hubs.topology_manifests row has status='active'; otherwise

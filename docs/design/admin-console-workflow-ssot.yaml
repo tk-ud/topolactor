@@ -258,12 +258,18 @@ admin_console_workflow_ssot:
         (ad200's) production entry point via the same thin_projection_wrapper retirement_kind
         runtime-orchestration-ssot.yaml admin_route_retirement_matrix already used for
         /admin/enums (route file and URL unchanged, route body swapped from the current hardcoded
-        frontend/routes/admin/index.tsx content to a seed-backed ProjectionShell projection of
-        manifest ad200) -- see admin_route_retirement_matrix.routes' /admin entry for the
-        design-side registration; production implementation (swapping index.tsx's body,
-        registering the HubRelation rows this entry defines membership for) remains a
-        hub-relation-target-manifest-canonical-migration Bundle implementation_change item, not
-        design_change work.
+        frontend/routes/admin/index.tsx content to a seed-backed ProjectionShell projection),
+        pinned by manifestKey="admin.dashboard.navigation.projection" via the existing
+        manifest_key_target_ref_resolution_contract (runtime-orchestration-ssot.yaml) rather than a
+        raw manifest_id UUID constant -- the same pin style
+        frontend/routes/admin/team-dashboard/index.tsx and frontend/routes/dashboard/index.tsx
+        already use, and the preferred convention for any route pin authored after that contract
+        existed; /admin/enums' own raw-UUID pin is a pre-existing, deliberately-unmigrated
+        exception, not a precedent for new route work -- see admin_route_retirement_matrix.routes'
+        /admin entry for the design-side registration; production implementation (swapping
+        index.tsx's body, registering the HubRelation rows this entry defines membership for)
+        remains a hub-relation-target-manifest-canonical-migration Bundle implementation_change
+        item, not design_change work.
     subbundle_target_readiness:
       note: >-
         The only structural readiness gate this Bundle tracks per subBundle for STARTING that
