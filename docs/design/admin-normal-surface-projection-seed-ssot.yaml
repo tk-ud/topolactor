@@ -1276,7 +1276,15 @@ admin_normal_surface_projection_seed_ssot:
           requirement" rule. This governs link visibility/resolution only; it does not affect the
           separate, already-established capability_requirement.required_role=admin gate on
           normal.surfaces.dashboard.responsibilities.inputer's own mutation operations, which this
-          contract does not touch.
+          contract does not touch. "No required_role on the traversal action itself" must never be
+          read as "every topology is visible to every caller": which source/target topologies a
+          given caller's Navigation Island actually receives is governed by
+          docs/design/runtime-orchestration-ssot.yaml
+          ui_projection_render_reachability_contract.hub_relation_sequence_membership_and_
+          navigation_island_contract.active_topology_eligibility_predicate — the navigation read
+          itself needs no new permission, but each candidate topology it returns is still gated by
+          that caller's existing Active-topology-selection authority, identically to any other
+          dispatch path.
         projection_axis: normal
         connection_state_authority: >-
           Same rule as admin_hub_relation_navigation_contract.connection_state_authority: whether any

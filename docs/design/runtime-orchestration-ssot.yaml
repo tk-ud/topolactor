@@ -548,40 +548,92 @@ runtime_orchestration_ssot:
             same active_status_requirement discipline ManifestDispatcher's target_ref TOCTOU
             re-check and ResolveFallbackNavigationLinksAsync's own source-manifest check already
             apply. No new repository method or existence query is introduced.
+          active_topology_eligibility_predicate: >-
+            Canonical invariant (Owner-directed): NavigationTopologyVisibility(caller, topology)
+            == ActiveTopologyEligibility(caller, topology). Navigation visibility is never an
+            independent authority -- a source or target Manifest is a Navigation candidate only
+            when the SAME caller could actively select that Manifest through the runtime's
+            existing manifest-selection authority. This is not a layer/action-omitted shortcut:
+            a manifest reachable ONLY through a role-scoped dispatcher_mapping entry (e.g. a
+            Normal-facing manifest whose runtime_destination happens to be admin_runtime, gated
+            open by its own layer_action_scoped_override capability_requirement entries -- see
+            dd020_worked_example below) must resolve eligible for that role, exactly as it does
+            when actually dispatched. The predicate composes two already-existing, already-authoritative
+            readers over a manifest's own declared topology -- no new role source, no new
+            capability source, no Navigation-only RBAC:
+            (1) DispatcherMappingAxisAuthority.FindDeclaredRole(topology, layer, action) --
+            already the canonical reader of a dispatcher_mapping entry's own declared role
+            (absent = role-wildcard, present = exact caller-role match required) -- and
+            (2) ManifestDispatcher.ResolveRequiredRole/ValidateCapabilityRequirement(topology,
+            callerRole, layer, action) -- already the canonical capability gate every dispatch
+            path applies. A manifest is ActiveTopologyEligible for callerRole when EITHER: (a) the
+            manifest has at least one dispatcher_mapping entry E such that E's own declared role
+            (FindDeclaredRole semantics) permits callerRole AND
+            ValidateCapabilityRequirement(topology, callerRole, E.layer, E.action) raises no
+            AUTH_CAPABILITY_DENIED for that same (E.layer, E.action) pair -- i.e. there exists at
+            least one of the manifest's own declared entry points callerRole could actually
+            dispatch through; or (b) the manifest declares NO dispatcher_mapping entry at all (it
+            is reachable only via a direct target_ref/manifest_key pin, never axes routing -- e.g.
+            admin-dashboard, ad200, which has zero dispatcher_mapping entries in
+            db/seed_empty.sql), in which case eligibility falls back to
+            ValidateCapabilityRequirement(topology, callerRole) with layer/action omitted (the
+            unscoped-explicit-else-runtime_destination-inference resolution), since there is no
+            per-entry point to anchor a scoped check to. Case (b) applies only to manifests axes
+            routing never reaches in the first place -- a plain layer/action-omitted capability
+            resolution is correct exactly there, never as a uniform substitute for case (a).
+          dd020_worked_example: >-
+            team_dashboard.normal.projection (dd020) is a load-bearing example precisely because a
+            plain layer/action-omitted capability resolution gets it wrong: db/seed_empty.sql's
+            actual dd020 topology declares
+            {"type":"runtime_mapping","runtime_destination":"admin_runtime"} AND
+            {"type":"dispatcher_mapping","role":"normal","target":"admin","layer":"team_dashboard",
+            "action":"get"} AND two layer/action-scoped capability_requirement entries with no
+            required_role field (layer=screen_list/action=Search, layer=team_dashboard/action=get)
+            -- i.e. dd020 IS admin_runtime, and its real Normal-caller openness comes entirely
+            from its own role-scoped dispatcher_mapping entry plus its own scoped-open
+            capability_requirement entries (see auth-db-session-credential-ssot.yaml
+            manifest_capability_requirement.layer_action_scoped_override.first_adopter, which
+            already documents this factually), never from being "non-admin_runtime". A plain
+            layer/action-omitted ResolveRequiredRole call on dd020's topology falls through past
+            those scoped entries straight to the runtime_destination inference and incorrectly
+            resolves required_role=admin, wrongly hiding a legitimately Normal-eligible manifest's
+            navigation sequence from Normal callers -- exactly the failure mode
+            active_topology_eligibility_predicate's case (a) exists to prevent. Applying that
+            predicate: dd020 has exactly one dispatcher_mapping entry
+            (role="normal"), so for callerRole="normal" it matches under case (a), and
+            ValidateCapabilityRequirement(dd020.topology, "normal", "team_dashboard", "get")
+            resolves the scoped entry (no required_role = explicitly open) -- eligible. For
+            callerRole="admin", the same entry's declared role "normal" does not match "admin", so
+            (a) finds no qualifying entry and dd020 is NOT eligible for a pure Admin caller via its
+            own declared entries (Admin reaches the equivalent content through the separate
+            Admin-axis manifest dd010, which has its own role="admin" dispatcher_mapping entries).
           source_manifest_capability_authorization: >-
-            Reuses ManifestDispatcher.ResolveRequiredRole(sourceManifest.Topology) -- called with
-            layer/action omitted, exactly as its own doc comment already specifies it is shared
-            with HubNavigationResolver read-only role filtering ("always called with layer/action
-            omitted, so it only ever sees the unscoped/inferred resolution, since link-visibility
-            filtering has no single specific action to scope against") -- compared against
-            callerRole (JwtGuard.TryGetRole(token)). A required role the caller's JWT role does
-            not match fails closed (AUTH_CAPABILITY_DENIED-shaped ValidationError, same code
-            family /dispatch already uses). Because layer/action are omitted, a
-            layer_action_scoped_override entry (auth-db-session-credential-ssot.yaml
-            manifest_capability_requirement.layer_action_scoped_override) never participates in
-            this resolution -- navigation read has no single business action of its own to scope
-            against, so an action-scoped capability_requirement is never widened into a
-            manifest-wide deny; only an unscoped explicit capability_requirement entry or
-            runtime_destination=admin_runtime inference applies, identically to how
-            ResolveFallbackNavigationLinksAsync already gates target manifests today. A
-            non-admin_runtime manifest (e.g. the Normal axis's team_dashboard.normal.projection,
-            dd020) with no explicit unscoped capability_requirement entry resolves no requirement
-            at all -- any authenticated caller may read its navigation sequence, unchanged from
-            today's structural/projection read openness. An admin_runtime manifest (e.g.
-            admin-dashboard, ad200, or any of axis_navigation_membership's four Admin-axis
-            targets) without an explicit unscoped override still infers required_role=admin,
-            matching the admin-gated surfaces those manifests already dispatch behind.
+            Applies active_topology_eligibility_predicate above to the source Manifest with
+            callerRole = JwtGuard.TryGetRole(token): not ActiveTopologyEligible fails closed
+            (AUTH_CAPABILITY_DENIED-shaped ValidationError, same code family /dispatch already
+            uses), same fail-close shape as missing_inactive_unauthorized_source below. No
+            Navigation-specific fake layer/action is invented for this check -- case (a) checks
+            the source manifest's own already-declared entry points (its dispatcher_mapping's own
+            layer/action), and case (b) falls back to the unscoped/inferred resolution only for
+            manifests with no declared entry point at all.
           target_filtering: >-
             The explicit branch must never disclose more than the existing fallback branch already
-            discloses (NG-axis requirement). ResolveFallbackNavigationLinksAsync already filters
-            each candidate's target Manifest for existence (LoadByIdAsync non-null),
-            active_status_requirement, and ManifestDispatcher.ResolveRequiredRole-based capability
-            visibility before including it -- the explicit branch reuses that identical per-target
-            filter (extracting/sharing the implementation is an implementation_change concern, not
-            decided here), so a Navigation Island never pre-renders a candidate the caller cannot
-            actually navigate to. This is not a new judgment: it is the existing fallback
-            resolver's own target-visibility rule applied uniformly to both branches of the same
-            resolver.
+            discloses (NG-axis requirement), and never discloses a target's identity (UUID, label,
+            or href) that fails active_topology_eligibility_predicate for the requesting caller --
+            a caller is never shown a candidate only to have it deny on click. Applies the
+            identical active_topology_eligibility_predicate above to each candidate's target
+            Manifest with the SAME callerRole: existence (LoadByIdAsync non-null),
+            active_status_requirement, and active_topology_eligibility_predicate together gate
+            inclusion; a target failing any of these is dropped from the response entirely, not
+            merely marked unresolvable. Source and target reuse the identical predicate -- no
+            separate role-determination algorithm per side. ResolveFallbackNavigationLinksAsync's own
+            per-target filter (today built directly on layer/action-omitted ResolveRequiredRole)
+            has the same dd020-shaped gap dd020_worked_example above describes and must converge onto
+            this same active_topology_eligibility_predicate rather than remain a second,
+            drifting authority -- a forward-design requirement recorded here; the fallback
+            endpoint's own semantic (canonical-default-entry resolution, role-filtered visibility,
+            explicit-empty-when-nothing-resolves) is unchanged, only the per-target eligibility
+            check it uses converges.
           malformed_input: >-
             A topologyManifestId query parameter that is present but does not parse as a GUID is
             an explicit validation failure (ValidationError, same envelope/code-family convention
