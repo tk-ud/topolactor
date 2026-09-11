@@ -461,7 +461,15 @@ db_schema:
         - name: target_topology_manifest_id
           type: uuid
           role: fk_topology_manifests_target_canonical
-          nullable: false
+          nullable: true
+          nullable_note: >-
+            Column-level: nullable. Non-null is enforced only for status='active' rows, by a CHECK
+            constraint (status <> 'active' OR target_topology_manifest_id IS NOT NULL) -- never a
+            blanket column-level NOT NULL. A status='deprecated' row may legitimately carry a NULL
+            target_topology_manifest_id. Full rule in
+            target_reference_canonical_contract.legacy_ambiguous_row_migration_disposition below;
+            this note exists only so the flat nullable flag above does not read as contradicting
+            that contract.
           design_change_status: >-
             Owner canonical redesign, this design_change; no SQL DDL yet (physical column add is
             next implementation_change scope). This is the CANONICAL, forward-design target
@@ -557,32 +565,68 @@ db_schema:
           with zero or multiple active hubs.topology_manifests rows as unresolvable -- both are
           existing entries in runtime_fail_close_negative_cases
           (zero_active_target_manifest_for_related_hub_id /
-          multiple_active_target_manifests_for_related_hub_id), meaning a hub_relations row in
-          either state already resolves to no navigable target under every current read path,
-          identically to a row with no target at all. The migration's canonical disposition,
-          derived from that existing fact rather than inventing a new judgment: (1) a row whose
-          related_hub_id resolves to EXACTLY ONE active target manifest backfills
-          target_topology_manifest_id to that manifest's id -- the clean, unambiguous case. (2) A
-          status='active' row whose related_hub_id resolves to ZERO or MULTIPLE active target
-          manifests cannot be backfilled with a real, non-fabricated target (PR #584's
-          does_not_authorize ban applies here identically) -- the migration transitions such a row
-          to status='deprecated' as part of the same migration, using the existing
-          hub_navigation:deprecate status value, never a new lifecycle state; this changes nothing
-          observable to any caller, since such a row was already functionally unresolvable
-          (excluded from every candidate list) under current read semantics -- deprecating it only
-          makes the schema state honest about what the read layer already treats as inert. (3) A
-          deprecated row (whether already deprecated, or deprecated by step 2) is exempt from the
-          not-null requirement -- the constraint is a CHECK scoped to status='active'
-          (status <> 'active' OR target_topology_manifest_id IS NOT NULL), never a blanket
-          column-level NOT NULL, precisely so an inert legacy row need not carry a fabricated
-          target to satisfy schema shape. (4) Step 2 must never silently create a NEW
-          minimum_cardinality_completion_invariant orphan: if deprecating a row would leave ITS
-          OWN source topology_manifest_id with zero surviving active outbound relations, the
-          migration fails that row closed for explicit admin remediation (author a replacement
-          relation, or resolve the ambiguity by hand) rather than auto-deprecating past the
-          existing hub_navigation:deprecate last-active-relation guard -- the migration respects
-          that guard's existing invariant rather than working around it via a raw
-          migration-time write.
+          multiple_active_target_manifests_for_related_hub_id). Verified against
+          NpgsqlContentBundleRepository.LoadHubNavigationSequenceAsync,
+          frontend/runtime/projectionEntry.ts resolveHubNavigationLinks, and
+          frontend/tests/projectionShellHubNavigationRenderProof.test.ts: such a row is NOT
+          excluded from the candidate sequence today -- LoadHubNavigationSequenceAsync's WHERE
+          clause filters only on status='active', so the row is still returned as a sequence item
+          with target_manifest_id NULL; resolveHubNavigationLinks maps it to a
+          { resolvable: false } entry, not to an absent one; and the row renders today as a real,
+          visible span[data-hub-navigation-unresolvable] placeholder in the sequence (the render
+          proof test's own assertion) -- present and inert, not hidden. The migration's canonical
+          disposition, derived from that verified behavior: (1) a row whose related_hub_id
+          resolves to EXACTLY ONE active target manifest backfills target_topology_manifest_id to
+          that manifest's id -- the clean, unambiguous case. (2) A status='active' row whose
+          related_hub_id resolves to ZERO or MULTIPLE active target manifests cannot be backfilled
+          with a real, non-fabricated target (PR #584's does_not_authorize ban applies here
+          identically) -- the migration transitions such a row to status='deprecated' as part of
+          the same migration, using the existing hub_navigation:deprecate status value, never a
+          new lifecycle state. This IS an observable rendering change -- the row's visible
+          unresolvable placeholder drops out of the sequence once its status leaves 'active' --
+          but it is not a navigability regression: the row never resolved to a working link before
+          deprecation either, so no caller loses a functioning target, only an already-inert
+          placeholder disappears. (3) A deprecated row (whether already deprecated, or deprecated
+          by step 2) is exempt from the not-null requirement -- the constraint is a CHECK scoped
+          to status='active' (status <> 'active' OR target_topology_manifest_id IS NOT NULL),
+          never a blanket column-level NOT NULL, precisely so an inert legacy row need not carry a
+          fabricated target to satisfy schema shape. (4) Step 2 must never silently create a NEW
+          minimum_cardinality_completion_invariant orphan. This must be judged as one batch
+          classification per source topology_manifest_id, decided before any row in that batch is
+          written: classify every one of that source's active rows as clean-backfill or
+          ambiguous-deprecate first, then check whether at least one clean-backfill row survives
+          for that source, before writing any status change for that source's rows -- rather than
+          reusing NpgsqlContentBundleRepository.DeprecateHubRelationAsync's existing runtime guard
+          row-by-row inside the migration. That guard counts raw active-status siblings
+          (HUB_RELATION_LAST_ACTIVE_FOR_MANIFEST fires only when zero survive); it does not check
+          whether any surviving sibling actually resolves. Applying it row-by-row across a batch
+          migration is insufficient whenever a source owns more than one ambiguous row: an earlier
+          ambiguous row's deprecation could pass the guard purely because a later, equally
+          ambiguous sibling is still counted as 'active' -- then that sibling's own turn either
+          wrongly passes (leaving the source with zero resolvable survivors, an undetected
+          orphan) or wrongly fails closed while unbackfillable, leaving it 'active' with no target
+          and unable to satisfy the new CHECK constraint. Deciding the whole batch first, before
+          any write, avoids both outcomes; when the batch decision finds a source would retain
+          zero clean-backfill rows, the migration fails that row closed for explicit admin
+          remediation (author a replacement relation, or resolve the ambiguity by hand), exactly
+          as before -- only the judgment's basis changes from the reused runtime guard to this
+          migration's own batch classification.
+        deprecate_and_update_guard_resolvability_distinction: >-
+          Separately from the migration above, NpgsqlContentBundleRepository
+          .DeprecateHubRelationAsync's existing regression guard (see
+          minimum_cardinality_completion_invariant.enforcement_boundary) counts raw
+          status='active' siblings, not resolvable ones -- deprecating the one resolvable row out
+          of several active-but-unresolvable siblings for the same source passes that guard with
+          no error today, silently leaving a navigation orphan under
+          minimum_cardinality_completion_invariant's own definition. UpdateHubRelationAsync
+          carries no resolvability check at all on the related_hub_id it writes, so an in-place
+          update can rebind a resolvable row to an unresolvable hub with no guard reacting either.
+          This is a pre-existing production condition, not introduced or worsened by this
+          design_change, and legacy_ambiguous_row_migration_disposition's own batch classification
+          above does not reuse or depend on either method, so it is unaffected by this condition.
+          Making DeprecateHubRelationAsync's guard resolvability-aware, or adding an equivalent
+          guard to UpdateHubRelationAsync, is a distinct change from anything this design_change
+          decides and is not begun here.
         canonical_target_resolution_rule: >-
           The navigable target manifest for a hub_relations row is target_topology_manifest_id
           itself when that referenced hubs.topology_manifests row has status='active'; otherwise
@@ -689,7 +733,10 @@ db_schema:
           topology_manifest_id with zero active relations, regardless of that manifest's own
           draft/active status (hub_navigation:update replaces related_hub_id in place;
           hub_navigation:reorder never changes status, so deprecate is the only other mutation
-          that can reduce the active count).
+          that can reduce the active count). "Zero active relations" here is a raw active-row
+          count, not a resolvable-row count -- see
+          target_reference_canonical_contract.deprecate_and_update_guard_resolvability_distinction
+          for what that distinction does and does not cover.
         mirror: >-
           docs/design/runtime-orchestration-ssot.yaml
           ui_projection_render_reachability_contract.production_projection_connectivity_invariant,
