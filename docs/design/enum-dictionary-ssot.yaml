@@ -132,9 +132,20 @@ enum_dictionary_ssot:
       backend/tests/Topolactor.Integration.Tests/AdminEnumHubRelationUiProjectionLiveDbTests.cs.
       2026-07-27: the 7 enum_dictionary write actions each gained their own dedicated
       single-purpose write manifest (00000000-0000-0000-0000-0000000ae210/ae220/ae230/ae240/
-      ae250/ae260/ae270), each independently navigable from ae200 via the same hub_navigation:
-      create authority (proven representatively for the create_group manifest; the other 6 reuse
-      the identical, already-proven mechanism). This id no longer gates admin-enum; see
+      ae250/ae260/ae270). The hub_navigation:create authoring mechanism was proven generically
+      reachable against these manifests at that time (representatively, the create_group
+      manifest); this id no longer gates admin-enum; see
       docs/design/admin-normal-surface-projection-seed-ssot.yaml design_blocking
       target_surface_manifest_readiness.subbundle_status.admin-enum for the still-authoritative
-      per-Bundle tracking record.
+      per-Bundle tracking record. Superseded: "each independently navigable from ae200" above
+      described an interim state, not the current canonical design -- see
+      docs/design/admin-console-workflow-ssot.yaml
+      admin_hub_relation_navigation_contract.admin_navigation_non_targets, the current authority:
+      these 7 manifests (plus ae280) are ae200's own internal write/read operation authority,
+      reached exclusively via node-local target_ref dispatches embedded in ae200's own layout,
+      never independently selected by a user via HubRelation navigation, and are not authorized
+      hub_navigation:create targets. db/seed_empty.sql seeds zero hub_relations rows from ae200
+      (AdminEnumManagementManifest_OwnsNoHubRelationsRows_SeedOnly,
+      backend/tests/Topolactor.Integration.Tests/AdminEnumHubRelationUiProjectionLiveDbTests.cs)
+      -- the mechanism's generic reachability, proven once representatively, was never adopted as
+      production seed authoring for these targets.

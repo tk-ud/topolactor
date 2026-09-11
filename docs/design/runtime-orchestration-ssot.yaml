@@ -490,9 +490,15 @@ runtime_orchestration_ssot:
         production_projection_connectivity_invariant) is the unweakened, canonical authority on
         whether an active topology_manifest's own zero-outbound-relations state is a valid
         completion state -- it is not: that invariant calls it a "navigation orphan," enforced
-        going forward at NpgsqlManifestRepository.PromoteAsync (the draft -> active transition) and
-        guarded against regression by hub_navigation:deprecate's own last-active-relation check.
-        This contract does not reopen, narrow, or create an exception to that invariant. What this
+        going forward at NpgsqlManifestRepository.PromoteAsync (the draft -> active transition;
+        resolvable-cardinality-aware, via HasResolvableActiveHubRelationAsync) and guarded against
+        regression by hub_navigation:deprecate's own last-active-relation check (a narrower,
+        raw-active-row-count guard, not resolvable-cardinality-aware -- see db-schema.yaml
+        hub_relations.target_reference_canonical_contract.
+        deprecate_and_update_guard_resolvability_distinction for the full account, including
+        UpdateHubRelationAsync's absent guard and NpgsqlManifestRepository.DeprecateAsync's
+        unguarded target-Manifest-deprecation regression path). This contract does not reopen,
+        narrow, or create an exception to that invariant. What this
         contract's own no_return_edge_bootstrap_requirement and
         explicit_current_topology_trust_boundary.valid_source_empty_and_multiple_rows actually decide
         is orthogonal: the RUNTIME READ contract for whatever outbound-relation count a manifest
@@ -671,10 +677,17 @@ runtime_orchestration_ssot:
             never a Navigation-specific fake layer/action and never a dispatcher_mapping-role
             precondition.
           target_filtering: >-
-            The explicit branch must never disclose more than the existing fallback branch already
-            discloses (NG-axis requirement), and never discloses a target's identity (UUID, label,
-            or href) that fails active_topology_eligibility_predicate for the requesting caller --
-            a caller is never shown a candidate only to have it deny on click. Applies the
+            The explicit branch's safety boundary is not a response-set containment relationship
+            against the fallback branch -- the two branches resolve from different source
+            manifests (fallback: the canonical-default-entry manifest; explicit: whatever
+            topologyManifestId the caller supplied) with no general subset relationship between
+            what each could legitimately disclose, and fallback's own per-target filter is
+            independently known narrower/buggier than active_topology_eligibility_predicate (see
+            below) -- requiring the explicit branch to disclose no more than fallback would force
+            it to inherit that bug rather than the corrected predicate. The actual boundary: the
+            explicit branch never discloses a target's identity (UUID, label, or href) that fails
+            active_topology_eligibility_predicate for the requesting caller -- a caller is never
+            shown a candidate only to have it deny on click. Applies the
             identical active_topology_eligibility_predicate above to each candidate's target
             Manifest with the SAME callerRole: existence (LoadByIdAsync non-null),
             active_status_requirement, and active_topology_eligibility_predicate together gate
