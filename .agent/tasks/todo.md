@@ -569,7 +569,7 @@ SSOT上のsource宣言とproduction実装の間にこのgapがあることは、
 
 - 既存mechanism（`ContextRouteRecommendationResolver`の`BuildCandidateSourceAsync`/`BuildEligibilityAsync`/`BuildScoreRankAsync`パイプライン、`NpgsqlContextRouteRepository`の`context_transition_stats`集計パターン）を repo-wide に再調査し、`component_operation_event_log`を折り込める既存拡張点があるかを先に確認する。既存mechanismのrepo-wide探索を経ずに新しいcounter table/aggregate table/endpoint/Store/recommendation lane/parallel authorityを設計しない。
 - `next_operation`が`context_event`/`context_transition_stats`のみで既に生成されている一方、`next_component`/`next_route_action`が具体的に何を入力として何を出力すべきかがSSOT上でも未確定である可能性を検証する（`component_operation_event_log`のペイロード形状 — `ComponentOperationEventLogRecord` — が`next_component`/`next_route_action`を導出するに足る情報を持つか、`ComponentEventAppendEndpoint.cs`が受理するペイロード契約を含めて確認する）。
-- `context_transition_stats`のような既存aggregate tableへ`component_operation_event_log`を根拠なく機械的に写像しない。両者のsemantics（`context_event`はcontext token遷移、`component_operation_event_log`はcomponent/operation単位のUI操作）が異なるため、単純な統合が正しいかはOwner判断が必要な設計論点として明示する。
+- `context_transition_stats`のような既存aggregate tableへ`component_operation_event_log`を根拠なく機械的に写像しない。`context_event`（append-only operation event log、各eventがoperation発生時点のtoken_idsスナップショットを記録する）/`context_transition_stats`（`prev_operation`→`next_operation`のoperation transition aggregate、`P(next_operation | prev_operation)`）と、`component_operation_event_log`（component/operation単位のUI操作ログ）のsemanticsが異なるため、単純な統合が正しいかはOwner判断が必要な設計論点として明示する。
 - 既存consumerがrepo-wide探索で発見された場合（本調査時点では未発見）は、新規architectureを設計せずそれをreuseする。
 - 調査の結果、設計authorityが不足していると判明した場合はimplementation_changeへ進めず、Owner判断が必要な具体的選択肢（例: 既存`context_transition_stats`集計を拡張してcomponent/operation次元を追加するか、別テーブル・別集計を設けるか）を比較根拠とともに報告する場に留める。
 
