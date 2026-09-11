@@ -626,7 +626,16 @@ db_schema:
           above does not reuse or depend on either method, so it is unaffected by this condition.
           Making DeprecateHubRelationAsync's guard resolvability-aware, or adding an equivalent
           guard to UpdateHubRelationAsync, is a distinct change from anything this design_change
-          decides and is not begun here.
+          decides and is not begun here. A third, independent regression path sits at the target
+          Manifest level rather than the hub_relations row level: NpgsqlManifestRepository.
+          DeprecateAsync deprecates a Manifest directly (mirroring status onto
+          hubs.topology_manifests) with no check against OTHER manifests' hub_relations rows that
+          name it as their resolution target -- deprecating a widely-referenced target Manifest
+          can silently drop any number of unrelated source manifests to zero resolvable active
+          relations in a single action, unguarded by either check above (neither one inspects
+          incoming references to the Manifest being deprecated). No existing enforcement
+          mechanism guards this path; it is a pre-existing production condition, neither
+          introduced nor remediated by this design_change.
         canonical_target_resolution_rule: >-
           The navigable target manifest for a hub_relations row is target_topology_manifest_id
           itself when that referenced hubs.topology_manifests row has status='active'; otherwise
