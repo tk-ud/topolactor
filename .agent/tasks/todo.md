@@ -14,6 +14,7 @@
 | `admin-console-workflow-step-wording-boundary` | Seed conversion後の admin console workflow wording boundary | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `ui-builder-schema-composed-override-delta-reachability` | schema-composed override-delta nodeがUI-Builder再オープン時に消失するnode-loss gap | not_started | 1 | 未割当（`frontend-canonical-surface-structure-label-boundary` PR#610 9ラウンド目監査からの新規発見、別scope） | `docs/design/runtime-orchestration-ssot.yaml` / `docs/design/react-schema-topology-seed-translator-ssot.yaml` |
 | `hub-relation-target-manifest-canonical-migration` | (1) Admin Enum (`ae200`) をHubRelation fixed-navigationからjump可能にする、(2) `related_hub_id` をfixed-navigation target-resolution authorityから退役させ直接FKの `target_topology_manifest_id` へ移行する、の2目的を扱う implementation_change | not_started | 1 | 未割当（design_change PRでSSOT契約のみ確定、実装は本Bundleの後段） | `docs/design/db-schema.yaml` / `docs/design/runtime-orchestration-ssot.yaml` / `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/admin-normal-surface-projection-seed-ssot.yaml` |
+| `ui-pressure-component-event-log-consumer-gap` | `component_operation_event_log` がSSOT上 `context-route-recommendation.yaml lanes.ui_pressure` のsourceとして宣言されているにもかかわらず、production consumer/aggregation mechanismが存在しないgapのdesign_investigation/design_change | not_started | 1 | 未割当（`hub-relation-target-manifest-canonical-migration` Round 27監査からの新規発見、Recommendation subsystem側の独立scope） | `docs/design/context-route-recommendation.yaml` / `docs/design/runtime-orchestration-ssot.yaml` |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
 
@@ -469,7 +470,7 @@ Bundleの全受入条件を満たしたため、Status を `partial` → `implem
 - app-shell navigation Island: UI Builder非依存・ProjectionShell非依存。`frontend/routes/_app.tsx`をapp shellとして使う。current topology identityをContextから読み、上記の拡張済み`GET /hub-navigation/relations`（`?topologyManifestId=<current>`）を呼んでcurrent topology自身のsequenceを取得し、複数candidateを単一へ縮退させず提示する。target選択後の遷移は既存`?manifest=`遷移entryを再利用し、frontend側でattractor/structure-map解決を複製しない。
 - Context boundary: Fresh 1.7.3の実際のclient hydration algorithm（`src/runtime/entrypoints/main.ts`の`revive()`/`_walkInner()`、`deno.json`固定バージョンから直接取得して確認）を根拠とする。islandの閉じmarkerが独立した`render()`呼び出し（別Preact root）になるのは、その時点で他のislandのmarkerがmarker stack上に開いていない場合のみ。あるislandが別のislandの subtree内にnestされている場合（outer islandが自分のJSX内で直接renderする場合、またはrouteからouter islandのchildrenとして渡す場合の両方 — 既存`frontend/islands/AdminAuthGate.tsx`が`frontend/islands/ProjectionShell.tsx`を包む現行patternが正にこれ）、そのislandはouter islandと同じvnode treeに畳み込まれ、1回の`render()`で一緒にhydrateされる。したがって文字通りの`createContext`/`Context.Provider`は、outer top-level islandからnestされたislandの`useContext`へ正しく伝播する。canonical designはOwner指定通り: `frontend/routes/_app.tsx`から`{Component}`を包む新しいtop-level app-shell Islandをmountし、そこで`useState`によりcurrent topology identityを所有して`Context.Provider`で公開する。navigation Islandと（既存route nestingを通じた）ProjectionShellはそのnested descendantとして`useContext`で読む。module-scope subscribable storeやRedux/Zustandは使わない。Contextの値は最小限（current topology identity + 明示的なupdate関数）とし、URL selection/backend dispatch resolutionのauthorityを上書きしない。ProjectionShellは`adoptResolvedManifestIdentity`/`adoptedManifestIdRef`確定後にのみupdate関数を呼ぶ。
 - ProjectionShell役割縮小: dispatch/loading/error/emission/specs/node-value/local runtime state/SSE lifecycleは維持したまま、`resolveHubNavigationLinks(emission.navigationSequence)`によるnav bar表示は撤退し、navigation Islandとの二重表示を避ける。撤退作業自体は次段implementation_changeの対象。
-- **selection observation forward要件**（`runtime-orchestration-ssot.yaml selection_observation_forward_requirement`で確定）: 表示順序authority（`sequence_position`、uncollapsed）は無変更。別途、fixed sequence linkの選択操作は`context-route-recommendation.yaml lanes.ui_pressure`（sources: `context_event`/`component_operation_event_log`）への観測材料となるべきというOwner意図がある。実装事実を検証: `frontend/islands/ProjectionShell.tsx`の現行nav bar linkは素の`<a href>`でonClickが無く、`frontend/runtime/frontendScheduler.ts emitComponentOperationEvent`への接続は現在存在しない（本Bundle以前から未接続、本Bundleが壊したものではない）。既存の再利用可能なchainは`emitComponentOperationEvent` → `backend/endpoint/ComponentEventAppendEndpoint.cs` → `ContextRouteRepository.AppendComponentOperationEventLogAsync` → `component_operation_event_log`（db-schema.yaml上のrole: recommendation pressure signal collection） → `ui_pressure` lane。次段implementation_changeでapp-shell navigation Islandを構築する際、そのlink選択handlerがこの既存`emitComponentOperationEvent`を呼ぶことをforward要件とする。新しいcounter table/endpoint/store/event laneは作らない。`framework-core.yaml runtime_route_attention_boundary`の`attention_score_must_not_override_fixed_route`は無影響（観測はどのcandidateが表示されるか・どのhrefへ遷移するかに一切影響しない、純粋な追加材料）。
+- **selection observation forward要件**（`runtime-orchestration-ssot.yaml selection_observation_forward_requirement`で確定、本Roundで四層に分離）: 表示順序authority（`sequence_position`、uncollapsed）は無変更。別途、fixed sequence linkの選択操作は`context-route-recommendation.yaml lanes.ui_pressure`への観測材料となるべきというOwner意図がある。実装事実をproducer/persistence/SSOT宣言/consumerの四層に分離して検証する（SSOT宣言をproduction実装済みの証拠として扱わない）: (A) `frontend/islands/ProjectionShell.tsx`の現行nav bar linkは素の`<a href>`でonClickが無く、`frontend/runtime/frontendScheduler.ts emitComponentOperationEvent`への接続は現在存在しない（本Bundle以前から未接続、本Bundleが壊したものではない）。(B) producer/persistence chainは既存で再利用可能: `emitComponentOperationEvent` → `backend/endpoint/ComponentEventAppendEndpoint.cs` → `ContextRouteRepository.AppendComponentOperationEventLogAsync` → `component_operation_event_log`（db-schema.yaml上のrole: recommendation pressure signal collection）。(C) `context-route-recommendation.yaml lanes.ui_pressure`は`component_operation_event_log`をsourceとしてcanonical宣言済みだが、これはSSOT authority factであり、実際に何かがこのtableを読んでいる証拠ではない。(D) repo-wide調査の結果、`component_operation_event_log`を読むproduction consumer/aggregation mechanismは現時点で存在しない（`backend/runtime/ContextRouteRecommendationResolver.cs`の実際の`ui_pressure`/`next_operation`計算は`context_event`/`context_transition_stats`のみを使用し、`component_operation_event_log`には一切触れない。同tableに触れる唯一のbackend methodはwrite-onlyの`AppendComponentOperationEventLogAsync`）。本Bundle自身のselection-observation受入境界は(A)+(B)のみとする: 次段implementation_changeでapp-shell navigation Islandを構築する際、そのlink選択handlerが既存`emitComponentOperationEvent`を呼び`component_operation_event_log`へ永続化するところまでを本Bundleの受入条件とし、`ui_pressure`のoutput（`next_operation`/`next_component`/`next_route_action`）が実際に生成されることは本Bundleの受入条件に含めない。新しいcounter table/endpoint/store/event laneは作らない。`framework-core.yaml runtime_route_attention_boundary`の`attention_score_must_not_override_fixed_route`は無影響（観測はどのcandidateが表示されるか・どのhrefへ遷移するかに一切影響しない、純粋な追加材料）。(C)-(D)間のgap（`component_operation_event_log`がSSOT上`ui_pressure` sourceと宣言されているにもかかわらずproduction consumerが存在しないこと）は本Bundleとは独立した、hub-relation navigationと無関係な既存条件であり、本Bundleへ吸収せず独立Bundle`ui-pressure-component-event-log-consumer-gap`（本索引ファイル参照）へ引き継ぐ。
 
 ### 対応資料
 
@@ -537,5 +538,74 @@ Bundleの全受入条件を満たしたため、Status を `partial` → `implem
 - [ ] frontend DOM proof 4: Enum candidate `ae200`をnavigation Islandから選択し、実際に`ae200`のprojectionへ到達できることを証明する。
 - [ ] frontend negative proof: current topologyのoutbound sequenceが0件のとき、navigation Islandが空を表示し、canonical default entry（`ResolveFallbackNavigationLinksAsync`側の挙動）やad200等へ暗黙fallbackしていないことを証明する。
 - [ ] frontend DOM proof 5: navigation IslandがProjectionShellと同じfixed-navigationを二重表示していないことを証明する（`ProjectionShell.tsx`の`resolveHubNavigationLinks`によるnav bar表示が撤退済みであることを含む）。
-- [ ] selection observation proof: navigation Islandでfixed sequence linkを選択した際、既存`emitComponentOperationEvent`（`frontendScheduler.ts`）が呼ばれ、`ComponentEventAppendEndpoint`経由で`component_operation_event_log`へ実際に記録されることを証明する。新しいcounter table/endpoint/store/event laneが追加されていないこと、`sequence_position`順の表示・遷移先hrefが観測ロジックにより一切変わらないことを確認する。
+- [ ] selection observation proof（本Bundleの受入境界は(A)+(B)のみ、`ui_pressure` output生成は含まない）: navigation Islandでfixed sequence linkを選択した際、既存`emitComponentOperationEvent`（`frontendScheduler.ts`）が呼ばれ、`ComponentEventAppendEndpoint`経由で`component_operation_event_log`へ実際に記録されることを証明する。新しいcounter table/endpoint/store/event laneが追加されていないこと、`sequence_position`順の表示・遷移先hrefが観測ロジックにより一切変わらないことを確認する。`component_operation_event_log`から`ui_pressure`のoutput（`next_operation`/`next_component`/`next_route_action`）が実際に生成されることの証明は本Bundleの受入条件に含めない — 独立Bundle`ui-pressure-component-event-log-consumer-gap`（索引参照）へ引き継ぐ。
 - [ ] 本Bundleの完了判定はCI greenのみを根拠にしない。SSOT契約・実装・testの意味的整合を監査役が個別に確認したうえで判定する。
+
+---
+
+## Bundle `ui-pressure-component-event-log-consumer-gap`
+
+**Status:** `not_started`
+**Primary SSOT:** `docs/design/context-route-recommendation.yaml` `hub_local_recommendation_pressure_lanes.lanes.ui_pressure`（正本）/ `docs/design/context-route-recommendation.md` / `docs/design/runtime-orchestration-ssot.yaml` `selection_observation_forward_requirement`
+**Position:** design_investigation / design_change。`hub-relation-target-manifest-canonical-migration` Round 27監査からの新規発見であり、Recommendation subsystem側の独立scope。同Bundleへは吸収しない。
+
+### 問題点
+
+`docs/design/context-route-recommendation.yaml hub_local_recommendation_pressure_lanes.lanes.ui_pressure`は`sources: [context_event, component_operation_event_log]`、`outputs: [next_operation, next_component, next_route_action]`をcanonical宣言しているが、repo-wide調査の結果、`component_operation_event_log`を実際に読むproduction consumer/aggregation mechanismが存在しない:
+
+- `backend/repository/ContextRouteRepository.cs`/`backend/repository/NpgsqlContextRouteRepository.cs`には`AppendComponentOperationEventLogAsync`という write-only メソッドのみが存在し、対になる読み取り/集計メソッド（`GetTransitionStatsAsync`/`GetWindowedTransitionStatsAsync`が`context_transition_stats`に対して持つような）が存在しない。
+- `backend/runtime/ContextRouteRecommendationResolver.cs BuildScoreRankAsync`が生成する`NextOperations`（`ui_pressure`の実際の出力）は`ResolveNextOperations(eligibility.Neighbors, eligibility.TransitionStats, policy)`という、`context_event`/`context_transition_stats`のみに由来するneighbor/transition-stats経由の計算であり、`component_operation_event_log`は一切参照しない。
+- `backend/schema/ContextRouteContracts.cs RecommendNavigationProjectionSpec.FromRecommendation`が実際に生成する`ui_pressure` laneの`CandidateKind`は`next_operation`と`next_context_token`の2種のみであり、SSOTが`outputs`として宣言する`next_component`/`next_route_action`はどこでも生成されていない。
+- `frontend/api/dispatch.ts`の型union、`docs/design/context-route-recommendation.yaml`/`.md`には`next_component`/`next_route_action`という語彙が存在するが、`frontend/tests/recommendNavigationIsland.test.ts`（`"RecommendationPanel labels nextTokens as context tokens, not component or route-action candidates"`）は逆に`next_component / next_route_action candidates`という文字列が`RecommendationPanel.tsx`に**存在しないこと**を明示的に検証しているテストであり、これら2 output kindが未実装であることの直接的な既存証跡になっている。
+- `frontend/tests/recommendationPressureLaneGuard.test.ts`は`context-route-recommendation.yaml`をパースして`ui_pressure.sources`/`outputs`の宣言shapeのみを検証するテストであり、production consumerの存在を証明するものではない。
+
+SSOT上のsource宣言とproduction実装の間にこのgapがあることは、`hub-relation-target-manifest-canonical-migration`のselection observation forward要件（navigation Islandからの`emitComponentOperationEvent`呼び出し）が実装された後も、その観測データが実際に`ui_pressure`のrecommendation出力へ反映されないことを意味する。
+
+### 目的
+
+`component_operation_event_log`と`ui_pressure`の`next_component`/`next_route_action` outputの間に必要なsource→aggregate→output mappingの設計が、既存の`context_event`/`context_transition_stats`パターンの延長で十分か、別の設計が必要かをOwner判断のために調査・整理する。本Bundle自体はこの調査結果を確定させることを目的とし、調査未了のままimplementation_changeへ進めない。
+
+### 改善方針
+
+- 既存mechanism（`ContextRouteRecommendationResolver`の`BuildCandidateSourceAsync`/`BuildEligibilityAsync`/`BuildScoreRankAsync`パイプライン、`NpgsqlContextRouteRepository`の`context_transition_stats`集計パターン）を repo-wide に再調査し、`component_operation_event_log`を折り込める既存拡張点があるかを先に確認する。既存mechanismのrepo-wide探索を経ずに新しいcounter table/aggregate table/endpoint/Store/recommendation lane/parallel authorityを設計しない。
+- `next_operation`が`context_event`/`context_transition_stats`のみで既に生成されている一方、`next_component`/`next_route_action`が具体的に何を入力として何を出力すべきかがSSOT上でも未確定である可能性を検証する（`component_operation_event_log`のペイロード形状 — `ComponentOperationEventLogRecord` — が`next_component`/`next_route_action`を導出するに足る情報を持つか、`ComponentEventAppendEndpoint.cs`が受理するペイロード契約を含めて確認する）。
+- `context_transition_stats`のような既存aggregate tableへ`component_operation_event_log`を根拠なく機械的に写像しない。両者のsemantics（`context_event`はcontext token遷移、`component_operation_event_log`はcomponent/operation単位のUI操作）が異なるため、単純な統合が正しいかはOwner判断が必要な設計論点として明示する。
+- 既存consumerがrepo-wide探索で発見された場合（本調査時点では未発見）は、新規architectureを設計せずそれをreuseする。
+- 調査の結果、設計authorityが不足していると判明した場合はimplementation_changeへ進めず、Owner判断が必要な具体的選択肢（例: 既存`context_transition_stats`集計を拡張してcomponent/operation次元を追加するか、別テーブル・別集計を設けるか）を比較根拠とともに報告する場に留める。
+
+### 対応資料
+
+- `docs/design/context-route-recommendation.yaml`（`hub_local_recommendation_pressure_lanes.lanes.ui_pressure`）
+- `docs/design/context-route-recommendation.md`
+- `docs/design/db-schema.yaml`（`component_operation_event_log`テーブル定義・role）
+- `docs/design/runtime-orchestration-ssot.yaml`（`selection_observation_forward_requirement`、四層(A)/(B)/(C)/(D)分離の記述）
+
+### 対象ファイル名
+
+- `backend/runtime/ContextRouteRecommendationResolver.cs`（`BuildCandidateSourceAsync`/`BuildEligibilityAsync`/`BuildScoreRankAsync` — 既存`ui_pressure`計算パイプライン、`component_operation_event_log`を組み込む場合の拡張候補）
+- `backend/repository/ContextRouteRepository.cs`（`AppendComponentOperationEventLogAsync` — 現状write-onlyな抽象基底、対になる読み取り/集計メソッドが存在しない）
+- `backend/repository/NpgsqlContextRouteRepository.cs`（`AppendComponentOperationEventLogAsync`実装、`GetTransitionStatsAsync`/`GetWindowedTransitionStatsAsync` — `context_transition_stats`集計の既存参照実装パターン）
+- `backend/schema/ContextRouteContracts.cs`（`RecommendNavigationProjectionSpec.FromRecommendation` — `next_operation`/`next_context_token`のみを生成し`next_component`/`next_route_action`を生成しない現行実装、`ComponentOperationEventLogRecord`のペイロード形状）
+- `backend/schema/RecommendationPressureLanes.cs`（`UiPressure`定数）
+- `backend/endpoint/ComponentEventAppendEndpoint.cs`（`component_operation_event_log`への書き込み経路、受理ペイロード契約）
+- `frontend/api/dispatch.ts`（`next_component`/`next_route_action`型union宣言箇所）
+- `frontend/components/RecommendationPanel.tsx`
+- `frontend/tests/recommendNavigationIsland.test.ts`（`next_component`/`next_route_action`未実装を裏付ける既存test）
+- `frontend/tests/recommendationPressureLaneGuard.test.ts`（SSOT shape guardのみ、consumer proofではないことに留意）
+- `backend/tests/Topolactor.Runtime.Tests/ContextRouteRecommendationResolverTests.cs`
+- `frontend/tests/recommendNavigationIsland.test.ts`（`RecommendNavigationProjectionSpecTests`相当のfrontend側proof）
+
+### 対象関数名
+
+- `ContextRouteRecommendationResolver.BuildScoreRankAsync`（`NextOperations`生成箇所、`component_operation_event_log`由来の入力が無い）
+- `ContextRouteRecommendationResolver`内`ResolveNextOperations`（private、`context_event`/`context_transition_stats`のみ使用）
+- `ContextRouteRepository.AppendComponentOperationEventLogAsync`（write-only、対称の読み取り/集計メソッドは repo-wide 探索の結果 現時点で存在しない — 新設が必要な場合の対象）
+- `NpgsqlContextRouteRepository.GetTransitionStatsAsync`/`GetWindowedTransitionStatsAsync`（`context_transition_stats`集計の既存参照実装、拡張または並列設計の比較対象）
+- `RecommendNavigationProjectionSpec.FromRecommendation`（`next_component`/`next_route_action`のCandidateKindが未生成であることの確定箇所）
+
+### 受入条件（design_investigation / design_change の範囲）
+
+- [ ] 既存mechanism（`ContextRouteRecommendationResolver`パイプライン、`NpgsqlContextRouteRepository`集計パターン）のrepo-wide再探索により、`component_operation_event_log`を読むconsumerが本当に存在しないことを再確認する（存在する場合はその具体的source/function/proofを記録し、本Bundleの問題点自体を訂正する）。
+- [ ] `next_component`/`next_route_action`の入力（`component_operation_event_log`のどのcolumn/ペイロードから何を導出するか）と出力（`RecommendProjectionSection`のどのCandidateKind/表示semanticとして提示するか）のsource→aggregate→output mappingの設計選択肢を、既存`context_transition_stats`パターンとの異同を明示したうえでOwnerへ提示する。
+- [ ] 上記mappingがOwnerに確認・確定されるまで、新しいcounter table/aggregate table/endpoint/Store/recommendation lane/parallel authorityを設計・実装しない。
+- [ ] 本Bundleの成果物はdesign_investigation/design_change文書（SSOT訂正・比較根拠の記録）に留め、implementation_change（SQL DDL/backend/frontend実装）には進まない。

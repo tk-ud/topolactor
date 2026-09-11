@@ -802,32 +802,53 @@ runtime_orchestration_ssot:
         Display order authority is unchanged and already established above
         (relation_branching_is_native, valid_source_empty_and_multiple_rows): sequence_position,
         uncollapsed, never guessed. Separately, Owner intent is that a caller's selection of a
-        fixed sequence link also becomes an observable signal feeding docs/design/
-        context-route-recommendation.yaml lanes.ui_pressure (sources: context_event,
-        component_operation_event_log; outputs: next_operation/next_component/next_route_action)
-        -- purely additive material for Attention/Recommend, never a route-state authority:
+        fixed sequence link also becomes an observable signal feeding
+        docs/design/context-route-recommendation.yaml lanes.ui_pressure -- purely additive
+        material for Attention/Recommend, never a route-state authority:
         framework-core.yaml runtime_route_attention_boundary's own
         attention_score_must_not_override_fixed_route invariant is unaffected either way, since
         observation logging never influences which candidate is shown or which href a click
-        follows. Verified against the actual code today: frontend/islands/ProjectionShell.tsx's
-        own hub navigation nav bar renders a bare anchor (<a href={link.href}>), with no onClick
-        handler and no call into frontend/runtime/frontendScheduler.ts
-        emitComponentOperationEvent -- selecting a fixed sequence link is NOT connected to
-        component_operation_event_log today, independent of and predating this Bundle's own
-        presentation-ownership move. The reusable chain for exactly this purpose already exists
-        end to end and must be reused, never invented anew: emitComponentOperationEvent
-        (frontendScheduler.ts) -> queued flush -> backend/endpoint/ComponentEventAppendEndpoint.cs
-        -> ContextRouteRepository.AppendComponentOperationEventLogAsync ->
+        follows. Verified against the actual code, with producer/persistence and consumer kept
+        strictly separate (an SSOT source declaration is not production consumer evidence): (A)
+        frontend/islands/ProjectionShell.tsx's own hub navigation nav bar renders a bare anchor
+        (<a href={link.href}>), with no onClick handler and no call into
+        frontend/runtime/frontendScheduler.ts emitComponentOperationEvent -- selecting a fixed
+        sequence link is NOT connected to component_operation_event_log today, independent of and
+        predating this Bundle's own presentation-ownership move. (B) The producer/persistence
+        chain for exactly this purpose is already built and must be reused, never invented anew:
+        emitComponentOperationEvent (frontendScheduler.ts) -> queued flush ->
+        backend/endpoint/ComponentEventAppendEndpoint.cs ->
+        ContextRouteRepository.AppendComponentOperationEventLogAsync ->
         public.component_operation_event_log (db-schema.yaml role: component operation event log
-        for recommendation pressure signal collection) -> context-route-recommendation.yaml
-        lanes.ui_pressure. Forward requirement for the future implementation_change that builds
-        the app-shell navigation Island: the Island's own link-selection handler must call
-        emitComponentOperationEvent at selection time (identity/payload shape is an
-        authoring-time decision for that change, informed by hubRelationId already carried on
-        ResolvedHubNavigationLink) -- no new counter table, endpoint, store, or event lane may be
-        introduced for this purpose. This closes a pre-existing wiring gap (the missing call from
-        the hub navigation link handler into an already-built observation mechanism), not a gap
-        this Bundle itself opened.
+        for recommendation pressure signal collection). (C)
+        context-route-recommendation.yaml lanes.ui_pressure canonically declares
+        component_operation_event_log as one of its sources (sources: context_event,
+        component_operation_event_log; outputs: next_operation/next_component/
+        next_route_action) -- an SSOT authority fact, not by itself proof that anything reads the
+        table. (D) No production consumer or aggregation mechanism reading
+        component_operation_event_log exists today: backend/runtime/
+        ContextRouteRecommendationResolver.cs's actual ui_pressure/next_operation computation
+        reads exclusively from context_event/context_transition_stats
+        (NpgsqlContextRouteRepository's prev_operation/next_operation/count_events/count_hits/
+        prob01 aggregate), never component_operation_event_log; the only backend method touching
+        that table is the write-only AppendComponentOperationEventLogAsync; and
+        frontend/tests/recommendationPressureLaneGuard.test.ts's assertion that ui_pressure's
+        sources include component_operation_event_log is a parsed-YAML SSOT-shape check, not a
+        runtime consumer proof. Forward requirement for the future implementation_change that
+        builds the app-shell navigation Island, scoped to (A)+(B) only: the Island's own
+        link-selection handler must call emitComponentOperationEvent at selection time
+        (identity/payload shape is an authoring-time decision for that change, informed by
+        hubRelationId already carried on ResolvedHubNavigationLink) -- no new counter table,
+        endpoint, store, or event lane may be introduced for this purpose. This closes a
+        pre-existing wiring gap (the missing call from the hub navigation link handler into an
+        already-built producer/persistence mechanism), not a gap this Bundle itself opened. The
+        separate (C)-to-actual-recommendation-output consumer gap (component_operation_event_log
+        declared as a ui_pressure source with no reader) is a distinct, pre-existing condition,
+        independent of hub-relation navigation and not caused or worsened by selecting a fixed
+        sequence link -- it is out of this Bundle's own scope and is tracked as its own Bundle
+        (see the Bundle index file under .agent/tasks/, entry
+        ui-pressure-component-event-log-consumer-gap), never absorbed
+        into this Bundle's own acceptance boundary.
     admin_runtime_structural_read_fallback:
       owner: manifest_dispatcher
       trigger: >-
