@@ -798,6 +798,36 @@ runtime_orchestration_ssot:
         resolveHubNavigationLinks(emission.navigationSequence) nav-bar rendering is retired in
         favor of the navigation Island so the same relation candidates are never presented twice;
         this retirement is an implementation_change item, not performed by this design_change.
+      selection_observation_forward_requirement: >-
+        Display order authority is unchanged and already established above
+        (relation_branching_is_native, valid_source_empty_and_multiple_rows): sequence_position,
+        uncollapsed, never guessed. Separately, Owner intent is that a caller's selection of a
+        fixed sequence link also becomes an observable signal feeding docs/design/
+        context-route-recommendation.yaml lanes.ui_pressure (sources: context_event,
+        component_operation_event_log; outputs: next_operation/next_component/next_route_action)
+        -- purely additive material for Attention/Recommend, never a route-state authority:
+        framework-core.yaml runtime_route_attention_boundary's own
+        attention_score_must_not_override_fixed_route invariant is unaffected either way, since
+        observation logging never influences which candidate is shown or which href a click
+        follows. Verified against the actual code today: frontend/islands/ProjectionShell.tsx's
+        own hub navigation nav bar renders a bare anchor (<a href={link.href}>), with no onClick
+        handler and no call into frontend/runtime/frontendScheduler.ts
+        emitComponentOperationEvent -- selecting a fixed sequence link is NOT connected to
+        component_operation_event_log today, independent of and predating this Bundle's own
+        presentation-ownership move. The reusable chain for exactly this purpose already exists
+        end to end and must be reused, never invented anew: emitComponentOperationEvent
+        (frontendScheduler.ts) -> queued flush -> backend/endpoint/ComponentEventAppendEndpoint.cs
+        -> ContextRouteRepository.AppendComponentOperationEventLogAsync ->
+        public.component_operation_event_log (db-schema.yaml role: component operation event log
+        for recommendation pressure signal collection) -> context-route-recommendation.yaml
+        lanes.ui_pressure. Forward requirement for the future implementation_change that builds
+        the app-shell navigation Island: the Island's own link-selection handler must call
+        emitComponentOperationEvent at selection time (identity/payload shape is an
+        authoring-time decision for that change, informed by hubRelationId already carried on
+        ResolvedHubNavigationLink) -- no new counter table, endpoint, store, or event lane may be
+        introduced for this purpose. This closes a pre-existing wiring gap (the missing call from
+        the hub navigation link handler into an already-built observation mechanism), not a gap
+        this Bundle itself opened.
     admin_runtime_structural_read_fallback:
       owner: manifest_dispatcher
       trigger: >-

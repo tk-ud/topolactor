@@ -203,13 +203,31 @@ admin_console_workflow_ssot:
       admin_navigation_non_targets: >-
         00000000-0000-0000-0000-0000000ae210/ae220/ae230/ae240/ae250/ae260/ae270/ae280 (admin-enum's
         7 per-operation write manifests plus its get_group read-detail manifest) are ae200's own
-        internal write/read operation authority, reached exclusively via node-local
+        internal write/read operation authority in the canonical Enum UX, reached via node-local
         admin_runtime_dispatch_override_wiring target_ref dispatches embedded in ae200's own
         layout (admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.enum.
-        seed_contract.component_tree_note) -- never independently selected by a user via
-        HubRelation navigation, and not first-class members of this axis's navigation target set
-        merely because each is an active hubs.topology_manifests row. Nothing in this entry
-        authorizes listing them as hub_navigation:create targets.
+        seed_contract.component_tree_note) -- not first-class members of this axis's registered
+        navigation membership set (admin_navigation_targets above) merely because each is an
+        active hubs.topology_manifests row, and this Bundle does not register a fixed
+        ad200-sourced hub_relations row to any of them. This is a membership-registration scope
+        statement, not a technical prohibition: nothing in the hub_navigation:create dispatch
+        mechanism itself (NpgsqlContentBundleRepository.CreateHubRelationAsync -- manifest
+        existence, hub existence, no self-loop; no manifest-kind check of any shape) rejects
+        authoring an ordinary HubRelation row targeting one of these manifests, and
+        AdminEnumHubRelationUiProjectionLiveDbTests.
+        DispatchAsync_AdminEnumManagementManifest_HubNavigationCreate_ToCreateGroupWriteManifest_ResolutionChainReflectsIt
+        already proves this live end to end today (a real hub_navigation:create dispatch from
+        ae200 to ae210 persists and resolves through the identical
+        LoadHubNavigationSequenceAsync/NavigationSequence chain fixed navigation uses elsewhere).
+        An earlier revision of this entry read "never independently selected by a user via
+        HubRelation navigation" and "nothing in this entry authorizes listing them as
+        hub_navigation:create targets" as a ban on generic authoring targetability -- that reading
+        was incorrect and is retracted here: this entry withholds them only from this Bundle's own
+        pre-registered fixed membership and describes today's canonical Enum UX choice, not a
+        technical or governance prohibition on future hub_navigation:create authoring against
+        them through the ordinary /admin/manifests authoring surface, whose target picker remains
+        the same all-topology-manifest listing every other manifest uses -- no UUID allow/deny
+        filter is introduced or required here.
       normal_navigation_membership: >-
         docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.normal.
         normal_hub_relation_navigation_contract already defines the Normal-axis equivalent
@@ -226,23 +244,31 @@ admin_console_workflow_ssot:
         is unchanged and this entry does not reopen it. No fake Normal-axis target is introduced
         here.
       cross_axis_navigation: >-
-        Not established by this entry. An Admin-axis source relation targets only Admin-axis
-        manifests and a Normal-axis source relation targets only Normal-axis manifests, per each
-        axis's own membership above; nothing here authorizes an Admin source -> Normal target or
-        Normal source -> Admin target relation as a canonical default. A future
-        implementation_change introducing genuine cross-axis navigation needs its own explicit
-        SSOT authority.
+        This entry does not itself register or seed any cross-axis hub_relations row: this
+        Bundle's own axis_navigation_membership authors no Admin-axis source -> Normal-axis target
+        and no Normal-axis source -> Admin-axis target relation, and neither axis's membership
+        list above should be read as including one. This is a registration-scope statement, not a
+        technical prohibition on the hub_navigation:create mechanism itself -- that mechanism
+        carries no axis-membership check (the same CreateHubRelationAsync authority referenced in
+        admin_navigation_non_targets above), so cross-axis authoring through ordinary
+        /admin/manifests authoring is not technically blocked; this entry simply does not author
+        one and does not establish one as a canonical default. A future implementation_change
+        introducing a canonical, Bundle-registered cross-axis navigation path still needs its own
+        explicit SSOT authority -- that requirement is unchanged.
       out_of_membership_scope: >-
         db/seed_empty.sql's external-port-consumer-completion projections (email/stripe/
         webhook_inbox/job_scheduler/audit_approval/export_sftp response-port manifests,
         00000000-0000-0000-0000-0000000000a3 through 0000000000a8) are not declared under
         surface_axes.admin or surface_axes.normal at all and carry no ui_projection topology entry
         (a flat external-port-consumer-completion metadata object instead) -- they are not
-        user-facing navigable screens, and this entry does not include them in either axis's
-        navigation membership. The same applies to manifest 093 (file-storage-bundle-export-job-
-        dispatch, the same bundle_projection/consumer-evidence kind) and, for a different reason
-        (dispatch-only, never independently navigated to), to ae210/ae220/ae230/ae240/ae250/ae260/
-        ae270/ae280 above.
+        user-facing navigable screens at all (no ui_projection to render), and this entry does not
+        include them in either axis's navigation membership. The same applies to manifest 093
+        (file-storage-bundle-export-job-dispatch, the same bundle_projection/consumer-evidence
+        kind). ae210/ae220/ae230/ae240/ae250/ae260/ae270/ae280 are excluded from this axis's
+        registered membership for a different, narrower reason: unlike a3-a8/093, they DO carry a
+        real ui_projection and are not technically unreachable via hub_navigation:create -- see
+        admin_navigation_non_targets above for the full account and its explicit retraction of any
+        broader prohibition.
       production_reachability_precondition: >-
         RESOLVED: repo-wide grep found no frontend route, island, or backend code referencing
         00000000-0000-0000-0000-0000000ad200 outside test files
