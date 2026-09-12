@@ -544,14 +544,24 @@ db_schema:
           docs/design/admin-console-workflow-ssot.yaml
           admin_hub_relation_navigation_contract.axis_navigation_membership.
           fixed_navigation_presentation_ownership); this entry does not restate or independently
-          decide that split. None of this call chain is replaced, forked, or supplemented by a
-          parallel path -- the only thing this redesign changes is WHICH COLUMN feeds
+          decide that split. None of this FORWARD target-resolution call chain -- the one this
+          entry's canonical_target_field change touches -- is replaced, forked, or supplemented by
+          a parallel path -- the only thing this redesign changes is WHICH COLUMN feeds
           TargetManifestId inside LoadHubNavigationSequenceAsync
           (and the sibling CreateHubRelationAsync/UpdateHubRelationAsync writes): the
           exactly-one-active-manifest-for-related_hub_id inference is replaced by a direct
           target_topology_manifest_id read, and every caller above keeps consuming the identical
           DTO field it already consumes today. No new navigation model, navigation store, parallel
-          router, or recommendation-as-fixed-route-substitute is introduced.
+          router, or recommendation-as-fixed-route-substitute is introduced. This is distinct from,
+          and not in tension with, docs/design/runtime-orchestration-ssot.yaml
+          hub_relation_sequence_membership_and_navigation_island_contract.bidirectional_read_projection_gap's
+          separate, additive reverse-direction READ method: that method reads the SAME
+          hubs.hub_relations persistence by a different column (target-scoped, to derive current
+          topology's prev when it is a target member) and calls the identical
+          target_topology_manifest_id resolution this entry defines once physically built -- it is
+          an additional query alongside this forward call chain, never a fork or replacement of it,
+          so "not forked or supplemented" above is scoped to the forward target-resolution chain
+          itself, not to whether any OTHER read may exist over the same table.
         canonical_target_field: >-
           target_topology_manifest_id (uuid, FK to hubs.topology_manifests.topology_manifest_id).
           Forward end-state is NOT NULL for status='active' rows -- every ACTIVE hub_relations row
