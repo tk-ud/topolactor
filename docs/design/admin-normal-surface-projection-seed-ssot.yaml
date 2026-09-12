@@ -686,9 +686,15 @@ admin_normal_surface_projection_seed_ssot:
               hub_relation_sequence_membership_and_navigation_island_contract), not ProjectionShell
               -- see that contract and admin-console-workflow-ssot.yaml
               admin_hub_relation_navigation_contract.axis_navigation_membership.
-              fixed_navigation_presentation_ownership. The fuller identity is available for any
-              future onSelect wiring on this seed's card_list without a second resolution path,
-              regardless of which surface ends up presenting it.
+              fixed_navigation_presentation_ownership. This is not future onSelect wiring on this
+              seed's own card_list -- per projection_responsibility_forward_ownership_note above,
+              once the navigation Island lands this card_list's selection affordance retires to a
+              read-only projection and never regains a second, competing click-to-navigate
+              implementation. The fuller identity fields already threaded onto every rendered item
+              (hubRelationId/topologyManifestId/relatedHubId) remain available on the data layer
+              without a second resolution path regardless of which surface reads them, but "which
+              surface ends up presenting it" resolves to the app-shell navigation Island, not an
+              onSelect handler reintroduced on this card_list.
             canonical_resolution_rule_ref: docs/design/admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract.resolution_rule
             target_manifest_resolution: >-
               CURRENT implementation (unchanged, still accurate today): related_hub_id resolves

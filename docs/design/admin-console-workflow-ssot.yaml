@@ -200,11 +200,20 @@ admin_console_workflow_ssot:
         Presentation of this axis's membership (source and targets alike) is owned by
         docs/design/runtime-orchestration-ssot.yaml ui_projection_render_reachability_contract.
         hub_relation_sequence_membership_and_navigation_island_contract's app-shell navigation
-        Island, not by ProjectionShell or UI Builder. Each manifest's own outbound sequence
-        (resolved via the existing HubNavigationResolver.ResolveAsync pipeline) is what the
-        navigation Island presents when that manifest is the current topology; a target with no
-        outbound sequence of its own resolves an explicit empty candidate set rather than a fixed
-        return path, and authoring one is ordinary future hub_navigation:create work, not a
+        Island, not by ProjectionShell or UI Builder. That contract's semantic_role_mapping is the
+        sole canonical definition of what the navigation Island presents -- this entry does not
+        restate or narrow it. Concretely for this axis: a manifest's own outbound sequence (resolved
+        via the existing HubNavigationResolver.ResolveAsync pipeline) supplies only its own
+        index-0-as-owner next (that sequence's first row); a target's own zero-outbound-rows state
+        is NOT what determines whether the navigation Island shows it an empty set -- the additive
+        reverse-direction read (bidirectional_read_projection_gap) independently supplies a prev
+        when the target occurs as another manifest's sequence row, exactly as ae200/5c100/092 each
+        do from dd010's sequence despite owning zero rows of their own (see
+        no_return_edge_bootstrap_requirement in that same contract). Only a manifest with neither a
+        prev nor a next from any index occurrence resolves an explicit empty candidate set; an
+        earlier revision of this entry described "no outbound sequence of its own" alone as the
+        empty-set condition, which is retracted here as the semantic drift that framing was.
+        Authoring an additional relation remains ordinary future hub_navigation:create work, not a
         bootstrap requirement of this entry.
       admin_navigation_non_targets: >-
         00000000-0000-0000-0000-0000000ae210/ae220/ae230/ae240/ae250/ae260/ae270/ae280 (admin-enum's
