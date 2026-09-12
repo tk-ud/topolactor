@@ -408,18 +408,26 @@ runtime_orchestration_ssot:
     hub_relation_sequence_membership_and_navigation_island_contract:
       status: design_change
       note: >-
-        Canonical design. Fixed navigation is not a navbar-only edge type or a
-        UI-Builder/ProjectionShell-specific concern. It is the existing hubs.hub_relations
-        manifest-scoped sequence authority (db/topology_tables.sql's own hub_relations table
-        comment: "Manifest-scoped hub sequence / UI transition order... sequence_position is the
-        sequence authority... Not a global hub-to-hub relation graph"), read for whichever
-        manifest is presently adopted, and presented by a dedicated app-shell navigation consumer
-        rather than embedded per-projection rendering. No new axis column, relation-kind flag, or
-        parallel relation table is introduced, and hubs.hub_relations is not reframed as a generic
-        bidirectional graph. A manifest with no outbound sequence of its own resolves an explicit
-        empty candidate set (see no_return_edge_bootstrap_requirement below); a return path back
-        to any other manifest is ordinary hub_navigation:create authoring, never bootstrap-mandatory
-        content.
+        Canonical design; corrects an overbroad retraction this section previously held. Fixed
+        navigation is not a navbar-only edge type or a UI-Builder/ProjectionShell-specific concern.
+        It is the existing hubs.hub_relations manifest-scoped sequence authority
+        (db/topology_tables.sql's own hub_relations table comment: "Manifest-scoped hub sequence /
+        UI transition order... sequence_position is the sequence authority... Not a global
+        hub-to-hub relation graph"), read for whichever manifest is presently adopted, and presented
+        by a dedicated app-shell navigation consumer rather than embedded per-projection rendering.
+        No new axis column, relation-kind flag, or parallel relation table is introduced. "Not a
+        global hub-to-hub relation graph" rules out treating the table as an arbitrarily traversable
+        multi-hop graph (no path-finding, no transitive walks) -- it does not rule out reading the
+        SAME finite row set from both angles (by its own topology_manifest_id, and by which OTHER
+        manifest's row names it as target) as two bounded, single-hop lookups over one canonical
+        table: current topology's OWN sequence (the manifest's own outbound rows) plus the
+        upper-level relation(s)/sequence(s) current topology belongs to as a named target (the
+        owning manifest of any row pointing at current topology). Both are candidate sources; see
+        semantic_role_mapping and bidirectional_read_projection_gap below for the restored
+        Owner-directed design this section had incorrectly narrowed to source-direction-only. A
+        manifest with candidates from neither direction resolves an explicit empty candidate set
+        (see no_return_edge_bootstrap_requirement below); authoring an additional relation is
+        ordinary hub_navigation:create work, never bootstrap-mandatory content.
       semantic_role_mapping: >-
         current topology = the manifest identity actually adopted by ProjectionShell after a
         backend dispatch resolves it (frontend/islands/ProjectionShell.tsx adoptedManifestIdRef /
@@ -427,63 +435,114 @@ runtime_orchestration_ssot:
         new concept). sequence = one manifest's own hubs.hub_relations row-set, keyed by that
         manifest's topology_manifest_id (db/topology_tables.sql's own definition -- a manifest owns
         at most one sequence, its own outbound rows; a manifest never owns another manifest's
-        sequence). sequence position = sequence_position within that owning manifest's row-set
-        (unchanged, existing column, existing UNIQUE(topology_manifest_id, sequence_position)
-        constraint). candidate = a member of current topology's OWN sequence (a row whose
-        topology_manifest_id equals current topology), per db-schema.yaml
-        hub_relations.target_reference_canonical_contract's target_topology_manifest_id (pointer
-        only, unchanged by this entry) -- never a different manifest's sequence, and never current
-        topology's own membership reverse-read from someone else's sequence. attractor resolution =
-        the existing OperationVectorResolver -> AttractorResolver -> StructureMapResolver ->
-        PackageResolver/SchemaResolver -> EmissionBuilder chain a candidate's topology already goes
-        through once selected, via the existing ?manifest= projection-entry route -- not
-        reimplemented on the frontend.
+        sequence -- unchanged). sequence position = sequence_position within that owning manifest's
+        row-set (unchanged, existing column, existing UNIQUE(topology_manifest_id,
+        sequence_position) constraint). candidate = a row's own opposite endpoint relative to
+        current topology: the row's target (per db-schema.yaml
+        hub_relations.target_reference_canonical_contract's target_topology_manifest_id, pointer
+        only, unchanged by this entry) when current topology is that row's own source
+        (topology_manifest_id equals current topology -- current topology's OWN sequence); the
+        row's source (topology_manifest_id) when current topology is that row's target instead --
+        i.e. current topology is a named member of an upper-level relation/sequence some OTHER
+        manifest owns, and that owning manifest is itself a candidate (a "way back up," restored
+        per bidirectional_read_projection_gap below). Both readings query the SAME finite row set
+        by a different column; neither is a multi-hop traversal of a second manifest's sequence
+        beyond that one owning row, so this does not reframe hubs.hub_relations as a generic
+        transitively-walked graph. attractor resolution = the existing OperationVectorResolver ->
+        AttractorResolver -> StructureMapResolver -> PackageResolver/SchemaResolver ->
+        EmissionBuilder chain a candidate's topology already goes through once selected, via the
+        existing ?manifest= projection-entry route -- not reimplemented on the frontend.
       relation_branching_is_native: >-
         Repo-wide check confirmed hubs.hub_relations already permits multiple active rows sharing
         the same topology_manifest_id (the only uniqueness constraint is per
         (topology_manifest_id, sequence_position), not one-row-per-source) -- a manifest owning
         several outbound rows already has a multi-member sequence, no new axis/dimension/role-flag
         column required. The Owner's illustrative A=[1,5,7,9,15] / B=[4,2,3,8,9,6] example (current
-        topology 9, candidates 15 and 6) maps onto this exactly: "A" and "B" are informal names for
-        two walks that both pass through manifest 9, but the only sequence that matters once
-        standing on 9 is 9's OWN sequence -- and that sequence already has two members (15 and 6)
-        because manifest 9 owns two of its own outbound rows. Reading 9's own sequence is the
-        entirety of what resolving candidates from 9 means; no cross-sequence or cross-manifest
-        read is needed for this example.
-      no_new_read_projection_required: >-
-        The existing ContentBundleRepository.LoadHubNavigationSequenceAsync(topologyManifestId) --
-        source-scoped by design, per db/topology_tables.sql's own "Not a global hub-to-hub relation
-        graph" comment -- already reads exactly current topology's own sequence and already returns
-        every member (unbounded row count, ordered by sequence_position), so it already satisfies
-        semantic_role_mapping and relation_branching_is_native above verbatim. Reading
-        hubs.hub_relations by target_topology_manifest_id to find a manifest's membership inside a
-        DIFFERENT manifest's sequence would treat the table as a traversable graph, which
-        db/topology_tables.sql's own comment rules out, and is not how candidates are resolved. No
-        new backend read projection, table, or column is required for the navigation Island to
-        resolve candidates from current topology: HubNavigationResolver.ResolveAsync ->
-        LoadHubNavigationSequenceAsync is the sole backend semantic owner, reached from the frontend
-        only through navigation_island_transport_boundary below -- never through a new parallel
-        repository call, and never by the navigation Island holding a frontend-side reference to a
-        backend class (frontend code cannot call HubNavigationResolver directly; only an HTTP
-        boundary can carry current topology identity across that layer).
+        topology 9, candidates 15 and 6) maps onto this exactly via the forward direction alone:
+        "A" and "B" are informal names for two walks that both pass through manifest 9, but the
+        only OWN sequence that matters once standing on 9 is 9's own row-set -- and that sequence
+        already has two members (15 and 6) because manifest 9 owns two of its own outbound rows.
+        This specific example needs no reverse-direction read to work; the SOURCE-direction half of
+        candidate discovery is already fully native to the existing table with zero schema change.
+        The reverse-direction half (candidates from rows where current topology is the TARGET, not
+        the source) is a separate, additional candidate source restored in
+        bidirectional_read_projection_gap below -- motivated by a different, concrete case
+        (axis_navigation_membership's targets reaching back to their source without a mirrored
+        authored row) that this A/B/9/15/6 example does not itself exercise.
+      bidirectional_read_projection_gap: >-
+        Restores this section's own previously-retracted design (an earlier revision here narrowed
+        candidate discovery to source-direction-only and called the reverse direction a forbidden
+        graph-traversal reframing; that retraction is corrected here). The existing
+        ContentBundleRepository.LoadHubNavigationSequenceAsync(topologyManifestId) -- source-scoped
+        by design -- already reads exactly current topology's own sequence (the forward half) and
+        already returns every member (unbounded row count, ordered by sequence_position). A
+        repo-wide check confirmed no query anywhere in the repository (NpgsqlContentBundleRepository.cs,
+        SQL Attention's HubAttractorExplorationRuntime.cs expandedHubIds included) reads
+        hubs.hub_relations by its target column to find which OTHER manifest's row names current
+        topology as target -- that reverse half is a read-projection gap over the SAME canonical
+        persistence, not a data-model limitation: nothing in the schema prevents a second,
+        target-scoped read over the identical table/columns, and reading it this way is a single,
+        bounded lookup (current topology's own membership as a target, resolved against the owning
+        row's source), never a multi-hop walk of a second manifest's own sequence beyond that one
+        row -- so it does not reframe hubs.hub_relations as a generic traversable graph, and
+        db/topology_tables.sql's "Not a global hub-to-hub relation graph" comment is not violated by
+        it. Resolution shape mirrors the rest of this file's present-day-vs-canonical-forward split:
+        today's unchanged mechanism resolves the reverse direction by, for each row, applying the
+        existing related_hub_id -> exactly-one-active-manifest inference and keeping rows whose
+        resolved target equals current topology; canonical forward design resolves it as a plain
+        WHERE target_topology_manifest_id = current topology once
+        db-schema.yaml hub_relations.target_reference_canonical_contract is physically built
+        -- the same current-vs-forward distinction hub_navigation_resolution.
+        target_manifest_resolution above already applies to the forward direction, applied
+        symmetrically here. The next implementation_change adds
+        this reverse-direction read as an additive query --
+        not a new authority, new table, or new column -- alongside the existing forward read, and
+        the navigation Island presents the UNION of both as current topology's candidates. This is
+        what makes axis_navigation_membership's targets (ae200/5c100/dd010/092) reachable back to
+        their source (ad200) without requiring any of them to carry their own authored return row:
+        see no_return_edge_bootstrap_requirement below, worked concretely through the existing
+        dd010 (team_dashboard.admin.projection) manifest -- the existing, already-registered
+        ad200 -> dd010 row is reused as-is; no new bridge manifest, dispatch axis, or parallel
+        architecture is introduced for this. HubNavigationResolver.ResolveAsync ->
+        LoadHubNavigationSequenceAsync remains the sole backend owner of the forward half; the
+        reverse half is an additional method on the same repository/resolver pair (exact shape is
+        an implementation_change decision, not invented here), reached from the frontend only
+        through navigation_island_transport_boundary below -- never by the navigation Island holding
+        a frontend-side reference to a backend class (frontend code cannot call
+        HubNavigationResolver directly; only an HTTP boundary can carry current topology identity
+        across that layer).
       no_return_edge_bootstrap_requirement: >-
-        Scope of this entry: a RETURN edge specifically (e.g. ae200 -> ad200) is not
-        bootstrap-mandatory content for this Bundle -- axis_navigation_membership's four targets
-        are not required to each carry a return row back to their source, and this Bundle does not
-        author one. This is narrower than "zero outbound relations is a fine end state": see
-        minimum_cardinality_completion_invariant_relationship below for what a target's own
-        zero-outbound state does and does not mean, since db-schema.yaml's
-        minimum_cardinality_completion_invariant already governs that question and this entry does
-        not override, weaken, or restate it. Whatever a manifest's own outbound-relation count
-        actually is (zero, one, or many), the navigation Island's READ behavior is unconditional:
-        it resolves an explicit empty candidate set when there are none, the same
-        explicit-empty-list-never-guessed discipline
+        Scope of this entry: a mirrored, separately-authored RETURN edge (e.g. an ae200 -> ad200
+        row authored in addition to ad200 -> ae200) is not bootstrap-mandatory content for this
+        Bundle -- axis_navigation_membership's four targets are not required to each carry their
+        own authored return row, and this Bundle does not author one. Restored justification (an
+        earlier revision of this entry substituted a weaker one -- requiring the explicit-empty-list
+        fallback to carry the whole burden -- corrected here): bidirectional_read_projection_gap
+        above already finds the return path for free, because the SAME ad200 -> {ae200, 5c100,
+        dd010, 092} rows this Bundle registers are also, from each target's own point of view, an
+        upper-level relation each target belongs to as a named member -- the reverse-direction half
+        of candidate discovery resolves ad200 itself as a candidate from any of the four, with no
+        extra row required. Concretely: standing on dd010 (team_dashboard.admin.projection,
+        itself carrying zero of its own outbound rows today), the reverse-direction read finds the
+        existing ad200 -> dd010 row and returns ad200 as dd010's candidate -- the existing dd010
+        manifest already provides this path once ad200 -> dd010 is registered, with no new bridge
+        manifest, dispatch axis, sequence-position convention, or other parallel architecture
+        introduced to make it work. The explicit-empty-list-never-guessed discipline
         HubNavigationResolver.ResolveFallbackNavigationLinksAsync already uses elsewhere in this
-        file -- never a synthesized/guessed return target, regardless of whether that emptiness is
-        itself a completeness gap under the older invariant. Authoring a return sequence entry from
-        ae200 back to ad200 (or authoring any other outbound relation on ae200/5c100/dd010/092) is
-        ordinary hub_navigation:create authoring through the existing /admin/manifests surface,
-        identical to authoring any other relation.
+        file still governs the genuinely disconnected case -- a manifest with candidates from
+        NEITHER its own outbound rows NOR any other manifest's row naming it as target resolves an
+        explicit empty candidate set, never a synthesized/guessed target -- but that case no longer
+        describes axis_navigation_membership's four targets once their ad200 -> target rows exist,
+        since each then has at least the reverse-direction ad200 candidate. This is narrower than
+        "zero outbound relations of a manifest's own is a fine end state": see
+        minimum_cardinality_completion_invariant_relationship below for what a target's own
+        zero-outbound state does and does not mean under db-schema.yaml's
+        minimum_cardinality_completion_invariant, which this entry does not override, weaken, or
+        restate -- that invariant is about a manifest's own forward-direction completeness, not
+        about whether the navigation Island can present a path back to it or from it. Authoring an
+        additional outbound relation on ae200/5c100/dd010/092 (a further forward hop, not a
+        mirrored return row) remains ordinary hub_navigation:create authoring through the existing
+        /admin/manifests surface, identical to authoring any other relation.
       minimum_cardinality_completion_invariant_relationship: >-
         db-schema.yaml hub_relations.minimum_cardinality_completion_invariant (mirrored in
         docs/framework-core.yaml runtime_route_attention_boundary
@@ -525,24 +584,29 @@ runtime_orchestration_ssot:
         the app shell per existing Fresh convention; the exact concrete component/file split is an
         implementation_change decision made against Fresh's actual island rules (see
         cross_island_shared_state_boundary below), not invented here. It reads current topology
-        identity from the shared Context boundary below and resolves that identity's own sequence
-        exclusively through navigation_island_transport_boundary below -- the sole frontend->backend
-        transport reaching HubNavigationResolver.ResolveAsync/LoadHubNavigationSequenceAsync, never
-        a second/parallel implementation of the read. It renders every returned member (never
-        collapsed to a single assumed target) as a navigation option; selecting one dispatches
-        through the existing ?manifest= projection-entry route, never a frontend-duplicated
-        attractor/structure-map resolution.
+        identity from the shared Context boundary below and resolves that identity's candidates
+        (its own sequence, forward direction, PLUS the upper-level relation(s)/sequence(s) it
+        belongs to as a named target, reverse direction -- see bidirectional_read_projection_gap
+        above) exclusively through navigation_island_transport_boundary below -- the sole
+        frontend->backend transport reaching this resolution, never a second/parallel
+        implementation of either read. It renders every returned member from either direction
+        (never collapsed to a single assumed target) as a navigation option; selecting one
+        dispatches through the existing ?manifest= projection-entry route, never a
+        frontend-duplicated attractor/structure-map resolution.
       navigation_island_transport_boundary:
         canonical_chain: >-
           Context (current topology Manifest identity, backend-resolved) -> navigation Island
-          issues a request carrying that identity as explicit input -> backend resolves that
-          Manifest's own active hubs.hub_relations sequence via the existing
-          HubNavigationResolver.ResolveAsync -> ContentBundleRepository.LoadHubNavigationSequenceAsync
-          (unfiltered, ordered by sequence_position, 0..N items) -> navigation Island renders every
-          returned candidate -> selecting one uses the existing ?manifest= projection-entry route.
-          No repository query, table, column, or parallel resolver is added; the read authority is
-          the identical one ManifestDispatcher/RuntimeExecutor already call for every manifest
-          dispatch.
+          issues a request carrying that identity as explicit input -> backend resolves BOTH
+          directions for that identity: (a) the Manifest's own active hubs.hub_relations sequence
+          via the existing HubNavigationResolver.ResolveAsync ->
+          ContentBundleRepository.LoadHubNavigationSequenceAsync (unfiltered, ordered by
+          sequence_position, 0..N items), and (b) the upper-level relation(s) it belongs to as a
+          named target, via the additive reverse-direction read bidirectional_read_projection_gap
+          above defines (0..N items, one per owning manifest) -> navigation Island renders the
+          union of both as candidates -> selecting one uses the existing ?manifest=
+          projection-entry route. No new table, column, or parallel resolver AUTHORITY is added;
+          (b) is one additional read method over the identical hubs.hub_relations persistence (a),
+          not a second data model.
         chosen_boundary: >-
           GET /hub-navigation/relations (backend/Program.cs), extended with an optional explicit
           topologyManifestId query parameter. When present and it parses as a GUID, the handler
@@ -550,13 +614,15 @@ runtime_orchestration_ssot:
           explicit_current_topology_trust_boundary below -- a client-supplied query parameter is
           request input, never backend-side proof of an already-authorized dispatch, so it is
           validated the same way any other explicit Manifest identity reaching this backend is)
-          and, once validated, calls HubNavigationResolver.ResolveAsync(topologyManifestId) --
-          the same unfiltered, sequence_position-ordered read RuntimeExecutor/ManifestDispatcher
-          already perform for that manifest during its own dispatch -- and returns it, filtered
-          per-target exactly as explicit_current_topology_trust_boundary's target_filtering
-          describes, in the existing HubRelationNavigationLinksResponseDto envelope (links /
-          success / errors), with fallbackReason distinguishing this explicit-current-topology
-          read from the endpoint's existing fallback mode. When topologyManifestId is absent, the
+          and, once validated, calls HubNavigationResolver.ResolveAsync(topologyManifestId) for the
+          forward half -- the same unfiltered, sequence_position-ordered read
+          RuntimeExecutor/ManifestDispatcher already perform for that manifest during its own
+          dispatch -- and the additive reverse-direction read for the upper-level half, unions the
+          two, and returns the result, filtered per-target exactly as
+          explicit_current_topology_trust_boundary's target_filtering describes, in the existing
+          HubRelationNavigationLinksResponseDto envelope (links / success / errors), with
+          fallbackReason distinguishing this explicit-current-topology read from the endpoint's
+          existing fallback mode. When topologyManifestId is absent, the
           endpoint's existing behavior (ResolveFallbackNavigationLinksAsync's
           canonical-default-entry, role-filtered fallback) is entirely unchanged, so its existing
           callers are not regressed -- only presence of the parameter selects the explicit branch;
@@ -716,12 +782,18 @@ runtime_orchestration_ssot:
             ValidationError, not a success), never silently collapsed into an empty-links success
             and never resolved against a different (default-entry or guessed) Manifest.
           valid_source_empty_and_multiple_rows: >-
-            A validated, authorized source Manifest with zero active outbound hub_relations rows
-            is an ordinary success with an explicit empty links array -- indistinguishable in
-            shape from any other empty result, but reached only after source validity is already
-            established, never as a stand-in for a validation failure. A validated, authorized
-            source Manifest with multiple active outbound rows returns all of them, ordered by
-            sequence_position, uncollapsed -- unchanged from relation_branching_is_native above.
+            A validated, authorized source Manifest with zero active outbound hub_relations rows of
+            its own AND zero other manifest's rows naming it as target is an ordinary success with
+            an explicit empty links array -- indistinguishable in shape from any other empty result,
+            but reached only after source validity is already established, never as a stand-in for
+            a validation failure. Zero of its OWN outbound rows alone is not sufficient for an
+            empty result once bidirectional_read_projection_gap above is physically built: the
+            reverse-direction read may still supply candidates (e.g. ae200/5c100/dd010/092 each find
+            ad200 this way despite having zero of their own outbound rows). A validated, authorized
+            source Manifest with multiple rows from either direction returns all of them, ordered by
+            sequence_position within each direction, uncollapsed -- unchanged from
+            relation_branching_is_native above for the forward half, extended symmetrically to the
+            reverse half.
           response_envelope: >-
             Reuses the existing HubRelationNavigationLinksResponseDto (success / links / errors /
             requestedSurface / fallbackReason) for both branches -- no new DTO is introduced by
@@ -742,13 +814,17 @@ runtime_orchestration_ssot:
             (frontend/api/adminApi.ts callHubNavigation, the same token AdminAuthGate/super_auth
             issues), so it cannot serve the Normal-axis surfaces axis_navigation_membership also
             covers without giving the navigation Island a second, admin-only auth path. Reusing it
-            would also point a second, semantically-different read at the same table this design
-            already keeps single-owner (LoadHubNavigationSequenceAsync).
+            would also point a second, semantically-different (admin-authoring-shaped) read at the
+            same table the active-only runtime semantic already keeps single-owner for the forward
+            direction (LoadHubNavigationSequenceAsync) and, per bidirectional_read_projection_gap
+            above, for the reverse direction (its own additive method) -- neither is
+            ListHubRelationsByManifestAsync's broader CRUD-shaped read.
           new_dedicated_endpoint: >-
-            Rejected as redundant: the explicit-current-topology semantic is already fully
-            expressible as a minimal extension of the existing GET /hub-navigation/relations
-            boundary (same resolver, same repository call, same response envelope, same auth), so
-            a second endpoint would only duplicate that boundary rather than close a real gap.
+            Rejected as redundant: the explicit-current-topology semantic (both the forward and the
+            additive reverse-direction reads) is already fully expressible as a minimal extension of
+            the existing GET /hub-navigation/relations boundary (same resolver, same
+            repository/table, same response envelope, same auth), so a second endpoint would only
+            duplicate that boundary rather than close a real gap.
           dispatch_business_projection_reuse: >-
             The projection dispatch ProjectionShell already performs (queueClientCommand -> POST
             /dispatch -> ManifestDispatcher/RuntimeExecutor) already embeds this same manifest's
