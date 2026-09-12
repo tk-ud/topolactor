@@ -132,26 +132,27 @@ runtime_orchestration_ssot:
         - route: /admin
           retirement_kind: thin_projection_wrapper
           replacement: same_url_seed_backed
-          status: design_resolved_not_started
+          status: retracted_not_required_by_this_bundle
           precondition: >-
-            admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract.
-            axis_navigation_membership.production_reachability_precondition resolves the target
-            route: /admin has no other available registry slot and inventing a new route is
-            prohibited, so /admin/index.tsx's current hardcoded body is replaced by a same-URL
-            ProjectionShell thin wrapper pinned by manifestKey="admin.dashboard.navigation.projection"
-            (manifest_key_target_ref_resolution_contract below) -- the same pattern
-            frontend/routes/admin/team-dashboard/index.tsx and frontend/routes/dashboard/index.tsx
-            already establish as this repo's current, preferred route-pin convention (a stable
-            human-readable manifest_key, not a raw manifest_id UUID constant embedded in route
-            source). /admin/enums' own raw-UUID pin predates that convention and was deliberately
-            left unmigrated by the round that introduced manifest_key_target_ref_resolution_contract
-            (to avoid an unrelated repo-wide route migration on an already-built route) -- that
-            precedent does not apply here, since /admin is new work, not an existing pin being
-            preserved. This design_change performs no SQL DDL/backend/frontend/test
-            work; status is design_resolved_not_started (the design is closed, production work
-            has not begun). Closing this route entry to status=done and registering
-            axis_navigation_membership's HubRelation rows are
-            hub-relation-target-manifest-canonical-migration Bundle implementation items.
+            RETRACTED: an earlier revision of this entry planned to replace /admin/index.tsx's
+            current hardcoded body with a ProjectionShell thin wrapper pinned to
+            manifestKey="admin.dashboard.navigation.projection" (ad200), solely so ad200 could serve
+            as this Bundle's Admin-axis fixed-navigation source (which otherwise has no production
+            route or entry point of its own -- see the retracted production_reachability_precondition
+            this pointed to). That plan is retracted: admin-console-workflow-ssot.yaml
+            admin_hub_relation_navigation_contract.axis_navigation_membership.admin_navigation_source
+            now designates dd010 (team_dashboard.admin.projection) as the canonical Admin-axis
+            fixed-navigation source instead, because dd010 already has a real, already-built
+            production route today (/admin/team-dashboard, retirement_kind hub_navigation_only below)
+            -- inventing a new /admin route purely to give a different manifest (ad200) a landing page
+            is no longer necessary to close this Bundle's Goal 1 (ae200 reachable). /admin's own
+            current hardcoded body is therefore out of this Bundle's scope entirely and is left
+            unchanged; ad200 is no longer part of this Bundle's registered Admin-axis navigation
+            membership (see admin_navigation_source and out_of_membership_scope in that same
+            contract). This route entry stays listed per this matrix's own note (retiring routes are
+            never silently dropped), but closing it is no longer a hub-relation-target-manifest-
+            canonical-migration Bundle item; a future, separately-scoped change to /admin's own
+            static content would need its own SSOT authority if ever pursued.
         - route: /admin/enums
           retirement_kind: thin_projection_wrapper
           replacement: same_url_seed_backed
@@ -498,12 +499,11 @@ runtime_orchestration_ssot:
         this reverse-direction read as an additive query --
         not a new authority, new table, or new column -- alongside the existing forward read, and
         the navigation Island presents the UNION of both as current topology's candidates. This is
-        what makes axis_navigation_membership's targets (ae200/5c100/dd010/092) reachable back to
-        their source (ad200) without requiring any of them to carry their own authored return row:
-        see no_return_edge_bootstrap_requirement below, worked concretely through the existing
-        dd010 (team_dashboard.admin.projection) manifest -- the existing, already-registered
-        ad200 -> dd010 row is reused as-is; no new bridge manifest, dispatch axis, or parallel
-        architecture is introduced for this. HubNavigationResolver.ResolveAsync ->
+        what makes axis_navigation_membership's targets (ae200/5c100/092) reachable back to their
+        source (dd010, team_dashboard.admin.projection -- the existing, already-production-routed
+        Admin bridge manifest itself, not merely an illustrative example standing in for a
+        separately-designated source) without requiring any of them to carry their own authored
+        return row: see no_return_edge_bootstrap_requirement below. HubNavigationResolver.ResolveAsync ->
         LoadHubNavigationSequenceAsync remains the sole backend owner of the forward half; the
         reverse half is an additional method on the same repository/resolver pair (exact shape is
         an implementation_change decision, not invented here), reached from the frontend only
@@ -512,35 +512,35 @@ runtime_orchestration_ssot:
         HubNavigationResolver directly; only an HTTP boundary can carry current topology identity
         across that layer).
       no_return_edge_bootstrap_requirement: >-
-        Scope of this entry: a mirrored, separately-authored RETURN edge (e.g. an ae200 -> ad200
-        row authored in addition to ad200 -> ae200) is not bootstrap-mandatory content for this
-        Bundle -- axis_navigation_membership's four targets are not required to each carry their
+        Scope of this entry: a mirrored, separately-authored RETURN edge (e.g. an ae200 -> dd010
+        row authored in addition to dd010 -> ae200) is not bootstrap-mandatory content for this
+        Bundle -- axis_navigation_membership's three targets are not required to each carry their
         own authored return row, and this Bundle does not author one. Restored justification (an
         earlier revision of this entry substituted a weaker one -- requiring the explicit-empty-list
         fallback to carry the whole burden -- corrected here): bidirectional_read_projection_gap
-        above already finds the return path for free, because the SAME ad200 -> {ae200, 5c100,
-        dd010, 092} rows this Bundle registers are also, from each target's own point of view, an
+        above already finds the return path for free, because the SAME dd010 -> {ae200, 5c100,
+        092} rows this Bundle registers are also, from each target's own point of view, an
         upper-level relation each target belongs to as a named member -- the reverse-direction half
-        of candidate discovery resolves ad200 itself as a candidate from any of the four, with no
-        extra row required. Concretely: standing on dd010 (team_dashboard.admin.projection,
-        itself carrying zero of its own outbound rows today), the reverse-direction read finds the
-        existing ad200 -> dd010 row and returns ad200 as dd010's candidate -- the existing dd010
-        manifest already provides this path once ad200 -> dd010 is registered, with no new bridge
-        manifest, dispatch axis, sequence-position convention, or other parallel architecture
-        introduced to make it work. The explicit-empty-list-never-guessed discipline
+        of candidate discovery resolves dd010 itself as a candidate from any of the three, with no
+        extra row required. Concretely: standing on ae200 (admin-enum), the reverse-direction read
+        finds the existing dd010 -> ae200 row and returns dd010 as ae200's candidate -- the existing
+        dd010 (team_dashboard.admin.projection, the Admin bridge manifest itself) already provides
+        this path once dd010 -> ae200 is registered, with no new bridge manifest, dispatch axis,
+        sequence-position convention, or other parallel architecture introduced to make it work. The
+        explicit-empty-list-never-guessed discipline
         HubNavigationResolver.ResolveFallbackNavigationLinksAsync already uses elsewhere in this
         file still governs the genuinely disconnected case -- a manifest with candidates from
         NEITHER its own outbound rows NOR any other manifest's row naming it as target resolves an
         explicit empty candidate set, never a synthesized/guessed target -- but that case no longer
-        describes axis_navigation_membership's four targets once their ad200 -> target rows exist,
-        since each then has at least the reverse-direction ad200 candidate. This is narrower than
+        describes axis_navigation_membership's three targets once their dd010 -> target rows exist,
+        since each then has at least the reverse-direction dd010 candidate. This is narrower than
         "zero outbound relations of a manifest's own is a fine end state": see
         minimum_cardinality_completion_invariant_relationship below for what a target's own
         zero-outbound state does and does not mean under db-schema.yaml's
         minimum_cardinality_completion_invariant, which this entry does not override, weaken, or
         restate -- that invariant is about a manifest's own forward-direction completeness, not
         about whether the navigation Island can present a path back to it or from it. Authoring an
-        additional outbound relation on ae200/5c100/dd010/092 (a further forward hop, not a
+        additional outbound relation on ae200/5c100/092 (a further forward hop, not a
         mirrored return row) remains ordinary hub_navigation:create authoring through the existing
         /admin/manifests surface, identical to authoring any other relation.
       minimum_cardinality_completion_invariant_relationship: >-
@@ -562,15 +562,15 @@ runtime_orchestration_ssot:
         explicit_current_topology_trust_boundary.valid_source_empty_and_multiple_rows actually decide
         is orthogonal: the RUNTIME READ contract for whatever outbound-relation count a manifest
         happens to have, never a judgment on whether that count is itself authoring-complete.
-        axis_navigation_membership's four Admin-axis targets (ae200, 5c100, dd010, 092) are
+        axis_navigation_membership's three Admin-axis targets (ae200, 5c100, 092) are
         pre-existing rows already seeded directly as status='active' (like the large majority of
         this repo's seeded manifests), predating PromoteAsync's enforcement mechanism and never
         promoted through it -- under a literal reading of minimum_cardinality_completion_invariant
         each is, right now, already a navigation orphan (zero of its OWN outbound active
         hub_relations rows) -- a pre-existing fact independent of this Bundle's own work.
-        Registering axis_navigation_membership's four ad200 -> {ae200, 5c100, dd010, 092} rows
-        gives ad200 itself a resolvable outbound relation (satisfying the invariant for ad200,
-        the SOURCE), but does not, and is not required to, retroactively resolve the four TARGETS'
+        Registering axis_navigation_membership's three dd010 -> {ae200, 5c100, 092} rows
+        gives dd010 itself a resolvable outbound relation (satisfying the invariant for dd010,
+        the SOURCE), but does not, and is not required to, retroactively resolve the three TARGETS'
         own pre-existing orphan status -- that is a separate, repo-wide seed-completeness
         condition shared by most already-active seeded manifests, not something Goal 1
         (ae200 reachable as a navigation target) depends on, and not something this Bundle
@@ -788,8 +788,8 @@ runtime_orchestration_ssot:
             but reached only after source validity is already established, never as a stand-in for
             a validation failure. Zero of its OWN outbound rows alone is not sufficient for an
             empty result once bidirectional_read_projection_gap above is physically built: the
-            reverse-direction read may still supply candidates (e.g. ae200/5c100/dd010/092 each find
-            ad200 this way despite having zero of their own outbound rows). A validated, authorized
+            reverse-direction read may still supply candidates (e.g. ae200/5c100/092 each find
+            dd010 this way despite having zero of their own outbound rows). A validated, authorized
             source Manifest with multiple rows from either direction returns all of them, ordered by
             sequence_position within each direction, uncollapsed -- unchanged from
             relation_branching_is_native above for the forward half, extended symmetrically to the

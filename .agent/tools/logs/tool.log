@@ -162,3 +162,4 @@
 2026-09-11T18:27:47Z 9306e0f7-e075-4186-9007-803b15a437f5 round27-selection-observation-consumer-gap design_change
 2026-09-11T19:18:49Z d12e0ebc-1a48-4edc-a745-f22c174b4f13 round28-context-event-semantics-fix design_change
 2026-09-12T01:32:34Z 2d5bf1b8-90bb-4df4-a0e3-60b85de9ec62 round29-bidirectional-candidate-discovery-restore design_change
+2026-09-12T02:17:46Z bdc887bd-94e7-4ae5-b533-02aa660b0c86 round30-admin-bridge-converge-dd010 design_change
