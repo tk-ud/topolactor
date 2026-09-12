@@ -9,11 +9,16 @@ admin_console_workflow_ssot:
       This document is subordinate to runtime orchestration. It describes the admin UI
       responsibility split but MUST NOT add canonical admin routes outside that registry.
     canonical_routes:
+      # Readability mirror only; the file listed in canonical_admin_route_registry above remains
+      # the sole authority on order/membership.
       - /admin
       - /admin/manifests
       - /admin/contents
       - /admin/ui-builder
       - /admin/team-dashboard
+      - /admin/team-markdown
+      - /admin/enums
+      - /admin/users
       - /admin/scheduler
 
   admin_hub_relation_navigation_contract:
@@ -99,7 +104,8 @@ admin_console_workflow_ssot:
         defined anywhere in this SSOT family and are explicitly out of this Bundle's scope; a future
         dedicated Bundle would need its own SSOT authority if that need ever arises.
     resolution_rule: >-
-      Identical, non-negotiable rule as
+      CURRENT implementation (unchanged by canonical_forward_target_reference below, and still
+      an accurate description of production today), identical, non-negotiable rule as
       docs/design/runtime-orchestration-ssot.yaml
       dispatcher_contract.hub_navigation_resolution.target_manifest_resolution: a related_hub_id
       resolves to a target manifest only when exactly one active hubs.topology_manifests row
@@ -107,12 +113,213 @@ admin_console_workflow_ssot:
       first-match/oldest/MIN implicit fallback. Source topology_manifest, related hub, and
       sequence_position must each be explicit; only active relations and active target manifests
       are reachable.
+    canonical_forward_target_reference: >-
+      Owner canonical redesign (design_change, no SQL DDL/backend/frontend/test change yet):
+      docs/design/db-schema.yaml hub_relations.target_reference_canonical_contract is the sole
+      canonical forward definition -- a direct target_topology_manifest_id FK the admin selects,
+      replacing the related-hub inference resolution_rule above describes. A future
+      implementation_change extends the authoring surface below so the admin picks a target
+      MANIFEST directly (reusing the same existing "list every hubs.topology_manifests row"
+      mechanism ManifestsAdmin.tsx already uses for SOURCE selection -- see authoring.surface
+      above; no new picker UI concept), instead of picking a target Hub via related_hub_id. Once
+      implemented, resolution_rule above is updated in place to match rather than kept as a
+      second, independently-drifting description.
     connection_state_authority: >-
       Whether any specific hubs.hub_relations row currently exists between two manifests is
       runtime/admin data, observed via /admin/manifests (HubNavigationAdmin.tsx) or a direct
       hubs.hub_relations query — never duplicated here as a fixed per-subBundle "wired"/"unconnected"
       SSOT status ledger. This document defines the authoring contract, schema, and resolution
       semantics; it does not track live connection state.
+    bootstrap_seed_vs_runtime_authoring_boundary: >-
+      Single-ledger contract: axis_navigation_membership's three relations (dd010 -> ae200/5c100/
+      092, below) exist as pre-built db/seed_empty.sql physical rows at fresh bootstrap, so
+      the app-shell navigation Island has something to display the moment a fresh environment boots
+      (fixed_navigation_presentation_ownership below -- presentation is the Island's own
+      responsibility, not a per-source-manifest card_list). After bootstrap they are ordinary
+      hubs.hub_relations rows, editable through the same
+      /admin/manifests authoring mechanism (hub_navigation:create/update/reorder/deprecate)
+      connection_state_authority above already governs -- one ledger, not a separate bootstrap-only
+      store and a separate runtime-authoring store.
+    axis_navigation_membership:
+      note: >-
+        Owner-confirmed design (this design_change): docs/design/admin-normal-surface-projection-
+        seed-ssot.yaml surface_axes.admin / surface_axes.normal are the existing
+        projection-surface axes (axis_kind: projection_surface_axis, not_role_or_rbac --
+        unchanged, never converted into an auth role, RBAC dimension, or a new
+        hubs.hub_relations column). This entry defines concrete HubRelation fixed-navigation
+        membership per axis, reusing the existing mechanism this contract already defines
+        (hub_navigation:create/update/reorder/deprecate, HubNavigationResolver,
+        Emission.NavigationSequence, resolveHubNavigationLinks) unchanged -- no new navigation
+        model, global hub graph, parallel store, or per-surface fallback is introduced.
+        Presentation of this membership is NOT part of that unchanged list: see
+        fixed_navigation_presentation_ownership below for the current canonical owner (an
+        app-shell navigation Island, not ProjectionShell).
+      admin_navigation_source: >-
+        db/seed_empty.sql manifest 00000000-0000-0000-0000-0000000dd010
+        ("team_dashboard.admin.projection", admin-normal-surface-projection-seed-ssot.yaml
+        surface_axes.admin.surfaces.team_dashboard) is the canonical Admin-axis fixed-navigation
+        source -- corrected here from an earlier revision that designated
+        00000000-0000-0000-0000-0000000ad200 ("admin.dashboard.navigation.projection") instead.
+        Retraction reasoning: the earlier choice was derived from ad200's own seed-declared
+        projection_responsibility (display_manifest_scoped_hub_relation_links,
+        use_selected_link_as_projection_change_trigger) -- a criterion superseded once
+        fixed_navigation_presentation_ownership below moved fixed-navigation presentation off the
+        source manifest's own seed-declared card_list onto the app-shell navigation Island (a
+        manifest-agnostic presenter that works identically regardless of what any given manifest's
+        own seed declares). With that criterion superseded, the only requirement that actually
+        matters for choosing this axis's source is which manifest is a REAL, already-reachable
+        production entry point for an Admin user to land on -- and repo-wide verification (see
+        production_reachability_precondition below) found dd010 already has one
+        (/admin/team-dashboard, a real, already-built route) while ad200 has none. Choosing dd010
+        closes Goal 1 (ae200 reachable) without inventing any new production route; the earlier
+        ad200-sourced design would have required building one (a same-URL /admin thin wrapper)
+        solely to give ad200 a landing page, which this correction makes unnecessary. ad200 itself
+        is untouched as a manifest/seed row -- see out_of_membership_scope below for its resulting
+        scope status.
+      admin_navigation_targets:
+        - manifest: 00000000-0000-0000-0000-0000000ae200 (admin.enum.management.projection, admin-enum)
+          eligibility: >-
+            Real ui_projection, Admin-axis surface, own dedicated production route (/admin/enums,
+            retirement_kind=thin_projection_wrapper per runtime-orchestration-ssot.yaml
+            admin_route_retirement_matrix). First-class navigation target -- this is the manifest
+            this PR's original production symptom names.
+        - manifest: 00000000-0000-0000-0000-00000005c100 (scheduler.settings.projection, scheduler-settings)
+          eligibility: >-
+            Real ui_projection, Admin-axis surface, hub_navigation_only reachability per
+            admin_route_retirement_matrix (no dedicated route of its own -- /admin/scheduler keeps
+            mounting SchedulerJobSettingsPanel.tsx directly, unchanged by this entry). First-class
+            navigation target.
+        - manifest: 00000000-0000-0000-0000-000000000092 (auth.external.credential_management.projection, credential-management)
+          eligibility: >-
+            Real ui_projection, Admin-axis surface, already reachable today via the separate
+            canonical_default_entry_contract bare-selection fallback (runtime-orchestration-ssot.yaml
+            canonical_default_entry_contract) and additionally eligible as an ordinary HubRelation
+            navigation target from dd010 (this axis's source, see admin_navigation_source above)
+            like the others -- the two reachability paths are independent and do not conflict.
+      fixed_navigation_presentation_ownership: >-
+        Presentation of this axis's membership (source and targets alike) is owned by
+        docs/design/runtime-orchestration-ssot.yaml ui_projection_render_reachability_contract.
+        hub_relation_sequence_membership_and_navigation_island_contract's app-shell navigation
+        Island, not by ProjectionShell or UI Builder. That contract's semantic_role_mapping is the
+        sole canonical definition of what the navigation Island presents -- this entry does not
+        restate or narrow it. Concretely for this axis: a manifest's own outbound sequence (resolved
+        via the existing HubNavigationResolver.ResolveAsync pipeline) supplies only its own
+        index-0-as-owner next (that sequence's first row); a target's own zero-outbound-rows state
+        is NOT what determines whether the navigation Island shows it an empty set -- the additive
+        reverse-direction read (bidirectional_read_projection_gap) independently supplies a prev
+        when the target occurs as another manifest's sequence row, exactly as ae200/5c100/092 each
+        do from dd010's sequence despite owning zero rows of their own (see
+        no_return_edge_bootstrap_requirement in that same contract). Only a manifest with neither a
+        prev nor a next from any index occurrence resolves an explicit empty candidate set; an
+        earlier revision of this entry described "no outbound sequence of its own" alone as the
+        empty-set condition, which is retracted here as the semantic drift that framing was.
+        Authoring an additional relation remains ordinary future hub_navigation:create work, not a
+        bootstrap requirement of this entry.
+      admin_navigation_non_targets: >-
+        00000000-0000-0000-0000-0000000ae210/ae220/ae230/ae240/ae250/ae260/ae270/ae280 (admin-enum's
+        7 per-operation write manifests plus its get_group read-detail manifest) are ae200's own
+        internal write/read operation authority in the canonical Enum UX, reached via node-local
+        admin_runtime_dispatch_override_wiring target_ref dispatches embedded in ae200's own
+        layout (admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.enum.
+        seed_contract.component_tree_note) -- not first-class members of this axis's registered
+        navigation membership set (admin_navigation_targets above) merely because each is an
+        active hubs.topology_manifests row, and this Bundle does not register a fixed
+        dd010-sourced hub_relations row to any of them. This is a membership-registration scope
+        statement, not a technical prohibition: nothing in the hub_navigation:create dispatch
+        mechanism itself (NpgsqlContentBundleRepository.CreateHubRelationAsync -- manifest
+        existence, hub existence, no self-loop; no manifest-kind check of any shape) rejects
+        authoring an ordinary HubRelation row targeting one of these manifests, and
+        AdminEnumHubRelationUiProjectionLiveDbTests.
+        DispatchAsync_AdminEnumManagementManifest_HubNavigationCreate_ToCreateGroupWriteManifest_ResolutionChainReflectsIt
+        already proves this live end to end today (a real hub_navigation:create dispatch from
+        ae200 to ae210 persists and resolves through the identical
+        LoadHubNavigationSequenceAsync/NavigationSequence chain fixed navigation uses elsewhere).
+        An earlier revision of this entry read "never independently selected by a user via
+        HubRelation navigation" and "nothing in this entry authorizes listing them as
+        hub_navigation:create targets" as a ban on generic authoring targetability -- that reading
+        was incorrect and is retracted here: this entry withholds them only from this Bundle's own
+        pre-registered fixed membership and describes today's canonical Enum UX choice, not a
+        technical or governance prohibition on future hub_navigation:create authoring against
+        them through the ordinary /admin/manifests authoring surface, whose target picker remains
+        the same all-topology-manifest listing every other manifest uses -- no UUID allow/deny
+        filter is introduced or required here.
+      normal_navigation_membership: >-
+        docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.normal.
+        normal_hub_relation_navigation_contract already defines the Normal-axis equivalent
+        (reusing the same mechanism, scoped to normal-axis manifests), and its own
+        current_target_readiness records the repo-wide result this entry confirms: manifest
+        00000000-0000-0000-0000-0000000dd020 (team_dashboard.normal.projection) is the only real,
+        production-reachable Normal-axis surface today (own dedicated route, /dashboard), and no
+        other Normal-axis surface exists to link it to or from -- self_account_capability remains
+        blocked pending its own ui_projection manifest, a separate, unrelated future item this
+        entry does not decide. The Owner already redirected the underlying "always get back to
+        Normal home" intent to ProjectionShell's fixed data-projection-home-link ("ホーム" ->
+        /dashboard, runtime-orchestration-ssot.yaml admin_route_retirement_matrix.routes
+        /admin/team-dashboard entry) rather than a fabricated HubRelation source -- that decision
+        is unchanged and this entry does not reopen it. No fake Normal-axis target is introduced
+        here.
+      cross_axis_navigation: >-
+        This entry does not itself register or seed any cross-axis hub_relations row: this
+        Bundle's own axis_navigation_membership authors no Admin-axis source -> Normal-axis target
+        and no Normal-axis source -> Admin-axis target relation, and neither axis's membership
+        list above should be read as including one. This is a registration-scope statement, not a
+        technical prohibition on the hub_navigation:create mechanism itself -- that mechanism
+        carries no axis-membership check (the same CreateHubRelationAsync authority referenced in
+        admin_navigation_non_targets above), so cross-axis authoring through ordinary
+        /admin/manifests authoring is not technically blocked; this entry simply does not author
+        one and does not establish one as a canonical default. A future implementation_change
+        introducing a canonical, Bundle-registered cross-axis navigation path still needs its own
+        explicit SSOT authority -- that requirement is unchanged.
+      out_of_membership_scope: >-
+        db/seed_empty.sql's external-port-consumer-completion projections (email/stripe/
+        webhook_inbox/job_scheduler/audit_approval/export_sftp response-port manifests,
+        00000000-0000-0000-0000-0000000000a3 through 0000000000a8) are not declared under
+        surface_axes.admin or surface_axes.normal at all and carry no ui_projection topology entry
+        (a flat external-port-consumer-completion metadata object instead) -- they are not
+        user-facing navigable screens at all (no ui_projection to render), and this entry does not
+        include them in either axis's navigation membership. The same applies to manifest 093
+        (file-storage-bundle-export-job-dispatch, the same bundle_projection/consumer-evidence
+        kind). ae210/ae220/ae230/ae240/ae250/ae260/ae270/ae280 are excluded from this axis's
+        registered membership for a different, narrower reason: unlike a3-a8/093, they DO carry a
+        real ui_projection and are not technically unreachable via hub_navigation:create -- see
+        admin_navigation_non_targets above for the full account and its explicit retraction of any
+        broader prohibition. 00000000-0000-0000-0000-0000000ad200 (admin.dashboard.navigation.
+        projection, admin-dashboard) is excluded from this axis's registered membership for a
+        third, still narrower reason, corrected here: it DOES carry a real ui_projection and is not
+        technically unreachable, but this Bundle no longer registers it as either this axis's
+        source (see admin_navigation_source above, corrected to dd010) or as one of dd010's
+        targets, because it has no production route or entry point of its own today (see
+        production_reachability_precondition below) and nothing in this Bundle's own two goals
+        (ae200 reachable; target_topology_manifest_id migration) depends on it having one. ad200
+        itself is untouched as an existing manifest/seed row -- this is a registration-scope
+        decision for this Bundle's Admin-axis navigation membership only, not a claim that ad200 is
+        deleted, deprecated, or technically prohibited from ever being authored as a
+        hub_navigation:create source or target in a future, separately-scoped change.
+      production_reachability_precondition: >-
+        RESOLVED, corrected here: repo-wide grep found no frontend route, island, or backend code
+        referencing 00000000-0000-0000-0000-0000000ad200 outside test files
+        (backend/tests/Topolactor.Integration.Tests/AdminDashboardNavigationUiProjectionLiveDbTests.cs
+        and frontend/tests/adminWiringExecutionLane.test.ts) -- unlike ae200 (/admin/enums) and
+        dd010 (/admin/team-dashboard), admin-dashboard has no production route or entry point of
+        its own today. An earlier revision of this entry resolved this by inventing a new route
+        for ad200 (/admin becoming ad200's own thin_projection_wrapper entry point, since none of
+        runtime-orchestration-ssot.yaml frontend_routes.admin's other 8 registered admin routes was
+        an available slot and a genuinely new route outside that registry is prohibited) -- that
+        resolution is retracted: it solved the wrong problem. This Bundle's own Goal 1 only requires
+        that the Admin-axis fixed-navigation SOURCE be a real, already-reachable production entry
+        point; it never required that source to specifically be ad200. dd010
+        (team_dashboard.admin.projection) already satisfies that requirement today via its own real,
+        already-built production route (/admin/team-dashboard, retirement_kind hub_navigation_only
+        per runtime-orchestration-ssot.yaml admin_route_retirement_matrix) -- no new route,
+        thin_projection_wrapper, or any other production surface is needed. admin_navigation_source
+        above is corrected to designate dd010 as this axis's canonical source accordingly; ad200 is
+        removed from this Bundle's Admin-axis navigation membership entirely (see
+        out_of_membership_scope above), and the /admin route retains its current hardcoded body,
+        unaffected by and out of scope for this Bundle -- see
+        runtime-orchestration-ssot.yaml admin_route_retirement_matrix.routes' /admin entry for the
+        corresponding retraction there. This closes Goal 1 (ae200 reachable) without any new
+        production surface at all, beyond registering the three ordinary HubRelation rows
+        axis_navigation_membership already defines.
     subbundle_target_readiness:
       note: >-
         The only structural readiness gate this Bundle tracks per subBundle for STARTING that

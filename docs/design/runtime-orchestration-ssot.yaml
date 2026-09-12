@@ -129,6 +129,30 @@ runtime_orchestration_ssot:
           manifest an admin selects there, never required to be /admin's own landing page) in
           addition to the route's existing direct URL.
       routes:
+        - route: /admin
+          retirement_kind: thin_projection_wrapper
+          replacement: same_url_seed_backed
+          status: retracted_not_required_by_this_bundle
+          precondition: >-
+            RETRACTED: an earlier revision of this entry planned to replace /admin/index.tsx's
+            current hardcoded body with a ProjectionShell thin wrapper pinned to
+            manifestKey="admin.dashboard.navigation.projection" (ad200), solely so ad200 could serve
+            as this Bundle's Admin-axis fixed-navigation source (which otherwise has no production
+            route or entry point of its own -- see the retracted production_reachability_precondition
+            this pointed to). That plan is retracted: admin-console-workflow-ssot.yaml
+            admin_hub_relation_navigation_contract.axis_navigation_membership.admin_navigation_source
+            now designates dd010 (team_dashboard.admin.projection) as the canonical Admin-axis
+            fixed-navigation source instead, because dd010 already has a real, already-built
+            production route today (/admin/team-dashboard, retirement_kind hub_navigation_only below)
+            -- inventing a new /admin route purely to give a different manifest (ad200) a landing page
+            is no longer necessary to close this Bundle's Goal 1 (ae200 reachable). /admin's own
+            current hardcoded body is therefore out of this Bundle's scope entirely and is left
+            unchanged; ad200 is no longer part of this Bundle's registered Admin-axis navigation
+            membership (see admin_navigation_source and out_of_membership_scope in that same
+            contract). This route entry stays listed per this matrix's own note (retiring routes are
+            never silently dropped), but closing it is no longer a hub-relation-target-manifest-
+            canonical-migration Bundle item; a future, separately-scoped change to /admin's own
+            static content would need its own SSOT authority if ever pursued.
         - route: /admin/enums
           retirement_kind: thin_projection_wrapper
           replacement: same_url_seed_backed
@@ -365,12 +389,715 @@ runtime_orchestration_ssot:
         runtime_destination via HubNavigationResolver, not only topology_transform_runtime
         (RuntimeExecutor already performed this for its own path prior to this addendum).
       target_manifest_resolution: >-
-        HubNavigationSequenceItemDto.TargetManifestId is resolved only when exactly one active
-        hubs.topology_manifests row exists for NavigationSequence[].RelatedHubId — no implicit
-        oldest/first-match fallback (mirrors topology.physical_table_manifest_bindings'
+        The mechanism already built and unchanged by the design_change noted below (still an
+        accurate description of production today): HubNavigationSequenceItemDto.TargetManifestId
+        is resolved only when exactly one active hubs.topology_manifests row exists for
+        NavigationSequence[].RelatedHubId — no implicit oldest/first-match fallback (mirrors
+        topology.physical_table_manifest_bindings'
         no_implicit_join_nullable_fallback_or_oldest_manifest_fallback invariant in
         db-schema.yaml). Null/absent means the frontend must treat the related hub as not
         directly callable, never guess a target.
+      canonical_forward_target_reference: >-
+        Owner canonical redesign (design_change, no SQL DDL/backend/frontend/test change yet):
+        docs/design/db-schema.yaml hub_relations.target_reference_canonical_contract is the sole
+        canonical definition of the forward target-resolution design -- a direct
+        target_topology_manifest_id FK, replacing the related_hub_id-based exactly-one-active-
+        manifest inference described in target_manifest_resolution above. This field is a
+        pointer, not a restatement; once physically built, target_manifest_resolution
+        above is updated in place to describe the new current behavior rather than kept as an
+        independently-drifting second copy.
+    hub_relation_sequence_membership_and_navigation_island_contract:
+      status: design_change
+      note: >-
+        Canonical design; corrects a semantic drift this section previously held. Fixed navigation
+        is not a navbar-only edge type or a UI-Builder/ProjectionShell-specific concern. It is the
+        existing hubs.hub_relations manifest-scoped sequence authority (db/topology_tables.sql's own
+        hub_relations table comment: "Manifest-scoped hub sequence / UI transition order...
+        sequence_position is the sequence authority... Not a global hub-to-hub relation graph"),
+        read for whichever manifest is presently adopted, and presented by a dedicated app-shell
+        navigation consumer rather than embedded per-projection rendering. No new axis column,
+        relation-kind flag, or parallel relation table is introduced. hubs.hub_relations is a
+        sequence_position-ordered ORDERED SEQUENCE owned by one manifest at a time (its own outbound
+        rows, totally ordered by the UNIQUE(topology_manifest_id, sequence_position) constraint) --
+        never called a permutation here, since target identity carries no uniqueness constraint of
+        its own (only the (topology_manifest_id, sequence_position) pair is unique; the same target
+        manifest, including the owner itself via a legal self-targeting row -- see
+        db-schema.yaml hub_relations.target_reference_canonical_contract's
+        canonical_target_resolution_rule -- may occupy more than one position, so this is an ordered
+        list that can repeat a value, not a bijective permutation). Per db/topology_tables.sql's own
+        table comment ("Manifest-scoped hub sequence... sequence_position is the sequence
+        authority... Not a global hub-to-hub relation graph") and the table's own lineage
+        (db/legacy_utils/hub_relations_legacy_to_manifest_scoped.sql migrates this table FROM a
+        legacy global source-hub/target-hub/relation-registry graph shape TO this manifest-scoped
+        canonical shape precisely to retire the global-graph reading), the owning manifest's own
+        identity (topology_manifest_id, present and NOT NULL on every row) is the sequence's real,
+        literal first position -- not an invented or hidden placeholder, since it is a directly
+        readable column value already carried by every row the sequence owns. The full logical
+        sequence for an owning manifest M with rows sorted p1 < p2 < ... < pn by sequence_position is
+        therefore [M, target(p1), target(p2), ..., target(pn)], M occupying index 0 by direct
+        construction. Fixed navigation exposes only the IMMEDIATE prev/next entry adjacent to
+        current topology's own index within each such logical sequence it occurs in -- never the
+        sequence's other members, never a multi-hop walk, and never every row from either direction
+        unioned together (an earlier revision of this section held that broader framing; it is
+        retracted here). Current topology can occur at an index in a sequence two ways: (a) at index
+        0, as the OWNING manifest, or (b) at some index k>=1, as a TARGET row's resolved manifest,
+        inside a sequence owned by ANY manifest -- including current topology's own sequence when a
+        row legally self-targets (topology_manifest_id == target_topology_manifest_id), and
+        including more than one index within the SAME owning sequence when the same target manifest
+        is named by more than one row (not prohibited by the schema). Every such index occurrence
+        current topology occupies -- not every distinct owning manifest, and not deduplicated by
+        identity -- independently contributes its own prev/next pair; see semantic_role_mapping
+        below for the uniform single-list adjacency rule this reduces to, and
+        bidirectional_read_projection_gap below for why the owning manifest's index-0 position is a
+        directly authoritative schema fact rather than an open interpretive question. A manifest
+        with neither a prev nor a next from any index occurrence resolves an explicit empty
+        candidate set (see no_return_edge_bootstrap_requirement below); authoring an additional
+        relation is ordinary hub_navigation:create work, never bootstrap-mandatory content.
+        Attention/Recommendation candidate generation (logs, transition aggregates,
+        count/recency-weighted surfacing -- docs/design/context-route-recommendation.yaml,
+        docs/design/sql-attention-logs-ssot.yaml) is a separate, un-mixed lane per
+        docs/framework-core.yaml runtime_route_attention_boundary
+        (attention_score_must_not_override_fixed_route): this contract governs fixed_route/canonical
+        navigation only and never borrows an aggregate-pressure signal to select, order, or
+        supplement a prev/next candidate.
+      semantic_role_mapping: >-
+        current topology = the manifest identity actually adopted by ProjectionShell after a
+        backend dispatch resolves it (frontend/islands/ProjectionShell.tsx adoptedManifestIdRef /
+        adoptResolvedManifestIdentity -- the existing canonical frontend observation point, not a
+        new concept). logical sequence = for an owning manifest M, the ordered list [M,
+        target(p1), target(p2), ..., target(pn)] where p1 < p2 < ... < pn are M's own
+        hubs.hub_relations rows sorted by sequence_position ascending (db/topology_tables.sql's own
+        definition -- a manifest owns at most one such sequence, its own outbound rows; a manifest
+        never owns another manifest's sequence -- unchanged) and M itself occupies index 0 by direct
+        construction from the row's own topology_manifest_id column (see note above for why this is
+        a literal fact, not an invented element). index occurrence = one position current topology
+        occupies within one owning manifest's logical sequence: either index 0 (current topology IS
+        the owner M), or index k>=1 (current topology is the resolved target_topology_manifest_id of
+        M's row pk -- per db-schema.yaml hub_relations.target_reference_canonical_contract's
+        canonical_target_field, pointer only, unchanged by this entry). Because neither
+        target_topology_manifest_id nor related_hub_id carries a uniqueness constraint of its own
+        (only (topology_manifest_id, sequence_position) is unique -- confirmed against both
+        db/topology_tables.sql's own UNIQUE clause and the identical constraint
+        db/legacy_utils/hub_relations_legacy_to_manifest_scoped.sql adds when migrating from the
+        legacy shape), current topology's identity can occupy index k>=1 more than once within the
+        SAME owning sequence (the same target named by more than one row), and can occupy index 0
+        AND some index k>=1 of its OWN sequence simultaneously when one of its own rows legally
+        self-targets (topology_manifest_id == target_topology_manifest_id is explicit design
+        authority per that same canonical_target_resolution_rule, e.g. manifest 092's
+        canonical_default_entry_contract self-reference). candidate = the IMMEDIATE prev and/or next
+        entry adjacent to current topology's INDEX within one such logical sequence -- never the
+        sequence's other members, never every row sharing that owner. Derivation is a single,
+        uniform adjacency rule over the one logical sequence list [M, target(p1), ..., target(pn)]:
+        for current topology occurring at index i (0<=i<=n), next = the entry at index i+1 if i<n,
+        else none from this occurrence; prev = the entry at index i-1 if i>0, else none from this
+        occurrence -- index 0 has no prev because M is the sequence's real first element, not
+        because of a special-cased rule for owners; this is the same adjacency computation whether i
+        is 0 (owner) or >=1 (target row), requiring no separate case split. Every index occurrence
+        current topology occupies -- across every owning sequence it appears in, and independently
+        for each repeated occurrence within one owning sequence -- is evaluated on its own and
+        contributes its own prev/next pair; none are merged, none are deduplicated by identity, and
+        none are dropped. Everything above -- per-owner total ordering, the literal
+        owner-at-index-0 fact, adjacent-index lookup, multiple independent occurrences each
+        contributing their own pair, legal self-targeting, legal target-identity repetition -- is
+        settled directly by the existing schema (UNIQUE(topology_manifest_id, sequence_position),
+        NOT NULL topology_manifest_id, and the canonical_target_resolution_rule's explicit
+        source==target legality) and requires no new authority; see
+        bidirectional_read_projection_gap below for the read-projection question this derivation
+        still leaves open (how to transport a prev candidate that is itself an owning manifest,
+        given the existing DTO shape) and the minimal-extension candidates that question requires
+        Owner comparison against. attractor resolution = the existing OperationVectorResolver ->
+        AttractorResolver -> StructureMapResolver -> PackageResolver/SchemaResolver -> EmissionBuilder
+        chain a candidate's topology already goes through once selected, via the existing
+        ?manifest= projection-entry route -- not reimplemented on the frontend.
+      relation_branching_is_native: >-
+        Repo-wide check confirmed hubs.hub_relations already permits multiple active rows sharing
+        the same topology_manifest_id (the only uniqueness constraint is per
+        (topology_manifest_id, sequence_position), not one-row-per-source) -- a manifest owning
+        several outbound rows already has a multi-member sequence, no new axis/dimension/role-flag
+        column required; this fact is what lets an owning manifest's next (semantic_role_mapping
+        above) resolve deterministically to its own single lowest-sequence_position row without a
+        new column, and it is what lets dd010's own three-row sequence (ae200/5c100/092) chain
+        internally via prev/next once dd010 is standing on the FIRST of them. The Owner's
+        illustrative A=[1,5,7,9,15] / B=[4,2,3,8,9,6] example (current topology 9, candidates 15 and
+        6) is read literally here, correcting an earlier revision that named "A" and "B" as two
+        additional, invented owning-manifest identities standing outside these two arrays -- that
+        reading added elements the Owner's illustration never specified and is retracted. "A" and
+        "B" are plain labels for two target lists; this entry does not assign either array an owner
+        identity beyond what the illustration states, and does not add one as an extra array member.
+        The illustration's members are exactly the listed values (1, 5, 7, 9, 15 and 4, 2, 3, 8, 9,
+        6); applying semantic_role_mapping's single adjacency rule to each list as a target portion
+        (whichever unspecified manifest owns each list occupies that list's own index 0, per the
+        note above, but that owner's identity plays no part in this worked example since 9 does not
+        sit there): 9 sits at index 4 of A's array (0-indexed with index 0 reserved for A's owner,
+        1-indexed target position 4) with immediate neighbors 7 and 15, and at index 5 of B's array
+        (1-indexed target position 5) with immediate neighbors 8 and 6 -- two separate index
+        occurrences of the same identity (9)
+        within two different owning sequences, each contributing its own independent prev/next pair
+        exactly as semantic_role_mapping's occurrence-based derivation requires, without needing to
+        name or invent either array's owner. The Owner's original illustration named only the
+        forward continuation (15, 6); this design's explicit prev-and-next requirement means the
+        corrected candidate set standing on 9 is {7, 15, 8, 6} -- the earlier next-only framing of
+        this fixture undercounts once prev is included, and this entry documents that consequence
+        rather than silently narrowing back to next-only to match the original illustration.
+      bidirectional_read_projection_gap: >-
+        Restores this section's need for a target-scoped read, but retracts the specific candidate
+        SEMANTIC an earlier revision attached to it (that revision treated the read's purpose as
+        enumerating every owning manifest of a row naming current topology as target, and treated
+        each such owner as an unconditional "way back up" candidate -- an opposite-endpoint
+        enumeration this design_change retracts; see semantic_role_mapping above for the corrected
+        purpose: deriving current topology's prev/next within each sequence it belongs to as a
+        member, never enumerating owners as candidates in their own right). The existing
+        ContentBundleRepository.LoadHubNavigationSequenceAsync(topologyManifestId) -- source-scoped
+        by design -- already reads exactly current topology's own sequence (index 0 occurrence, the
+        forward half) and already returns every member ordered by sequence_position; under this
+        design_change the navigation Island consumes only that row-set's FIRST entry as current
+        topology's next when current topology is the owner (semantic_role_mapping above), not every
+        returned row. A repo-wide check confirmed no query anywhere in the repository
+        (NpgsqlContentBundleRepository.cs, SQL Attention's HubAttractorExplorationRuntime.cs
+        expandedHubIds included) reads hubs.hub_relations by its target column to find which row
+        (owned by any manifest, current topology's own included -- self-targeting rows are legal
+        per canonical_target_resolution_rule and this read does not special-case or exclude them)
+        names current topology as target -- that read is still a genuine read-projection gap over
+        the SAME canonical persistence, not a data-model limitation:
+        nothing in the schema prevents a second, target-scoped read over the identical
+        table/columns, and reading it this way is a single, bounded lookup (current topology's own
+        membership as a target, resolved against the owning row's source AND its own
+        sequence_position among that owner's other rows, so prev/next can be derived -- never an
+        unbounded enumeration of owners, and never a multi-hop walk of a second manifest's own
+        sequence beyond that one row) -- so it does not reframe hubs.hub_relations as a generic
+        traversable graph, and db/topology_tables.sql's "Not a global hub-to-hub relation graph"
+        comment is not violated by it. Resolution shape mirrors the rest of this file's
+        present-day-vs-canonical-forward split: today's unchanged mechanism resolves the reverse
+        direction by, for each row, applying the existing related_hub_id -> exactly-one-active-manifest
+        inference and keeping rows whose resolved target equals current topology (together with that
+        row's own sequence_position and its owner's OTHER rows, needed to find the adjacent
+        sequence_position and derive prev/next -- not to enumerate the owner's full row-set as
+        candidates); canonical forward design resolves the target match as a plain WHERE
+        target_topology_manifest_id = current topology once db-schema.yaml
+        hub_relations.target_reference_canonical_contract is physically built -- the same
+        current-vs-forward distinction hub_navigation_resolution.target_manifest_resolution above
+        already applies to the forward direction, applied symmetrically here. The next
+        implementation_change adds this reverse-direction read as an additive query -- not a new
+        authority, new table, or new column -- alongside the existing forward read; the navigation
+        Island derives, from the two reads together, current topology's prev and/or next per
+        sequence membership (semantic_role_mapping above), never a union of every row either read
+        returns.
+
+        Owner-at-index-0 is a directly authoritative schema fact, not an open interpretive
+        completion (an earlier revision of this entry surfaced it as one, hedging on something the
+        schema already settles; that hedge is retracted here). topology_manifest_id is NOT NULL on
+        every hubs.hub_relations row (db/topology_tables.sql), documented as "source/parent manifest
+        context for this relation row" (db-schema.yaml hub_relations.key_columns), and the table's
+        own migration lineage (db/legacy_utils/hub_relations_legacy_to_manifest_scoped.sql) exists
+        specifically to convert this table INTO a manifest-scoped chain rooted at that column. There
+        is nothing to interpret: the owning manifest is already the sequence's real first element by
+        direct column read, exactly as semantic_role_mapping's [M, target(p1), ..., target(pn)]
+        list states it, and the single adjacency rule applies to index 0 the same way it applies to
+        every other index -- no owner-specific case, no invented placeholder, no Owner sign-off
+        needed for this specific point. Reachability between dd010's own three Admin-axis targets
+        (ae200/5c100/092) follows directly from that same uniform rule, without a return-row per
+        target and without exposing more than one hop from any one position: dd010's own next is
+        ae200 (index 1, its first row); ae200 -- itself the owner of no rows of its own -- has, as
+        the index-1 occurrence of dd010's sequence, prev=dd010 (index 0) and next=5c100's target
+        (index 2); 5c100 similarly has prev=ae200's target and next=092's target; 092 has
+        prev=5c100's target and no next (index 3, dd010's last row). Chained prev/next hops keep all
+        four Admin-axis manifests (dd010, ae200, 5c100, 092) mutually reachable through fixed
+        navigation, each hop deterministic and bounded to one adjacent index -- satisfying "Admin権限
+        で到達可能なAdmin topology間のfixed-navigationを許容する" without requiring every pair to be a
+        single hop apart, and without dd010 being surfaced as an unconditional candidate from all
+        three (only from ae200, the specific occurrence whose index is 1, dd010's minimum target
+        position): see no_return_edge_bootstrap_requirement below for the corrected, position-
+        specific statement of this.
+
+        Genuinely open question, surfaced for Owner judgment because repo-wide search leaves more
+        than one non-identical way to close it: transporting a prev candidate that is itself an
+        owning manifest (e.g. dd010 as ae200's prev) through the existing
+        HubNavigationSequenceItemDto (backend/schema/ContentBundleContracts.cs) without silently
+        changing what that DTO's own fields already mean. Traced concretely against ae200's actual
+        prev candidate (the real dd010 -> ae200 row): that row's own TopologyManifestId is dd010,
+        RelatedHubId/RelatedHubLabel are ae200's own hub/label (the row's related_hub_id names
+        ae200's hub, since the row's real target is ae200, not dd010), and TargetManifestId's own
+        doc comment defines it as "the navigable topology_manifest under RelatedHubId" -- which
+        resolves to ae200 itself, never dd010, under that documented derivation. Populating the DTO
+        naively from this one real row therefore cannot produce a prev candidate whose click
+        destination is dd010 without one of: (a) setting TargetManifestId to dd010 while
+        RelatedHubId still names ae200's hub -- contradicting TargetManifestId's own "resolved under
+        RelatedHubId" derivation for this entry, a silent field-meaning change the NG axis forbids;
+        (b) leaving RelatedHubLabel as ae200's own label on a link whose href points at dd010 -- a
+        label/destination mismatch a user would experience as clicking "ae200" and landing on dd010;
+        or (c) overwriting TopologyManifestId with ae200 (current topology) to satisfy
+        resolveHubNavigationLinks's own doc comment ("Source topology_manifest_id this navigation
+        sequence was resolved for") -- which would then no longer match the real underlying row's
+        own topology_manifest_id column, corrupting the hubRelationId+topologyManifestId identity
+        pair selected_link_payload_required and cardListFactory's identity passthrough both rely on
+        as a real-row reference. None of these is a transport-layer detail; each rewrites a
+        documented field meaning. Repo-wide search found no existing DTO shape (
+        HubNavigationHubRelationItemDto, HubNavigationManifestItemDto, and the other
+        backend/schema/ContentBundleContracts.cs / ManifestManagementContracts.cs / UiTopologyContracts.cs
+        candidate/link-shaped records) that already carries fields honestly naming "the owning
+        manifest of this candidate" and "the click destination" as two independent, non-conflicting
+        identities. Minimal-extension candidates, for Owner comparison before any
+        implementation_change builds this: (1) RECOMMENDED -- add a new, separately-named DTO (e.g.
+        an "adjacent candidate" shape carrying hubRelationId, the owning manifest's own identity and
+        label, sequencePosition, an explicit direction discriminant, and targetManifestId as the
+        real click destination) alongside the existing, untouched HubNavigationSequenceItemDto; the
+        transport response carries the existing forward shape for the index-0-as-owner case (already
+        correctly expressible: TopologyManifestId=current, TargetManifestId=first row's real target)
+        plus this new shape for reverse-derived prev/next occurrences -- no existing field's meaning
+        changes for any caller, at the cost of one new backend/frontend type. (2) add a
+        `direction`/`role` discriminant field to HubNavigationSequenceItemDto itself and redefine
+        RelatedHubId/RelatedHubLabel/TargetManifestId's derivation conditionally on that discriminant
+        -- rejected as the weaker option: it makes three already-documented, always-present fields'
+        meaning conditional on a fourth field's value, which is a more confusing shape than a second
+        DTO and still requires touching the existing type every future consumer already depends on.
+        (3) synthesize a pseudo-row and reuse the DTO completely unchanged, choosing which columns to
+        borrow from which real row per case -- rejected outright: this is exactly the silent,
+        per-case field-meaning reinterpretation the NG axis prohibits, not a genuine third option.
+        No implementation_change should build the transport shape for this direction before Owner
+        picks between (1) and (2) (or states a different resolution) in response to this comparison.
+      no_return_edge_bootstrap_requirement: >-
+        Scope of this entry: a mirrored, separately-authored RETURN edge (e.g. an ae200 -> dd010
+        row authored in addition to dd010 -> ae200) is not bootstrap-mandatory content for this
+        Bundle -- axis_navigation_membership's three targets are not required to each carry their
+        own authored return row, and this Bundle does not author one. Corrected statement of the
+        justification (an earlier revision of this entry claimed dd010 resolves as a candidate "from
+        any of the three" targets unconditionally -- an opposite-endpoint/way-back framing this
+        design_change retracts; the actual reach-back is position-specific, per
+        semantic_role_mapping and bidirectional_read_projection_gap above):
+        bidirectional_read_projection_gap above already finds the return path for free for the ONE
+        target sitting at dd010's own sequence's minimum position (index 1), because index 0 of that
+        same logical sequence is dd010 itself, by direct construction (semantic_role_mapping above)
+        -- no extra row required for that one target. The other two targets
+        reach dd010 by chaining prev through their sequence-adjacent sibling first, not directly:
+        with dd010's three rows ordered ae200(1)/5c100(2)/092(3), only ae200 (the minimum-position
+        target) has dd010 itself as its prev; 5c100's prev is ae200's target, and 092's prev is
+        5c100's target -- dd010 is reached from 5c100 or 092 by an additional prev hop, not exposed
+        to them directly. Concretely: standing on ae200, the reverse-direction read finds the
+        existing dd010 -> ae200 row, confirms ae200 sits at dd010's minimum sequence_position, and
+        returns dd010 as ae200's prev -- the existing dd010 (team_dashboard.admin.projection, the
+        Admin bridge manifest itself) already provides this path once dd010 -> ae200 is registered,
+        with no new bridge manifest, dispatch axis, sequence-position convention, or other parallel
+        architecture introduced to make it work. The explicit-empty-list-never-guessed discipline
+        HubNavigationResolver.ResolveFallbackNavigationLinksAsync already uses elsewhere in this
+        file still governs the genuinely disconnected case -- a manifest with neither a prev NOR a
+        next from any sequence membership (its own outbound rows included) resolves an explicit
+        empty candidate set, never a synthesized/guessed target -- but that case no longer describes
+        any of axis_navigation_membership's three targets once their dd010 -> target rows exist,
+        since each then has at least one prev and/or next candidate (dd010 directly for ae200; a
+        sequence-adjacent sibling for 5c100 and 092, which themselves eventually chain back to
+        dd010). This is narrower than "zero outbound relations of a manifest's own is a fine end
+        state": see
+        minimum_cardinality_completion_invariant_relationship below for what a target's own
+        zero-outbound state does and does not mean under db-schema.yaml's
+        minimum_cardinality_completion_invariant, which this entry does not override, weaken, or
+        restate -- that invariant is about a manifest's own forward-direction completeness, not
+        about whether the navigation Island can present a path back to it or from it. Authoring an
+        additional outbound relation on ae200/5c100/092 (a further forward hop, not a
+        mirrored return row) remains ordinary hub_navigation:create authoring through the existing
+        /admin/manifests surface, identical to authoring any other relation.
+      minimum_cardinality_completion_invariant_relationship: >-
+        db-schema.yaml hub_relations.minimum_cardinality_completion_invariant (mirrored in
+        docs/framework-core.yaml runtime_route_attention_boundary
+        production_projection_connectivity_invariant) is the unweakened, canonical authority on
+        whether an active topology_manifest's own zero-outbound-relations state is a valid
+        completion state -- it is not: that invariant calls it a "navigation orphan," enforced
+        going forward at NpgsqlManifestRepository.PromoteAsync (the draft -> active transition;
+        resolvable-cardinality-aware, via HasResolvableActiveHubRelationAsync) and guarded against
+        regression by hub_navigation:deprecate's own last-active-relation check (a narrower,
+        raw-active-row-count guard, not resolvable-cardinality-aware -- see db-schema.yaml
+        hub_relations.target_reference_canonical_contract.
+        deprecate_and_update_guard_resolvability_distinction for the full account, including
+        UpdateHubRelationAsync's absent guard and NpgsqlManifestRepository.DeprecateAsync's
+        unguarded target-Manifest-deprecation regression path). This contract does not reopen,
+        narrow, or create an exception to that invariant. What this
+        contract's own no_return_edge_bootstrap_requirement and
+        explicit_current_topology_trust_boundary.valid_source_empty_and_multiple_rows actually decide
+        is orthogonal: the RUNTIME READ contract for whatever outbound-relation count a manifest
+        happens to have, never a judgment on whether that count is itself authoring-complete.
+        axis_navigation_membership's three Admin-axis targets (ae200, 5c100, 092) are
+        pre-existing rows already seeded directly as status='active' (like the large majority of
+        this repo's seeded manifests), predating PromoteAsync's enforcement mechanism and never
+        promoted through it -- under a literal reading of minimum_cardinality_completion_invariant
+        each is, right now, already a navigation orphan (zero of its OWN outbound active
+        hub_relations rows) -- a pre-existing fact independent of this Bundle's own work.
+        Registering axis_navigation_membership's three dd010 -> {ae200, 5c100, 092} rows
+        gives dd010 itself a resolvable outbound relation (satisfying the invariant for dd010,
+        the SOURCE), but does not, and is not required to, retroactively resolve the three TARGETS'
+        own pre-existing orphan status -- that is a separate, repo-wide seed-completeness
+        condition shared by most already-active seeded manifests, not something Goal 1
+        (ae200 reachable as a navigation target) depends on, and not something this Bundle
+        introduces, worsens, or is scoped to remediate. Closing it for any specific manifest
+        remains ordinary future hub_navigation:create authoring on that manifest, or a separate,
+        dedicated seed-remediation item covering the repo's existing orphaned manifests generally
+        -- out of this Bundle's scope either way.
+      navigation_island_contract: >-
+        Fixed-navigation presentation moves to a dedicated app-shell navigation consumer -- UI
+        Builder-independent and ProjectionShell-independent -- reusing frontend/routes/_app.tsx as
+        the app shell per existing Fresh convention; the exact concrete component/file split is an
+        implementation_change decision made against Fresh's actual island rules (see
+        cross_island_shared_state_boundary below), not invented here. It reads current topology
+        identity from the shared Context boundary below and resolves that identity's immediate
+        prev and/or next candidates per sequence membership (its own outbound row-set when it is an
+        owner, PLUS the upper-level sequence(s) it belongs to as a named target member, reverse
+        direction -- see semantic_role_mapping and bidirectional_read_projection_gap above)
+        exclusively through navigation_island_transport_boundary below -- the sole frontend->backend
+        transport reaching this resolution, never a second/parallel implementation of either read.
+        It renders only the immediate prev/next per sequence membership (never a sequence's other
+        members, never collapsed to a single assumed target when more than one membership
+        contributes a pair) as navigation options; selecting one dispatches through the existing
+        ?manifest= projection-entry route, never a frontend-duplicated attractor/structure-map
+        resolution.
+      navigation_island_transport_boundary:
+        canonical_chain: >-
+          Context (current topology Manifest identity, backend-resolved) -> navigation Island
+          issues a request carrying that identity as explicit input -> backend resolves BOTH
+          sequence-membership directions for that identity: (a) the Manifest's own active
+          hubs.hub_relations sequence via the existing HubNavigationResolver.ResolveAsync ->
+          ContentBundleRepository.LoadHubNavigationSequenceAsync (ordered by sequence_position; only
+          the first row's target is consumed as this identity's next when it is the owner --
+          semantic_role_mapping above), and (b) the upper-level sequence(s) it belongs to as a named
+          target member, via the additive reverse-direction read bidirectional_read_projection_gap
+          above defines (per owning manifest found, resolves that manifest's OTHER rows around the
+          matched position to derive prev and/or next) -> navigation Island renders the immediate
+          prev and/or next per sequence membership as candidates (never the full row-set either read
+          returns) -> selecting one uses the existing ?manifest= projection-entry route. No new
+          table, column, or parallel resolver AUTHORITY is added; (b) is one additional read method
+          over the identical hubs.hub_relations persistence (a), not a second data model.
+        chosen_boundary: >-
+          GET /hub-navigation/relations (backend/Program.cs), extended with an optional explicit
+          topologyManifestId query parameter. When present and it parses as a GUID, the handler
+          validates it against existing Manifest lifecycle/capability authority (see
+          explicit_current_topology_trust_boundary below -- a client-supplied query parameter is
+          request input, never backend-side proof of an already-authorized dispatch, so it is
+          validated the same way any other explicit Manifest identity reaching this backend is)
+          and, once validated, calls HubNavigationResolver.ResolveAsync(topologyManifestId) for the
+          forward half -- the same sequence_position-ordered read RuntimeExecutor/ManifestDispatcher
+          already perform for that manifest during its own dispatch, from which only the first row
+          is consumed as next when this identity is the owner -- and the additive reverse-direction
+          read for the upper-level half, from which the adjacent-position prev and/or next are
+          derived, combines the two into this identity's prev/next pair(s), and returns the result,
+          filtered per-target exactly as
+          explicit_current_topology_trust_boundary's target_filtering describes. Index-0-as-owner
+          (forward, next-only) entries are already truthfully expressible in the existing
+          HubRelationNavigationLinksResponseDto/HubNavigationSequenceItemDto envelope unchanged; the
+          reverse-derived prev entries (where the click destination is itself an owning manifest, not
+          the matched row's own resolved target) are NOT -- see
+          bidirectional_read_projection_gap above's genuinely open DTO-representability question and
+          its minimal-extension candidates, which Owner judgment must resolve before this envelope's
+          exact reverse-entry shape is finalized in a future implementation_change; this entry does
+          not prescribe one here. Whatever shape is chosen, fallbackReason distinguishes this
+          explicit-current-topology read from the endpoint's existing fallback mode. When
+          topologyManifestId is absent, the
+          endpoint's existing behavior (ResolveFallbackNavigationLinksAsync's
+          canonical-default-entry, role-filtered fallback) is entirely unchanged, so its existing
+          callers are not regressed -- only presence of the parameter selects the explicit branch;
+          a malformed value is never treated as absent (see
+          explicit_current_topology_trust_boundary's malformed_input rule). Auth boundary is
+          unchanged: any authenticated JWT (ValidateActiveSessionAsync), not admin-gated -- the
+          same boundary the endpoint already enforces -- so the navigation Island works on both
+          Admin and Normal surfaces without a new token authority; source/target Manifest
+          visibility is additionally gated by existing capability authority as described below,
+          the same authority every other explicit-Manifest-identity backend path already applies.
+          The frontend client function reaching this boundary (a new plain-fetch client, not
+          routed through queueClientCommand/dispatchOperation's /dispatch POST lane, since this is
+          a distinct GET boundary with its own existing auth check) is an implementation_change
+          addition, not defined by this design_change.
+        explicit_current_topology_trust_boundary:
+          note: >-
+            A backend-resolved current topology identity living in frontend Context is still,
+            once it crosses an HTTP boundary, ordinary client-supplied request input -- Context
+            membership proves the frontend believes it once received this identity from a
+            dispatch response, never that THIS request is authorized to read THIS Manifest's
+            navigation sequence right now. "Already-authorized current topology" is not by itself
+            sufficient justification to skip the fallback resolver's per-target role filter on the
+            explicit branch -- that assumption does not hold and is retracted here. The explicit
+            branch instead reuses the identical Manifest lifecycle/capability authority every
+            other explicit-Manifest-identity backend path already applies -- no Navigation-only
+            RBAC, session-to-current-manifest ledger, or parallel authorization table is
+            introduced.
+          authentication: >-
+            Unchanged: JwtGuard.ValidateActiveSessionAsync gates the whole endpoint before either
+            branch is reached, exactly as today. A valid session proves the caller is
+            authenticated; it does not by itself prove the caller may read any specific Manifest's
+            navigation sequence -- that is a separate, per-Manifest question answered below.
+          source_manifest_existence_and_lifecycle: >-
+            Reuses ManifestRepository.LoadByIdAsync(topologyManifestId) -- the identical call
+            ManifestDispatcher.DispatchAsync's target_ref path already uses to resolve an explicit
+            Manifest identity, and the identical call HubNavigationResolver.
+            ResolveFallbackNavigationLinksAsync already uses for its own canonical-default-entry
+            source manifest. A null result (no such row) or a non-active Status fails closed --
+            same active_status_requirement discipline ManifestDispatcher's target_ref TOCTOU
+            re-check and ResolveFallbackNavigationLinksAsync's own source-manifest check already
+            apply. No new repository method or existence query is introduced.
+          active_topology_eligibility_predicate: >-
+            Canonical invariant (Owner-directed): NavigationTopologyVisibility(caller, topology)
+            == ActiveTopologyEligibility(caller, topology), where ActiveTopologyEligibility means
+            the SAME caller could actually reach that Manifest through the runtime's existing
+            EXPLICIT Manifest-selection door -- the one
+            frontend/runtime/projectionEntry.ts resolveProjectionEntryAxes already opens for any
+            manifest via ?manifest=<uuid> / manifest_key:<key>:projection_entry (admin-dashboard's
+            own seed comment confirms this is the intended door: "reached the same way manifest
+            092 is reached, via explicit payload.target_ref = manifest:<id>:projection_entry").
+            That selection path ALWAYS sends layer=screen_list, action=Search -- it never inspects
+            the target manifest's own dispatcher_mapping to choose a layer/action.
+            Verified against ManifestDispatcher.DispatchAsync's target_ref branch:
+            "manifest:<uuid>:projection_entry" does not match AdminRuntimeTargetRefRe's strict
+            manifest:<uuid>:<layer>:<action> shape, so an admin_runtime-destined manifest instead
+            takes IsGenericStructuralReadTargetRef's gate
+            (HasUiProjectionEntry(topology) &&
+            ScreenDataShapeTopologyReader.IsScreenReadAction(layer, action)) -- true for every
+            manifest worth navigating to, since a real navigation target always carries its own
+            ui_projection entry and screen_list/Search is a registered screen-read shape. Once
+            that gate passes (or the manifest is not admin_runtime at all), the SAME single gate
+            every target_ref/axes/db_notify path eventually reaches decides reachability:
+            ManifestDispatcher.ValidateCapabilityRequirement(topology, callerRole, "screen_list",
+            "Search"). dispatcher_mapping.role plays NO part in this outcome --
+            ManifestDispatcher.ResolveRequiredRole's own doc comment states this outright
+            ("dispatcher_mapping.role is NOT used for inference. That field is a routing
+            constraint... Using it as a capability gate would create a tautological check on axes
+            paths and incorrect constraints on non-admin-runtime manifests accessed via
+            target_ref"), and
+            ManifestDispatcherLayerActionScopedCapabilityTests.DispatchAsync_DefaultScreenReadDeclared_StructuralReadReturnsRealData
+            proves it live today: a manifest whose own dispatcher_mapping declares role="admin" on
+            its one action still returns Success=true for role="user" via target_ref, purely
+            because it also carries a scoped-open capability_requirement for (screen_list,
+            Search). A manifest is therefore ActiveTopologyEligible for callerRole exactly when
+            ValidateCapabilityRequirement(topology, callerRole, "screen_list", "Search") raises no
+            AUTH_CAPABILITY_DENIED -- a single check, the fixed axes the real explicit-selection
+            door always sends, no dispatcher_mapping composition and no case split between
+            manifests that do or do not declare a dispatcher_mapping entry of their own (an
+            earlier two-case framing built around
+            DispatcherMappingAxisAuthority.FindDeclaredRole is retracted -- see
+            dd020_worked_example below for why): dispatcher_mapping shape is irrelevant to this
+            specific question, since explicit target_ref-based selection never consults it.
+          dd020_worked_example: >-
+            team_dashboard.normal.projection (dd020) is a load-bearing example because both a
+            plain layer/action-omitted resolution AND a dispatcher_mapping-role-first composition
+            get it wrong. db/seed_empty.sql's actual dd020 topology declares
+            {"type":"runtime_mapping","runtime_destination":"admin_runtime"},
+            {"type":"dispatcher_mapping","role":"normal","target":"admin","layer":"team_dashboard",
+            "action":"get"}, two layer/action-scoped capability_requirement entries with no
+            required_role field (layer=screen_list/action=Search, layer=team_dashboard/action=get),
+            and its own ui_projection entry -- i.e. dd020 IS admin_runtime and IS a real navigation
+            target. Applying active_topology_eligibility_predicate:
+            ValidateCapabilityRequirement(dd020.topology, callerRole, "screen_list", "Search")
+            resolves the scoped (screen_list, Search) entry (no required_role = explicitly open)
+            for EVERY callerRole -- Normal, Admin, or any other authenticated role. dd020's own
+            dispatcher_mapping.role="normal" entry (declared on team_dashboard/get, a DIFFERENT
+            (layer, action) pair than the predicate's fixed screen_list/Search evaluation) is
+            never consulted by the predicate at all: it is the axes-routing constraint for
+            ?route=<target> selection (a separate door, ResolveActiveManifestAsync's own WHERE
+            clause), not a capability gate for ?manifest=<uuid>-style explicit selection --
+            ManifestDispatcher.ResolveRequiredRole's own doc comment says as much directly. An
+            earlier framing of the predicate (composing DispatcherMappingAxisAuthority.
+            FindDeclaredRole with a per-entry-scoped ValidateCapabilityRequirement, and concluding
+            an Admin caller is "not eligible" for dd020 because dd020's one dispatcher_mapping
+            entry declares role="normal") is retracted here: it assigned dispatcher_mapping.role a
+            capability meaning the runtime itself explicitly disclaims, and it would have required
+            narrowing the real ?manifest=<dd020-uuid> door to hide dd020 from Admin callers to
+            make Navigation match that framing. dd020 is ActiveTopologyEligible for Normal AND
+            Admin callers alike; dd010 remains a distinct, additionally-eligible Admin-axis
+            manifest, never dd020's sole Admin-facing substitute.
+          source_manifest_capability_authorization: >-
+            Applies active_topology_eligibility_predicate above to the source Manifest with
+            callerRole = JwtGuard.TryGetRole(token): not ActiveTopologyEligible fails closed
+            (AUTH_CAPABILITY_DENIED-shaped ValidationError, same code family /dispatch already
+            uses), same fail-close shape as missing_inactive_unauthorized_source below. The check
+            is a single ValidateCapabilityRequirement(topology, callerRole, "screen_list",
+            "Search") call -- the same fixed axes the real ?manifest=<uuid> door always sends --
+            never a Navigation-specific fake layer/action and never a dispatcher_mapping-role
+            precondition.
+          target_filtering: >-
+            The explicit branch's safety boundary is not a response-set containment relationship
+            against the fallback branch -- the two branches resolve from different source
+            manifests (fallback: the canonical-default-entry manifest; explicit: whatever
+            topologyManifestId the caller supplied) with no general subset relationship between
+            what each could legitimately disclose, and fallback's own per-target filter is
+            independently known narrower/buggier than active_topology_eligibility_predicate (see
+            below) -- requiring the explicit branch to disclose no more than fallback would force
+            it to inherit that bug rather than the corrected predicate. The actual boundary: the
+            explicit branch never discloses a target's identity (UUID, label, or href) that fails
+            active_topology_eligibility_predicate for the requesting caller -- a caller is never
+            shown a candidate only to have it deny on click. Applies the
+            identical active_topology_eligibility_predicate above to each candidate's target
+            Manifest with the SAME callerRole: existence (LoadByIdAsync non-null),
+            active_status_requirement, and active_topology_eligibility_predicate together gate
+            inclusion; a target failing any of these is dropped from the response entirely, not
+            merely marked unresolvable. Source and target reuse the identical predicate -- no
+            separate role-determination algorithm per side. ResolveFallbackNavigationLinksAsync's
+            own per-target filter (today built directly on layer/action-omitted
+            ResolveRequiredRole) has the same dd020-shaped gap dd020_worked_example above
+            describes, and is narrower than even the retracted dispatcher_mapping-role framing
+            was, since it evaluates no layer/action at all -- it must converge onto this same
+            active_topology_eligibility_predicate rather than remain a second, drifting authority
+            -- a forward-design requirement recorded here; the fallback endpoint's own semantic
+            (canonical-default-entry resolution, role-filtered visibility,
+            explicit-empty-when-nothing-resolves) is unchanged, only the per-target eligibility
+            check it uses converges.
+          malformed_input: >-
+            A topologyManifestId query parameter that is present but does not parse as a GUID is
+            an explicit validation failure (ValidationError, same envelope/code-family convention
+            /dispatch and this endpoint's own 401 branch already use -- e.g.
+            TOPOLOGY_MANIFEST_ID_INVALID), never silently treated as absent and never routed into
+            the canonical-default-entry fallback. Only true absence of the parameter selects the
+            fallback branch.
+          missing_inactive_unauthorized_source: >-
+            present-but-source-missing, present-but-source-inactive, and
+            present-but-source-unauthorized are each an explicit fail-close response (a
+            ValidationError, not a success), never silently collapsed into an empty-links success
+            and never resolved against a different (default-entry or guessed) Manifest.
+          valid_source_empty_and_multiple_rows: >-
+            A validated, authorized source Manifest with no prev and no next from any index
+            occurrence -- neither at index 0 of its own sequence nor as a target row's resolved
+            manifest at any index of any owning sequence, its own self-targeting rows included -- is
+            an ordinary success with an explicit empty links array -- indistinguishable in shape
+            from any other empty result, but reached only after source validity is already
+            established, never as a stand-in for a validation failure. Zero of its OWN outbound rows
+            alone is not sufficient for an empty result once bidirectional_read_projection_gap above
+            is physically built: the reverse-direction read may still supply a prev and/or next
+            (e.g. ae200 finds dd010 as its prev this way despite owning zero rows of its own). A
+            validated, authorized source Manifest occurring at multiple simultaneous indices (owner
+            of its own sequence AND/OR a target row's resolved manifest at one or more indices of one
+            or more owning sequences -- including more than one index within the SAME owning
+            sequence, since target-identity repetition is not schema-prohibited, and including both
+            index 0 and some index k>=1 of its OWN sequence when a legal self-targeting row exists)
+            returns each occurrence's own prev/next pair, uncollapsed and none dropped or
+            deduplicated by identity -- but never the full member list of any one sequence: per
+            semantic_role_mapping above, an owning manifest's own index-0 occurrence contributes only
+            its single first-row next, and each target-row occurrence contributes only its own
+            adjacent prev/next, regardless of how many rows the owning manifest in question has or
+            how many of those rows resolve to the same target identity.
+          response_envelope: >-
+            Reuses the existing HubRelationNavigationLinksResponseDto (success / links / errors /
+            requestedSurface / fallbackReason) for both branches -- no new DTO is introduced by
+            this design_change. Whether fallbackReason needs a distinct explicit-branch value (as
+            already noted in chosen_boundary above) or another minimal-compatible envelope
+            adjustment is an implementation_change decision against existing DTO/consumer
+            conventions, not decided here.
+        rejected_boundaries:
+          hub_navigation_get_hub_relations_dispatch_action: >-
+            /dispatch layer=hub_navigation action=get_hub_relations
+            (backend/runtime/AdminRuntime.cs HubNavigationGetHubRelationsAsync) takes an explicit
+            topologyManifestId input but calls ContentBundleRepository.ListHubRelationsByManifestAsync,
+            not LoadHubNavigationSequenceAsync -- a broader, admin-authoring-shaped read (includes
+            inactive/deprecated rows, returns a related-hub display label for the
+            HubNavigationAdmin.tsx CRUD editing screen) rather than the active-only,
+            sequence_position-ordered runtime read semantic_role_mapping requires. It is also
+            reachable only through the admin-authenticated session boundary
+            (frontend/api/adminApi.ts callHubNavigation, the same token AdminAuthGate/super_auth
+            issues), so it cannot serve the Normal-axis surfaces axis_navigation_membership also
+            covers without giving the navigation Island a second, admin-only auth path. Reusing it
+            would also point a second, semantically-different (admin-authoring-shaped) read at the
+            same table the active-only runtime semantic already keeps single-owner for the forward
+            direction (LoadHubNavigationSequenceAsync) and, per bidirectional_read_projection_gap
+            above, for the reverse direction (its own additive method) -- neither is
+            ListHubRelationsByManifestAsync's broader CRUD-shaped read.
+          new_dedicated_endpoint: >-
+            Rejected as redundant: the explicit-current-topology semantic (both the forward and the
+            additive reverse-direction reads) is already fully expressible as a minimal extension of
+            the existing GET /hub-navigation/relations boundary (same resolver, same
+            repository/table, same response envelope, same auth), so a second endpoint would only
+            duplicate that boundary rather than close a real gap.
+          dispatch_business_projection_reuse: >-
+            The projection dispatch ProjectionShell already performs (queueClientCommand -> POST
+            /dispatch -> ManifestDispatcher/RuntimeExecutor) already embeds this same manifest's
+            NavigationSequence in its own Emission (RuntimeExecutor.ExecuteAsync step 11 /
+            ManifestDispatcher.EnrichWithHubNavigationAsync), but that Emission is
+            ProjectionShell-internal state; carrying it into Context would put
+            loading/error/emission-shaped data into the shared boundary and make ProjectionShell
+            the de facto source of navigation presentation data again -- both excluded by
+            cross_island_shared_state_boundary's minimal-Context contract and by
+            navigation_island_contract's ProjectionShell-independence requirement. The navigation
+            Island's own read above is therefore a deliberate, additional read of data the backend
+            already computes once per dispatch elsewhere -- not a new authority, and not a second
+            write/business dispatch.
+      cross_island_shared_state_boundary: >-
+        Verified against Fresh 1.7.3's actual client hydration algorithm
+        (src/runtime/entrypoints/main.ts's revive()/_walkInner(), fetched and read directly from the
+        pinned version named in deno.json), not inferred from build-time bundle splitting alone: an
+        island's closing DOM marker is only turned into its own independent
+        render(vnode, rootFragment) call -- a separate Preact root -- when no OTHER island's marker
+        is still open on the walk's marker stack at that point. An island encountered while nested
+        inside another island's own subtree (whether composed directly in the outer island's JSX, or
+        passed in as that outer island's children from a route, exactly the existing
+        frontend/islands/AdminAuthGate.tsx pattern already wrapping
+        frontend/islands/ProjectionShell.tsx today) is instead folded into the SAME vnode tree as
+        that outer island and hydrated together as one single render() call. Literal preact
+        createContext/Context.Provider therefore DOES propagate from an outer, top-level island down
+        to useContext() calls in an island nested inside it -- confirmed from the framework's own
+        hydration algorithm, not assumed from the absence of existing createContext usage or from
+        per-island JS chunk splitting (chunking is a build-time code-splitting concern, orthogonal to
+        the runtime hydration-tree question). The canonical mechanism is therefore the Owner's
+        literal design: a new top-level app-shell Island, mounted from frontend/routes/_app.tsx
+        around {Component} (so every route's existing nested islands, this pattern's
+        AdminAuthGate/ProjectionShell included, become descendants of this one hydration tree), owns
+        current topology identity via useState and exposes it through a Context.Provider; the
+        navigation Island and ProjectionShell consume it via useContext as nested descendants of
+        that same app-shell Island -- not a module-scoped subscribable store, and not
+        Redux/Zustand. Context carries only the minimal shared value (current topology identity)
+        plus one explicit update function -- URL selection and backend dispatch resolution remain
+        the sole identity authorities; ProjectionShell calls the update function only after
+        adoptResolvedManifestIdentity/adoptedManifestIdRef confirms a backend-resolved identity, and
+        Context never overrides either authority.
+      projection_shell_role_narrowing: >-
+        ProjectionShell.tsx keeps every non-navigation responsibility unchanged (dispatch,
+        loading/error/emission/specs state, node-value tracking, local runtime state, SSE
+        lifecycle) and becomes a producer into cross_island_shared_state_boundary above, not the
+        fixed-navigation presentation owner. Its existing
+        resolveHubNavigationLinks(emission.navigationSequence) nav-bar rendering is retired in
+        favor of the navigation Island so the same relation candidates are never presented twice;
+        this retirement is an implementation_change item, not performed by this design_change.
+      selection_observation_forward_requirement: >-
+        Display order authority is unchanged and already established above
+        (relation_branching_is_native, valid_source_empty_and_multiple_rows): sequence_position,
+        uncollapsed, never guessed. Separately, Owner intent is that a caller's selection of a
+        fixed sequence link also becomes an observable signal feeding
+        docs/design/context-route-recommendation.yaml lanes.ui_pressure -- purely additive
+        material for Attention/Recommend, never a route-state authority:
+        framework-core.yaml runtime_route_attention_boundary's own
+        attention_score_must_not_override_fixed_route invariant is unaffected either way, since
+        observation logging never influences which candidate is shown or which href a click
+        follows. Verified against the actual code, with producer/persistence and consumer kept
+        strictly separate (an SSOT source declaration is not production consumer evidence): (A)
+        frontend/islands/ProjectionShell.tsx's own hub navigation nav bar renders a bare anchor
+        (<a href={link.href}>), with no onClick handler and no call into
+        frontend/runtime/frontendScheduler.ts emitComponentOperationEvent -- selecting a fixed
+        sequence link is NOT connected to component_operation_event_log today, independent of and
+        predating this Bundle's own presentation-ownership move. (B) The producer/persistence
+        chain for exactly this purpose is already built and must be reused, never invented anew:
+        emitComponentOperationEvent (frontendScheduler.ts) -> queued flush ->
+        backend/endpoint/ComponentEventAppendEndpoint.cs ->
+        ContextRouteRepository.AppendComponentOperationEventLogAsync ->
+        public.component_operation_event_log (db-schema.yaml role: component operation event log
+        for recommendation pressure signal collection). (C)
+        context-route-recommendation.yaml lanes.ui_pressure canonically declares
+        component_operation_event_log as one of its sources (sources: context_event,
+        component_operation_event_log; outputs: next_operation/next_component/
+        next_route_action) -- an SSOT authority fact, not by itself proof that anything reads the
+        table. (D) No production consumer or aggregation mechanism reading
+        component_operation_event_log exists today: backend/runtime/
+        ContextRouteRecommendationResolver.cs's actual ui_pressure/next_operation computation
+        reads exclusively from context_event/context_transition_stats
+        (NpgsqlContextRouteRepository's prev_operation/next_operation/count_events/count_hits/
+        prob01 aggregate), never component_operation_event_log; the only backend method touching
+        that table is the write-only AppendComponentOperationEventLogAsync; and
+        frontend/tests/recommendationPressureLaneGuard.test.ts's assertion that ui_pressure's
+        sources include component_operation_event_log is a parsed-YAML SSOT-shape check, not a
+        runtime consumer proof. Forward requirement for the future implementation_change that
+        builds the app-shell navigation Island, scoped to (A)+(B) only: the Island's own
+        link-selection handler must call emitComponentOperationEvent at selection time
+        (identity/payload shape is an authoring-time decision for that change, informed by
+        hubRelationId already carried on ResolvedHubNavigationLink) -- no new counter table,
+        endpoint, store, or event lane may be introduced for this purpose. This closes a
+        pre-existing wiring gap (the missing call from the hub navigation link handler into an
+        already-built producer/persistence mechanism), not a gap this Bundle itself opened. The
+        separate (C)-to-actual-recommendation-output consumer gap (component_operation_event_log
+        declared as a ui_pressure source with no reader) is a distinct, pre-existing condition,
+        independent of hub-relation navigation and not caused or worsened by selecting a fixed
+        sequence link -- it is out of this Bundle's own scope and is tracked as its own Bundle
+        (see the Bundle index file under .agent/tasks/, entry
+        ui-pressure-component-event-log-consumer-gap), never absorbed
+        into this Bundle's own acceptance boundary.
     admin_runtime_structural_read_fallback:
       owner: manifest_dispatcher
       trigger: >-
@@ -494,6 +1221,22 @@ runtime_orchestration_ssot:
             fallback)
         - this contract does not authorize a dedicated credential-management route, dedicated
             panel, or new runtime_destination
+      canonical_forward_scope_note: >-
+        test_input_shape / resolution_chain / proof_boundary above describe the mechanism already
+        built and its passing proof (unchanged by this design_change). The canonical forward
+        target-resolution design is db-schema.yaml hub_relations.target_reference_canonical_contract
+        (target_topology_manifest_id, no SQL DDL yet). When a future implementation_change
+        physically replaces related_hub_id with target_topology_manifest_id, it must update this
+        test_proof_contract (test_input_shape's hub_ids[] becomes a manifest_ids[] vector,
+        resolution_chain's RelatedHubId/TargetManifestId steps are rewritten, proof_boundary's
+        "exactly one ACTIVE manifest for a related hub" clause is replaced by a direct
+        target_topology_manifest_id existence+status check) in the same change that updates the
+        code — not leave this text describing a retired mechanism. Where an existing test turns
+        out, on inspection, to assert the OLD related_hub_id-based semantic as its actual point
+        (rather than incidentally using related_hub_id as test plumbing), that
+        implementation_change must judge what canonical contract the test is meant to prove and
+        either update it to prove the new canonical contract or retire it as stale proof — never
+        keep the old semantic alive by leaving the test unchanged and calling it done.
 
     production_projection_connectivity_invariant:
       note: >-
@@ -601,7 +1344,24 @@ runtime_orchestration_ssot:
         its topology_manifest_id with zero active relations, regardless of that manifest's own
         draft/active status (hub_navigation:update replaces related_hub_id in place;
         hub_navigation:reorder never changes status, so deprecate is the only other mutation able to
-        reduce the active count).
+        reduce the active count). "Zero active relations" here is not the same test as
+        PromoteAsync's own gate above: HasResolvableActiveHubRelationAsync reuses
+        LoadHubNavigationSequenceAsync's own resolution semantics (a row counts only when its
+        target actually resolves), while hub_navigation:deprecate's guard counts raw
+        status='active' hub_relations siblings and never checks whether any of them resolves --
+        see db-schema.yaml
+        hub_relations.target_reference_canonical_contract.deprecate_and_update_guard_resolvability_distinction
+        for the full account, including hub_navigation:update's own complete absence of a
+        resolvability check on the related_hub_id it writes. A third, independent regression path
+        sits outside both of the above: NpgsqlManifestRepository.DeprecateAsync deprecates a
+        Manifest directly (mirroring status onto hubs.topology_manifests, as this contract's own
+        proof_shape above describes) with no check against OTHER manifests' hub_relations rows
+        that name it as their resolution target -- deprecating a widely-referenced target Manifest
+        can silently drop any number of unrelated source manifests to zero resolvable active
+        relations in one action. No existing enforcement mechanism guards this path; it is a
+        pre-existing production condition, neither introduced nor remediated by this
+        design_change, recorded alongside deprecate_and_update_guard_resolvability_distinction
+        rather than answered with a new mechanism here.
       scope: >-
         Applies to every hubs.topology_manifests row per db-schema.yaml
         hub_relations.minimum_cardinality_completion_invariant.applies_to -- not limited to
@@ -617,7 +1377,12 @@ runtime_orchestration_ssot:
         explicit manifest, no pre-injected payload.target_ref) resolves an initial manifest.
         Distinct from hub_navigation_resolution above, which resolves OUTBOUND navigation links
         from an ALREADY-resolved manifest -- this contract is consulted BEFORE any manifest is
-        resolved, as the initial-resolution fallback itself.
+        resolved, as the initial-resolution fallback itself. Unaffected by
+        db-schema.yaml hub_relations.target_reference_canonical_contract (the related_hub_id ->
+        target_topology_manifest_id redesign): this contract resolves the marked relation's own
+        topology_manifest_id (its source/parent manifest field), never related_hub_id or any
+        outbound target field, so retiring related_hub_id's target-resolution authority does not
+        touch this mechanism.
       owner: hubs.hub_relations
       marker:
         field: relation_config.transition

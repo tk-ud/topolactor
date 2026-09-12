@@ -2994,8 +2994,20 @@ react_schema_topology_seed_translator_ssot:
               dispatchPayloadFromByTrigger={click:{...}}, dispatches enum_dictionary:create_group
               against ae210's own dispatcher_mapping/capability_requirement exactly as if that
               button lived on ae210's own layout. What remains is authoring-only, not architecture:
-              (1) the 7 write manifests (ae210-270) are still each their OWN separate hub-navigable
-              screen rather than nodes wired into ae200's layout via this mechanism, and (2)
+              (1) the 7 write manifests (ae210-270) are still each their OWN separate manifest
+              (each with its own hub, per LoadHubNavigationSequenceAsync's one-active-manifest-
+              per-hub resolution requirement) rather than nodes wired into ae200's layout via this
+              mechanism -- this point's original "hub-navigable" wording is accurate as a
+              mechanism fact (the hub_navigation:create dispatch does not reject them as targets;
+              see docs/design/admin-console-workflow-ssot.yaml
+              admin_hub_relation_navigation_contract.admin_navigation_non_targets for the full,
+              current account, including its own explicit retraction of a stricter reading an
+              earlier revision of that entry carried) -- but it is narrower than it may read: no
+              Bundle registers a fixed hub_relations row to these 7 manifests (plus ae280) in
+              production seed data, and the canonical Enum UX reaches them via node-local
+              target_ref dispatch embedded in ae200's own layout, not as separately navigated-to
+              screens; "separate manifest" above describes their physical seed-row separateness
+              only, not a navigation membership claim -- and (2)
               ae200's own layout has not been authored with the search/table/create-modal/
               inline-update/delete-confirm/membership-editing/dryRun-preview/confirm/write/reread
               composition this single-surface goal requires -- see
