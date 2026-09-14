@@ -128,6 +128,18 @@ admin_normal_surface_projection_seed_ssot:
         table: hubs.hub_relations
         role: navigation_edge
         meaning: an outbound navigation row from a source topology_manifest (topology_manifest_id) to a target hub (related_hub_id).
+        canonical_forward_note: >-
+          The meaning above describes today's physical row shape (related_hub_id is the only
+          target-identifying column db/topology_tables.sql currently defines) -- it is not a
+          restatement of the target-resolution authority. docs/design/db-schema.yaml
+          hub_relations.target_reference_canonical_contract.canonical_target_resolution_rule is
+          the canonical-forward authority: once target_topology_manifest_id (a direct FK to
+          hubs.topology_manifests, not yet physically added) exists, it is the sole
+          target-resolution authority and related_hub_id is retired from that role (retained only
+          as a legacy field per related_hub_id_retirement_contract), not a second, competing
+          target-identifying column. This physical_hierarchy section is not the place that
+          decision is made or restated; it only grounds the seed layer in whatever the physical
+          row shape is at read time.
       topology:
         table: hubs.topology_manifests (projected from manifest.topology jsonb[])
         role: semantic_space_db_calculation_and_definition

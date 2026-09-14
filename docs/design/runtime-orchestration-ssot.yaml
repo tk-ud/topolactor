@@ -1017,6 +1017,24 @@ runtime_orchestration_ssot:
         resolveHubNavigationLinks(emission.navigationSequence) nav-bar rendering is retired in
         favor of the navigation Island so the same relation candidates are never presented twice;
         this retirement is an implementation_change item, not performed by this design_change.
+        **Explicit boundary of this retirement (verified directly against
+        frontend/islands/ProjectionShell.tsx's actual JSX)**: the `hubNavigationLinks` array
+        (`resolveHubNavigationLinks(emission?.navigationSequence)`) and its
+        `.map(...)` rendering (`data-hub-navigation-resolvable` /
+        `data-hub-navigation-unresolvable`) are the ONLY things retired -- the sibling
+        `data-projection-home-link` anchor (`href="/dashboard"`, labelled "ホーム") that today
+        shares the same `<nav data-projection-hub-navigation>` wrapper element is NOT part of
+        `resolveHubNavigationLinks`'s output and is NOT retired by this item, even though both
+        sit inside one `<nav>...</nav>` block today: retiring the hub-relation candidate
+        rendering must not delete or relocate the Home anchor, its `/dashboard` href, or its
+        unconditional-render behavior. Whether the implementation_change keeps a (now
+        candidate-less) `<nav>` wrapper around the Home anchor alone, or moves the anchor to a
+        different wrapper, is an implementation_change layout decision -- the invariant this entry
+        fixes is behavioral, not structural: the Home affordance's existing text, href, and
+        unconditional-render semantics must survive this retirement unchanged, since it is the
+        sole round-trip mechanism no_return_edge_bootstrap_requirement and
+        valid_source_empty_and_multiple_rows above rely on for the missing-side and
+        genuinely-disconnected cases.
       selection_observation_forward_requirement: >-
         Display order authority is unchanged and already established above
         (relation_branching_is_native, valid_source_empty_and_multiple_rows): sequence_position,
