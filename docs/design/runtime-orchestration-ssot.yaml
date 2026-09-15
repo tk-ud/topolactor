@@ -621,46 +621,83 @@ runtime_orchestration_ssot:
         Island derives, from the two reads together, current topology's prev and/or next per
         occurrence (semantic_role_mapping above), never a union of every row either read returns.
 
-        No new transport DTO is required. Round 32 originally raised this as a genuinely open
-        question because representing an owning manifest as a destination appeared to require
-        inverting TargetManifestId's own "resolved under RelatedHubId" derivation for that specific
-        row. Verified directly against the actual implementation
-        (NpgsqlContentBundleRepository.LoadHubNavigationSequenceAsync,
-        backend/repository/NpgsqlContentBundleRepository.cs): HubNavigationSequenceItemDto's
-        TopologyManifestId field is populated today from the QUERY'S OWN INPUT PARAMETER (the
-        manifest identity being asked about), never read from the SQL row's own topology_manifest_id
-        column -- i.e. this field has always meant "the identity this navigation answer is for," not
-        "this specific row's real owner." No inversion is needed at all: for a prev/next occurrence
-        whose adjacent position is 0 (the owning manifest S itself), the DTO's other fields are
-        populated directly from S's OWN identity -- RelatedHubId = S's own hub_id (from
-        hubs.topology_manifests.hub_id), RelatedHubLabel = S's own display label, TargetManifestId =
-        S's own topology_manifest_id -- ordinary, already-existing columns read for S directly,
-        never derived through a target row's related_hub_id/target_topology_manifest_id resolution
-        chain (which is only ever used to resolve an ordinary target, not the owner). HubRelationId
-        for that occurrence reuses the adjacent real row's own id (the row connecting S to its
-        position-1 target) for referential continuity; the exact mechanics of sourcing S's own
-        hub/label fields (a repository join or a second small lookup) are an implementation_change
-        detail, not a new field, table, or DTO shape. For a prev/next occurrence whose adjacent
-        position is k>=1 (an ordinary target), TopologyManifestId = current topology (the identity
-        being asked about), HubRelationId = the real adjacent row this value was read from,
-        RelatedHubId/RelatedHubLabel/TargetManifestId = that same real row's own hub/label/resolved
-        target, and SequencePosition = that row's own sequence_position (reused verbatim for correct
-        prev/next ordering when an occurrence returns both a prev and a next from two different
-        adjacent rows). Every field keeps its existing, already-coded meaning; nothing is repurposed
-        or reinterpreted -- only which identity's own columns populate the RelatedHubId/
-        RelatedHubLabel/TargetManifestId trio changes with which position is adjacent, and that is a
-        data-sourcing choice, not a semantic redefinition of any field. The only accuracy fix needed
-        is a comment update to frontend/runtime/projectionEntry.ts resolveHubNavigationLinks -- its
-        current doc comment ("Source topology_manifest_id this navigation sequence was resolved
-        for") was written when every item in one response necessarily shared one row's real owner as
-        an accidental byproduct of the forward-only query; that remains true for
-        TopologyManifestId's actual, coded meaning (the query's own subject) once reverse-derived
-        items are mixed in, so the comment only needs to state the general rule this field's
-        population already follows, not describe a new one.
-        This closes the DTO question Round 32 raised as genuinely open: repo-wide verification shows
-        the existing HubNavigationSequenceItemDto already suffices, with zero new fields, zero new
-        types, and only a data-sourcing distinction (whose identity's columns populate a given
-        occurrence) in derivation -- never a new derivation rule per field.
+        **Round38 Gate-0 transport audit (retracts Round37's "existing DTO already suffices"
+        conclusion for position-0 occurrences only -- the sequence/adjacency semantic itself,
+        including "dd010 IS obtained as ae200's prev," is unaffected and NOT retracted; see the
+        physical-fact-vs-convention separation this entry adds below)**: Round 37 claimed
+        HubNavigationSequenceItemDto could represent a position-0 (owning-manifest-as-destination)
+        occurrence with zero new fields, by reusing "the adjacent real row's own id" for
+        HubRelationId while populating RelatedHubId/RelatedHubLabel/TargetManifestId from S's own
+        identity. Re-audited repo-wide against every existing field contract, this does not hold for
+        three of the six fields.
+        TopologyManifestId is unaffected by this audit: it was already, unchanged since before this
+        Bundle, populated from the query's own input parameter rather than any row's own column
+        (NpgsqlContentBundleRepository.LoadHubNavigationSequenceAsync's `sourceTopologyManifestId`),
+        so a position-0 occurrence needs no new behavior here -- Round 33's original finding on this
+        one field stands.
+        RelatedHubLabel and TargetManifestId are also unaffected: both fields' existing role is
+        already "resolve the display label / navigation target for whichever entity this candidate
+        points to," not "echo one specific row's raw column verbatim" -- for RelatedHubLabel the
+        forward query already resolves it through a join (hubs.hub / topology.relation_registry)
+        rather than reading a stored column directly, and TargetManifestId is already a *resolved*
+        value, not a stored one. Populating both from S's own hubs.hub / hubs.topology_manifests
+        identity for a position-0 occurrence is a legitimate, role-consistent data-sourcing choice,
+        not a fabrication -- S's own manifest genuinely IS the correct navigation target and label
+        for that occurrence.
+        HubRelationId, RelatedHubId, and SequencePosition do NOT survive this audit unchanged.
+        frontend/api/dispatch.ts's HubNavigationSequenceItem doc comment states HubRelationId is
+        "the hubs.hub_relations row's own id" (unchanged, pre-existing, not authored by this
+        Bundle) -- an explicit, row-identifying contract, not a "response subject" convention like
+        TopologyManifestId's. Every existing forward-read row populates HubRelationId, RelatedHubId,
+        and SequencePosition from the SAME single physical row by construction (the only query that
+        has ever existed), and the existing test-proof pattern
+        (HubRelationUiProjectionResolutionChainProof.AssertNavigationSequenceResolvesHubVector)
+        matches an expected RelatedHubId/SequencePosition/TargetManifestId as one coherent,
+        row-derived tuple -- there is no precedent anywhere in this repository for populating these
+        fields from two different sources within one item. For a position-0 occurrence, reusing "the
+        adjacent real row's own id" (the row connecting S to its position-1 target, e.g. the
+        dd010->ae200 row) as HubRelationId while setting RelatedHubId to S's own hub_id produces an
+        item whose HubRelationId names a real row whose ACTUAL related_hub_id column is the
+        position-1 target's hub (ae200's), not S's (dd010's) -- a genuine row/field mismatch, not a
+        data-sourcing nuance, and exactly the kind of "borrow one row's id, substitute another
+        identity's value into a sibling field" construction this Bundle's own governance treats as
+        fabrication when found elsewhere. Separately and independently, SequencePosition for a
+        position-0 occurrence would need to hold a value (0, or any other sentinel) that db/
+        demo_seed.sql's existing hub_relations seed rows and db/topology_tables.sql's
+        sequence_position column (INTEGER NOT NULL, no zero-valued row exists in this repository's
+        seed data) never actually contain -- a fabricated value, not a column read verbatim, even
+        setting the HubRelationId/RelatedHubId mismatch aside.
+        This is reported here as an open Owner-decision transport-shape item, not resolved
+        unilaterally. A reusable existing asset for comparison:
+        frontend/api/adminApi.ts's HubNavigationManifestItem (topologyManifestId/manifestKey/hubId/
+        topologySystemName/userFacingTopologyLabel) already exists in this repository as a
+        manifest-identity-only shape carrying no hub_relations row coupling at all -- direct
+        evidence that this repository has never, until Round 37's now-retracted proposal, mixed "a
+        manifest's own identity" into a hub_relations-row-shaped DTO's row-identifying fields; it is
+        cited here as a reference shape for what a truthful position-0 representation could draw on,
+        not as a decision to reuse it verbatim (it is admin-gated and list-shaped, not per-occurrence
+        prev/next-shaped). At least two non-decided candidate directions exist for the eventual
+        implementation_change to choose between (Owner decision, not Agent judgment):
+        (a) make HubRelationId nullable on HubNavigationSequenceItemDto/HubNavigationSequenceItem
+        (explicit null for a position-0 occurrence, since no row identifies it) paired with an
+        explicit discriminator (e.g. a boolean or enum field distinguishing "this occurrence is the
+        sequence's own source manifest" from "this occurrence is an ordinary target row"), with
+        SequencePosition's meaning for that case documented as a synthetic ordering value rather
+        than a column echo; or
+        (b) introduce a small, separate source-identity shape (following HubNavigationManifestItem's
+        pattern) that a prev/next consumer receives instead of forcing a position-0 occurrence
+        through the row-shaped item type -- e.g. a discriminated union or a sibling field on the
+        response envelope -- avoiding overloading one item shape's fields with two different
+        meanings, at the cost of a larger consumer-side branch.
+        Neither option is chosen here; both require a documented consumer-impact and test-diff
+        comparison before an implementation_change proceeds, and this design_change round does not
+        build either one. Position k>=1 occurrences (ordinary resolved targets) are NOT affected
+        by any of the above and remain fully and truthfully representable by the existing DTO
+        unchanged -- HubRelationId, RelatedHubId, RelatedHubLabel, TargetManifestId, and
+        SequencePosition for those occurrences are, as before, all read from that one real adjacent
+        row, exactly matching frontend/api/dispatch.ts's existing HubRelationId contract and the
+        existing test-proof pattern; only TopologyManifestId keeps its pre-existing,
+        already-established "query subject" convention, unchanged either way.
       no_return_edge_bootstrap_requirement: >-
         Scope of this entry: a mirrored, separately-authored RETURN edge (e.g. an ae200 -> dd010
         row authored in addition to dd010 -> ae200) is not bootstrap-mandatory content for this
@@ -686,11 +723,23 @@ runtime_orchestration_ssot:
         retracted the owner from the sequence entirely specifically to avoid that DTO question,
         concluding "none of ae200/5c100/092 obtain dd010 itself" and that reaching dd010 relied on
         no mechanism at all -- that conclusion is itself retracted here, since
-        bidirectional_read_projection_gap above shows the DTO question has a direct answer (S's own
-        identity columns populate an S-as-destination occurrence) requiring no field inversion, no
-        new field, and no new type. The mutual-reachability property Round 30-32 intended (all four
-        Admin-axis manifests reachable from one another via fixed-navigation) is restored: dd010 <->
-        ae200 <-> 5c100 <-> 092 is a fully connected chain, with dd010's own missing prev and 092's
+        bidirectional_read_projection_gap above re-examines the DTO question at Round 38 and finds
+        it only partially closed: three of the six item fields (HubRelationId, RelatedHubId,
+        SequencePosition) remain an open Owner-decision transport-shape item for a position-0
+        occurrence, not yet resolved by this design_change. **Physical fact vs. canonical
+        convention, kept separate**: that S's topology_manifest_id is a real, NOT NULL schema column
+        on every row S owns is a physical fact, unaffected by any of this -- it does not depend on,
+        and is not weakened by, however the pending transport question above is eventually resolved.
+        Treating S as occupying "position 0" of the logical sequence, by contrast, is this Bundle's
+        own Round 37 canonical CONVENTION for describing the adjacency rule uniformly across every
+        position -- a description of the domain-level ordering, not a claim about any specific HTTP
+        response shape. The reachability claim below (dd010 obtained as ae200's prev) is a
+        domain-level fact about the ordering these physical rows already establish; it holds
+        regardless of which of bidirectional_read_projection_gap's candidate transport directions
+        (or another the Owner prefers) an eventual implementation_change picks, and is not itself
+        gated on that pending decision. The mutual-reachability property Round 30-32 intended (all four
+        Admin-axis manifests reachable from one another via fixed-navigation) is restored at this
+        domain level: dd010 <-> ae200 <-> 5c100 <-> 092 is a fully connected chain, with dd010's own missing prev and 092's
         own missing next each falling back to the existing, unconditional
         frontend/islands/ProjectionShell.tsx data-projection-home-link ("ホーム" -> /dashboard) for
         the missing-side case only -- **Round35's fact correction is unaffected and remains
@@ -795,17 +844,20 @@ runtime_orchestration_ssot:
           read for the upper-level half, from which the adjacent-position prev and/or next are
           derived, combines the two into this identity's prev/next pair(s), and returns the result,
           filtered per-target exactly as
-          explicit_current_topology_trust_boundary's target_filtering describes. Every prev/next
-          entry this contract produces -- whether the adjacent position happens to be 0 (the owning
-          manifest itself) or k>=1 (an ordinary resolved target) -- is already truthfully expressible
-          in the existing HubRelationNavigationLinksResponseDto/HubNavigationSequenceItemDto envelope
-          unchanged -- see bidirectional_read_projection_gap above: a position-0 value is populated
-          from that manifest's own hub/label/manifest identity (ordinary existing columns read
-          directly, not through a target row's resolution chain), and a position-k>=1 value is
-          populated from that adjacent row's own real HubRelationId/RelatedHubId/RelatedHubLabel/
-          TargetManifestId/SequencePosition, with TopologyManifestId carrying current topology per
-          the field's existing, already-coded convention in both cases -- no field inversion, no new
-          field, and no new DTO/type is required, and no Owner decision on envelope shape is pending.
+          explicit_current_topology_trust_boundary's target_filtering describes. A prev/next entry
+          whose adjacent position is k>=1 (an ordinary resolved target) is already truthfully
+          expressible in the existing HubRelationNavigationLinksResponseDto/
+          HubNavigationSequenceItemDto envelope unchanged, populated from that adjacent row's own
+          real HubRelationId/RelatedHubId/RelatedHubLabel/TargetManifestId/SequencePosition exactly
+          as today's forward read already does -- no field inversion, no new field, no new DTO/type,
+          no pending Owner decision for this case. A prev/next entry whose adjacent position is 0
+          (the owning manifest itself) is NOT yet closed the same way: see
+          bidirectional_read_projection_gap above (Round 38 Gate-0 audit) for the field-by-field
+          finding that HubRelationId/RelatedHubId/SequencePosition cannot be truthfully populated
+          for that case without either a real row/field mismatch or a fabricated value, and for the
+          two non-decided candidate transport-shape directions recorded there pending an Owner
+          decision. TopologyManifestId carries current topology per the field's existing,
+          already-coded "query subject" convention in both cases, unaffected either way.
           fallbackReason distinguishes this
           explicit-current-topology read from the endpoint's existing fallback mode. When
           topologyManifestId is absent, the
@@ -996,7 +1048,11 @@ runtime_orchestration_ssot:
           response_envelope: >-
             Reuses the existing HubRelationNavigationLinksResponseDto (success / links / errors /
             requestedSurface / fallbackReason) for both branches -- no new DTO is introduced by
-            this design_change. Whether fallbackReason needs a distinct explicit-branch value (as
+            this design_change. This claim is about the OUTER envelope shape only; it does not
+            resolve, and should not be read as resolving, the separate open question over the
+            `links` array's own item shape (HubNavigationSequenceItemDto) for a position-0
+            occurrence -- see bidirectional_read_projection_gap above (Round 38 Gate-0 audit) for
+            that pending Owner decision. Whether fallbackReason needs a distinct explicit-branch value (as
             already noted in chosen_boundary above) or another minimal-compatible envelope
             adjustment is an implementation_change decision against existing DTO/consumer
             conventions, not decided here.
