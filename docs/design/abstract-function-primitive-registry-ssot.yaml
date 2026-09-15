@@ -773,6 +773,54 @@ backend_abstract_function_runtime_substrate:
         - frontend_raw_sql
         - payload_derived_table_authority
         - csharp_function_name_switch_as_growth_surface
+      implementation_status_audit: >-
+        Verified against backend/runtime/AbstractFunctionRuntime.cs's registered
+        IAbstractFunctionPrimitiveAdapter set (the executor's _primitiveRegistry): db_query,
+        db_mutation, manifest_authorized_read, and manifest_authorized_write have no registered
+        adapter class as of this writing -- declared vocabulary without a connectable runtime
+        adapter yet. This is the ordinary, expected state of an as-yet-unneeded primitive under
+        this same policy's own migration_order (docs/framework-policy.yaml
+        abstract_function_substrate_policy.migration_order starts every bundle's own migration with
+        ssot_fix_and_abstract_function_primitive_generation) -- a consuming bundle is expected to
+        add the primitive it needs as its own first migration step, not find it pre-built by a
+        separate infrastructure bundle; absence of a registered adapter is a not-yet-built-by-any-
+        consumer fact, not evidence the primitive_category itself is unreachable or wrongly designed.
+        Only call_postgres_function is registered today, and it is scalar-only (SELECT function(...)
+        via ExecuteScalarAsync against a topology.* Postgres FUNCTION) -- unable to return a joined,
+        multi-row/multi-column read result without a new, purpose-built Postgres function. The only
+        registered primitives that read data at all (sql_attention, recommendation_candidate_source
+        and its siblings) are each a bespoke, domain-specific C# adapter class injecting its own
+        repository dependency directly (SqlAttentionLogsRepository/TopologyRepository, etc.) with
+        its own hardcoded query logic -- each was itself added by its own consuming bundle following
+        the same migration_order, not supplied generically ahead of time. No bundle has yet added a
+        db_query/manifest_authorized_read adapter; any bundle that needs one is the one expected to
+        add it, per the existing migration_order this policy already documents.
+      input_binding_source_implementation_status_audit: >-
+        Verified against AbstractFunctionExecutionContext.ResolveBinding's actual switch
+        (backend/runtime/AbstractFunctionRuntime.cs): the handled binding_source values are payload,
+        result_context, constant, external_context, runtime_context, scheduler_context,
+        scheduler_input, and step_config -- every one of these has a working case. manifest_authority,
+        physical_table_binding, and route_context are declared as valid binding_source values in
+        db/topology_tables.sql's topology.abstract_function_input_bindings CHECK constraint but
+        ResolveBinding has no case for any of the three as of this writing -- a binding row using one
+        of them would reach ResolveBinding's final else-branch and fail-close at runtime with
+        ABSTRACT_FUNCTION_INPUT_BINDING_SOURCE_UNSUPPORTED. As with implementation_status_audit
+        above, this is a declared-but-not-yet-consumed vocabulary gap, expected to be closed by
+        whichever bundle first needs one of these three sources, following the same migration_order
+        -- not a sign the binding_source concept itself is unreachable. No other SSOT or doc comment
+        in this repository describes what physical_table_binding or route_context are specifically
+        for beyond their bare name in this binding_sources list and the DDL CHECK constraint; their
+        likely intended role (route_context: reading a value off the current HTTP route/query
+        context rather than a request payload or prior step result; physical_table_binding: reading
+        a value directly from a specific manifest-declared table/column rather than through another
+        primitive's resolution chain) is a plausible reading from naming and context, not a
+        confirmed contract -- whichever bundle first implements them should also write that
+        contract down, since it does not exist yet. validate_authority/bind_input are a different
+        status again: their semantic is already applied to every step generically inside
+        AbstractFunctionExecutor.ExecuteAsync's own step loop (authority-binding validation and
+        per-binding resolution before every primitive call), never exposed as an independent,
+        manifest-authorable primitive_key a step can select -- the semantic exists, the standalone
+        primitive does not.
     attention_and_recommendation:
       primitives:
         - sql_attention
