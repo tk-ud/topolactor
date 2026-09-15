@@ -773,6 +773,44 @@ backend_abstract_function_runtime_substrate:
         - frontend_raw_sql
         - payload_derived_table_authority
         - csharp_function_name_switch_as_growth_surface
+      implementation_status_audit: >-
+        Repo-wide verification against backend/runtime/AbstractFunctionRuntime.cs's registered
+        IAbstractFunctionPrimitiveAdapter set (the executor's _primitiveRegistry): db_query,
+        db_mutation, manifest_authorized_read, and manifest_authorized_write have NO registered
+        adapter class -- these are SSOT-declared vocabulary only, not connectable runtime
+        substrate today. Only call_postgres_function is registered, and it is scalar-only
+        (SELECT function(...) via ExecuteScalarAsync against a topology.* Postgres FUNCTION) --
+        structurally unable to return a joined, multi-row/multi-column read result without a new,
+        purpose-built Postgres function, which is itself new engineering, not a connection to
+        existing substrate. The only registered primitives that read data at all
+        (sql_attention, recommendation_candidate_source and its siblings) are each a bespoke,
+        domain-specific C# adapter class injecting its own repository dependency directly
+        (SqlAttentionLogsRepository/TopologyRepository, etc.) with its own hardcoded query logic --
+        not an instance of a generic db_query engine, despite the SSOT category name. This audit
+        (PR #612 Round 39) found no existing generic manifest-authorized-read engine anywhere in
+        this repository to connect a new consumer to; building one, or adding another bespoke
+        domain-specific adapter of the sql_attention/recommendation_* shape, would both be new
+        primitive engineering, not minimal substrate reuse. See
+        docs/design/runtime-orchestration-ssot.yaml
+        ui_projection_render_reachability_contract.hub_relation_sequence_membership_and_navigation_island_contract.bidirectional_read_projection_gap
+        for the specific transport question this was investigated for.
+      input_binding_source_implementation_status_audit: >-
+        Repo-wide verification against AbstractFunctionExecutionContext.ResolveBinding's actual
+        switch (backend/runtime/AbstractFunctionRuntime.cs): the handled binding_source values are
+        payload, result_context, constant, external_context, runtime_context, scheduler_context,
+        scheduler_input, and step_config -- every one of these has a working case. manifest_authority,
+        physical_table_binding, and route_context are declared as valid binding_source values in
+        db/topology_tables.sql's topology.abstract_function_input_bindings CHECK constraint (schema
+        accepts them) but ResolveBinding has NO case for any of the three -- a binding row using one
+        of them would reach ResolveBinding's final else-branch and fail-close at runtime with
+        ABSTRACT_FUNCTION_INPUT_BINDING_SOURCE_UNSUPPORTED. This is a genuine, concrete SSOT/DDL
+        vocabulary vs. runtime-code gap (declared, unimplemented -- category (c), not (a) or (b)),
+        distinct from validate_authority/bind_input's status: those two are (b) -- their semantic is
+        already applied to every step generically inside AbstractFunctionExecutor.ExecuteAsync's own
+        step loop (authority-binding validation at lines checking RuntimeLane/AuthorityScope/
+        AuthorityBindings, and per-binding resolution before every primitive call), never exposed as
+        an independent, manifest-authorable primitive_key a step can select -- the semantic exists,
+        the standalone primitive does not.
     attention_and_recommendation:
       primitives:
         - sql_attention

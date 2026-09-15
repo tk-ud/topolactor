@@ -698,6 +698,50 @@ runtime_orchestration_ssot:
         row, exactly matching frontend/api/dispatch.ts's existing HubRelationId contract and the
         existing test-proof pattern; only TopologyManifestId keeps its pre-existing,
         already-established "query subject" convention, unchanged either way.
+        **Round 39 abstract-function substrate audit (does not change the Round 38 finding above;
+        confirms no shortcut around it exists)**: before deciding between Round 38's two candidate
+        transport directions, this Bundle investigated whether connecting HubNavigation's read to
+        the existing backend-wide execute_abstract_function substrate (docs/framework-policy.yaml
+        abstract_function_substrate_policy; docs/design/abstract-function-primitive-registry-ssot.yaml
+        backend_abstract_function_runtime_substrate) could normalize a physical HubRelation row and
+        a source Manifest's own identity into one logical navigation occurrence generically, ahead
+        of any DTO-shape decision. Repo-wide verification (see
+        abstract-function-primitive-registry-ssot.yaml backend_abstract_function_runtime_substrate.
+        primitive_categories.db_operation's implementation_status_audit and
+        input_binding_source_implementation_status_audit, added by this same round) found: the
+        db_query/manifest_authorized_read primitive has no registered adapter at all (category (c),
+        not connectable); the only registered DB-reading primitives (sql_attention,
+        recommendation_candidate_source and its siblings) are each a bespoke, domain-specific C#
+        adapter with its own hardcoded repository query, not a generic engine an unrelated bundle
+        could plug into; the manifest_authority/physical_table_binding/route_context input-binding
+        sources this Bundle would need are declared valid in db/topology_tables.sql's CHECK
+        constraint but have no case in AbstractFunctionExecutionContext.ResolveBinding, and would
+        fail-close as unsupported if used today; and abstract_function_manifests.runtime_lane is a
+        fixed six-value CHECK (external_port_runtime/instance_port_runtime/admin_runtime/
+        runtime_executor/scheduler_job_runtime/aggregate_trigger_runtime), all invoked only from
+        within the existing /dispatch pipeline, ManifestDispatcher/RuntimeExecutor's own per-manifest
+        render, or SchedulerJobRunner -- never from a bespoke authenticated-but-not-admin-gated
+        GET route of the kind GET /hub-navigation/relations already is (backend/Program.cs
+        app.MapGet, calling HubNavigationResolver directly, the same pattern as several other
+        read-only Program.cs endpoints). Notably, even TODAY's existing forward HubNavigation read
+        -- invoked from inside ManifestDispatcher.EnrichWithHubNavigationAsync during ordinary
+        runtime_executor-lane manifest dispatch -- calls HubNavigationResolver.ResolveAsync as a
+        plain C# method and has never gone through execute_abstract_function; HubNavigation's read
+        path, forward or reverse, has never used this substrate at any point in this repository's
+        history. Connecting to it now would require either building a first-of-its-kind generic
+        db_query engine (substantial new engineering with no precedent to reuse) or adding another
+        bespoke domain-specific primitive of the sql_attention/recommendation_* shape (which does
+        not avoid a bundle-specific handler, it only relocates one) -- and, either way, inventing a
+        new runtime_lane value or misrouting through admin_runtime, whose auth boundary is wrong for
+        this endpoint (deliberately not admin-gated). None of this qualifies as a minimal connection
+        to already-working substrate. Conclusion: abstract-function substrate reuse does not offer a
+        shortcut past the open transport-shape decision above; Round 38's two candidate directions
+        (nullable HubRelationId + discriminator, or a separate source-identity shape) remain the live,
+        Owner-decision options, to be resolved and built at the existing DTO/repository layer
+        HubNavigation has always used -- not re-platformed onto execute_abstract_function as part of
+        resolving them. HubNavigationSequenceItemDto/Emission.NavigationSequence's existing
+        physical-row-projection contract for position k>=1 occurrences (confirmed above) is
+        unaffected by this finding either way.
       no_return_edge_bootstrap_requirement: >-
         Scope of this entry: a mirrored, separately-authored RETURN edge (e.g. an ae200 -> dd010
         row authored in addition to dd010 -> ae200) is not bootstrap-mandatory content for this
