@@ -742,6 +742,47 @@ runtime_orchestration_ssot:
         resolving them. HubNavigationSequenceItemDto/Emission.NavigationSequence's existing
         physical-row-projection contract for position k>=1 occurrences (confirmed above) is
         unaffected by this finding either way.
+        **Round 40 correction (re-audits Round 39's framing, does not change its production-fact
+        findings or Round 38's conclusion)**: Round 39's registered-adapter/binding-source findings
+        above are re-confirmed as accurate production facts. What Round 39 got wrong was treating
+        "no registered adapter exists yet" as "the mechanism cannot be reached" -- docs/
+        framework-policy.yaml abstract_function_substrate_policy's own migration_order documents
+        that a consuming bundle's migration STARTS with
+        ssot_fix_and_abstract_function_primitive_generation: adding a needed primitive is each
+        bundle's own first step, not something a separate infrastructure bundle must supply first.
+        No Bundle in this repository's own dynamic feature-status reference, the Agent task list
+        under .agent/tasks/, or its commit history owns "db_query/manifest_authority/
+        physical_table_binding/route_context completion" as dedicated infrastructure work --
+        searched and confirmed absent -- because
+        under this policy's own design, no such dedicated bundle is expected to exist: this Bundle,
+        had it chosen this direction, would itself have been the one to add the missing primitive,
+        exactly as file_storage (af05-af07), Stripe, and audit_approval each added their own needed
+        primitives when they needed them. So "unimplemented today" is correctly read as "not yet
+        built by any consumer, buildable by whichever bundle needs it," never as "this
+        primitive_category is architecturally unreachable."
+        That correction does not, however, change Round 38's conclusion, for an independent reason
+        traced here for the first time: tracing the actual data-flow this Bundle would need --
+        db_query (manifest_authorized_read) reading current topology's own hubs.hub_relations rows,
+        a second read via physical_table_binding for S's own hubs.hub/hubs.topology_manifests
+        identity when the adjacent occurrence is position 0, both flowing through result_context
+        into a final projection step -- shows this pipeline, even fully built, computes exactly the
+        same VALUES today's C# repository code already computes; the projection primitive itself is
+        a plain result_context-to-dictionary passthrough (confirmed in
+        backend_abstract_function_runtime_substrate's own registered-adapter evidence), not a
+        row-consistency engine. It does not, and structurally cannot, manufacture a physical
+        hubs.hub_relations row for position 0 that does not exist, or a non-fabricated
+        sequence_position value for it -- the constraint Round 38 identified lives in the OUTPUT
+        DTO's own field contracts (HubRelationId as "the row's own id," RelatedHubId/SequencePosition
+        as that same row's own columns), not in which computation mechanism assembles the values
+        feeding that DTO. Whether the values are assembled by hand-written C# (today) or by a newly
+        built abstract-function manifest, the same position-0 representability question in Round 38
+        applies identically to whatever the final transport shape is. Substrate choice (repository
+        code vs. execute_abstract_function) and transport-shape choice (Round 38's two candidates)
+        are therefore independent decisions -- resolving one does not resolve the other, and Owner
+        deciding to build via execute_abstract_function later does not remove the need to also decide
+        Round 38's DTO-shape question; it would simply mean whichever shape is chosen gets built as
+        manifest-declared steps instead of repository methods. Round 38's two candidate directions
+        remain the sole open Owner-decision item this Bundle carries forward.
       no_return_edge_bootstrap_requirement: >-
         Scope of this entry: a mirrored, separately-authored RETURN edge (e.g. an ae200 -> dd010
         row authored in addition to dd010 -> ae200) is not bootstrap-mandatory content for this
