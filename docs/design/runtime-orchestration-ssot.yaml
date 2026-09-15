@@ -436,7 +436,18 @@ runtime_orchestration_ssot:
         the disputed part); (b) MEMBER standing on a manifest that occurs as a resolved target
         somewhere in some owning manifest M's array locates its own position in that plain array by
         UUID identity and takes the IMMEDIATE adjacent array elements (other resolved targets in the
-        SAME array, never M itself) as prev/next -- see semantic_role_mapping below. Neither
+        SAME array, never M itself) as prev/next -- see semantic_role_mapping below. Neither mechanism
+        is this Bundle's own invention: docs/design/db-schema.yaml
+        hub_relations.target_reference_canonical_contract.existing_fixed_navigation_pipeline_reuse_contract
+        independently grounds (a) as the pre-existing forward call chain (HubNavigationResolver.
+        ResolveAsync -> LoadHubNavigationSequenceAsync -> Emission.NavigationSequence) that has
+        resolved "current topology's own sequence, first row" as next since before this Bundle
+        existed, and grounds (b) as "a separate, additive reverse-direction READ method... that reads
+        the SAME hubs.hub_relations persistence by a different column (target-scoped, to derive
+        current topology's prev when it is a target member)" -- the same two-mechanism split, stated
+        independently one authority level above this file. This split is not a special two-rule
+        carve-out invented to solve this Bundle's Goal 1; it is this Bundle naming and applying an
+        existing db-schema.yaml-level distinction. Neither
         mechanism ever produces the owning manifest as a prev/next value: an earlier revision treated
         a target sitting at an array's first position as having its owner for a prev, requiring a
         reverse-engineered read reconstructing an extended list and a dedicated DTO comparison to
@@ -639,19 +650,36 @@ runtime_orchestration_ssot:
         last element) -- dd010 itself never appears as any of the three targets' prev or next.
         dd010's OWN next (the owner case) is ae200, its array's first element; dd010 has no prev
         from the owner case (there is no "before" one's own entry point, per semantic_role_mapping's
-        directly-stated owner-case rule, not a computed index). The consequence this design_change
-        accepts and states plainly: none of ae200/5c100/092 obtain dd010 itself as a fixed-navigation
-        prev/next value under this contract -- reaching dd010 from any of the three is not a
-        fixed-navigation hop at all, it is the pre-existing, unconditional
-        frontend/islands/ProjectionShell.tsx data-projection-home-link ("ホーム" -> /dashboard),
-        which every projection surface already renders regardless of hub_relations content and
-        which this Bundle neither builds nor modifies. The explicit-empty-list-never-guessed
-        discipline HubNavigationResolver.ResolveFallbackNavigationLinksAsync already uses elsewhere
-        in this file still governs a manifest with neither a prev NOR a next from any occurrence
-        (its own outbound rows included) or owner case: it resolves an explicit empty candidate set
-        for fixed navigation, never a synthesized/guessed target, and the Home link (not a
-        fixed-navigation candidate) is what keeps the surface navigable regardless. This is narrower
-        than "zero outbound relations of a manifest's own is a fine end state": see
+        directly-stated owner-case rule, not a computed index). This owner-case mechanism is not an
+        invention of this Bundle's own Rounds: docs/design/db-schema.yaml
+        hub_relations.target_reference_canonical_contract.existing_fixed_navigation_pipeline_reuse_contract
+        independently grounds it as the pre-existing, unaffected forward call chain
+        (HubNavigationResolver.ResolveAsync -> ContentBundleRepository.LoadHubNavigationSequenceAsync
+        -> Emission.NavigationSequence) that has always resolved "current topology's own outbound
+        sequence, first row" as its next -- this Bundle names it "owner case" but does not create it.
+        The consequence this design_change accepts and states plainly: none of ae200/5c100/092
+        obtain dd010 itself as a fixed-navigation prev/next value under this contract. **Correction
+        to an error an earlier revision of this entry made**: that earlier revision additionally
+        claimed the existing, unconditional frontend/islands/ProjectionShell.tsx
+        data-projection-home-link ("ホーム" -> /dashboard) is how a caller "reaches dd010" from any
+        of the three -- this is false and is retracted here. /dashboard is team_dashboard.normal.
+        projection (dd020)'s own route, a different, Normal-axis manifest with no relationship to
+        dd010 (team_dashboard.admin.projection, /admin/team-dashboard) at all -- see
+        docs/design/admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract.
+        normal_navigation_membership for that link's own, unrelated, already-decided purpose (the
+        Owner-directed "always get back to Normal home" intent). Clicking it does not land the
+        caller on dd010, on any Admin-axis manifest, or on any HubRelation-resolved target at all.
+        The accurate statement is narrower: there is no mechanism -- fixed-navigation or otherwise --
+        by which this contract returns a caller from ae200/5c100/092 specifically to dd010; the Home
+        link's actual round-trip is a separate, pre-existing, Normal-axis-only affordance this
+        Bundle neither builds, modifies, nor repurposes into an Admin-axis return path. The
+        explicit-empty-list-never-guessed discipline HubNavigationResolver.
+        ResolveFallbackNavigationLinksAsync already uses elsewhere in this file still governs a
+        manifest with neither a prev NOR a next from any occurrence (its own outbound rows included)
+        or owner case: it resolves an explicit empty candidate set for fixed navigation, never a
+        synthesized/guessed target; ae200/5c100/092 each still have their own next/prev from the
+        member-case adjacency chain established above regardless of this dd010-specific gap. This is
+        narrower than "zero outbound relations of a manifest's own is a fine end state": see
         minimum_cardinality_completion_invariant_relationship below for what a target's own
         zero-outbound state does and does not mean under db-schema.yaml's
         minimum_cardinality_completion_invariant, which this entry does not override, weaken, or

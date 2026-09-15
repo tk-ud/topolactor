@@ -216,11 +216,18 @@ admin_console_workflow_ssot:
         independently supplies a member-case prev/next from ANOTHER ordinary array element when one
         exists (e.g. 5c100 finds ae200 as its prev this way despite owning zero rows of its own),
         never the owning manifest. Only a manifest with neither an owner-case next nor a
-        member-case prev/next from any occurrence resolves an explicit empty candidate set; reaching
-        dd010 itself from any of the three relies entirely on the pre-existing, unconditional
-        ProjectionShell.tsx Home link, not a fixed-navigation hop. An earlier revision of this entry
-        described "no outbound sequence of its own" alone as the empty-set condition, which is
-        retracted here as the semantic drift that framing was. Authoring an additional relation
+        member-case prev/next from any occurrence resolves an explicit empty candidate set. **Round35
+        correction**: an earlier revision of this entry claimed reaching dd010 itself from any of the
+        three "relies entirely on the pre-existing, unconditional ProjectionShell.tsx Home link" --
+        this is false and is retracted. The Home link's href is /dashboard, team_dashboard.normal.
+        projection (dd020)'s own route -- a different, Normal-axis manifest unrelated to dd010
+        (team_dashboard.admin.projection, /admin/team-dashboard); see normal_navigation_membership
+        below for that link's own, separate, already-decided purpose. Clicking it does not reach
+        dd010 or any Admin-axis manifest. The accurate statement: no mechanism, fixed-navigation or
+        otherwise, returns a caller from ae200/5c100/092 specifically to dd010 under this contract.
+        An earlier revision of this entry also described "no outbound sequence of its own" alone as
+        the empty-set condition, which is retracted here as the semantic drift that framing was.
+        Authoring an additional relation
         remains ordinary future hub_navigation:create work, not a bootstrap requirement of this
         entry.
       admin_navigation_non_targets: >-
