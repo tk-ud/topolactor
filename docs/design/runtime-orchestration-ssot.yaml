@@ -436,18 +436,35 @@ runtime_orchestration_ssot:
         the disputed part); (b) MEMBER standing on a manifest that occurs as a resolved target
         somewhere in some owning manifest M's array locates its own position in that plain array by
         UUID identity and takes the IMMEDIATE adjacent array elements (other resolved targets in the
-        SAME array, never M itself) as prev/next -- see semantic_role_mapping below. Neither mechanism
-        is this Bundle's own invention: docs/design/db-schema.yaml
+        SAME array, never M itself) as prev/next -- see semantic_role_mapping below.
+        **Round36 correction (provenance)**: an earlier revision of this entry cited
+        docs/design/db-schema.yaml
         hub_relations.target_reference_canonical_contract.existing_fixed_navigation_pipeline_reuse_contract
-        independently grounds (a) as the pre-existing forward call chain (HubNavigationResolver.
-        ResolveAsync -> LoadHubNavigationSequenceAsync -> Emission.NavigationSequence) that has
-        resolved "current topology's own sequence, first row" as next since before this Bundle
-        existed, and grounds (b) as "a separate, additive reverse-direction READ method... that reads
-        the SAME hubs.hub_relations persistence by a different column (target-scoped, to derive
-        current topology's prev when it is a target member)" -- the same two-mechanism split, stated
-        independently one authority level above this file. This split is not a special two-rule
-        carve-out invented to solve this Bundle's Goal 1; it is this Bundle naming and applying an
-        existing db-schema.yaml-level distinction. Neither
+        as "independent" grounding for both (a) and (b), stated "one authority level above this
+        file" -- this is retracted as a circular citation: that db-schema.yaml section was itself
+        authored inside this same design_change (confirmed absent from db-schema.yaml at base
+        commit 47e5a9ed9fe38de5b6a07f5a7899b7aa94cec64f), and its own text explicitly
+        cross-references this file's bidirectional_read_projection_gap below -- two documents
+        added together inside one design_change cannot ground each other as independent authority.
+        The correct, pre-design_change-verified provenance, checked directly against that base
+        commit: (a) OWNER is genuinely pre-existing -- this file's own hub_navigation_resolution
+        above (already present, unchanged, at that base commit: "manifest_dispatcher attaches the
+        manifest-scoped hubs.hub_relations navigation sequence (Emission.NavigationSequence,
+        'current hub relation' candidates)...
+        via HubNavigationResolver") already established, before this Bundle existed, that current
+        topology's own outbound hub_relations rows are read and attached as candidates; this
+        Bundle's own contribution is narrowing "the whole sequence as candidates" to "the first
+        row as next," in direct response to the Owner's own prev/next fixture (below), not
+        inventing the read itself. (b) MEMBER has no such pre-PR precedent: a repo-wide check of
+        the base commit found zero mentions of prev/next/reverse-direction/bidirectional read
+        anywhere in framework-core.yaml, db-schema.yaml, or this file -- the reverse-direction read
+        this Bundle defines (bidirectional_read_projection_gap below) is new design work this
+        Bundle's own Rounds introduce, authorized directly by the Owner's own explicit fixture and
+        Goal 1 requirement (ae200 reachable despite owning no outbound rows of its own), not
+        derived from any pre-existing SSOT authority. Stating this honestly does not change the
+        mechanism itself -- semantic_role_mapping's derivation and this contract's outcome for the
+        Owner's fixture are unaffected -- it only corrects what kind of authority backs each half.
+        Neither
         mechanism ever produces the owning manifest as a prev/next value: an earlier revision treated
         a target sitting at an array's first position as having its owner for a prev, requiring a
         reverse-engineered read reconstructing an extended list and a dedicated DTO comparison to
@@ -651,13 +668,16 @@ runtime_orchestration_ssot:
         dd010's OWN next (the owner case) is ae200, its array's first element; dd010 has no prev
         from the owner case (there is no "before" one's own entry point, per semantic_role_mapping's
         directly-stated owner-case rule, not a computed index). This owner-case mechanism is not an
-        invention of this Bundle's own Rounds: docs/design/db-schema.yaml
-        hub_relations.target_reference_canonical_contract.existing_fixed_navigation_pipeline_reuse_contract
-        independently grounds it as the pre-existing, unaffected forward call chain
+        invention of this Bundle's own Rounds: this file's own pre-existing
+        hub_navigation_resolution above (already present, unchanged, at base commit
+        47e5a9ed9fe38de5b6a07f5a7899b7aa94cec64f -- see note above for the Round36 provenance
+        correction that replaced an earlier, circular db-schema.yaml self-citation with this
+        verified pre-design_change source) already establishes the forward call chain
         (HubNavigationResolver.ResolveAsync -> ContentBundleRepository.LoadHubNavigationSequenceAsync
-        -> Emission.NavigationSequence) that has always resolved "current topology's own outbound
-        sequence, first row" as its next -- this Bundle names it "owner case" but does not create it.
-        The consequence this design_change accepts and states plainly: none of ae200/5c100/092
+        -> Emission.NavigationSequence) that has always resolved current topology's own outbound
+        sequence as its candidates -- this Bundle names the narrowed "first row = next" reading
+        "owner case" but does not invent the underlying read. The consequence this design_change
+        accepts and states plainly: none of ae200/5c100/092
         obtain dd010 itself as a fixed-navigation prev/next value under this contract. **Correction
         to an error an earlier revision of this entry made**: that earlier revision additionally
         claimed the existing, unconditional frontend/islands/ProjectionShell.tsx
