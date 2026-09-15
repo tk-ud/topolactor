@@ -416,76 +416,66 @@ runtime_orchestration_ssot:
         sequence_position is the sequence authority... Not a global hub-to-hub relation graph"),
         read for whichever manifest is presently adopted, and presented by a dedicated app-shell
         navigation consumer rather than embedded per-projection rendering. No new axis column,
-        relation-kind flag, or parallel relation table is introduced. hubs.hub_relations is a
-        sequence_position-ordered ORDERED SEQUENCE, one per owning manifest (its own outbound rows,
-        totally ordered by the UNIQUE(topology_manifest_id, sequence_position) constraint) -- never
-        called a permutation here, since target identity carries no uniqueness constraint of its own
-        (only the (topology_manifest_id, sequence_position) pair is unique; the same target manifest,
-        including the owner itself via a legal self-targeting row -- see db-schema.yaml
-        hub_relations.target_reference_canonical_contract's canonical_target_resolution_rule -- may
-        occupy more than one position). Round 32 additionally read the owning manifest itself as
-        occupying a literal "index 0" of an extended list [M, target(p1), ..., target(pn)]; that
-        reading is retracted here as exactly the kind of array-external addition the Owner's own
-        fixture instructs against -- the ordered sequence is the plain array of RESOLVED TARGETS
-        only ([target(p1), ..., target(pn)]), nothing more, matching the Owner's own illustrative
-        A=[1,5,7,9,15] / B=[4,2,3,8,9,6] arrays literally (see relation_branching_is_native below).
-        Fixed navigation reduces to two independent, un-special-cased mechanisms rather than one
-        unified index-adjacency rule: (a) OWNER standing on its own manifest reads its own array via
-        the existing, unchanged ContentBundleRepository.LoadHubNavigationSequenceAsync and treats the
-        array's first element as its deterministic next (unaffected by this round -- this was never
-        the disputed part); (b) MEMBER standing on a manifest that occurs as a resolved target
-        somewhere in some owning manifest M's array locates its own position in that plain array by
-        UUID identity and takes the IMMEDIATE adjacent array elements (other resolved targets in the
-        SAME array, never M itself) as prev/next -- see semantic_role_mapping below.
-        **Round36 correction (provenance)**: an earlier revision of this entry cited
-        docs/design/db-schema.yaml
-        hub_relations.target_reference_canonical_contract.existing_fixed_navigation_pipeline_reuse_contract
-        as "independent" grounding for both (a) and (b), stated "one authority level above this
-        file" -- this is retracted as a circular citation: that db-schema.yaml section was itself
-        authored inside this same design_change (confirmed absent from db-schema.yaml at base
-        commit 47e5a9ed9fe38de5b6a07f5a7899b7aa94cec64f), and its own text explicitly
-        cross-references this file's bidirectional_read_projection_gap below -- two documents
-        added together inside one design_change cannot ground each other as independent authority.
-        The correct, pre-design_change-verified provenance, checked directly against that base
-        commit: (a) OWNER is genuinely pre-existing -- this file's own hub_navigation_resolution
-        above (already present, unchanged, at that base commit: "manifest_dispatcher attaches the
-        manifest-scoped hubs.hub_relations navigation sequence (Emission.NavigationSequence,
-        'current hub relation' candidates)...
-        via HubNavigationResolver") already established, before this Bundle existed, that current
-        topology's own outbound hub_relations rows are read and attached as candidates; this
-        Bundle's own contribution is narrowing "the whole sequence as candidates" to "the first
-        row as next," in direct response to the Owner's own prev/next fixture (below), not
-        inventing the read itself. (b) MEMBER has no such pre-PR precedent: a repo-wide check of
-        the base commit found zero mentions of prev/next/reverse-direction/bidirectional read
-        anywhere in framework-core.yaml, db-schema.yaml, or this file -- the reverse-direction read
-        this Bundle defines (bidirectional_read_projection_gap below) is new design work this
-        Bundle's own Rounds introduce, authorized directly by the Owner's own explicit fixture and
-        Goal 1 requirement (ae200 reachable despite owning no outbound rows of its own), not
-        derived from any pre-existing SSOT authority. Stating this honestly does not change the
-        mechanism itself -- semantic_role_mapping's derivation and this contract's outcome for the
-        Owner's fixture are unaffected -- it only corrects what kind of authority backs each half.
-        Neither
-        mechanism ever produces the owning manifest as a prev/next value: an earlier revision treated
-        a target sitting at an array's first position as having its owner for a prev, requiring a
-        reverse-engineered read reconstructing an extended list and a dedicated DTO comparison to
-        transport an owner-as-destination candidate truthfully; both the mechanism and the DTO
-        analysis it required are retracted here as unnecessary once the owner is removed from the
-        array (see bidirectional_read_projection_gap below). When either side of a member's adjacency
-        does not exist (no element before the first position, or after the last), no candidate is
-        synthesized for that side and no fallback is added by this contract -- the existing,
-        already-unconditional frontend/islands/ProjectionShell.tsx data-projection-home-link ("ホーム"
-        -> /dashboard) already covers the round-trip-navigability need for that side, exactly as it
-        already does for other already-decided round-trip gaps in this Bundle's own history (see
-        no_return_edge_bootstrap_requirement below). Multiple simultaneous positions (current
-        topology owning its own array AND/OR occurring at one or more member positions in one or more
-        owning manifests' arrays, including more than one position within the SAME array when the
-        same target is named by more than one row) are each evaluated independently and each
-        contribute their own prev/next; none are merged, deduplicated by identity, or dropped. A
-        manifest with neither a next from owning its own array nor a prev/next from any member
-        position resolves an explicit empty candidate set (see no_return_edge_bootstrap_requirement
-        below); authoring an additional relation is ordinary hub_navigation:create work, never
-        bootstrap-mandatory content. Attention/Recommendation candidate generation (logs, transition
-        aggregates,
+        relation-kind flag, or parallel relation table is introduced.
+        **Round37 unification (retracts Round33-36's owner/member split)**: the ordered logical
+        sequence for a source manifest S is `[S, target(p1), target(p2), ..., target(pn)]` --
+        S's own topology_manifest_id occupies position 0 as a literal, directly-authoritative
+        schema fact (topology_manifest_id is the real, NOT NULL owner column on every row S owns,
+        not a fabricated or hidden element), followed by S's resolved targets ordered by
+        sequence_position ascending. This retracts two earlier readings in turn: Round 32 first put
+        the owner at "index 0" but then required a reverse-engineered extended-list read and a
+        dedicated DTO comparison to represent the owner as a destination, which Round 33-36 avoided
+        by removing the owner from the sequence entirely (array = targets only). That removal is
+        itself now retracted as an over-correction: the actual blocking problem Round 32 hit was
+        never "can the owner be in the sequence" -- it was "can the existing DTO truthfully carry
+        the owner as a destination," and Round 33 already answered that question independently, by
+        verifying NpgsqlContentBundleRepository.LoadHubNavigationSequenceAsync populates
+        HubNavigationSequenceItemDto.TopologyManifestId from the query's own input parameter (the
+        identity being asked about), never from a row's own owner column -- so representing S as an
+        adjacent destination needs no field inversion: RelatedHubId/RelatedHubLabel/TargetManifestId
+        for an S-as-destination occurrence are populated directly from S's own hubs.hub /
+        hubs.topology_manifests identity (ordinary, already-existing columns, read directly rather
+        than through a target row's related_hub_id/target_topology_manifest_id resolution chain);
+        HubRelationId for that occurrence may reuse the adjacent real row's own id (the row
+        connecting S to its position-1 target) for referential continuity -- the exact mechanics are
+        an implementation_change detail, not a new field, table, or DTO shape. With that
+        confirmed, no further reason exists to keep the owner out of the sequence, and doing so
+        was itself the kind of array-external special-casing the Owner's own fixture instructs
+        against: a single sequence that includes its own owner at position 0 is the plain, literal
+        reading of "current identity's position in an ordered sequence," while carving the owner out
+        into a separate "owner case" was the actual special rule.
+        **Single unified rule**: fixed navigation locates every occurrence of current identity's UUID
+        across all logical sequences in hubs.hub_relations -- as S itself (position 0 of S's own
+        sequence, for every S current identity owns) and/or as a resolved target(pk) (position k of
+        any owning manifest M's sequence, M possibly equal to S itself via a legal self-targeting
+        row) -- and for each occurrence at position i, takes prev = the element at position i-1
+        (or none if i=0) and next = the element at position i+1 (or none if i is the sequence's last
+        position). This is the SAME rule at every position; there is no separate "owner-only"
+        next-only special case and no separate "member-only" adjacency case -- position 0's "no
+        prev" is simply the i=0 instance of the general rule, not a distinct mechanism. The Owner's
+        own abstract fixture (A=[1,5,7,9,15], B=[4,2,3,8,9,6], current=9 -- see
+        relation_branching_is_native below) was never framed with an owner concept at all (it is a
+        plain array, not `[owner, ...]`), so this unification does not reinterpret it; it resolves
+        the previously-disputed question only for the CONCRETE hubs.hub_relations domain, where a
+        sequence's position-0 element (S) is a real, schema-authoritative identity, unlike the
+        abstract fixture's elements which carry no such structure. See semantic_role_mapping below
+        for the full derivation and the Admin axis (dd010/ae200/5c100/092) worked example.
+        When either side of an occurrence's adjacency does not exist (no element before position 0,
+        or after the last position), no candidate is synthesized for that side and no fallback is
+        added by this contract -- the existing, already-unconditional
+        frontend/islands/ProjectionShell.tsx data-projection-home-link ("ホーム" -> /dashboard)
+        already covers the round-trip-navigability need for that side (see
+        no_return_edge_bootstrap_requirement below for why this Home affordance is a
+        missing-side fallback only, not itself a claim about which manifest it lands on).
+        Multiple simultaneous occurrences (current identity owning its own sequence AND/OR occurring
+        as a target at one or more positions in one or more owning manifests' sequences, including
+        more than one position within the SAME sequence when the same target is named by more than
+        one row) are each evaluated independently and each contribute their own prev/next; none are
+        merged, deduplicated by identity, or dropped. A manifest with no occurrence at all (owns no
+        sequence of its own and is never named as a target anywhere) resolves an explicit empty
+        candidate set (see no_return_edge_bootstrap_requirement below); authoring an additional
+        relation is ordinary hub_navigation:create work, never bootstrap-mandatory content.
+        Attention/Recommendation candidate generation (logs, transition aggregates,
         count/recency-weighted surfacing -- docs/design/context-route-recommendation.yaml,
         docs/design/sql-attention-logs-ssot.yaml) is a separate, un-mixed lane per
         docs/framework-core.yaml runtime_route_attention_boundary
@@ -496,46 +486,57 @@ runtime_orchestration_ssot:
         current topology = the manifest identity actually adopted by ProjectionShell after a
         backend dispatch resolves it (frontend/islands/ProjectionShell.tsx adoptedManifestIdRef /
         adoptResolvedManifestIdentity -- the existing canonical frontend observation point, not a
-        new concept). array = for an owning manifest M, the plain ordered list of RESOLVED TARGETS
-        [target(p1), target(p2), ..., target(pn)], where p1 < p2 < ... < pn are M's own
-        hubs.hub_relations rows sorted by sequence_position ascending (db/topology_tables.sql's own
-        definition -- a manifest owns at most one such array, its own outbound rows; a manifest
-        never owns another manifest's array -- unchanged); M itself is NOT an element of its own
-        array (see note above -- this is the Owner's own fixture read literally: A and B are the
-        target lists themselves, nothing prepended). owner case = current topology IS some
-        manifest M with at least one active outbound row: next = M's own array's first element
-        (target(p1)); prev = none from this case (there is no "before" the entry point into one's
-        own array; this is a directly-stated rule, not an index computed from array membership).
-        member case = current topology's UUID matches one element's resolved manifest identity
+        new concept). sequence = for a source manifest S, the ordered list [S, target(p1),
+        target(p2), ..., target(pn)], where S occupies position 0 (S's own topology_manifest_id, a
+        literal, directly-authoritative, NOT NULL schema fact on every row S owns -- see note
+        above for the Round37 retraction of the "array = targets only" reading) and p1 < p2 < ... <
+        pn are S's own hubs.hub_relations rows sorted by sequence_position ascending
+        (db/topology_tables.sql's own definition -- a manifest owns at most one such sequence, its
+        own outbound rows; a manifest never owns another manifest's sequence -- unchanged). occurrence
+        = current topology's UUID matching either (a) S itself at position 0 of S's own sequence,
+        for every S current topology owns, or (b) one element's resolved manifest identity
         (target(pk), per db-schema.yaml hub_relations.target_reference_canonical_contract's
-        canonical_target_field, pointer only, unchanged by this entry) inside SOME owning manifest
-        M's array (M may be a different manifest, or current topology's own manifest when one of its
-        rows legally self-targets -- topology_manifest_id == target_topology_manifest_id is explicit
-        design authority per canonical_target_resolution_rule, e.g. manifest 092's
-        canonical_default_entry_contract self-reference): prev = target(p(k-1)) if k>1, else none
-        from this occurrence; next = target(p(k+1)) if k<n, else none from this occurrence -- both
-        values, when present, are themselves ordinary array elements (other resolved targets), NEVER
-        the owning manifest M. Direct UUID equality is the matching mechanism this entry specifies;
-        anything beyond a straight identity comparison (e.g. pattern/regex matching) is an
-        implementation detail for cases where identity cannot be compared directly, never promoted to
-        SSOT semantic. Because neither target_topology_manifest_id nor related_hub_id carries a
-        uniqueness constraint of its own (only (topology_manifest_id, sequence_position) is unique --
-        confirmed against both db/topology_tables.sql's own UNIQUE clause and the identical
-        constraint db/legacy_utils/hub_relations_legacy_to_manifest_scoped.sql adds when migrating
-        from the legacy shape), current topology's identity can occur at more than one position
-        within the SAME array (the same target named by more than one row), and can simultaneously
-        own an array (owner case) and occur as a member of one or more arrays (its own via
-        self-targeting, and/or other manifests' arrays). Every such occurrence -- the single owner
-        case plus every member position, across every array current topology appears in, and
-        independently for each repeated position within one array -- is evaluated on its own and
-        contributes its own prev/next; none are merged, none are deduplicated by identity, and none
-        are dropped. The Owner's own worked fixture confirms this directly: A=[1,5,7,9,15],
-        B=[4,2,3,8,9,6], current=9 -- 9 occurs at position 4 of A (prev=7, next=15) and position 5 of
-        B (prev=8, next=6), each computed by plain array-adjacency over the literal arrays with no
-        owner element added to either. See bidirectional_read_projection_gap below for why this
-        member-case derivation needs no new transport DTO: every prev/next value is always an
-        ordinary resolved-target identity, identical in kind to the owner case's own next, never an
-        owning manifest treated as a destination. attractor resolution = the existing
+        canonical_target_field, pointer only, unchanged by this entry) at position k inside SOME
+        source manifest S's sequence (S may be a different manifest, or current topology's own
+        manifest when one of its rows legally self-targets -- topology_manifest_id ==
+        target_topology_manifest_id is explicit design authority per
+        canonical_target_resolution_rule, e.g. manifest 092's canonical_default_entry_contract
+        self-reference). **Single rule for every occurrence, at every position i (i=0 for case (a),
+        i=k for case (b))**: prev = the sequence's element at position i-1 if i>0, else none from
+        this occurrence; next = the element at position i+1 if i<n (the sequence's last index),
+        else none from this occurrence. There is no separate "owner-only" or "member-only" rule --
+        position 0's "no prev" and the last position's "no next" are simply instances of this one
+        rule, not distinct mechanisms; a prev/next value produced this way may itself be S (when the
+        adjacent position is 0) or an ordinary resolved target (any other position) -- both are
+        treated identically as sequence elements, never special-cased by which kind of identity they
+        happen to be. Direct UUID equality is the matching mechanism this entry specifies; anything
+        beyond a straight identity comparison (e.g. pattern/regex matching) is an implementation
+        detail for cases where identity cannot be compared directly, never promoted to SSOT semantic.
+        Because neither target_topology_manifest_id nor related_hub_id carries a uniqueness
+        constraint of its own (only (topology_manifest_id, sequence_position) is unique -- confirmed
+        against both db/topology_tables.sql's own UNIQUE clause and the identical constraint
+        db/legacy_utils/hub_relations_legacy_to_manifest_scoped.sql adds when migrating from the
+        legacy shape), current topology's identity can occur at more than one position within the
+        SAME sequence (the same target named by more than one row), and can simultaneously occupy
+        position 0 of its own sequence and occur as a target-position member of one or more
+        sequences (its own via self-targeting, and/or other manifests' sequences). Every such
+        occurrence -- position 0 of every sequence current topology owns, plus every target position
+        it appears at, across every sequence, and independently for each repeated position within
+        one sequence -- is evaluated on its own and contributes its own prev/next; none are merged,
+        none are deduplicated by identity, and none are dropped. The Owner's own abstract worked
+        fixture (a plain array, never framed with an owner/position-0 concept) confirms the
+        adjacency mechanics directly: A=[1,5,7,9,15], B=[4,2,3,8,9,6], current=9 -- 9 occurs at
+        position 4 of A (prev=7, next=15) and position 5 of B (prev=8, next=6), each computed by
+        plain array-adjacency over the literal arrays. The Admin axis worked example below
+        (dd010/ae200/5c100/092) is the concrete hubs.hub_relations-domain illustration where
+        position 0 is a real owning manifest, not an abstract array element. See
+        bidirectional_read_projection_gap below for why representing a position-0 occurrence as a
+        prev/next value needs no new transport DTO: TopologyManifestId already echoes the query's
+        own input identity rather than any row's owner column, so a position-0 value's
+        RelatedHubId/RelatedHubLabel/TargetManifestId are simply read from that manifest's own
+        hubs.hub/hubs.topology_manifests identity instead of through a target row's resolution
+        chain -- an ordinary data-sourcing choice over existing columns, not a field inversion.
+        attractor resolution = the existing
         OperationVectorResolver ->
         AttractorResolver -> StructureMapResolver -> PackageResolver/SchemaResolver -> EmissionBuilder
         chain a candidate's topology already goes through once selected, via the existing
@@ -557,151 +558,155 @@ runtime_orchestration_ssot:
         are exactly the listed values (1, 5, 7, 9, 15 and 4, 2, 3, 8, 9, 6), 1-indexed by position:
         9 sits at position 4 of A with immediate neighbors 7 (position 3) and 15 (position 5), and at
         position 5 of B with immediate neighbors 8 (position 4) and 6 (position 6) -- two separate
-        member-case occurrences of the same identity (9) within two different owners' arrays, each
-        contributing its own independent prev/next pair exactly as semantic_role_mapping's
-        occurrence-based derivation requires, without needing to name or locate either array's owner
-        at all. The Owner's original illustration named only the forward continuation (15, 6); this
-        design's explicit prev-and-next requirement means the corrected candidate set standing on 9
-        is {7, 15, 8, 6} -- the earlier next-only framing of this fixture undercounts once prev is
+        occurrences of the same identity (9) within two different arrays, each contributing its own
+        independent prev/next pair exactly as semantic_role_mapping's occurrence-based derivation
+        requires, without needing to name or locate either array's owner at all (this abstract
+        fixture has none -- see no_return_edge_bootstrap_requirement below for the concrete
+        hubs.hub_relations-domain worked example where position 0 IS a real owning manifest). The
+        Owner's original illustration named only the forward continuation (15, 6); this design's
+        explicit prev-and-next requirement means the corrected candidate set standing on 9 is
+        {7, 15, 8, 6} -- the earlier next-only framing of this fixture undercounts once prev is
         included, and this entry documents that consequence rather than silently narrowing back to
         next-only to match the original illustration.
       bidirectional_read_projection_gap: >-
         Restores this section's need for a target-scoped read, but retracts the specific candidate
-        SEMANTIC two earlier revisions attached to it in turn: the first treated the read's purpose
-        as enumerating every owning manifest of a row naming current topology as target and
-        surfacing each owner as an unconditional "way back up" candidate (an opposite-endpoint
-        enumeration); the second retracted that but still reconstructed an extended array
-        [M, target(p1), ...] to let the OWNER M itself be current topology's prev when current sits
-        at M's minimum position. Both are retracted here: per semantic_role_mapping above, the read's
-        only purpose is locating current topology's position within a plain target array it is a
-        MEMBER of and returning the ADJACENT ARRAY ELEMENTS (other resolved targets in the same
-        array) -- the owning manifest M is never itself a prev/next value, at any position. The
-        existing ContentBundleRepository.LoadHubNavigationSequenceAsync(topologyManifestId) --
-        source-scoped by design -- already reads exactly current topology's own array (the owner
-        case) and already returns every element ordered by sequence_position; the navigation Island
-        consumes only that array's FIRST entry as current topology's next when current topology is
-        an owner (semantic_role_mapping above), not every returned row -- this half is unaffected by
-        this round's retraction and was never the disputed part. A repo-wide check confirmed no query
-        anywhere in the repository (NpgsqlContentBundleRepository.cs, SQL Attention's
-        HubAttractorExplorationRuntime.cs expandedHubIds included) reads hubs.hub_relations by its
-        target column to find which row (owned by any manifest, current topology's own included --
-        self-targeting rows are legal per canonical_target_resolution_rule and this read does not
-        special-case or exclude them) names current topology as target -- that read is still a
-        genuine read-projection gap over the SAME canonical persistence, not a data-model limitation:
-        nothing in the schema prevents a second, target-scoped read over the identical
-        table/columns, and reading it this way is a single, bounded lookup (current topology's own
-        position as a target, resolved against the owning row's OTHER rows at the adjacent
-        sequence_position, so the adjacent target identities -- not the owner -- can be read off
-        directly -- never an unbounded enumeration of owners, and never a multi-hop walk of a second
-        manifest's own array beyond the immediately-adjacent rows) -- so it does not reframe
-        hubs.hub_relations as a generic traversable graph, and db/topology_tables.sql's "Not a global
-        hub-to-hub relation graph" comment is not violated by it. Resolution shape mirrors the rest
-        of this file's present-day-vs-canonical-forward split: today's unchanged mechanism resolves
-        the reverse direction by, for each row, applying the existing related_hub_id ->
+        SEMANTIC prior revisions attached to it in turn: Round 29 treated the read's purpose as
+        enumerating every owning manifest of a row naming current topology as target and surfacing
+        each owner as an unconditional "way back up" candidate (an opposite-endpoint enumeration,
+        retracted); Round 32 reconstructed an extended array to let the owner be current topology's
+        prev but hit a real DTO-representability question doing so; Round 33-36 retracted the owner
+        from the sequence entirely to route around that question, which Round 37 now retracts in
+        turn as an over-correction (see note above) -- the DTO question Round 32 raised was
+        answerable without removing the owner, as this entry's DTO section below shows. Per
+        semantic_role_mapping above, the read's purpose is locating every position where current
+        topology's UUID occurs across all sequences (as position 0 of its own sequence, or as a
+        target at position k of any sequence) and returning the ADJACENT SEQUENCE ELEMENTS at that
+        occurrence -- which may themselves be an owning manifest (when the adjacent position is 0)
+        or an ordinary resolved target (any other position); the read treats both uniformly, never
+        special-casing either. The existing
+        ContentBundleRepository.LoadHubNavigationSequenceAsync(topologyManifestId) -- source-scoped
+        by design -- already reads exactly current topology's own sequence (positions 1..n, i.e.
+        its own outbound rows) and already returns every element ordered by sequence_position; the
+        navigation Island consumes that sequence's FIRST entry as current topology's next when
+        current topology occupies position 0 of its own sequence (semantic_role_mapping above,
+        unaffected by any round's retraction and never the disputed part) -- prev from that same
+        position-0 occurrence is always none, per the single unified rule. A repo-wide check
+        confirmed no query anywhere in the repository (NpgsqlContentBundleRepository.cs, SQL
+        Attention's HubAttractorExplorationRuntime.cs expandedHubIds included) reads
+        hubs.hub_relations by its target column to find which row (owned by any manifest, current
+        topology's own included -- self-targeting rows are legal per
+        canonical_target_resolution_rule and this read does not special-case or exclude them) names
+        current topology as target -- that read is still a genuine read-projection gap over the
+        SAME canonical persistence, not a data-model limitation: nothing in the schema prevents a
+        second, target-scoped read over the identical table/columns, and reading it this way is a
+        single, bounded lookup (current topology's own position as a target, resolved against the
+        owning row's OTHER rows -- including the owning manifest's own identity when the adjacent
+        position is 0 -- at the adjacent position, so the adjacent identities can be read off
+        directly -- never an unbounded enumeration of owners, and never a multi-hop walk of a
+        second manifest's own sequence beyond the immediately-adjacent positions) -- so it does not
+        reframe hubs.hub_relations as a generic traversable graph, and db/topology_tables.sql's "Not
+        a global hub-to-hub relation graph" comment is not violated by it. Resolution shape mirrors
+        the rest of this file's present-day-vs-canonical-forward split: today's unchanged mechanism
+        resolves the reverse direction by, for each row, applying the existing related_hub_id ->
         exactly-one-active-manifest inference and keeping rows whose resolved target equals current
-        topology (together with that row's own sequence_position and its owner's adjacent rows, read
-        only to resolve THEIR OWN targets as the prev/next values -- never to surface the owner);
-        canonical forward design resolves the target match as a plain WHERE
-        target_topology_manifest_id = current topology once db-schema.yaml
+        topology (together with that row's own sequence_position and its owning manifest's own
+        identity and OTHER rows, read to resolve the adjacent prev/next values -- including the
+        owner itself when the adjacent position is 0); canonical forward design resolves the target
+        match as a plain WHERE target_topology_manifest_id = current topology once db-schema.yaml
         hub_relations.target_reference_canonical_contract is physically built -- the same
         current-vs-forward distinction hub_navigation_resolution.target_manifest_resolution above
         already applies to the forward direction, applied symmetrically here. The next
         implementation_change adds this reverse-direction read as an additive query -- not a new
         authority, new table, or new column -- alongside the existing forward read; the navigation
         Island derives, from the two reads together, current topology's prev and/or next per
-        occurrence (semantic_role_mapping above), never a union of every row either read returns, and
-        never the owner itself.
+        occurrence (semantic_role_mapping above), never a union of every row either read returns.
 
-        No new transport DTO is required, and the elaborate comparison an earlier revision of this
-        entry built to justify one is retracted as unnecessary once the owner is removed from the
-        candidate set entirely. That comparison existed only because representing dd010 itself as
-        ae200's prev required inverting TargetManifestId's own "resolved under RelatedHubId"
-        derivation for that specific row -- a problem that does not arise under this round's
-        semantic, because a member-case prev/next value is always some OTHER resolved target within
-        the same array (e.g. ae200's next is 5c100, both ordinary targets of dd010's own array),
-        never the array's owner. Verified directly against the actual implementation
+        No new transport DTO is required. Round 32 originally raised this as a genuinely open
+        question because representing an owning manifest as a destination appeared to require
+        inverting TargetManifestId's own "resolved under RelatedHubId" derivation for that specific
+        row. Verified directly against the actual implementation
         (NpgsqlContentBundleRepository.LoadHubNavigationSequenceAsync,
         backend/repository/NpgsqlContentBundleRepository.cs): HubNavigationSequenceItemDto's
         TopologyManifestId field is populated today from the QUERY'S OWN INPUT PARAMETER (the
         manifest identity being asked about), never read from the SQL row's own topology_manifest_id
         column -- i.e. this field has always meant "the identity this navigation answer is for," not
-        "this specific row's real owner." The additive reverse-direction read reuses this exact,
-        already-established convention unchanged: for a member-case prev/next item, TopologyManifestId
-        = current topology (the identity being asked about, e.g. ae200), HubRelationId = the real
-        adjacent row this value was read from (e.g. dd010's own row targeting 5c100),
+        "this specific row's real owner." No inversion is needed at all: for a prev/next occurrence
+        whose adjacent position is 0 (the owning manifest S itself), the DTO's other fields are
+        populated directly from S's OWN identity -- RelatedHubId = S's own hub_id (from
+        hubs.topology_manifests.hub_id), RelatedHubLabel = S's own display label, TargetManifestId =
+        S's own topology_manifest_id -- ordinary, already-existing columns read for S directly,
+        never derived through a target row's related_hub_id/target_topology_manifest_id resolution
+        chain (which is only ever used to resolve an ordinary target, not the owner). HubRelationId
+        for that occurrence reuses the adjacent real row's own id (the row connecting S to its
+        position-1 target) for referential continuity; the exact mechanics of sourcing S's own
+        hub/label fields (a repository join or a second small lookup) are an implementation_change
+        detail, not a new field, table, or DTO shape. For a prev/next occurrence whose adjacent
+        position is k>=1 (an ordinary target), TopologyManifestId = current topology (the identity
+        being asked about), HubRelationId = the real adjacent row this value was read from,
         RelatedHubId/RelatedHubLabel/TargetManifestId = that same real row's own hub/label/resolved
-        target (5c100's hub, label, and manifest -- an entirely ordinary, undisputed application of
-        each field's existing derivation, no inversion of any kind), and SequencePosition = that
-        row's own sequence_position (reused verbatim for correct prev/next ordering when an
-        occurrence returns both a prev and a next from two different adjacent rows). Every field
-        keeps its existing, already-coded meaning; nothing is repurposed, reinterpreted, or
-        conditionally redefined. The only accuracy fix needed is a comment update to
-        frontend/runtime/projectionEntry.ts resolveHubNavigationLinks -- its current doc comment
-        ("Source topology_manifest_id this navigation sequence was resolved for") was written when
-        every item in one response necessarily shared one row's real owner as an accidental
-        byproduct of the forward-only query; that remains true for TopologyManifestId's actual,
-        coded meaning (the query's own subject) once reverse-derived items are mixed in, so the
-        comment only needs to state the general rule this field's population already follows, not
-        describe a new one.
+        target, and SequencePosition = that row's own sequence_position (reused verbatim for correct
+        prev/next ordering when an occurrence returns both a prev and a next from two different
+        adjacent rows). Every field keeps its existing, already-coded meaning; nothing is repurposed
+        or reinterpreted -- only which identity's own columns populate the RelatedHubId/
+        RelatedHubLabel/TargetManifestId trio changes with which position is adjacent, and that is a
+        data-sourcing choice, not a semantic redefinition of any field. The only accuracy fix needed
+        is a comment update to frontend/runtime/projectionEntry.ts resolveHubNavigationLinks -- its
+        current doc comment ("Source topology_manifest_id this navigation sequence was resolved
+        for") was written when every item in one response necessarily shared one row's real owner as
+        an accidental byproduct of the forward-only query; that remains true for
+        TopologyManifestId's actual, coded meaning (the query's own subject) once reverse-derived
+        items are mixed in, so the comment only needs to state the general rule this field's
+        population already follows, not describe a new one.
         This closes the DTO question Round 32 raised as genuinely open: repo-wide verification shows
         the existing HubNavigationSequenceItemDto already suffices, with zero new fields, zero new
-        types, and zero changes to any field's derivation.
+        types, and only a data-sourcing distinction (whose identity's columns populate a given
+        occurrence) in derivation -- never a new derivation rule per field.
       no_return_edge_bootstrap_requirement: >-
         Scope of this entry: a mirrored, separately-authored RETURN edge (e.g. an ae200 -> dd010
         row authored in addition to dd010 -> ae200) is not bootstrap-mandatory content for this
         Bundle -- axis_navigation_membership's three targets are not required to each carry their
-        own authored return row, and this Bundle does not author one. Retracted history of this
-        entry, for the record: a first revision claimed dd010 resolves as a candidate "from any of
-        the three" targets unconditionally (an opposite-endpoint/way-back framing); a second
-        revision narrowed that to "dd010 occupies index 0 of its own sequence, so only the
-        minimum-position target gets dd010 directly, the other two chain back to it through a
-        sequence-adjacent sibling" -- that second revision's "dd010 occupies index 0" premise is
-        itself retracted by this design_change (semantic_role_mapping and
-        bidirectional_read_projection_gap above): the array for an owning manifest is the plain
-        list of its resolved targets only, and the owning manifest is never one of that array's
-        own elements, so it is never produced as a member-case prev/next value for anything sitting
-        inside its own array. Concretely, with dd010's array ordered
-        [ae200(position 1), 5c100(position 2), 092(position 3)]: ae200's prev-from-this-occurrence
-        is none (position 1, nothing precedes it) and next is 5c100; 5c100's prev is ae200 and next
-        is 092; 092's prev is 5c100 and next-from-this-occurrence is none (position 3, the array's
-        last element) -- dd010 itself never appears as any of the three targets' prev or next.
-        dd010's OWN next (the owner case) is ae200, its array's first element; dd010 has no prev
-        from the owner case (there is no "before" one's own entry point, per semantic_role_mapping's
-        directly-stated owner-case rule, not a computed index). This owner-case mechanism is not an
-        invention of this Bundle's own Rounds: this file's own pre-existing
-        hub_navigation_resolution above (already present, unchanged, at base commit
-        47e5a9ed9fe38de5b6a07f5a7899b7aa94cec64f -- see note above for the Round36 provenance
-        correction that replaced an earlier, circular db-schema.yaml self-citation with this
-        verified pre-design_change source) already establishes the forward call chain
-        (HubNavigationResolver.ResolveAsync -> ContentBundleRepository.LoadHubNavigationSequenceAsync
-        -> Emission.NavigationSequence) that has always resolved current topology's own outbound
-        sequence as its candidates -- this Bundle names the narrowed "first row = next" reading
-        "owner case" but does not invent the underlying read. The consequence this design_change
-        accepts and states plainly: none of ae200/5c100/092
-        obtain dd010 itself as a fixed-navigation prev/next value under this contract. **Correction
-        to an error an earlier revision of this entry made**: that earlier revision additionally
-        claimed the existing, unconditional frontend/islands/ProjectionShell.tsx
-        data-projection-home-link ("ホーム" -> /dashboard) is how a caller "reaches dd010" from any
-        of the three -- this is false and is retracted here. /dashboard is team_dashboard.normal.
-        projection (dd020)'s own route, a different, Normal-axis manifest with no relationship to
-        dd010 (team_dashboard.admin.projection, /admin/team-dashboard) at all -- see
-        docs/design/admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract.
-        normal_navigation_membership for that link's own, unrelated, already-decided purpose (the
-        Owner-directed "always get back to Normal home" intent). Clicking it does not land the
-        caller on dd010, on any Admin-axis manifest, or on any HubRelation-resolved target at all.
-        The accurate statement is narrower: there is no mechanism -- fixed-navigation or otherwise --
-        by which this contract returns a caller from ae200/5c100/092 specifically to dd010; the Home
-        link's actual round-trip is a separate, pre-existing, Normal-axis-only affordance this
-        Bundle neither builds, modifies, nor repurposes into an Admin-axis return path. The
+        own authored return row, and this Bundle does not author one; dd010's own reachability from
+        the three (below) comes from the single unified adjacency rule applied to dd010's own
+        already-existing forward rows, not from any authored return row.
+        **Round37 worked example (retracts Round33-36's "dd010 unreachable" conclusion)**: per
+        semantic_role_mapping and bidirectional_read_projection_gap above, dd010's logical sequence
+        is `[dd010, ae200, 5c100, 092]` -- dd010 at position 0 (its own topology_manifest_id, a
+        literal schema fact), ae200/5c100/092 at positions 1/2/3 (dd010's own outbound rows, ordered
+        by sequence_position). Applying the single unified rule at every position: dd010 (position
+        0) has no prev from this occurrence (nothing precedes position 0) and next = ae200 (position
+        1); ae200 (position 1) has prev = dd010 (position 0) and next = 5c100 (position 2); 5c100
+        (position 2) has prev = ae200 and next = 092 (position 3); 092 (position 3, the sequence's
+        last) has prev = 5c100 and no next from this occurrence. **dd010 IS obtained as ae200's
+        prev** -- this is the direct consequence of position 0 being an ordinary position under the
+        one rule, not a special "owner-only" carve-out. Retracted history, for the record: a first
+        revision (pre-Round33) claimed dd010 resolves as a candidate "from any of the three"
+        targets unconditionally (an opposite-endpoint/way-back framing, retracted); a second
+        revision (Round 32) reached a similar dd010-reachable-from-ae200 conclusion but through an
+        extended-array reconstruction that raised a DTO-representability question; Round 33-36
+        retracted the owner from the sequence entirely specifically to avoid that DTO question,
+        concluding "none of ae200/5c100/092 obtain dd010 itself" and that reaching dd010 relied on
+        no mechanism at all -- that conclusion is itself retracted here, since
+        bidirectional_read_projection_gap above shows the DTO question has a direct answer (S's own
+        identity columns populate an S-as-destination occurrence) requiring no field inversion, no
+        new field, and no new type. The mutual-reachability property Round 30-32 intended (all four
+        Admin-axis manifests reachable from one another via fixed-navigation) is restored: dd010 <->
+        ae200 <-> 5c100 <-> 092 is a fully connected chain, with dd010's own missing prev and 092's
+        own missing next each falling back to the existing, unconditional
+        frontend/islands/ProjectionShell.tsx data-projection-home-link ("ホーム" -> /dashboard) for
+        the missing-side case only -- **Round35's fact correction is unaffected and remains
+        current**: /dashboard is team_dashboard.normal.projection (dd020)'s own route, a different,
+        Normal-axis manifest with no relationship to dd010 (team_dashboard.admin.projection,
+        /admin/team-dashboard); the Home link is a generic missing-side fallback affordance, never a
+        claim that it specifically lands on dd010 or any particular Admin-axis manifest -- it is
+        simply what a caller sees on the one end of the chain (dd010, "no prev") and the other (092,
+        "no next") where the unified rule legitimately produces no candidate. The
         explicit-empty-list-never-guessed discipline HubNavigationResolver.
         ResolveFallbackNavigationLinksAsync already uses elsewhere in this file still governs a
-        manifest with neither a prev NOR a next from any occurrence (its own outbound rows included)
-        or owner case: it resolves an explicit empty candidate set for fixed navigation, never a
-        synthesized/guessed target; ae200/5c100/092 each still have their own next/prev from the
-        member-case adjacency chain established above regardless of this dd010-specific gap. This is
-        narrower than "zero outbound relations of a manifest's own is a fine end state": see
-        minimum_cardinality_completion_invariant_relationship below for what a target's own
-        zero-outbound state does and does not mean under db-schema.yaml's
+        manifest with no occurrence at all (owns no sequence of its own and is never named as a
+        target anywhere): it resolves an explicit empty candidate set for fixed navigation, never a
+        synthesized/guessed target. This is narrower than "zero outbound relations of a manifest's
+        own is a fine end state": see minimum_cardinality_completion_invariant_relationship below
+        for what a target's own zero-outbound state does and does not mean under db-schema.yaml's
         minimum_cardinality_completion_invariant, which this entry does not override, weaken, or
         restate -- that invariant is about a manifest's own forward-direction completeness, not
         about whether the navigation Island can present a path back to it or from it. Authoring an
@@ -790,15 +795,16 @@ runtime_orchestration_ssot:
           read for the upper-level half, from which the adjacent-position prev and/or next are
           derived, combines the two into this identity's prev/next pair(s), and returns the result,
           filtered per-target exactly as
-          explicit_current_topology_trust_boundary's target_filtering describes. Owner-case (forward,
-          next-only) entries and member-case (reverse-derived) prev/next entries are BOTH already
-          truthfully expressible in the existing
-          HubRelationNavigationLinksResponseDto/HubNavigationSequenceItemDto envelope unchanged --
-          see bidirectional_read_projection_gap above: because a member-case value is always some
-          OTHER ordinary resolved target within the same array, never the owning manifest itself,
-          it is populated with that adjacent row's own real HubRelationId/RelatedHubId/
-          RelatedHubLabel/TargetManifestId/SequencePosition, with TopologyManifestId carrying current
-          topology per the field's existing, already-coded convention -- no field inversion, no new
+          explicit_current_topology_trust_boundary's target_filtering describes. Every prev/next
+          entry this contract produces -- whether the adjacent position happens to be 0 (the owning
+          manifest itself) or k>=1 (an ordinary resolved target) -- is already truthfully expressible
+          in the existing HubRelationNavigationLinksResponseDto/HubNavigationSequenceItemDto envelope
+          unchanged -- see bidirectional_read_projection_gap above: a position-0 value is populated
+          from that manifest's own hub/label/manifest identity (ordinary existing columns read
+          directly, not through a target row's resolution chain), and a position-k>=1 value is
+          populated from that adjacent row's own real HubRelationId/RelatedHubId/RelatedHubLabel/
+          TargetManifestId/SequencePosition, with TopologyManifestId carrying current topology per
+          the field's existing, already-coded convention in both cases -- no field inversion, no new
           field, and no new DTO/type is required, and no Owner decision on envelope shape is pending.
           fallbackReason distinguishes this
           explicit-current-topology read from the endpoint's existing fallback mode. When
@@ -962,29 +968,31 @@ runtime_orchestration_ssot:
             ValidationError, not a success), never silently collapsed into an empty-links success
             and never resolved against a different (default-entry or guessed) Manifest.
           valid_source_empty_and_multiple_rows: >-
-            A validated, authorized source Manifest with no prev and no next from any occurrence --
-            neither an owner-case next (no active outbound rows of its own) nor a member-case
-            prev/next (its identity does not occur as a resolved target anywhere in any owning
-            manifest's array, its own self-targeting rows included) -- is an ordinary success with
-            an explicit empty links array -- indistinguishable in shape from any other empty result,
-            but reached only after source validity is already established, never as a stand-in for a
-            validation failure. Zero of its OWN outbound rows alone is not sufficient to conclude an
-            empty result once bidirectional_read_projection_gap above is physically built: the
-            reverse-direction read may still supply a prev and/or next from a member-case occurrence
-            (e.g. 5c100 finds ae200 as its prev this way despite the two being unrelated except
-            through dd010's own array) -- but per no_return_edge_bootstrap_requirement above, this
-            never means the OWNING manifest itself (e.g. dd010) is returned to one of its own array's
-            targets; only other ordinary array elements are. A validated, authorized source Manifest
-            occurring at multiple simultaneous positions (owner of its own array AND/OR a resolved
-            target at one or more positions of one or more owning manifests' arrays -- including more
-            than one position within the SAME owning array, since target-identity repetition is not
-            schema-prohibited, and including both the owner case and some member-case position within
-            its OWN array when a legal self-targeting row exists) returns each occurrence's own
-            prev/next pair, uncollapsed and none dropped or deduplicated by identity -- but never the
-            full member list of any one array: per semantic_role_mapping above, the owner case
-            contributes only the single first-element next, and each member-case occurrence
-            contributes only its own adjacent prev/next, regardless of how many rows the owning
-            manifest in question has or how many of those rows resolve to the same target identity.
+            A validated, authorized source Manifest with no occurrence at all -- it owns no sequence
+            of its own (no active outbound rows) AND it is never named as a resolved target anywhere
+            (no owning manifest's sequence, its own self-targeting rows included, contains it) -- is
+            an ordinary success with an explicit empty links array -- indistinguishable in shape from
+            any other empty result, but reached only after source validity is already established,
+            never as a stand-in for a validation failure. Zero of its OWN outbound rows alone is not
+            sufficient to conclude an empty result once bidirectional_read_projection_gap above is
+            physically built: the reverse-direction read may still supply a prev and/or next from a
+            target-position occurrence (e.g. 5c100 finds ae200 as its prev this way, since both are
+            positions 1 and 2 of dd010's own sequence). Per no_return_edge_bootstrap_requirement
+            above (Round37 unification), the OWNING manifest itself (e.g. dd010) IS a valid prev/next
+            value under the single unified rule -- it is simply the element occupying position 0,
+            returned exactly like any other adjacent position whenever position 0 is the adjacent
+            index (e.g. dd010 is ae200's prev). A validated, authorized source Manifest occurring at
+            multiple simultaneous positions (position 0 of its own sequence AND/OR a resolved target
+            at one or more positions of one or more sequences -- including more than one position
+            within the SAME sequence, since target-identity repetition is not schema-prohibited, and
+            including both position 0 and some target position within its OWN sequence when a legal
+            self-targeting row exists) returns each occurrence's own prev/next pair, uncollapsed and
+            none dropped or deduplicated by identity -- but never the full member list of any one
+            sequence: per semantic_role_mapping above, the position-0 occurrence contributes only the
+            single first-element next (and no prev, per the same rule applied at i=0), and each
+            target-position occurrence contributes only its own adjacent prev/next, regardless of how
+            many rows the owning manifest in question has or how many of those rows resolve to the
+            same target identity.
           response_envelope: >-
             Reuses the existing HubRelationNavigationLinksResponseDto (success / links / errors /
             requestedSurface / fallbackReason) for both branches -- no new DTO is introduced by

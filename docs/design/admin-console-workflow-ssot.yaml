@@ -202,34 +202,32 @@ admin_console_workflow_ssot:
         hub_relation_sequence_membership_and_navigation_island_contract's app-shell navigation
         Island, not by ProjectionShell or UI Builder. That contract's semantic_role_mapping is the
         sole canonical definition of what the navigation Island presents -- this entry does not
-        restate or narrow it. Concretely for this axis: dd010 is the owner of the array
-        [ae200, 5c100, 092] (sequence_position-ordered, dd010 itself never an element of its own
-        array); the owner case supplies dd010's own next as ae200 (the array's first element), with
-        no prev from that case. ae200/5c100/092 each supply prev/next from the member case only,
-        by their own position within dd010's array (ae200: no prev, next=5c100; 5c100: prev=ae200,
-        next=092; 092: prev=5c100, no next) -- none of the three ever obtain dd010 itself as a
-        prev/next value, since the owning manifest is never a member-case candidate (see
-        no_return_edge_bootstrap_requirement in that same contract, which retracts an earlier
-        revision's claim that each of the three reaches dd010 this way). A target's own
-        zero-outbound-rows state is NOT what determines whether the navigation Island shows it an
-        empty set: the additive reverse-direction read (bidirectional_read_projection_gap)
-        independently supplies a member-case prev/next from ANOTHER ordinary array element when one
-        exists (e.g. 5c100 finds ae200 as its prev this way despite owning zero rows of its own),
-        never the owning manifest. Only a manifest with neither an owner-case next nor a
-        member-case prev/next from any occurrence resolves an explicit empty candidate set. **Round35
-        correction**: an earlier revision of this entry claimed reaching dd010 itself from any of the
-        three "relies entirely on the pre-existing, unconditional ProjectionShell.tsx Home link" --
-        this is false and is retracted. The Home link's href is /dashboard, team_dashboard.normal.
-        projection (dd020)'s own route -- a different, Normal-axis manifest unrelated to dd010
-        (team_dashboard.admin.projection, /admin/team-dashboard); see normal_navigation_membership
-        below for that link's own, separate, already-decided purpose. Clicking it does not reach
-        dd010 or any Admin-axis manifest. The accurate statement: no mechanism, fixed-navigation or
-        otherwise, returns a caller from ae200/5c100/092 specifically to dd010 under this contract.
-        An earlier revision of this entry also described "no outbound sequence of its own" alone as
-        the empty-set condition, which is retracted here as the semantic drift that framing was.
-        Authoring an additional relation
-        remains ordinary future hub_navigation:create work, not a bootstrap requirement of this
-        entry.
+        restate or narrow it. **Round37 update (retracts the Round33-36 "dd010 unreachable"
+        reading)**: that contract's logical sequence for this axis is
+        `[dd010, ae200, 5c100, 092]` -- dd010 occupies position 0 (its own topology_manifest_id, a
+        literal schema fact, not an array-external addition), with ae200/5c100/092 at positions
+        1/2/3 (sequence_position-ordered). The single unified adjacency rule applies identically at
+        every position: dd010 (position 0) has no prev and next=ae200; ae200 has prev=dd010 and
+        next=5c100; 5c100 has prev=ae200 and next=092; 092 (the last position) has prev=5c100 and no
+        next. **dd010 IS obtained as ae200's prev** under this rule -- position 0 is not a
+        special-cased exclusion, it is simply the position with nothing before it, exactly like any
+        sequence's first element. A target's own zero-outbound-rows state is NOT what determines
+        whether the navigation Island shows it an empty set: the additive reverse-direction read
+        (bidirectional_read_projection_gap) independently supplies a prev/next from an adjacent
+        occurrence when one exists (e.g. 5c100 finds ae200 as its prev this way despite owning zero
+        rows of its own; ae200 finds dd010 as its prev the same way). Only a manifest with no
+        occurrence at all (position 0 of no sequence, and never a target position of any sequence)
+        resolves an explicit empty candidate set. The missing sides in this chain -- dd010's own
+        missing prev, and 092's own missing next -- fall back to the existing, unconditional
+        ProjectionShell.tsx Home link ("ホーム" -> /dashboard) as a generic missing-side affordance;
+        per Round35's fact correction (still current), /dashboard is team_dashboard.normal.
+        projection (dd020)'s own route, a different, Normal-axis manifest unrelated to dd010 --
+        Home is never presented as "the way back to dd010 specifically," only as what a caller sees
+        when the unified rule legitimately produces no candidate on that side. An earlier revision
+        of this entry also described "no outbound sequence of its own" alone as the empty-set
+        condition, which remains retracted as the semantic drift that framing was. Authoring an
+        additional relation remains ordinary future hub_navigation:create work, not a bootstrap
+        requirement of this entry.
       admin_navigation_non_targets: >-
         00000000-0000-0000-0000-0000000ae210/ae220/ae230/ae240/ae250/ae260/ae270/ae280 (admin-enum's
         7 per-operation write manifests plus its get_group read-detail manifest) are ae200's own
