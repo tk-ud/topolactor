@@ -399,9 +399,19 @@ runtime_orchestration_ssot:
         manifest (e.g. dd010, team_dashboard.admin.projection, an existing production manifest
         already routed at /admin/team-dashboard) to ae200, at the next available sequence_position
         for that source. Once authored, ae200 is directly reachable in one click from that
-        source's own rendered nav bar, and reachable from any other Admin surface via ordinary
-        sequential navigation (click through the existing chain), using no new mechanism, field,
-        table, endpoint, or UI component. This design_change adds no new architecture for Goal 1:
+        source's own rendered nav bar only -- LoadHubNavigationSequenceAsync reads
+        WHERE hr.topology_manifest_id = @mid, strictly the current manifest's OWN outbound rows,
+        forward-only, never another manifest's rows -- so being a target of one source's sequence
+        grants no outbound reachability of its own to any other manifest. This Bundle's originally-
+        reported symptom (Admin Credential, manifest 092, unable to reach ae200) is closed the same
+        way: 092 authors its OWN ordinary outbound row to ae200, a second, independent row from a
+        second source, not inherited via dd010's row. Any other existing Admin surface this
+        Bundle's fixed scope requires the same jump from needs its own outbound row authored the
+        same way -- see admin-console-workflow-ssot.yaml
+        admin_hub_relation_navigation_contract.axis_navigation_membership.
+        source_scoped_reachability_note for the full account. No new mechanism, field, table,
+        endpoint, or UI component is used either way. This design_change adds no new architecture
+        for Goal 1:
         Navigation Island, shared Context, reverse-direction read, prev/next adjacency, and
         related presentational redesigns considered in earlier revisions of this entry are not
         required to close the observable outcome above and are retracted here as unnecessary --
@@ -602,9 +612,14 @@ runtime_orchestration_ssot:
         test_proof_contract already defines -- HubNavigationResolver -> Emission.NavigationSequence
         -> resolveHubNavigationLinks -> ProjectionShell's own nav bar / target-manifest round trip.
         An active topology_manifest with zero active hub_relations, with only deprecated-status
-        hub_relations, or whose only active hub_relations row's target does not resolve to exactly
-        one active topology_manifest, is not a valid completion state ("navigation orphan"). A
-        status='draft' topology_manifest is exempt while authoring is in progress and is never
+        hub_relations, or whose only active hub_relations row's target does not resolve, is not a
+        valid completion state ("navigation orphan") -- see db-schema.yaml
+        hub_relations.minimum_cardinality_completion_invariant's
+        canonical_forward_resolvability_definition / current_resolvability_definition for what
+        "resolves" means forward-design and today respectively; this addendum mirrors that
+        definition rather than restating it, so it is not itself the CURRENT-vs-forward split's
+        canonical location. A status='draft' topology_manifest is exempt while authoring is in
+        progress and is never
         itself resolved as a navigation/runtime target -- see
         docs/design/db-schema.yaml hub_relations.minimum_cardinality_completion_invariant
         (draft_transient_state_carve_out), the top authority this addendum mirrors.

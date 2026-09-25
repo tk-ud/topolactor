@@ -126,6 +126,22 @@ admin_console_workflow_ssot:
             canonical_default_entry_contract) and additionally eligible as an ordinary HubRelation
             navigation target from dd010 (this axis's source) like the others -- the two
             reachability paths are independent and do not conflict.
+      source_scoped_reachability_note: >-
+        HubNavigationResolver.ResolveAsync -> LoadHubNavigationSequenceAsync(topologyManifestId)
+        reads WHERE hr.topology_manifest_id = @mid only -- a manifest's fixed-navigation candidates
+        are strictly its OWN outbound hub_relations rows, forward-only, never another manifest's
+        rows and never a reverse/shared lookup. Authoring dd010 -> ae200 (admin_navigation_targets
+        above) therefore makes ae200 reachable only when dd010 itself is the currently-displayed
+        manifest; it does not, by itself, make ae200 reachable from 092 (credential-management) or
+        any other Admin surface a user might be standing on -- being a TARGET of dd010's own
+        sequence gives 092 no outbound reachability of its own. This Bundle's originally-reported
+        symptom (Admin Credential unable to reach Admin Enum) is closed by 092 authoring its OWN
+        ordinary outbound hub_relations row to ae200 (092 -> ae200), via the identical
+        hub_navigation:create mechanism, at the next available sequence_position for 092 -- a
+        second, independent row from a second source, not a consequence of dd010's own row and not
+        a new mechanism. Any other existing Admin surface this Bundle's fixed scope requires the
+        same jump from needs its own outbound row authored the same way; no shared, reverse, or
+        transitive-walk mechanism is introduced to avoid this per-source authoring.
       admin_navigation_non_targets: >-
         00000000-0000-0000-0000-0000000ae210/ae220/ae230/ae240/ae250/ae260/ae270/ae280 (admin-enum's
         7 per-operation write manifests plus its get_group read-detail manifest) are ae200's own
