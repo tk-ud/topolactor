@@ -365,12 +365,80 @@ runtime_orchestration_ssot:
         runtime_destination via HubNavigationResolver, not only topology_transform_runtime
         (RuntimeExecutor already performed this for its own path prior to this addendum).
       target_manifest_resolution: >-
-        HubNavigationSequenceItemDto.TargetManifestId is resolved only when exactly one active
-        hubs.topology_manifests row exists for NavigationSequence[].RelatedHubId — no implicit
-        oldest/first-match fallback (mirrors topology.physical_table_manifest_bindings'
+        The mechanism already built and unchanged by the design_change noted below (still an
+        accurate description of production today): HubNavigationSequenceItemDto.TargetManifestId
+        is resolved only when exactly one active hubs.topology_manifests row exists for
+        NavigationSequence[].RelatedHubId — no implicit oldest/first-match fallback (mirrors
+        topology.physical_table_manifest_bindings'
         no_implicit_join_nullable_fallback_or_oldest_manifest_fallback invariant in
         db-schema.yaml). Null/absent means the frontend must treat the related hub as not
         directly callable, never guess a target.
+      canonical_forward_target_reference: >-
+        Owner canonical redesign (design_change, no SQL DDL/backend/frontend/test change yet):
+        docs/design/db-schema.yaml hub_relations.target_reference_canonical_contract is the sole
+        canonical definition of the forward target-resolution design -- a direct
+        target_topology_manifest_id FK, replacing the related_hub_id-based exactly-one-active-
+        manifest inference described in target_manifest_resolution above. This field is a
+        pointer, not a restatement; once physically built, target_manifest_resolution
+        above is updated in place to describe the new current behavior rather than kept as an
+        independently-drifting second copy.
+    hub_relation_sequence_membership_and_navigation_island_contract:
+      status: design_change
+      note: >-
+        Goal 1 closure (Admin Enum ae200 reachable via existing HubRelation fixed-navigation):
+        the pre-existing forward-only mechanism this file's own hub_navigation_resolution above
+        already defines is sufficient, unchanged. hub_navigation_resolution already attaches
+        Emission.NavigationSequence (current topology's own hubs.hub_relations rows, ordered by
+        sequence_position) for any resolved manifest, and frontend/islands/ProjectionShell.tsx's
+        existing resolveHubNavigationLinks(emission.navigationSequence) already renders every
+        such row as a real, clickable <a href> link -- both pre-existing, unmodified by this
+        design_change. The only missing piece is DATA, not mechanism: no hubs.hub_relations row
+        today names ae200 as a target from any Admin-axis source manifest. Closing this Goal
+        is ordinary hub_navigation:create authoring (the existing admin-gated dispatch action) on
+        a future implementation_change -- author a hub_relations row from an Admin-axis source
+        manifest (e.g. dd010, team_dashboard.admin.projection, an existing production manifest
+        already routed at /admin/team-dashboard) to ae200, at the next available sequence_position
+        for that source. Once authored, ae200 is directly reachable in one click from that
+        source's own rendered nav bar only -- LoadHubNavigationSequenceAsync reads
+        WHERE hr.topology_manifest_id = @mid, strictly the current manifest's OWN outbound rows,
+        forward-only, never another manifest's rows -- so being a target of one source's sequence
+        grants no outbound reachability of its own to any other manifest. This Bundle's originally-
+        reported symptom (Admin Credential, manifest 092, unable to reach ae200) is closed the same
+        way: 092 authors its OWN ordinary outbound row to ae200, a second, independent row from a
+        second source, not inherited via dd010's row. Any other existing Admin surface this
+        Bundle's fixed scope requires the same jump from needs its own outbound row authored the
+        same way -- see admin-console-workflow-ssot.yaml
+        admin_hub_relation_navigation_contract.axis_navigation_membership.
+        source_scoped_reachability_note for the full account. No new mechanism, field, table,
+        endpoint, or UI component is used either way. This design_change adds no new architecture
+        for Goal 1:
+        Navigation Island, shared Context, reverse-direction read, prev/next adjacency, and
+        related presentational redesigns considered in earlier revisions of this entry are not
+        required to close the observable outcome above and are retracted here as unnecessary --
+        see retracted_designs below for the record.
+      target_resolution_authority_note: >-
+        The row(s) authored to close Goal 1 above resolve their navigable target exactly as db-
+        schema.yaml hub_relations.target_reference_canonical_contract (Goal 2 of this Bundle)
+        describes: today, through related_hub_id's existing exactly-one-active-manifest
+        inference (hub_navigation_resolution.target_manifest_resolution above); once Goal 2's
+        physical migration lands, through target_topology_manifest_id directly. Goal 1's data-
+        authoring closure is independent of which of the two resolves the target at read time --
+        neither goal requires the other to be physically built first, and authoring the row does
+        not need to wait for Goal 2's migration.
+      retracted_designs: >-
+        Earlier revisions of this entry accumulated a dedicated app-shell navigation Island with
+        shared Context, an additive reverse-direction read discovering current topology's
+        membership as a target elsewhere, prev/next occurrence adjacency (including a single-
+        sequence-with-source-at-position-0 unification), a position-0 transport DTO design
+        investigation, an active-topology eligibility predicate redesign, a selection-observation
+        forward requirement, and an audit of backend-wide abstract-function substrate reuse. None
+        of these is necessary to close Goal 1 as scoped above (existing forward-only rendering
+        already suffices once the missing row is authored) or Goal 2 (target-resolution authority
+        migration, scoped entirely in db-schema.yaml hub_relations.target_reference_canonical_
+        contract and this file's canonical_forward_target_reference/canonical_forward_scope_note
+        above). All of it is retracted from this Bundle's scope. Retraction is scope correction,
+        not a claim any of it was wrong on its own terms -- if pursued again, it belongs in its
+        own, separately-scoped design work with its own authority, not this Bundle.
     admin_runtime_structural_read_fallback:
       owner: manifest_dispatcher
       trigger: >-
@@ -494,6 +562,22 @@ runtime_orchestration_ssot:
             fallback)
         - this contract does not authorize a dedicated credential-management route, dedicated
             panel, or new runtime_destination
+      canonical_forward_scope_note: >-
+        test_input_shape / resolution_chain / proof_boundary above describe the mechanism already
+        built and its passing proof (unchanged by this design_change). The canonical forward
+        target-resolution design is db-schema.yaml hub_relations.target_reference_canonical_contract
+        (target_topology_manifest_id, no SQL DDL yet). When a future implementation_change
+        physically replaces related_hub_id with target_topology_manifest_id, it must update this
+        test_proof_contract (test_input_shape's hub_ids[] becomes a manifest_ids[] vector,
+        resolution_chain's RelatedHubId/TargetManifestId steps are rewritten, proof_boundary's
+        "exactly one ACTIVE manifest for a related hub" clause is replaced by a direct
+        target_topology_manifest_id existence+status check) in the same change that updates the
+        code — not leave this text describing a retired mechanism. Where an existing test turns
+        out, on inspection, to assert the OLD related_hub_id-based semantic as its actual point
+        (rather than incidentally using related_hub_id as test plumbing), that
+        implementation_change must judge what canonical contract the test is meant to prove and
+        either update it to prove the new canonical contract or retire it as stale proof — never
+        keep the old semantic alive by leaving the test unchanged and calling it done.
 
     production_projection_connectivity_invariant:
       note: >-
@@ -528,9 +612,14 @@ runtime_orchestration_ssot:
         test_proof_contract already defines -- HubNavigationResolver -> Emission.NavigationSequence
         -> resolveHubNavigationLinks -> ProjectionShell's own nav bar / target-manifest round trip.
         An active topology_manifest with zero active hub_relations, with only deprecated-status
-        hub_relations, or whose only active hub_relations row's target does not resolve to exactly
-        one active topology_manifest, is not a valid completion state ("navigation orphan"). A
-        status='draft' topology_manifest is exempt while authoring is in progress and is never
+        hub_relations, or whose only active hub_relations row's target does not resolve, is not a
+        valid completion state ("navigation orphan") -- see db-schema.yaml
+        hub_relations.minimum_cardinality_completion_invariant's
+        canonical_forward_resolvability_definition / current_resolvability_definition for what
+        "resolves" means forward-design and today respectively; this addendum mirrors that
+        definition rather than restating it, so it is not itself the CURRENT-vs-forward split's
+        canonical location. A status='draft' topology_manifest is exempt while authoring is in
+        progress and is never
         itself resolved as a navigation/runtime target -- see
         docs/design/db-schema.yaml hub_relations.minimum_cardinality_completion_invariant
         (draft_transient_state_carve_out), the top authority this addendum mirrors.
@@ -601,7 +690,11 @@ runtime_orchestration_ssot:
         its topology_manifest_id with zero active relations, regardless of that manifest's own
         draft/active status (hub_navigation:update replaces related_hub_id in place;
         hub_navigation:reorder never changes status, so deprecate is the only other mutation able to
-        reduce the active count).
+        reduce the active count). "Zero active relations" here is a raw active-row count, not a
+        resolvable-row count; that is a pre-existing condition, a distinct and independent topic
+        from this Bundle's two goals -- see db-schema.yaml
+        hub_relations.target_reference_canonical_contract.deprecate_and_update_guard_resolvability_distinction
+        for the full, canonical account. Neither Goal 1 nor Goal 2 depends on it.
       scope: >-
         Applies to every hubs.topology_manifests row per db-schema.yaml
         hub_relations.minimum_cardinality_completion_invariant.applies_to -- not limited to
@@ -617,7 +710,12 @@ runtime_orchestration_ssot:
         explicit manifest, no pre-injected payload.target_ref) resolves an initial manifest.
         Distinct from hub_navigation_resolution above, which resolves OUTBOUND navigation links
         from an ALREADY-resolved manifest -- this contract is consulted BEFORE any manifest is
-        resolved, as the initial-resolution fallback itself.
+        resolved, as the initial-resolution fallback itself. Unaffected by
+        db-schema.yaml hub_relations.target_reference_canonical_contract (the related_hub_id ->
+        target_topology_manifest_id redesign): this contract resolves the marked relation's own
+        topology_manifest_id (its source/parent manifest field), never related_hub_id or any
+        outbound target field, so retiring related_hub_id's target-resolution authority does not
+        touch this mechanism.
       owner: hubs.hub_relations
       marker:
         field: relation_config.transition

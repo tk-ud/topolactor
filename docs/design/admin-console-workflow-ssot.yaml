@@ -25,16 +25,10 @@ admin_console_workflow_ssot:
       the SAME mechanism manifest 092's own self-referencing hub_relations row already uses, never a
       new/parallel navigation mechanism. The RELATION SOURCE is whichever EXISTING topology_manifest
       an admin selects via the already-implemented /admin/manifests authoring surface (see
-      `authoring` below) — it is never required to be /admin's own landing page specifically, and
-      /admin having no hubs.hub / hubs.topology_manifests row of its own is not a blocker for this
-      mechanism. A prior revision of this Bundle (PR #584) fabricated a manifest/hub carrying no
-      ui_projection (00000000-0000-0000-0000-0000000ad100 / ad101) solely to give /admin its own
-      hub_relations source — that "empty/fake topology manifest created for hub relation connection
-      purposes" pattern is explicitly prohibited (owner correction, PR #584 review comments) and has
-      been removed from db/seed_empty.sql; it was never structurally necessary in the first place.
-      canonical_default_entry_contract (manifest 092's own self-referencing relation, resolving a
-      bare/no-selection projection entry) is a SEPARATE mechanism and must never be conflated with an
-      ordinary outbound hub navigation relation authored through this contract.
+      `authoring` below). canonical_default_entry_contract (manifest 092's own self-referencing
+      relation, resolving a bare/no-selection projection entry) is a SEPARATE mechanism and must
+      never be conflated with an ordinary outbound hub navigation relation authored through this
+      contract.
     authoring:
       surface: >-
         /admin/manifests (existing, already-implemented — not built by this Bundle):
@@ -49,9 +43,6 @@ admin_console_workflow_ssot:
         - hub_navigation:update
         - hub_navigation:deprecate
         - hub_navigation:reorder
-      dispatcher_mapping_status: >-
-        All six axes already have active production dispatcher_mapping rows in db/seed_empty.sql
-        (unlike auth_users/team_markdown before this Bundle's fix) — no wiring gap here.
       repository: >-
         NpgsqlContentBundleRepository (CreateHubRelationAsync / UpdateHubRelationAsync /
         DeprecateHubRelationAsync / ReorderHubRelationsAsync / ListHubRelationsByManifestAsync /
@@ -65,41 +56,16 @@ admin_console_workflow_ssot:
         standing in for authoring): hub_navigation:create dispatch -> real
         NpgsqlContentBundleRepository persistence -> readback -> re-dispatching the source manifest
         reflects the relation in Emission.NavigationSequence -> deprecating the sole active target
-        manifest fail-closes TargetManifestId to null. Direct-SQL-insert tests elsewhere in that
-        file (e.g. DispatchAsync_CredentialManagementManifest_E2E_RelationVectorToScalarEmission)
-        remain valid regression proof for the read/NavigationSequence-population half only — they
-        are not a substitute for this authoring-path proof.
-      resolved_closure_proof_shape: >-
-        2026-07-22 clarification: this authoring-path proof and the resolution_chain proof from
-        docs/design/runtime-orchestration-ssot.yaml
-        ui_projection_render_reachability_contract.test_proof_contract are two halves of one
-        completion criterion (see
-        docs/design/admin-normal-surface-projection-seed-ssot.yaml
-        design_blocking.target_surface_manifest_readiness.navigation_binding_resolution_criterion),
-        not two independent proofs. Closing a subBundle's navigation-binding item requires a single
-        live-DB proof that authors the relation via hub_navigation:create pointed at that subBundle's
-        own target manifest AND asserts the full resolution_chain from that same authored relation
-        through to that manifest's own package/layout/wiring/tensor rows and a scalar Emission --
-        the pattern backend/tests/Topolactor.Integration.Tests/AdminDashboardNavigationUiProjectionLiveDbTests.cs
-        (PR #595, admin-dashboard subBundle) already established. The existing
-        CredentialManagementHubRelationUiProjectionLiveDbTests.cs entries above satisfy each half
-        separately (a synthetic non-092 source for authoring, a directly-SQL-inserted row for
-        resolution against manifest 092) but not yet combined against manifest 092 itself.
+        manifest fail-closes TargetManifestId to null.
     authority_boundary:
       hub_relation_is: manifest_scoped_outbound_navigation_sequence_only
       hub_relation_is_not:
         - global_hub_graph
         - canonical_data_authority
         - runtime_participant_authority
-        - presentation_audience_authority
-        - presenter_to_participant_forced_projection_authority
-        - targeted_per_viewer_delivery_authority
-      out_of_bundle_note: >-
-        presentation/participant/forced-projection/targeted-audience-delivery concepts are not
-        defined anywhere in this SSOT family and are explicitly out of this Bundle's scope; a future
-        dedicated Bundle would need its own SSOT authority if that need ever arises.
     resolution_rule: >-
-      Identical, non-negotiable rule as
+      CURRENT implementation (unchanged by canonical_forward_target_reference below, and still
+      an accurate description of production today), identical, non-negotiable rule as
       docs/design/runtime-orchestration-ssot.yaml
       dispatcher_contract.hub_navigation_resolution.target_manifest_resolution: a related_hub_id
       resolves to a target manifest only when exactly one active hubs.topology_manifests row
@@ -107,89 +73,101 @@ admin_console_workflow_ssot:
       first-match/oldest/MIN implicit fallback. Source topology_manifest, related hub, and
       sequence_position must each be explicit; only active relations and active target manifests
       are reachable.
+    canonical_forward_target_reference: >-
+      Owner canonical redesign (design_change, no SQL DDL/backend/frontend/test change yet):
+      docs/design/db-schema.yaml hub_relations.target_reference_canonical_contract is the sole
+      canonical forward definition -- a direct target_topology_manifest_id FK the admin selects,
+      replacing the related-hub inference resolution_rule above describes. A future
+      implementation_change extends the authoring surface below so the admin picks a target
+      MANIFEST directly (reusing the same existing "list every hubs.topology_manifests row"
+      mechanism ManifestsAdmin.tsx already uses for SOURCE selection -- see authoring.surface
+      above; no new picker UI concept), instead of picking a target Hub via related_hub_id. Once
+      implemented, resolution_rule above is updated in place to match rather than kept as a
+      second, independently-drifting description.
     connection_state_authority: >-
       Whether any specific hubs.hub_relations row currently exists between two manifests is
       runtime/admin data, observed via /admin/manifests (HubNavigationAdmin.tsx) or a direct
       hubs.hub_relations query — never duplicated here as a fixed per-subBundle "wired"/"unconnected"
       SSOT status ledger. This document defines the authoring contract, schema, and resolution
       semantics; it does not track live connection state.
+    axis_navigation_membership:
+      note: >-
+        Owner-confirmed design (this design_change): defines concrete HubRelation fixed-navigation
+        membership closing Goal 1, reusing the existing mechanism this contract already defines
+        (hub_navigation:create/update/reorder/deprecate, HubNavigationResolver,
+        Emission.NavigationSequence, resolveHubNavigationLinks) unchanged -- no new navigation
+        model, global hub graph, parallel store, or per-surface fallback is introduced.
+        Presentation is the existing frontend/islands/ProjectionShell.tsx nav bar
+        (resolveHubNavigationLinks over emission.navigationSequence), unmodified -- see
+        docs/design/runtime-orchestration-ssot.yaml
+        ui_projection_render_reachability_contract.hub_relation_sequence_membership_and_navigation_island_contract
+        for the closure design.
+      admin_navigation_source: >-
+        db/seed_empty.sql manifest 00000000-0000-0000-0000-0000000dd010
+        ("team_dashboard.admin.projection", admin-normal-surface-projection-seed-ssot.yaml
+        surface_axes.admin.surfaces.team_dashboard) is the Admin-axis fixed-navigation source: a
+        real, already-reachable production entry point (/admin/team-dashboard, an existing route)
+        for an Admin user to land on and author outbound relations from.
+      admin_navigation_targets:
+        - manifest: 00000000-0000-0000-0000-0000000ae200 (admin.enum.management.projection, admin-enum)
+          eligibility: >-
+            Real ui_projection, Admin-axis surface, own dedicated production route (/admin/enums,
+            retirement_kind=thin_projection_wrapper per runtime-orchestration-ssot.yaml
+            admin_route_retirement_matrix). This is the manifest this Bundle's Goal 1 names.
+        - manifest: 00000000-0000-0000-0000-00000005c100 (scheduler.settings.projection, scheduler-settings)
+          eligibility: >-
+            Real ui_projection, Admin-axis surface, hub_navigation_only reachability per
+            admin_route_retirement_matrix (no dedicated route of its own -- /admin/scheduler keeps
+            mounting SchedulerJobSettingsPanel.tsx directly, unchanged by this entry).
+        - manifest: 00000000-0000-0000-0000-000000000092 (auth.external.credential_management.projection, credential-management)
+          eligibility: >-
+            Real ui_projection, Admin-axis surface, already reachable today via the separate
+            canonical_default_entry_contract bare-selection fallback (runtime-orchestration-ssot.yaml
+            canonical_default_entry_contract) and additionally eligible as an ordinary HubRelation
+            navigation target from dd010 (this axis's source) like the others -- the two
+            reachability paths are independent and do not conflict.
+      source_scoped_reachability_note: >-
+        HubNavigationResolver.ResolveAsync -> LoadHubNavigationSequenceAsync(topologyManifestId)
+        reads WHERE hr.topology_manifest_id = @mid only -- a manifest's fixed-navigation candidates
+        are strictly its OWN outbound hub_relations rows, forward-only, never another manifest's
+        rows and never a reverse/shared lookup. Authoring dd010 -> ae200 (admin_navigation_targets
+        above) therefore makes ae200 reachable only when dd010 itself is the currently-displayed
+        manifest; it does not, by itself, make ae200 reachable from 092 (credential-management) or
+        any other Admin surface a user might be standing on -- being a TARGET of dd010's own
+        sequence gives 092 no outbound reachability of its own. This Bundle's originally-reported
+        symptom (Admin Credential unable to reach Admin Enum) is closed by 092 authoring its OWN
+        ordinary outbound hub_relations row to ae200 (092 -> ae200), via the identical
+        hub_navigation:create mechanism, at the next available sequence_position for 092 -- a
+        second, independent row from a second source, not a consequence of dd010's own row and not
+        a new mechanism. Any other existing Admin surface this Bundle's fixed scope requires the
+        same jump from needs its own outbound row authored the same way; no shared, reverse, or
+        transitive-walk mechanism is introduced to avoid this per-source authoring.
+      admin_navigation_non_targets: >-
+        00000000-0000-0000-0000-0000000ae210/ae220/ae230/ae240/ae250/ae260/ae270/ae280 (admin-enum's
+        7 per-operation write manifests plus its get_group read-detail manifest) are ae200's own
+        internal write/read operation authority in the canonical Enum UX, reached via node-local
+        target_ref dispatches embedded in ae200's own layout -- not first-class members of this
+        axis's registered navigation membership set (admin_navigation_targets above); this Bundle
+        does not register a fixed dd010-sourced hub_relations row to any of them. This is a
+        membership-registration scope statement, not a technical prohibition on hub_navigation:create
+        authoring against them through the ordinary /admin/manifests authoring surface.
     subbundle_target_readiness:
       note: >-
-        The only structural readiness gate this Bundle tracks per subBundle for STARTING that
-        subBundle's own target manifest build (React-like Schema -> translator -> topology UI seed
-        -> seed registration) is whether that subBundle has a TARGET manifest worth navigating to at
-        all. 2026-07-22 clarification (reconciling this file with
-        docs/design/admin-normal-surface-projection-seed-ssot.yaml
-        design_blocking.target_surface_manifest_readiness, which previously read as contradictory on
-        this point): whether a relation has actually been authored is never part of THIS starting
-        gate, but it is a separate, later-sequenced completion requirement tracked by that other
-        file's navigation_binding_authoring_and_verification sub-item and
-        navigation_binding_resolution_criterion -- it gates that subBundle's full closure, not the
-        start of its manifest build. This note and connection_state_authority above remain correct
-        about live connection state (a specific hubs.hub_relations row's existence) never being a
-        fixed SSOT ledger; they are not a statement that closing the navigation-binding item is
-        exempt from design_blocking tracking entirely.
+        Per-target readiness for the three admin_navigation_targets above -- whether each already
+        has a real, seeded ui_projection manifest to navigate to (Goal 1's own precondition).
+      admin-enum: >-
+        manifest 00000000-0000-0000-0000-0000000ae200 already exists with a real ui_projection —
+        no target-side readiness blocker. This is the manifest Goal 1 names.
       credential-management: >-
         manifest 092 already exists with a real ui_projection — no target-side readiness blocker.
-        2026-07-15 gate0 audit reinforcement: once credentials.users/credentials.external_api/
-        credentials.external_instance (docs/design/admin-normal-surface-projection-seed-ssot.yaml
-        surface_axes.admin.surfaces.credentials) get their own topology UI seed and ui_projection
-        manifest, they connect to hub relation navigation through this SAME authoring mechanism
-        (authoring above, via /admin/manifests) — no dedicated credential-management relation
-        mechanism, fake source manifest, or parallel authoring surface is created for them.
-      enum_dictionary: >-
-        blocked — no per-screen ui_projection manifest exists yet for enum_dictionary (only
-        per-action dispatcher_mapping-only manifests). 2026-07-18: the Bundle-level owner production
-        pause was lifted (.agent/tasks/todo.md); this readiness gap is no longer pause-gated, it
-        remains blocked solely because the target manifest itself has not been produced yet.
+      scheduler-settings: >-
+        manifest 00000000-0000-0000-0000-00000005c100 (scheduler.settings.projection) already
+        exists with a real, seeded ui_projection (admin-normal-surface-projection-seed-ssot.yaml
+        surface_axes.admin.surfaces.scheduler) — no target-side readiness blocker.
       team_dashboard: >-
-        not blocked — team_dashboard.admin.projection (dd010) and team_dashboard.normal.projection
-        (dd020) are both real, seeded ui_projection manifests (admin-normal-surface-projection-
-        seed-ssot.yaml surface_axes.admin.surfaces.team_dashboard /
-        surface_axes.normal.surfaces.dashboard), their package/layout/wiring/tensor rows generated
-        through the real react_schema_topology_seed_translator.py intake (an offline draft/candidate
-        generator, never itself UIBuilder preview/validate/apply authority) and additionally
-        verified (2026-08-17, UIBuilder-lineage closure round 2) against the REAL, live, DB-writing
-        production layout_patch:preview -> layout_patch:validate -> layout_patch:apply pipeline
-        (backend/tests/Topolactor.Integration.Tests/
-        TeamDashboardUiBuilderCanonicalApplyPipelineLiveDbTests.cs — the exact dispatch actions
-        frontend/islands/UiBuilderAdmin.tsx's real Apply button calls, proven end to end against a
-        disposable scaffold, never db/seed_empty.sql's own production dd0xx rows) — not a
-        hand-authored tensor merely resembling generated output. Canonical physical-row mutation
-        (team_dashboard:update) runs the SAME AdminMasterRosterAudit.AppendAsync generic diff-log
-        helper credential-management/enum_dictionary/external_api_credential/
-        external_instance_credential/auth_users already share, behind the same dryRun-preview ->
-        explicit-confirm -> write mutation_confirmation_contract idiom enum_dictionary:create_group
-        established, writing real logs.diff evidence readable back through
-        physical_record:list_history (backend/tests/Topolactor.Integration.Tests/
-        TeamDashboardHubRelationUiProjectionLiveDbTests.cs
-        DispatchAsync_TeamDashboardUpdate_WritesLogsDiffEvidence_ReadableViaCanonicalPhysicalRecordHistory).
-        /admin/team-dashboard and /dashboard resolve their target manifest by manifest_key (2026-08-17,
-        generic route→Manifest identity resolution round), not a hardcoded manifest_id UUID
-        constant — see runtime-orchestration-ssot.yaml dispatcher_contract.
-        manifest_key_target_ref_resolution_contract. The one remaining open item is
-        navigation_binding's literal hub_navigation_only retirement (see runtime-orchestration-
-        ssot.yaml admin_route_retirement_matrix.routes /admin/team-dashboard entry) — resolved via
-        the Owner-directed ProjectionShell common Home link instead of a fabricated hub_relations
-        source, not a target-manifest-readiness blocker.
-      scheduler_settings: >-
-        not blocked — scheduler.settings.projection (manifest 00000000-0000-0000-0000-00000005c100)
-        is a real, seeded ui_projection manifest (admin-normal-surface-projection-seed-ssot.yaml
-        surface_axes.admin.surfaces.scheduler), its package/layout/wiring/tensor rows generated
-        through the react_schema_topology_seed_translator.py intake (.agent/tests/fixtures/
-        react-schema-topology-seed-translator/scheduler-settings-admin*.json) and adopted verbatim
-        into db/seed_empty.sql (identity-plumbing UUID edits only). 2026-07-22 Owner-confirmed
-        design (.agent/tasks/todo.md "scheduler-settings 3分割設計の確定"): this manifest proves the
-        Manifest/hub/package/layout/wiring/tensor and mutation_confirmation_contract chain is real
-        and dispatchable, but it is NOT frontend/routes/admin/scheduler.tsx's own route body —
-        that route keeps mounting the existing, scope-reduced (not deleted) frontend/islands/
-        SchedulerJobSettingsPanel.tsx, dispatching the same scheduler_jobs:list_settings/enable/
-        disable actions directly via the axes-routed dispatcher_mapping rows, never through this
-        manifest's target_ref. navigation_binding's literal hub_navigation_only retirement (see
-        runtime-orchestration-ssot.yaml admin_route_retirement_matrix.routes /admin/scheduler
-        entry) is proven live-DB at test time only (backend/tests/Topolactor.Integration.Tests/
-        SchedulerSettingsHubRelationUiProjectionLiveDbTests.cs), the same convention every other
-        subBundle here follows — no seeded hubs.hub_relations row.
+        team_dashboard.admin.projection (dd010) is a real, seeded ui_projection manifest with a
+        real, already-built production route (/admin/team-dashboard) — no source-side readiness
+        blocker.
     prohibited:
       - global_hub_scan_for_target_selection
       - first_match_oldest_or_MIN_fallback_target_selection
