@@ -99,7 +99,8 @@ admin_console_workflow_ssot:
         defined anywhere in this SSOT family and are explicitly out of this Bundle's scope; a future
         dedicated Bundle would need its own SSOT authority if that need ever arises.
     resolution_rule: >-
-      Identical, non-negotiable rule as
+      CURRENT implementation (unchanged by canonical_forward_target_reference below, and still
+      an accurate description of production today), identical, non-negotiable rule as
       docs/design/runtime-orchestration-ssot.yaml
       dispatcher_contract.hub_navigation_resolution.target_manifest_resolution: a related_hub_id
       resolves to a target manifest only when exactly one active hubs.topology_manifests row
@@ -107,6 +108,17 @@ admin_console_workflow_ssot:
       first-match/oldest/MIN implicit fallback. Source topology_manifest, related hub, and
       sequence_position must each be explicit; only active relations and active target manifests
       are reachable.
+    canonical_forward_target_reference: >-
+      Owner canonical redesign (design_change, no SQL DDL/backend/frontend/test change yet):
+      docs/design/db-schema.yaml hub_relations.target_reference_canonical_contract is the sole
+      canonical forward definition -- a direct target_topology_manifest_id FK the admin selects,
+      replacing the related-hub inference resolution_rule above describes. A future
+      implementation_change extends the authoring surface above so the admin picks a target
+      MANIFEST directly (reusing the same existing "list every hubs.topology_manifests row"
+      mechanism ManifestsAdmin.tsx already uses for SOURCE selection -- see authoring.surface
+      above; no new picker UI concept), instead of picking a target Hub via related_hub_id. Once
+      implemented, resolution_rule above is updated in place to match rather than kept as a
+      second, independently-drifting description.
     connection_state_authority: >-
       Whether any specific hubs.hub_relations row currently exists between two manifests is
       runtime/admin data, observed via /admin/manifests (HubNavigationAdmin.tsx) or a direct
@@ -137,6 +149,33 @@ admin_console_workflow_ssot:
         manifest, they connect to hub relation navigation through this SAME authoring mechanism
         (authoring above, via /admin/manifests) — no dedicated credential-management relation
         mechanism, fake source manifest, or parallel authoring surface is created for them.
+      admin-enum: >-
+        not blocked — manifest ae200 (admin.enum.management.projection) already exists with a real
+        ui_projection, and the authoring mechanism itself is already proven end to end against it:
+        docs/design/admin-normal-surface-projection-seed-ssot.yaml
+        design_blocking.target_surface_manifest_readiness.subbundle_status.admin-enum records
+        target_manifest: resolved and navigation_binding_authoring_and_verification: resolved, via
+        backend/tests/Topolactor.Integration.Tests/AdminEnumHubRelationUiProjectionLiveDbTests.cs
+        DispatchAsync_AdminEnumManagementManifest_HubNavigationCreate_RealAuthoringPath_ThenResolutionChainReflectsIt
+        (a real hub_navigation:create dispatch, never a raw SQL insert, with the full
+        resolution_chain reaching ae200's own real seed rows). This design_change's Goal 1 is not
+        "make the mechanism work" -- it already does -- but "author the production row": no
+        hubs.hub_relations row in db/seed_empty.sql currently names ae200 as a target from any
+        Admin-axis source, so no Admin surface a caller might actually be standing on (starting
+        with 00000000-0000-0000-0000-000000000092, auth.external.credential_management.projection,
+        this Bundle's originally-reported symptom) can reach it today. Closing this is ordinary
+        hub_navigation:create authoring on a future implementation_change: 092 authors its OWN
+        outbound hubs.hub_relations row to ae200, at the next available sequence_position for 092
+        -- using the identical, already-proven mechanism above, not a new one. HubNavigationResolver.
+        ResolveAsync -> ContentBundleRepository.LoadHubNavigationSequenceAsync(topologyManifestId)
+        reads WHERE hr.topology_manifest_id = @mid only (source-scoped, forward-only, never another
+        manifest's rows), so this authored row makes ae200 reachable from 092 specifically; any
+        other existing Admin surface this Bundle's fixed scope requires the same jump from needs
+        its own outbound row authored the same way -- no shared, reverse, or transitive-walk
+        mechanism is introduced to avoid this per-source authoring. Once authored, ae200 is directly
+        reachable in one click from 092's own rendered nav bar (frontend/islands/ProjectionShell.tsx's
+        existing resolveHubNavigationLinks over emission.navigationSequence, unmodified) -- no new
+        mechanism, field, table, endpoint, or UI component is introduced.
       enum_dictionary: >-
         blocked — no per-screen ui_projection manifest exists yet for enum_dictionary (only
         per-action dispatcher_mapping-only manifests). 2026-07-18: the Bundle-level owner production

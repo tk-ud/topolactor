@@ -457,9 +457,31 @@ db_schema:
         - name: topology_manifest_id
           type: uuid
           role: fk_topology_manifests
+        - name: target_topology_manifest_id
+          type: uuid
+          role: fk_topology_manifests_target_canonical
+          nullable: true
+          nullable_note: >-
+            Column-level: nullable. Non-null is enforced only for status='active' rows via a CHECK
+            constraint (status <> 'active' OR target_topology_manifest_id IS NOT NULL), never a
+            blanket column-level NOT NULL -- a status='deprecated' row may legitimately carry NULL.
+            Full rule in target_reference_canonical_contract below.
+          design_change_status: >-
+            Owner canonical redesign, this design_change; no SQL DDL yet (physical column add is
+            next implementation_change scope). This is the canonical, forward-design target
+            reference for this relation: a direct FK to hubs.topology_manifests naming the
+            manifest this relation navigates to. Full contract in target_reference_canonical_contract
+            below (sibling of key_columns on this table) -- this entry does not restate it.
         - name: related_hub_id
           type: uuid
-          role: fk_hubs_sequenced_hub_entry
+          role: legacy_target_resolution_mirror_pending_migration
+          retirement_note: >-
+            Owner canonical redesign, this design_change: related_hub_id is retired as
+            fixed-navigation target-resolution authority as of this design_change's SSOT, but is
+            NOT physically dropped, migrated, or stopped-being-read/written by this design_change
+            -- no SQL DDL, backend, frontend, or test code changes here. See
+            target_reference_canonical_contract below for the full retirement and write-path
+            mirror contract.
         - name: sequence_position
           type: integer
           role: sequence_authority
@@ -477,17 +499,114 @@ db_schema:
         - name: status
           type: enum
           role: active_or_deprecated
+      target_reference_canonical_contract:
+        status: design_change
+        note: >-
+          Owner canonical redesign (this design_change): unifies HubRelation fixed-navigation
+          target-resolution authority onto a direct target_topology_manifest_id -> hubs.
+          topology_manifests FK, retiring the current related_hub_id -> Hub -> (exactly-one-active-
+          manifest inference) chain from that role. This section is the sole canonical definition
+          of the new target reference, its resolution rule, and the retirement/write-path contract
+          for related_hub_id; key_columns above only points here to avoid two copies drifting apart.
+        canonical_target_field: >-
+          target_topology_manifest_id (uuid, FK to hubs.topology_manifests.topology_manifest_id).
+          Forward end-state is NOT NULL for status='active' rows -- every ACTIVE hub_relations row
+          always names an explicit target manifest directly, no inference. During the physical
+          migration (next implementation_change), existing rows are backfilled from today's
+          related_hub_id-based resolution before the not-null requirement is enforced; this
+          design_change does not prescribe the exact DDL/backfill mechanism, only the sequencing
+          and disposition constraints below.
+        legacy_ambiguous_row_migration_disposition: >-
+          related_hub_id's own current resolution (current_target_resolution below) already treats
+          a hub with zero or multiple active hubs.topology_manifests rows as unresolvable. The
+          migration's disposition: (1) a row whose related_hub_id resolves to EXACTLY ONE active
+          target manifest backfills target_topology_manifest_id to that manifest's id -- the clean,
+          unambiguous case. (2) A status='active' row whose related_hub_id resolves to ZERO or
+          MULTIPLE active target manifests cannot be backfilled with a real, non-fabricated target
+          -- the migration transitions such a row to status='deprecated' as part of the same
+          migration, using the existing hub_navigation:deprecate status value, never a new lifecycle
+          state. (3) A deprecated row (already deprecated, or deprecated by step 2) is exempt from
+          the not-null requirement -- the CHECK constraint is scoped to status='active' rows only,
+          never a blanket column-level NOT NULL, precisely so an inert legacy row need not carry a
+          fabricated target. (4) Step 2 must never silently create a NEW
+          minimum_cardinality_completion_invariant orphan: classify every one of a source
+          topology_manifest_id's active rows as clean-backfill or ambiguous-deprecate BEFORE writing
+          any status change for that source's rows, and confirm at least one clean-backfill row
+          survives for that source before committing; when a source would retain zero
+          clean-backfill rows, the migration fails that source closed for explicit admin
+          remediation, rather than reusing the existing per-row DeprecateHubRelationAsync guard
+          (which counts raw active-status siblings, not resolvable ones, and can pass or fail
+          incorrectly when applied row-by-row across a batch with more than one ambiguous row for
+          the same source).
+        canonical_target_resolution_rule: >-
+          The navigable target manifest for a hub_relations row is target_topology_manifest_id
+          itself when that referenced hubs.topology_manifests row has status='active'; otherwise
+          (row deprecated, or -- only during the pre-NOT-NULL transition window --
+          target_topology_manifest_id itself unset) the target resolves to no target (null), never
+          a guessed/oldest/first row. This is a direct FK existence+status check, not an inference
+          over a set. topology_manifest_id == target_topology_manifest_id remains legal on this
+          contract -- a relation whose source and target Manifest are the same row is an ordinary,
+          valid relation (self-referencing rows already exist under the current related_hub_id
+          model; this redesign does not add or remove that legality).
+        write_path_legacy_mirror_contract: >-
+          related_hub_id's physical column stays UUID NOT NULL -- this design_change does not drop
+          it, make it nullable, or redesign its non-target-resolution consumers (search/display
+          listing, evidence generation, etc. -- unchanged, not decided by this design_change either
+          way). Once target_topology_manifest_id is physically built and becomes the field the
+          admin/caller selects, the write path (hub_navigation:create/update) derives related_hub_id
+          from it rather than accepting it as an independent input: the target Manifest referenced
+          by the caller-selected target_topology_manifest_id is loaded, and its own hubs.
+          topology_manifests.hub_id is written to related_hub_id in the same write, as a legacy
+          compatibility mirror -- never a second, independently-selected value. An admin/user never
+          picks a target Hub and a target Manifest separately for the same row, and the two columns
+          can never disagree, because only target_topology_manifest_id is ever a caller input.
+        prohibited: >-
+          No new code path introduced after this design_change may derive target-manifest
+          resolution from related_hub_id; any new consumer needing the navigable target manifest
+          must use target_topology_manifest_id (once physically added) or, until then, must not be
+          built against related_hub_id as if it were canonical. The physical drop, nullability
+          change, or non-target-resolution-consumer redesign of related_hub_id is out of this
+          design_change's scope.
+        current_target_resolution: >-
+          Current (unchanged by this design_change) implementation behavior, retained here verbatim
+          as an accurate description of what the code still actually does today: related_hub_id
+          resolves to a target manifest only when exactly one active hubs.topology_manifests row
+          exists for that hub_id (zero or multiple active rows resolve to no target, never a
+          guessed/oldest/first row) -- see docs/design/runtime-orchestration-ssot.yaml
+          ui_projection_render_reachability_contract.hub_navigation_resolution.target_manifest_resolution
+          for the full current-implementation text. This text is not being deleted or contradicted
+          -- it remains true of production today -- but it is no longer the canonical forward
+          design; it is what the next implementation_change replaces.
+        compatibility_history_ref: compatibility_history.hub_relations_related_hub_id_to_target_topology_manifest_id_transition
       minimum_cardinality_completion_invariant:
         rule: >-
           Every hubs.topology_manifests row with status='active' must own at least one
-          hubs.hub_relations row with status='active' whose related_hub_id resolves to exactly
-          one active hubs.topology_manifests row for that hub (the same exactly-one-active-manifest
-          rule navigation_target_resolution below already defines). An active topology_manifest
-          with zero hub_relations rows, with only status='deprecated' rows, or whose only active
-          row's target does not resolve, is not a valid completion state ("navigation orphan").
-          This is the reverse-direction cardinality this table's own fk_topology_manifests column
-          does not by itself guarantee: the FK guarantees every hub_relations row points at a real
-          topology_manifest, not that every topology_manifest has an outbound hub_relations row.
+          hubs.hub_relations row with status='active' whose target resolves to exactly one
+          reachable target manifest (see canonical_forward_resolvability_definition and
+          current_resolvability_definition below for what "resolves" means, forward-design and
+          today respectively). An active topology_manifest with zero hub_relations rows, with only
+          status='deprecated' rows, or whose only active row's target does not resolve, is not a
+          valid completion state ("navigation orphan"). This is the reverse-direction cardinality
+          this table's own fk_topology_manifests column does not by itself guarantee: the FK
+          guarantees every hub_relations row points at a real topology_manifest, not that every
+          topology_manifest has an outbound hub_relations row.
+        canonical_forward_resolvability_definition: >-
+          Owner canonical redesign (design_change, no SQL DDL/backend/frontend/test change yet):
+          once target_reference_canonical_contract above is physically built, "resolves" above
+          means canonical_target_resolution_rule (this table's own entry above) --
+          target_topology_manifest_id names a real hubs.topology_manifests row with status='active'
+          -- a direct FK existence+status check, not an inference over related_hub_id. This is the
+          forward-design definition this invariant's rule uses; current_resolvability_definition
+          below is what "resolves" means only until that migration lands.
+        current_resolvability_definition: >-
+          Current (unchanged by this design_change) implementation behavior, still accurate today:
+          "resolves" means related_hub_id resolves to exactly one active hubs.topology_manifests
+          row for that hub (the same exactly-one-active-manifest rule navigation_target_resolution
+          below already defines) -- zero or multiple active rows for that hub do not resolve. This
+          is what HasResolvableActiveHubRelationAsync (enforcement_boundary below) actually checks
+          today; once target_topology_manifest_id is physically built, that same method is updated
+          to check canonical_forward_resolvability_definition instead, not kept as a second,
+          independently-drifting resolvability check.
         draft_transient_state_carve_out: >-
           A status='draft' topology_manifest is explicitly exempt from this invariant while
           authoring is in progress — hub relations are commonly authored after the draft shell
@@ -1089,7 +1208,8 @@ db_schema:
       shape:
         hub_relation_id: uuid
         topology_manifest_id: uuid
-        related_hub_id: uuid
+        target_topology_manifest_id: uuid (design_change, no SQL DDL yet -- see hub_relations.target_reference_canonical_contract)
+        related_hub_id: uuid (legacy_target_resolution_mirror_pending_migration -- see hub_relations.target_reference_canonical_contract)
         sequence_position: integer
         relation_config: jsonb
         status: enum active/deprecated
@@ -1099,18 +1219,30 @@ db_schema:
       unique_constraint: topology_manifest_id + sequence_position
       note: >-
         Child of hubs.topology_manifests. Not a global hub-to-hub relation graph.
-        related_hub_id is the sequenced hub entry. relation_config holds optional sequence metadata.
+        related_hub_id is the current/legacy sequenced hub entry, retirement pending; see
+        navigation_target_resolution below for the current-vs-canonical-forward split.
+        relation_config holds optional sequence metadata.
       navigation_target_resolution:
-        note: >-
-          Minimal design addendum (credential-management hub relation / navigation bundle).
-          When a caller (e.g. runtime-orchestration-ssot.yaml
+        canonical_forward_rule: >-
+          Owner canonical redesign (this design_change; no SQL DDL yet): the navigable
+          topology_manifest for a hub_relations row is target_topology_manifest_id directly (an FK
+          to hubs.topology_manifests), resolved when that referenced row has status='active' -- a
+          direct existence+status check, never an inference over a set. Full contract in
+          hub_relations.target_reference_canonical_contract (this table's own entry above) -- this
+          field does not restate it.
+        current_implementation_note: >-
+          Minimal design addendum (credential-management hub relation / navigation bundle),
+          unchanged by this design_change and still an accurate description of current production
+          behavior: when a caller (e.g. runtime-orchestration-ssot.yaml
           ui_projection_render_reachability_contract.hub_navigation_resolution) needs a
           navigable topology_manifest for a hub_relations.related_hub_id, the target is
           resolved only when exactly one active hubs.topology_manifests row exists for that
           hub_id — mirroring physical_table_manifest_binding's
           no_implicit_join_nullable_fallback_or_oldest_manifest_fallback invariant above. Zero
           or multiple manifests under the related hub resolve to no target (null), never a
-          guessed/oldest/first row.
+          guessed/oldest/first row. This is the mechanism already built and in production use
+          today, not the canonical forward design (see canonical_forward_rule above) -- it
+          remains true of production today and is what a future implementation_change replaces.
 
     sql_attention_targets:
       target_space: hubs
@@ -1519,6 +1651,23 @@ db_schema:
           - hub_id
           - target_hub_id
           - relation_registry_id
+      hub_relations_related_hub_id_to_target_topology_manifest_id_transition:
+        status: design_change_canonical_defined_physical_migration_pending
+        migration_target: hubs.hub_relations
+        note: >-
+          Owner canonical redesign (this design_change; distinct from the hub_id/target_hub_id/
+          relation_registry_id migration above, which is already completed). Today's manifest-
+          scoped shape resolves its navigation target indirectly: related_hub_id (a Hub UUID) plus
+          an exactly-one-active-manifest-for-that-hub inference at read time. The new canonical
+          shape adds a direct target_topology_manifest_id (Manifest UUID) FK and retires
+          related_hub_id from target-resolution authority. This design_change performs NO physical
+          change at all: no DDL, no backend/frontend code, no test changes, no data migration. Full
+          contract (canonical field, resolution rule, retirement scope/permitted-uses/prohibited-
+          uses/write-path mirror) lives in hub_relations.target_reference_canonical_contract (this
+          table's own key_columns sibling) -- this entry is a compatibility_history pointer only,
+          not a restatement.
+        will_become_former_column: related_hub_id (only once the next implementation_change
+          physically completes the replacement; not yet -- see status above)
     registry_schema_policy:
       has_dedicated_schema: false
       rule: registry_is_tensor_map_reference_concept_not_schema_namespace

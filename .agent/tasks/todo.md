@@ -13,6 +13,7 @@
 | `test-orchestration-review` | Seed conversion後の proof / test orchestration review | not_started | 1 | proof surface carry-over | `docs/design/pipeline-continuity-ssot.yaml` |
 | `admin-console-workflow-step-wording-boundary` | Seed conversion後の admin console workflow wording boundary | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `ui-builder-schema-composed-override-delta-reachability` | schema-composed override-delta nodeがUI-Builder再オープン時に消失するnode-loss gap | not_started | 1 | 未割当（`frontend-canonical-surface-structure-label-boundary` PR#610 9ラウンド目監査からの新規発見、別scope） | `docs/design/runtime-orchestration-ssot.yaml` / `docs/design/react-schema-topology-seed-translator-ssot.yaml` |
+| `hub-relation-target-manifest-canonical-migration` | (1) Admin Credential(`092`)からAdmin Enum(`ae200`)をHubRelation fixed-navigationからjump可能にする、(2) `related_hub_id` をfixed-navigation target-resolution authorityから退役させ直接FKの `target_topology_manifest_id` へ移行する、の2目的のみを扱う implementation_change | not_started | 1 | 未割当（design_change PRでSSOT契約のみ確定、実装は本Bundleの後段） | `docs/design/db-schema.yaml` / `docs/design/runtime-orchestration-ssot.yaml` / `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/admin-normal-surface-projection-seed-ssot.yaml` |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
 
@@ -406,3 +407,36 @@ PR #608での `credential_category_filter` の select→tabs.template presentati
 - [x] credential-management surfaceの全confirmation Modal(12ペア)について、実tab/preview button clickによるdryRun dispatch決着後、実際にModalがopenし、日本語title/body/Confirm/Cancelが表示され、実Cancel/Confirm clickで正しくclose・dispatchTargetRef/payloadFrom保持まで到達することを実DOM操作で証明した（文字列absenceのみの証明ではない）。
 
 Bundleの全受入条件を満たしたため、Status を `partial` → `implemented` として扱ってよい（次回 audit/レビューで確認されるまでは Roadmap bundle index からの削除・完全クローズはオーナー/監査役判断とする）。
+
+---
+
+## Bundle `hub-relation-target-manifest-canonical-migration`
+
+**Status:** `not_started`
+**Primary SSOT:** `docs/design/db-schema.yaml` `db_schema.tables.hub_relations.target_reference_canonical_contract`（Goal 2の正本）/ `docs/design/runtime-orchestration-ssot.yaml` `ui_projection_render_reachability_contract.hub_navigation_resolution`（Goal 1の正本）/ `docs/design/admin-console-workflow-ssot.yaml` `admin_hub_relation_navigation_contract`（既存authoring mechanism、Goal 1のsubbundle_target_readiness.admin-enum entry）
+**Position:** design_change（本PR）の後段 implementation_change。SQL DDL / backend / frontend / test実装はすべて未着手。
+
+### 目的（Owner固定、2点のみ）
+
+1. Admin Credential（manifest `092`）から Admin Enum（manifest `ae200`）へ、既存HubRelation fixed-navigation mechanismを用いて到達可能にする。
+2. HubRelation fixed-navigationのcanonical target-resolution authorityを`related_hub_id`によるHub→Manifest推論から、直接FKの`target_topology_manifest_id -> hubs.topology_manifests`へ一本化する。`related_hub_id`はtarget-resolution authorityから退役し、既存consumer互換のためtarget Manifestの`hub_id`から機械的に導出されるlegacy compatibility mirrorとして扱う。
+
+### Goal 1 の設計（既存mechanismの再利用のみ、新規architectureなし）
+
+`docs/design/admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract`が既に確立している`/admin/manifests`authoring surface・`hub_navigation:create/update/deprecate/reorder`dispatch actions・`NpgsqlContentBundleRepository`実装は無変更のまま再利用する。同contractの`subbundle_target_readiness.admin-enum`が示す通り、target manifest（ae200）の準備とauthoring mechanismそのものの動作証明（`AdminEnumHubRelationUiProjectionLiveDbTests.cs`の既存live-DB test）は既に完了しており、不足しているのは**production dataのみ**である: `db/seed_empty.sql`のいずれのAdmin-axis sourceにも`ae200`をtargetとする`hubs.hub_relations`行が存在しない。
+
+既存`HubNavigationResolver.ResolveAsync -> ContentBundleRepository.LoadHubNavigationSequenceAsync(topologyManifestId)`は`WHERE hr.topology_manifest_id = @mid`のみを読むsource-scoped / forward-only mechanismである——current manifest自身のoutbound行のみを返し、他manifestの行を読むことも reverse に辿ることもない。したがって本Bundleが解消すべき症状（Admin Credential `092`からEnumへ到達できない）は、`092`自身が`ae200`への通常のoutbound HubRelation行を持つことでのみ閉じる。Goal 1の解決は、次段implementation_changeにおける通常の`hub_navigation:create`authoringのみで閉じる——`092`から`ae200`への`hubs.hub_relations`行を、`092`の次のsequence_positionへ author する。authored後は、`092`自身の既存nav bar（`frontend/islands/ProjectionShell.tsx`の既存`resolveHubNavigationLinks`、無変更）から`ae200`へ1クリックで到達可能になる。Owner固定scope上で他の既存Admin sourceも同じjumpを要求する場合は、それぞれのsource自身が同様に自分のoutbound行を author する。新しいnavigation mechanism・field・table・endpoint・UIコンポーネントは一切不要。
+
+### Goal 2 の設計（`db-schema.yaml target_reference_canonical_contract`が正本）
+
+- **canonical_target_field**: `target_topology_manifest_id`（uuid、`hubs.topology_manifests.topology_manifest_id`へのFK）。Forward end-stateでは`status='active'`行についてNOT NULL（CHECK制約`status <> 'active' OR target_topology_manifest_id IS NOT NULL`のみ、column-level NOT NULLではない）。
+- **legacy_ambiguous_row_migration_disposition**: 既存`related_hub_id`が exactly one active target manifestへ解決する行はそのまま`target_topology_manifest_id`へbackfill。zero/multiple active targetへ解決する行は、fabricationせず`status='deprecated'`へ遷移（既存`hub_navigation:deprecate`のstatus値を再利用、新lifecycle状態は作らない）。source `topology_manifest_id`ごとに全対象行を書き込み前に一括classification（clean-backfill / ambiguous-deprecate）し、そのsourceにclean-backfill行が最低1件残るかを判定してから書き込む。
+- **canonical_target_resolution_rule**: hub_relations行のnavigable targetは、`target_topology_manifest_id`が指すhubs.topology_manifests行が`status='active'`である場合にのみそのmanifest自身、それ以外はno target（null）。直接FK existence+status checkであり推論ではない。`topology_manifest_id == target_topology_manifest_id`は合法。
+- **write_path_legacy_mirror_contract**: `related_hub_id`の物理列（UUID NOT NULL）は変更しない。`target_topology_manifest_id`物理実装後は、それが唯一のcaller input（canonical selection authority）となり、`related_hub_id`は選択されたtarget Manifestの`hub_id`から導出され、同一writeでlegacy compatibility mirrorとして書き込まれる——admin/userが両方を独立に選択する二重authorityには戻さない。
+- **minimum_cardinality_completion_invariant同期**: 同invariantの`rule`を`canonical_forward_resolvability_definition`（`target_topology_manifest_id`基準、forward design）と`current_resolvability_definition`（`related_hub_id`基準、CURRENT）へ分離し、invariant自体がcanonical target-resolution authorityと同期するようにする。`runtime-orchestration-ssot.yaml`側のmirrorも同じ分離を指す。
+
+### 実装後の受入条件
+
+- [ ] Goal 1: 次段implementation_changeで`hub_navigation:create`を用い、`092`自身から`ae200`への`hubs.hub_relations`行を author する。`092`を表示した際、既存ProjectionShellのnav barが`ae200`への実クリック可能な`<a href>`を表示することを実DOM操作で証明する。新しいUIコンポーネント・backend endpoint・DTO変更が加わっていないことを確認する。
+- [ ] Goal 2: `target_topology_manifest_id`列の物理追加、`legacy_ambiguous_row_migration_disposition`に従ったbackfill/deprecate migration、`canonical_target_resolution_rule`に従った読み取り経路の切替、`write_path_legacy_mirror_contract`に従ったCreate/Update write pathの実装を行い、既存test（`HubRelationUiProjectionResolutionChainProof`等）を新しいcanonical fieldに対して更新のうえ green にする。`related_hub_id`の物理列・既存read/write pathの非target-resolution consumerはこのBundleでは変更しない。
+- [ ] 本Bundleの完了判定はCI greenのみを根拠にしない。SSOT契約・実装・testの意味的整合を監査役が個別に確認したうえで判定する。
