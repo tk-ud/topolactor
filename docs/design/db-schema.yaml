@@ -615,15 +615,29 @@ db_schema:
           change an EXISTING topology_manifest row's hub_id in place. Without a corresponding update,
           every hub_relations row that already mirrored that manifest's PREVIOUS hub_id into
           related_hub_id would silently go stale, breaking write_path_legacy_mirror_contract's own
-          "can never disagree" statement, not just once at write time but for as long as the row
-          stays active afterward. The canonical boundary (next implementation_change scope, no code change in this
-          design_change): the SAME transaction that updates hubs.topology_manifests.hub_id for a
-          topology_manifest_id must also update related_hub_id to the new hub_id on every
-          status='active' hubs.hub_relations row whose target_topology_manifest_id equals that
-          topology_manifest_id -- a propagation of the single existing hub_id authority to its own
-          already-declared mirror column, never a second, independently-selected authority and never
-          a new sync table, trigger, or lane. status='deprecated' target rows are exempt, mirroring
-          this contract's own not-null/mirror scope being status='active'-only elsewhere.
+          "can never disagree" statement, not just once at write time but for as long as that
+          mirrored value keeps being read afterward. The canonical boundary (next
+          implementation_change scope, no code change in this design_change): the SAME transaction
+          that updates hubs.topology_manifests.hub_id for a topology_manifest_id must also update
+          related_hub_id to the new hub_id on EVERY hubs.hub_relations row whose
+          target_topology_manifest_id equals that topology_manifest_id, REGARDLESS of the
+          hub_relations row's own status -- a propagation of the single existing hub_id authority to
+          its own already-declared mirror column, never a second, independently-selected authority
+          and never a new sync table, trigger, or lane. An earlier draft of this boundary scoped the
+          sync to status='active' target rows only and exempted status='deprecated' ones; that is
+          corrected here because NpgsqlContentBundleRepository.ListHubRelationsByManifestAsync (the
+          existing /admin/manifests listing query) has no status filter at all -- it returns every
+          hub_relations row for a manifest, active and deprecated alike, and exposes each one's
+          related_hub_id (joined to a hub/relation_registry display name) to that existing consumer.
+          A deprecated row whose target_topology_manifest_id is still populated (a deprecated
+          relation, not a NULL-target transition row) is exactly the same kind of mirror
+          write_path_legacy_mirror_contract already defines, and status='deprecated' does not make
+          its own already-declared mirror column exempt from staying accurate for that existing
+          consumer. The only rows outside this boundary's scope are those whose
+          target_topology_manifest_id is itself NULL (the pre-NOT-NULL transition-window rows
+          legacy_ambiguous_row_migration_disposition above covers) -- there is no target authority to
+          derive a mirror value from for those, so they remain governed solely by that disposition's
+          fail-close / explicit-admin-remediation contract, unchanged here.
         prohibited: >-
           No new code path introduced after this design_change may derive target-manifest
           resolution from related_hub_id; any new consumer needing the navigable target manifest
