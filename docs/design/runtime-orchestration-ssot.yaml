@@ -365,12 +365,44 @@ runtime_orchestration_ssot:
         runtime_destination via HubNavigationResolver, not only topology_transform_runtime
         (RuntimeExecutor already performed this for its own path prior to this addendum).
       target_manifest_resolution: >-
-        HubNavigationSequenceItemDto.TargetManifestId is resolved only when exactly one active
-        hubs.topology_manifests row exists for NavigationSequence[].RelatedHubId — no implicit
-        oldest/first-match fallback (mirrors topology.physical_table_manifest_bindings'
+        The mechanism already built and unchanged by the design_change noted below (still an
+        accurate description of production today): HubNavigationSequenceItemDto.TargetManifestId
+        is resolved only when exactly one active hubs.topology_manifests row exists for
+        NavigationSequence[].RelatedHubId — no implicit oldest/first-match fallback (mirrors
+        topology.physical_table_manifest_bindings'
         no_implicit_join_nullable_fallback_or_oldest_manifest_fallback invariant in
         db-schema.yaml). Null/absent means the frontend must treat the related hub as not
         directly callable, never guess a target.
+      canonical_forward_target_reference: >-
+        Owner canonical redesign (design_change, no SQL DDL/backend/frontend/test change yet):
+        docs/design/db-schema.yaml hub_relations.target_reference_canonical_contract is the sole
+        canonical definition of the forward target-resolution design -- a direct
+        target_topology_manifest_id FK, replacing the related_hub_id-based exactly-one-active-
+        manifest inference described in target_manifest_resolution above. This field is a pointer,
+        not a restatement; once physically built, target_manifest_resolution above is updated in
+        place to describe the new current behavior rather than kept as an independently-drifting
+        second copy.
+      source_scoped_admin_reachability_note: >-
+        Goal (this Bundle): Admin Enum (manifest 00000000-0000-0000-0000-0000000ae200,
+        admin.enum.management.projection) reachable FROM Admin Credential (manifest
+        00000000-0000-0000-0000-000000000092, auth.external.credential_management.projection) via
+        this existing mechanism, closed with zero new architecture. HubNavigationResolver.
+        ResolveAsync -> ContentBundleRepository.LoadHubNavigationSequenceAsync(topologyManifestId)
+        reads WHERE hr.topology_manifest_id = @mid only -- a manifest's fixed-navigation candidates
+        are strictly its OWN outbound hub_relations rows, forward-only, never another manifest's
+        rows and never a reverse/shared lookup. Closing this Goal is the ordinary
+        hub_navigation:create authoring pattern (the existing admin-gated dispatch action) applied
+        as a permanent db/seed_empty.sql addition on a future implementation_change -- 092 authors
+        its OWN ordinary outbound hub_relations row to ae200, at the next available
+        sequence_position for 092 (db-schema.yaml bootstrap_policy: this repository's standard
+        operational method is a fresh docker-compose-v bootstrap, migration_policy retired, so the
+        row must survive that bootstrap as a canonical seed row, not only exist as an ephemeral row
+        a live-DB test creates and rolls back in its own teardown). Once authored, ae200 is directly
+        reachable in one click from 092's own rendered nav bar (frontend/islands/ProjectionShell.tsx's
+        existing resolveHubNavigationLinks over emission.navigationSequence, unmodified) -- no new
+        mechanism, field, table, endpoint, or UI component is introduced. See
+        docs/design/admin-console-workflow-ssot.yaml
+        admin_hub_relation_navigation_contract.authoring for the authoring-surface detail.
     admin_runtime_structural_read_fallback:
       owner: manifest_dispatcher
       trigger: >-
@@ -528,9 +560,13 @@ runtime_orchestration_ssot:
         test_proof_contract already defines -- HubNavigationResolver -> Emission.NavigationSequence
         -> resolveHubNavigationLinks -> ProjectionShell's own nav bar / target-manifest round trip.
         An active topology_manifest with zero active hub_relations, with only deprecated-status
-        hub_relations, or whose only active hub_relations row's target does not resolve to exactly
-        one active topology_manifest, is not a valid completion state ("navigation orphan"). A
-        status='draft' topology_manifest is exempt while authoring is in progress and is never
+        hub_relations, or whose only active hub_relations row's target does not resolve, is not a
+        valid completion state ("navigation orphan") -- see db-schema.yaml
+        hub_relations.minimum_cardinality_completion_invariant's
+        canonical_forward_resolvability_definition / current_resolvability_definition for what
+        "resolves" means forward-design and today respectively; this addendum mirrors that
+        definition rather than restating it. A status='draft' topology_manifest is exempt while
+        authoring is in progress and is never
         itself resolved as a navigation/runtime target -- see
         docs/design/db-schema.yaml hub_relations.minimum_cardinality_completion_invariant
         (draft_transient_state_carve_out), the top authority this addendum mirrors.
