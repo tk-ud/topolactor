@@ -521,23 +521,44 @@ db_schema:
           a hub with zero or multiple active hubs.topology_manifests rows as unresolvable. The
           migration's disposition: (1) a row whose related_hub_id resolves to EXACTLY ONE active
           target manifest backfills target_topology_manifest_id to that manifest's id -- the clean,
-          unambiguous case. (2) A status='active' row whose related_hub_id resolves to ZERO or
-          MULTIPLE active target manifests cannot be backfilled with a real, non-fabricated target
-          -- the migration transitions such a row to status='deprecated' as part of the same
-          migration, using the existing hub_navigation:deprecate status value, never a new lifecycle
-          state. (3) A deprecated row (already deprecated, or deprecated by step 2) is exempt from
-          the not-null requirement -- the CHECK constraint is scoped to status='active' rows only,
-          never a blanket column-level NOT NULL, precisely so an inert legacy row need not carry a
-          fabricated target. (4) Step 2 must never silently create a NEW
-          minimum_cardinality_completion_invariant orphan: classify every one of a source
-          topology_manifest_id's active rows as clean-backfill or ambiguous-deprecate BEFORE writing
-          any status change for that source's rows, and confirm at least one clean-backfill row
-          survives for that source before committing; when a source would retain zero
-          clean-backfill rows, the migration fails that source closed for explicit admin
-          remediation, rather than reusing the existing per-row DeprecateHubRelationAsync guard
-          (which counts raw active-status siblings, not resolvable ones, and can pass or fail
-          incorrectly when applied row-by-row across a batch with more than one ambiguous row for
-          the same source).
+          unambiguous case, status untouched. (2) A status='active' row whose related_hub_id
+          resolves to ZERO or MULTIPLE active target manifests cannot be backfilled with a real,
+          non-fabricated target -- the migration leaves target_topology_manifest_id NULL and the
+          row's status untouched (never auto-transitions it to status='deprecated'). An earlier
+          draft of this contract auto-deprecated such rows; that is corrected here because
+          hr.status='active' is also the candidate condition
+          NpgsqlSqlAttentionLogsRepository.LoadHubRelationExplorationCandidatesAsync's SQL uses
+          (jointly with relation_config having a sql_attention_score key) to select SQL Attention
+          exploration candidates, entirely independent of target-manifest resolvability -- silently
+          flipping an ambiguous row's status would observably remove it from that unrelated
+          consumer's candidate set, which write_path_legacy_mirror_contract's own
+          non-target-resolution-consumers boundary (and this Bundle's fixed NG axis) forbids, and no
+          pre-existing authority sanctions a target-resolution migration causing that side effect.
+          (3) Because of (2), a status='active' row can legitimately carry a NULL
+          target_topology_manifest_id during the transition window -- this is exactly the
+          pre-NOT-NULL transition window canonical_target_resolution_rule below already carves out,
+          not a new exemption. The status='active' NOT NULL CHECK constraint therefore cannot be
+          enabled for a given database until every one of its active rows has been resolved by (1)
+          or by explicit admin remediation (below); enabling it is conditioned on that, not on a
+          fixed migration step count. (4) Explicit admin remediation for a row left NULL by (2):
+          the admin either re-points it to a specific target manifest (hub_navigation:update once
+          it accepts target_topology_manifest_id directly, resolving the ambiguity by deliberate
+          choice) or deprecates it via the existing hub_navigation:deprecate dispatch action -- an
+          intentional, admin-initiated decision using DeprecateHubRelationAsync's own existing
+          last-active-row guard, never an automatic migration side effect. (5) The migration itself
+          only classifies and reports; it never silently creates a NEW
+          minimum_cardinality_completion_invariant orphan by its own action, because it never
+          changes status -- but it must still report, per source topology_manifest_id, when ALL of
+          that source's active rows classify as ambiguous (case 2), since such a source is already a
+          navigation orphan under canonical_forward_resolvability_definition below (zero resolvable
+          active rows) pending the explicit remediation in (4), and that pre-existing condition must
+          not be masked by silence. On a fresh docker-compose-v bootstrap (bootstrap_policy above),
+          this classification step does not run at all -- db/seed_empty.sql's own rows are authored
+          with target_topology_manifest_id set directly from the start; this disposition applies
+          only to bringing an existing, already-running database's rows up to the canonical FK,
+          mirroring compatibility_history.hub_relations_legacy_global_graph's own
+          db/legacy_utils/*.sql precedent (a data-preserving utility for existing DBs, not part of
+          db/init.sql's fresh-bootstrap chain).
         canonical_target_resolution_rule: >-
           The navigable target manifest for a hub_relations row is target_topology_manifest_id
           itself when that referenced hubs.topology_manifests row has status='active'; otherwise
@@ -545,9 +566,30 @@ db_schema:
           target_topology_manifest_id itself unset) the target resolves to no target (null), never
           a guessed/oldest/first row. This is a direct FK existence+status check, not an inference
           over a set. topology_manifest_id == target_topology_manifest_id remains legal on this
-          contract -- a relation whose source and target Manifest are the same row is an ordinary,
-          valid relation (self-referencing rows already exist under the current related_hub_id
-          model; this redesign does not add or remove that legality).
+          contract as a READ-side resolution statement only -- such a row, if it exists, is fully
+          navigable, exactly like manifest 092's own existing self-referencing seed row (a relation
+          whose source and target Manifest are the same row is an ordinary, valid relation; this
+          redesign does not add or remove that read-side legality).
+        self_loop_authoring_guard_relationship: >-
+          This is a write-side clarification only; it does not redesign HubRelation cycle policy.
+          NpgsqlContentBundleRepository.CreateHubRelationAsync / UpdateHubRelationAsync's existing
+          SELF_LOOP guard (unchanged by this design_change) compares the SOURCE manifest's own
+          hub_id against the caller-supplied related_hub_id, i.e. it is a Hub-identity check, not a
+          Manifest-identity check. Because every hubs.topology_manifests row has exactly one hub_id,
+          "source Manifest == target Manifest" always implies "source hub_id == target hub_id", so
+          this guard already rejects authoring or updating a row into the read-side-legal
+          self-reference case above via the hub_navigation:create/update dispatch actions -- manifest
+          092's own existing self-referencing row was inserted directly by db/seed_empty.sql
+          (bootstrap SQL), not through either dispatch action, which would reject it today exactly as
+          they would reject it after this design_change. The converse does not hold: a Hub can have
+          zero, one, or multiple active hubs.topology_manifests rows (current_target_resolution /
+          legacy_ambiguous_row_migration_disposition above), so this guard also rejects a DIFFERENT,
+          non-self target manifest whenever it happens to share the source manifest's hub_id -- a
+          coarser rejection than Manifest-identity self-reference alone would produce. Once an admin
+          selects a target Manifest directly (canonical forward field above) rather than a target
+          Hub, the already-existing Hub-level guard remains the operative check on whatever
+          related_hub_id value the write path derives for it (write_path_legacy_mirror_contract
+          below); this design_change neither narrows it to Manifest-identity nor removes it.
         write_path_legacy_mirror_contract: >-
           related_hub_id's physical column stays UUID NOT NULL -- this design_change does not drop
           it, make it nullable, or redesign its non-target-resolution consumers (search/display
@@ -559,7 +601,29 @@ db_schema:
           topology_manifests.hub_id is written to related_hub_id in the same write, as a legacy
           compatibility mirror -- never a second, independently-selected value. An admin/user never
           picks a target Hub and a target Manifest separately for the same row, and the two columns
-          can never disagree, because only target_topology_manifest_id is ever a caller input.
+          can never disagree AT WRITE TIME, because only target_topology_manifest_id is ever a
+          caller input; mirror_freshness_boundary below covers the one existing production path that
+          can move the target Manifest's own hub_id AFTER that write.
+        mirror_freshness_boundary: >-
+          The target Manifest's own hub_id is not immutable after the mirror write above:
+          ManifestCanonicalProjection.UpsertTopologyManifestAsync's existing
+          "ON CONFLICT (topology_manifest_id) DO UPDATE SET hub_id = EXCLUDED.hub_id" (reached by
+          ProjectOnAuthoringDraftAsync and ProjectOnPromoteAsync, and in turn by
+          NpgsqlManifestRepository.MergeCloneReplacementDraftToActiveAsync's replacement-merge flow,
+          which keeps the active manifest's topology_manifest_id identity while replacing its
+          topology -- and with it, whatever hub_grouping.hubId the replacement draft declares) can
+          change an EXISTING topology_manifest row's hub_id in place. Without a corresponding update,
+          every hub_relations row that already mirrored that manifest's PREVIOUS hub_id into
+          related_hub_id would silently go stale, breaking write_path_legacy_mirror_contract's own
+          "can never disagree" statement, not just once at write time but for as long as the row
+          stays active afterward. The canonical boundary (next implementation_change scope, no code change in this
+          design_change): the SAME transaction that updates hubs.topology_manifests.hub_id for a
+          topology_manifest_id must also update related_hub_id to the new hub_id on every
+          status='active' hubs.hub_relations row whose target_topology_manifest_id equals that
+          topology_manifest_id -- a propagation of the single existing hub_id authority to its own
+          already-declared mirror column, never a second, independently-selected authority and never
+          a new sync table, trigger, or lane. status='deprecated' target rows are exempt, mirroring
+          this contract's own not-null/mirror scope being status='active'-only elsewhere.
         prohibited: >-
           No new code path introduced after this design_change may derive target-manifest
           resolution from related_hub_id; any new consumer needing the navigable target manifest

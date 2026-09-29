@@ -390,12 +390,16 @@ runtime_orchestration_ssot:
         ResolveAsync -> ContentBundleRepository.LoadHubNavigationSequenceAsync(topologyManifestId)
         reads WHERE hr.topology_manifest_id = @mid only -- a manifest's fixed-navigation candidates
         are strictly its OWN outbound hub_relations rows, forward-only, never another manifest's
-        rows and never a reverse/shared lookup. Closing this Goal is ordinary hub_navigation:create
-        authoring (the existing admin-gated dispatch action) on a future implementation_change --
-        092 authors its OWN ordinary outbound hub_relations row to ae200, at the next available
-        sequence_position for 092. Once authored, ae200 is directly reachable in one click from
-        092's own rendered nav bar (frontend/islands/ProjectionShell.tsx's existing
-        resolveHubNavigationLinks over emission.navigationSequence, unmodified) -- no new
+        rows and never a reverse/shared lookup. Closing this Goal is the ordinary
+        hub_navigation:create authoring pattern (the existing admin-gated dispatch action) applied
+        as a permanent db/seed_empty.sql addition on a future implementation_change -- 092 authors
+        its OWN ordinary outbound hub_relations row to ae200, at the next available
+        sequence_position for 092 (db-schema.yaml bootstrap_policy: this repository's standard
+        operational method is a fresh docker-compose-v bootstrap, migration_policy retired, so the
+        row must survive that bootstrap as a canonical seed row, not only exist as an ephemeral row
+        a live-DB test creates and rolls back in its own teardown). Once authored, ae200 is directly
+        reachable in one click from 092's own rendered nav bar (frontend/islands/ProjectionShell.tsx's
+        existing resolveHubNavigationLinks over emission.navigationSequence, unmodified) -- no new
         mechanism, field, table, endpoint, or UI component is introduced. See
         docs/design/admin-console-workflow-ssot.yaml
         admin_hub_relation_navigation_contract.authoring for the authoring-surface detail.

@@ -163,10 +163,14 @@ admin_console_workflow_ssot:
         hubs.hub_relations row in db/seed_empty.sql currently names ae200 as a target from any
         Admin-axis source, so no Admin surface a caller might actually be standing on (starting
         with 00000000-0000-0000-0000-000000000092, auth.external.credential_management.projection,
-        this Bundle's originally-reported symptom) can reach it today. Closing this is ordinary
-        hub_navigation:create authoring on a future implementation_change: 092 authors its OWN
-        outbound hubs.hub_relations row to ae200, at the next available sequence_position for 092
-        -- using the identical, already-proven mechanism above, not a new one. HubNavigationResolver.
+        this Bundle's originally-reported symptom) can reach it today. Closing this is the ordinary
+        hub_navigation:create authoring pattern applied as a permanent db/seed_empty.sql addition on
+        a future implementation_change (docs/design/db-schema.yaml bootstrap_policy: standard
+        operational method is a fresh docker-compose-v bootstrap, migration_policy retired, so the
+        row must be a canonical seed row surviving that bootstrap, not only an ephemeral row a
+        live-DB test creates and rolls back): 092 authors its OWN outbound hubs.hub_relations row to
+        ae200, at the next available sequence_position for 092 -- using the identical, already-proven
+        mechanism above, not a new one. HubNavigationResolver.
         ResolveAsync -> ContentBundleRepository.LoadHubNavigationSequenceAsync(topologyManifestId)
         reads WHERE hr.topology_manifest_id = @mid only (source-scoped, forward-only, never another
         manifest's rows), so this authored row makes ae200 reachable from 092 specifically; any
