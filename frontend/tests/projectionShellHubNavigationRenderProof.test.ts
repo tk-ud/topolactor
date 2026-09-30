@@ -27,6 +27,12 @@ import { assert, assertEquals, assertExists } from "https://deno.land/std@0.224.
 import { h, options, render } from "preact";
 import { flushUpdates, setupDom } from "./test-dom-setup.ts";
 import ProjectionShell from "../islands/ProjectionShell.tsx";
+import type { HubNavigationSequenceItem } from "../api/dispatch.ts";
+// Manifest 092's REAL Emission.navigationSequence, pinned by the live-DB proof
+// backend/tests/Topolactor.Integration.Tests/HubRelationTargetManifestCanonicalMigrationLiveDbTests.cs
+// (DispatchAsync_Manifest092_NavigationSequenceResolvesAe200_AndThatTargetDispatchesAe200Projection)
+// against the canonically bootstrapped db/seed_empty.sql -- not a hand-written navigation shape.
+import manifest0092NavigationSequence from "./fixtures/manifest_0092_navigation_sequence.json" with { type: "json" };
 
 // deno-lint-ignore no-explicit-any
 (options as any).requestAnimationFrame = (cb: () => void): number => {
@@ -54,13 +60,17 @@ class FakeEventSource {
   constructor(public url: string) {}
 }
 
-function buildFetchMock(emissionData: Record<string, unknown>): typeof fetch {
-  return ((url: string) => {
+function buildFetchMock(
+  emissionData: Record<string, unknown>,
+  onDispatch?: (body: Record<string, unknown>) => void,
+): typeof fetch {
+  return ((url: string, init?: RequestInit) => {
     const path = url.toString();
     if (path.startsWith("/api/auth/session") || path === "/api/auth/refresh") {
       return Promise.resolve(new Response(JSON.stringify({ success: true }), { status: 200 }));
     }
     if (path === "/api/dispatch") {
+      onDispatch?.(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
       return Promise.resolve(
         new Response(
           JSON.stringify({ success: true, errors: [], emission: emissionData }),
@@ -189,6 +199,93 @@ Deno.test(
       (globalThis as unknown as { EventSource: unknown }).EventSource = originalEventSource;
       render(null, container);
       cleanup();
+    }
+  },
+);
+
+const ADMIN_CREDENTIAL_MANIFEST_ID = "00000000-0000-0000-0000-000000000092";
+const ADMIN_ENUM_MANIFEST_ID = "00000000-0000-0000-0000-0000000ae200";
+
+function dispatchedTargetRef(body: Record<string, unknown>): unknown {
+  const payload = body.payload as Record<string, unknown> | undefined;
+  return payload?.target_ref;
+}
+
+Deno.test(
+  "ProjectionShell (real mount): Admin Credential (092)'s real navigationSequence renders a clickable Admin Enum (ae200) link, and clicking it lands on a page whose dispatch targets ae200",
+  async () => {
+    const originalEventSource = (globalThis as unknown as { EventSource?: unknown }).EventSource;
+    (globalThis as unknown as { EventSource: unknown }).EventSource = FakeEventSource;
+    const originalFetch = globalThis.fetch;
+    let navigatedHref = "";
+
+    // Page 1: /?manifest=092 -- the existing ProjectionShell nav bar over 092's own outbound
+    // hub_relations (source-scoped, forward-only; no other navigation mechanism involved).
+    {
+      const { container, cleanup } = setupDom(`http://localhost/?manifest=${ADMIN_CREDENTIAL_MANIFEST_ID}`);
+      const dispatched: Record<string, unknown>[] = [];
+      globalThis.fetch = buildFetchMock(
+        {
+          manifestId: ADMIN_CREDENTIAL_MANIFEST_ID,
+          layoutId: "layout-092-nav-proof",
+          layoutNodes: [],
+          navigationSequence: manifest0092NavigationSequence as HubNavigationSequenceItem[],
+        },
+        (body) => dispatched.push(body),
+      );
+      try {
+        globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+        render(h(ProjectionShell, {}), container);
+        await waitFor(() => container.querySelector("a[data-hub-navigation-resolvable]") !== null);
+
+        assertEquals(
+          dispatchedTargetRef(dispatched[0]),
+          `manifest:${ADMIN_CREDENTIAL_MANIFEST_ID}:projection_entry`,
+          "page 1 must be the 092 projection itself",
+        );
+
+        const enumLink = container.querySelector(
+          `a[data-hub-navigation-resolvable][href="?manifest=${ADMIN_ENUM_MANIFEST_ID}"]`,
+        ) as HTMLAnchorElement | null;
+        assertExists(enumLink, "092's nav bar must render a real <a> to ae200");
+        assertEquals(enumLink!.textContent, "Enum dictionary management");
+        // 092's own self-referencing canonical_default_entry row stays a separate link.
+        assertExists(
+          container.querySelector(`a[data-hub-navigation-resolvable][href="?manifest=${ADMIN_CREDENTIAL_MANIFEST_ID}"]`),
+        );
+
+        const win = (globalThis as unknown as { window: { location: { href: string }; MouseEvent: typeof MouseEvent } }).window;
+        enumLink!.dispatchEvent(new win.MouseEvent("click", { bubbles: true, cancelable: true }));
+        await flushUpdates();
+        navigatedHref = win.location.href;
+      } finally {
+        globalThis.fetch = originalFetch;
+        render(null, container);
+        cleanup();
+      }
+    }
+
+    assertEquals(navigatedHref, `http://localhost/?manifest=${ADMIN_ENUM_MANIFEST_ID}`, "the click must navigate to ?manifest=<ae200>");
+
+    // Page 2: the URL the click navigated to. The same ProjectionShell entry path must dispatch ae200.
+    {
+      const { container, cleanup } = setupDom(navigatedHref);
+      const dispatched: Record<string, unknown>[] = [];
+      globalThis.fetch = buildFetchMock(
+        { manifestId: ADMIN_ENUM_MANIFEST_ID, layoutId: "layout-ae200-nav-proof", layoutNodes: [] },
+        (body) => dispatched.push(body),
+      );
+      try {
+        globalThis.sessionStorage.setItem("demo_jwt_token", fakeJwt());
+        render(h(ProjectionShell, {}), container);
+        await waitFor(() => dispatched.length > 0 && container.querySelector("[data-projection-hub-navigation]") !== null);
+        assertEquals(dispatchedTargetRef(dispatched[0]), `manifest:${ADMIN_ENUM_MANIFEST_ID}:projection_entry`);
+      } finally {
+        globalThis.fetch = originalFetch;
+        (globalThis as unknown as { EventSource: unknown }).EventSource = originalEventSource;
+        render(null, container);
+        cleanup();
+      }
     }
   },
 );

@@ -1,0 +1,18 @@
+[
+  {
+    "hubRelationId": "00000000-0000-0000-0000-0000000000b1",
+    "topologyManifestId": "00000000-0000-0000-0000-000000000092",
+    "relatedHubId": "00000000-0000-0000-0000-0000000000a1",
+    "relatedHubLabel": "\u8A8D\u8A3C / \u5916\u90E8\u30AF\u30EC\u30C7\u30F3\u30B7\u30E3\u30EB\u7BA1\u7406",
+    "sequencePosition": 1,
+    "targetManifestId": "00000000-0000-0000-0000-000000000092"
+  },
+  {
+    "hubRelationId": "00000000-0000-0000-0000-0000000ae2b1",
+    "topologyManifestId": "00000000-0000-0000-0000-000000000092",
+    "relatedHubId": "00000000-0000-0000-0000-0000000ae201",
+    "relatedHubLabel": "Enum dictionary management",
+    "sequencePosition": 2,
+    "targetManifestId": "00000000-0000-0000-0000-0000000ae200"
+  }
+]

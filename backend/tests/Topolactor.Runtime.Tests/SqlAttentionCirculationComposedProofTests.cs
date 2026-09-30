@@ -88,13 +88,17 @@ VALUES ('sql_attention_hub_attractor_exploration', 'default_policy',
 ON CONFLICT (function_name, parameter_key) DO NOTHING;
 INSERT INTO hubs.hub (hub_id, relation) VALUES (@hub_id, '{}'::jsonb), (@related_hub_id, '{}'::jsonb);
 INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status) VALUES (@manifest_id, @hub_id, @manifest_key, 'active');
-INSERT INTO hubs.hub_relations (hub_relation_id, topology_manifest_id, related_hub_id, sequence_position, relation_config)
-VALUES (@relation_id, @manifest_id, @related_hub_id, 1, '{""sql_attention_score"":0.93}'::jsonb);
+-- Canonical target_topology_manifest_id for the relation (required on active rows); related_hub_id is
+-- its hub mirror. Removed with @related_hub_id's hub (ON DELETE CASCADE) in teardown.
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status) VALUES (@target_manifest_id, @related_hub_id, @manifest_key || '-target', 'active');
+INSERT INTO hubs.hub_relations (hub_relation_id, topology_manifest_id, target_topology_manifest_id, related_hub_id, sequence_position, relation_config)
+VALUES (@relation_id, @manifest_id, @target_manifest_id, @related_hub_id, 1, '{""sql_attention_score"":0.93}'::jsonb);
 INSERT INTO topology.physical_tables (table_ref) VALUES (@table_ref) RETURNING physical_table_id", conn))
                 {
                     cmd.Parameters.AddWithValue("hub_id", hubId);
                     cmd.Parameters.AddWithValue("related_hub_id", relatedHubId);
                     cmd.Parameters.AddWithValue("manifest_id", manifestId);
+                    cmd.Parameters.AddWithValue("target_manifest_id", Guid.NewGuid());
                     cmd.Parameters.AddWithValue("manifest_key", $"manifest-{suffix}");
                     cmd.Parameters.AddWithValue("relation_id", relationId);
                     cmd.Parameters.AddWithValue("table_ref", tableRef);

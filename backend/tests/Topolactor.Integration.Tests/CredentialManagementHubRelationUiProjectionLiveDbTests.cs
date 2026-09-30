@@ -18,8 +18,9 @@ namespace Topolactor.Integration.Tests;
 ///
 ///   relation_uuid (hubs.hub_relations.hub_relation_id)
 ///   -> source topology_manifest (manifest 092, via hub_relations.topology_manifest_id)
-///   -> hub_ids[] (hubs.hub_relations.related_hub_id, ordered by sequence_position — the
-///      manifest-scoped relation vector / route vector, not a global hub-to-hub graph)
+///   -> target manifests (hubs.hub_relations.target_topology_manifest_id, ordered by
+///      sequence_position — the manifest-scoped relation vector / route vector, not a global
+///      hub-to-hub graph; related_hub_id is each target manifest's hub mirror, hub_ids[])
 ///   -> package_ids[] (manifest.topology[ui_projection].packageIds, read from the manifest
 ///      topology just loaded from the DB, not a test constant)
 ///   -> topology.components_package_design / topology.components_layout_design /
@@ -28,7 +29,8 @@ namespace Topolactor.Integration.Tests;
 ///   -> backend dispatch (ManifestDispatcher.DispatchAsync)
 ///   -> scalar Emission.ManifestId / NavigationSequence / PackageId / LayoutId / LayoutNodes,
 ///      with NavigationSequence[].RelatedHubId observably corresponding to hub_ids[] and
-///      NavigationSequence[].TargetManifestId resolved via the exactly-one-ACTIVE-manifest rule
+///      NavigationSequence[].TargetManifestId resolved directly from target_topology_manifest_id
+///      while that manifest is ACTIVE (db-schema.yaml canonical_target_resolution_rule)
 ///
 /// The admin_runtime leg uses a REAL AdminRuntime (minimal constructor, same pattern as
 /// AdminRuntimeDbProjectionScenarioTests.StartAdminDispatchRouteAsync) so the
@@ -87,9 +89,10 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
 
         try
         {
-            // hub_relation(relation_uuid) whose source topology_manifest is manifest 092, whose
-            // related hub has exactly one active topology_manifest — the relation vector this
-            // proof walks: relation_uuid -> hub_ids[] -> package_ids[] -> scalar Emission.
+            // hub_relation(relation_uuid) whose source topology_manifest is manifest 092 and whose
+            // canonical target_topology_manifest_id is an active manifest (related_hub_id = that
+            // manifest's hub mirror) — the relation vector this proof walks:
+            // relation_uuid -> target manifest / hub_ids[] -> package_ids[] -> scalar Emission.
             await ExecAsync(
                 "INSERT INTO hubs.hub (hub_id, relation) VALUES (@id, '{}'::jsonb)",
                 ("id", relatedHubId));
@@ -98,9 +101,9 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
                 "VALUES (@mid, @hid, @key, 'active')",
                 ("mid", relatedManifestId), ("hid", relatedHubId), ("key", $"live-db-relation-vector-{suffix}"));
             await ExecAsync(
-                "INSERT INTO hubs.hub_relations (hub_relation_id, topology_manifest_id, related_hub_id, sequence_position, status) " +
-                "VALUES (@rid, @mid, @hid, 9201, 'active')",
-                ("rid", relationUuid), ("mid", CredentialManagementManifestId), ("hid", relatedHubId));
+                "INSERT INTO hubs.hub_relations (hub_relation_id, topology_manifest_id, target_topology_manifest_id, related_hub_id, sequence_position, status) " +
+                "VALUES (@rid, @mid, @tid, @hid, 9201, 'active')",
+                ("rid", relationUuid), ("mid", CredentialManagementManifestId), ("tid", relatedManifestId), ("hid", relatedHubId));
 
             var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
 
@@ -139,7 +142,7 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
 
             // "current topology phase" identity, and hub_ids[] (manifest-scoped relation vector,
             // hubs.hub_relations.sequence_position) resolving through to Emission.NavigationSequence
-            // with the related hub's sole active topology_manifest as TargetManifestId — the same
+            // with the relation's own active target manifest as TargetManifestId — the same
             // identity the frontend round-trip (?manifest=<TargetManifestId>) would dispatch next.
             // Generic resolution-chain assertion, shared with any other source manifest's own
             // live-DB proof — see HubRelationUiProjectionResolutionChainProof.
@@ -179,7 +182,7 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
         // (ManifestsAdmin.tsx's manifest list + HubNavigationAdmin.tsx's selector). It has no
         // relation whatsoever to /admin's own landing page — nothing about a "/admin landing
         // manifest" is required anywhere in this path (see CreateHubRelationAsync, which only
-        // validates the given topologyManifestId/relatedHubId exist and are not a self-loop).
+        // validates the given topologyManifestId/targetTopologyManifestId exist and are not a Hub-level self-loop).
         var sourceHubId = Guid.NewGuid();
         var sourceManifestId = Guid.NewGuid();
         var targetHubId = Guid.NewGuid();
@@ -226,7 +229,7 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
             var createPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
             {
                 topologyManifestId = sourceManifestId.ToString(),
-                relatedHubId = targetHubId.ToString(),
+                targetTopologyManifestId = targetManifestId.ToString(),
                 sequencePosition = 1,
             });
             var createRequest = new EndpointRequestDto(
@@ -245,10 +248,13 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
             // persisted, not merely echoed in the create response.
             var contentBundleRepo = new NpgsqlContentBundleRepository(NullLogger<NpgsqlContentBundleRepository>.Instance, cs);
             var relations = await contentBundleRepo.ListHubRelationsByManifestAsync(sourceManifestId);
-            var created = Assert.Single(relations, r => r.RelatedHubId == targetHubId.ToString());
+            var created = Assert.Single(relations, r => r.TargetTopologyManifestId == targetManifestId.ToString());
             createdHubRelationId = Guid.Parse(created.HubRelationId);
             Assert.Equal(1, created.SequencePosition);
             Assert.Equal("active", created.Status);
+            // related_hub_id was derived from the selected target manifest's hub_id (legacy mirror),
+            // never supplied by the caller.
+            Assert.Equal(targetHubId.ToString(), created.RelatedHubId);
 
             // STEP 3: dispatch the SOURCE manifest via target_ref (the same manifest:<uuid>:<key>
             // shape frontend/runtime/projectionEntry.ts produces for an explicit ?manifest=
@@ -257,7 +263,7 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
             // fallback — this source manifest deliberately has no ui_projection, since building
             // one would be topology UI seed content this remediation must not add), and confirm
             // Emission.NavigationSequence reflects the relation just authored through the real
-            // create action, with the target resolving via the exactly-one-active-manifest rule.
+            // create action, with the target resolving directly from target_topology_manifest_id.
             // EnrichWithHubNavigationAsync runs for ANY successful admin_runtime response
             // (ManifestDispatcher.cs), not only ui_projection-backed manifests.
             var sourcePayload = System.Text.Json.JsonSerializer.SerializeToElement(new
@@ -285,12 +291,11 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
                 sourceManifestId,
                 [new HubRelationUiProjectionResolutionChainProof.ExpectedHubVectorEntry(targetHubId, 1, targetManifestId)]);
 
-            // STEP 4: fail-close — deprecate the sole active target manifest and re-dispatch the
-            // same source manifest. Zero active target manifests under the related hub must
-            // resolve to null, never a stale/fallback value (mirrors the
-            // no_implicit_join_nullable_fallback_or_oldest_manifest_fallback invariant already
+            // STEP 4: fail-close — deprecate the relation's target manifest and re-dispatch the
+            // same source manifest. A target manifest that is no longer active must resolve to
+            // null, never a stale/fallback value (canonical_target_resolution_rule, already
             // covered for the repository method directly in
-            // LoadHubNavigationSequenceAsync_TargetManifestId_ResolvesOnlyExactlyOneActiveManifestPerHub —
+            // LoadHubNavigationSequenceAsync_TargetManifestId_ResolvesDirectFkOnlyWhileTargetManifestActive —
             // this proves the SAME fail-close through the full dispatch path instead).
             await ExecAsync(
                 "UPDATE hubs.topology_manifests SET status = 'deprecated' WHERE topology_manifest_id = @mid",
@@ -325,9 +330,8 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
     /// DispatchAsync_CredentialManagementManifest_E2E_RelationVectorToScalarEmission) across two
     /// separate tests instead of combining them. This single test: (1) authors a hub_relations row via
     /// the REAL hub_navigation:create dispatch action with manifest 092's OWN existing hub
-    /// ('...a1', external_port_substrate -- the hub HubRelations_Manifest092_HasCanonicalSequencePosition1Relation_SeedOnly
-    /// confirms carries exactly manifest 092 as its sole active topology_manifest) as the
-    /// relatedHubId/target, then (2) walks that SAME authored relation's resolved TargetManifestId
+    /// ('...a1', external_port_substrate) mirrored as related_hub_id because manifest 092 itself is
+    /// selected as targetTopologyManifestId, then (2) walks that SAME authored relation's resolved TargetManifestId
     /// onward through manifest 092's real package/layout/wiring/tensor rows to a scalar Emission --
     /// never a synthetic target, never a direct SQL relation insert standing in for authoring.
     /// </summary>
@@ -375,12 +379,12 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
             // STEP 1: author the relation via the REAL hub_navigation:create dispatch action
             // (frontend/api/adminApi.ts createHubRelation() -> HubNavigationAdmin.tsx -> real
             // ManifestDispatcher -> AdminRuntime.HubNavigationCreateAsync ->
-            // NpgsqlContentBundleRepository.CreateHubRelationAsync), targeting manifest 092's OWN
-            // existing hub as relatedHubId -- never a raw SQL insert standing in for authoring.
+            // NpgsqlContentBundleRepository.CreateHubRelationAsync), selecting manifest 092 itself as
+            // targetTopologyManifestId -- never a raw SQL insert standing in for authoring.
             var createPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
             {
                 topologyManifestId = sourceManifestId.ToString(),
-                relatedHubId = credentialManagementHubId.ToString(),
+                targetTopologyManifestId = CredentialManagementManifestId.ToString(),
                 sequencePosition = 1,
             });
             var createRequest = new EndpointRequestDto(
@@ -399,14 +403,15 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
             // persisted, not merely echoed in the create response.
             var contentBundleRepo = new NpgsqlContentBundleRepository(NullLogger<NpgsqlContentBundleRepository>.Instance, cs);
             var relations = await contentBundleRepo.ListHubRelationsByManifestAsync(sourceManifestId);
-            var created = Assert.Single(relations, r => r.RelatedHubId == credentialManagementHubId.ToString());
+            var created = Assert.Single(relations, r => r.TargetTopologyManifestId == CredentialManagementManifestId.ToString());
             createdHubRelationId = Guid.Parse(created.HubRelationId);
             Assert.Equal(1, created.SequencePosition);
             Assert.Equal("active", created.Status);
+            Assert.Equal(credentialManagementHubId.ToString(), created.RelatedHubId);
 
             // STEP 3: dispatch the SOURCE manifest and confirm THIS SAME authored relation resolves
-            // Emission.NavigationSequence[].TargetManifestId to manifest 092 itself, via the
-            // exactly-one-active-manifest rule against hub '...a1' (never an implicit fallback).
+            // Emission.NavigationSequence[].TargetManifestId to manifest 092 itself, directly from
+            // target_topology_manifest_id (never a hub-level inference or implicit fallback).
             var sourcePayload = System.Text.Json.JsonSerializer.SerializeToElement(new
             {
                 target_ref = $"manifest:{sourceManifestId}:hub_relations_read",
@@ -710,7 +715,8 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT related_hub_id::text, status FROM hubs.hub_relations " +
+            "SELECT related_hub_id::text, status, target_topology_manifest_id::text, " +
+            "       relation_config->>'transition' FROM hubs.hub_relations " +
             "WHERE topology_manifest_id = @id AND sequence_position = 1";
         cmd.Parameters.AddWithValue("id", CredentialManagementManifestId);
         await using var reader = await cmd.ExecuteReaderAsync();
@@ -718,10 +724,12 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
         Assert.True(
             await reader.ReadAsync(),
             "manifest 092 must have a canonical (seed_empty.sql) hubs.hub_relations row at sequence_position=1");
-        // Self-referencing: related_hub_id is 092's own existing hub (external_port_substrate,
-        // '...a1') — no dedicated hub was introduced for this relation.
+        // Self-referencing: the canonical target is manifest 092 itself and related_hub_id mirrors
+        // its own existing hub (external_port_substrate, '...a1') — no dedicated hub was introduced.
         Assert.Equal("00000000-0000-0000-0000-0000000000a1", reader.GetString(0));
         Assert.Equal("active", reader.GetString(1));
+        Assert.Equal(CredentialManagementManifestId.ToString(), reader.GetString(2));
+        Assert.Equal("canonical_default_entry", reader.GetString(3));
     }
 
     [Fact]
@@ -757,31 +765,41 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
     }
 
     [Fact]
-    public async Task LoadHubNavigationSequenceAsync_TargetManifestId_ResolvesOnlyExactlyOneActiveManifestPerHub()
+    public async Task LoadHubNavigationSequenceAsync_TargetManifestId_ResolvesDirectFkOnlyWhileTargetManifestActive()
     {
         var cs = GetConnectionString();
         if (cs is null) return;
 
-        // Four related-hub scenarios in one hub_relations sequence, per reviewer requirement:
-        //   1. exactly one ACTIVE manifest (+ zero deprecated siblings)              -> resolves
-        //   2. one ACTIVE + one DEPRECATED manifest under the same hub               -> resolves (active)
-        //   3. only a DEPRECATED manifest, no active one                            -> null
-        //   4. two ACTIVE manifests under the same hub (genuinely ambiguous)         -> null
-        var singleActiveHubId = Guid.NewGuid();
-        var singleActiveManifestId = Guid.NewGuid();
+        // canonical_target_resolution_rule (docs/design/db-schema.yaml
+        // hub_relations.target_reference_canonical_contract): the navigable target is the row's own
+        // target_topology_manifest_id, resolved only while that manifest is status='active' -- a direct
+        // FK existence+status check, never an inference over related_hub_id's manifests:
+        //   1. target manifest ACTIVE                                               -> that manifest
+        //   2. target manifest DEPRECATED                                           -> null
+        //   3. target manifest DRAFT                                                -> null
+        //   4. target's hub has TWO active manifests (ambiguous under the retired
+        //      hub-inference rule); the row explicitly names one of them          -> exactly that one
+        //   5. target's hub has an active sibling, but the named target is
+        //      deprecated                                                           -> null, never the sibling
+        var activeHubId = Guid.NewGuid();
+        var activeManifestId = Guid.NewGuid();
 
-        var activePlusDeprecatedHubId = Guid.NewGuid();
-        var activeAmongDeprecatedManifestId = Guid.NewGuid();
-        var deprecatedSiblingManifestId = Guid.NewGuid();
+        var deprecatedHubId = Guid.NewGuid();
+        var deprecatedManifestId = Guid.NewGuid();
 
-        var deprecatedOnlyHubId = Guid.NewGuid();
-        var deprecatedOnlyManifestId = Guid.NewGuid();
+        var draftHubId = Guid.NewGuid();
+        var draftManifestId = Guid.NewGuid();
 
         var twoActiveHubId = Guid.NewGuid();
         var twoActiveManifestIdA = Guid.NewGuid();
         var twoActiveManifestIdB = Guid.NewGuid();
 
+        var siblingHubId = Guid.NewGuid();
+        var deprecatedNamedManifestId = Guid.NewGuid();
+        var activeSiblingManifestId = Guid.NewGuid();
+
         var suffix = Guid.NewGuid().ToString("N")[..8];
+        var relationIds = new List<Guid>();
 
         // LoadHubNavigationSequenceAsync opens its own connection, so setup/teardown must be
         // committed (not left in an uncommitted transaction) for it to observe the rows.
@@ -805,63 +823,67 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
                 "VALUES (@mid, @hid, @key, @status)",
                 ("mid", manifestId), ("hid", hubId), ("key", key), ("status", status));
 
-        async Task InsertHubRelationAsync(Guid relatedHubId, int sequencePosition) =>
+        async Task InsertHubRelationAsync(Guid targetManifestId, Guid relatedHubId, int sequencePosition)
+        {
+            var relationId = Guid.NewGuid();
+            relationIds.Add(relationId);
             await ExecAsync(
-                "INSERT INTO hubs.hub_relations (topology_manifest_id, related_hub_id, sequence_position, status) " +
-                "VALUES (@mid, @hid, @seq, 'active')",
-                ("mid", CredentialManagementManifestId), ("hid", relatedHubId), ("seq", sequencePosition));
+                "INSERT INTO hubs.hub_relations (hub_relation_id, topology_manifest_id, target_topology_manifest_id, related_hub_id, sequence_position, status) " +
+                "VALUES (@rid, @mid, @tid, @hid, @seq, 'active')",
+                ("rid", relationId), ("mid", CredentialManagementManifestId), ("tid", targetManifestId),
+                ("hid", relatedHubId), ("seq", sequencePosition));
+        }
 
         try
         {
-            await InsertHubAsync(singleActiveHubId);
-            await InsertManifestAsync(singleActiveManifestId, singleActiveHubId, $"live-db-single-active-{suffix}", "active");
+            await InsertHubAsync(activeHubId);
+            await InsertManifestAsync(activeManifestId, activeHubId, $"live-db-target-active-{suffix}", "active");
 
-            await InsertHubAsync(activePlusDeprecatedHubId);
-            await InsertManifestAsync(activeAmongDeprecatedManifestId, activePlusDeprecatedHubId, $"live-db-active-{suffix}", "active");
-            await InsertManifestAsync(deprecatedSiblingManifestId, activePlusDeprecatedHubId, $"live-db-deprecated-sibling-{suffix}", "deprecated");
+            await InsertHubAsync(deprecatedHubId);
+            await InsertManifestAsync(deprecatedManifestId, deprecatedHubId, $"live-db-target-deprecated-{suffix}", "deprecated");
 
-            await InsertHubAsync(deprecatedOnlyHubId);
-            await InsertManifestAsync(deprecatedOnlyManifestId, deprecatedOnlyHubId, $"live-db-deprecated-only-{suffix}", "deprecated");
+            await InsertHubAsync(draftHubId);
+            await InsertManifestAsync(draftManifestId, draftHubId, $"live-db-target-draft-{suffix}", "draft");
 
             await InsertHubAsync(twoActiveHubId);
             await InsertManifestAsync(twoActiveManifestIdA, twoActiveHubId, $"live-db-two-active-a-{suffix}", "active");
             await InsertManifestAsync(twoActiveManifestIdB, twoActiveHubId, $"live-db-two-active-b-{suffix}", "active");
 
-            await InsertHubRelationAsync(singleActiveHubId, 9001);
-            await InsertHubRelationAsync(activePlusDeprecatedHubId, 9002);
-            await InsertHubRelationAsync(deprecatedOnlyHubId, 9003);
-            await InsertHubRelationAsync(twoActiveHubId, 9004);
+            await InsertHubAsync(siblingHubId);
+            await InsertManifestAsync(deprecatedNamedManifestId, siblingHubId, $"live-db-named-deprecated-{suffix}", "deprecated");
+            await InsertManifestAsync(activeSiblingManifestId, siblingHubId, $"live-db-active-sibling-{suffix}", "active");
+
+            await InsertHubRelationAsync(activeManifestId, activeHubId, 9001);
+            await InsertHubRelationAsync(deprecatedManifestId, deprecatedHubId, 9002);
+            await InsertHubRelationAsync(draftManifestId, draftHubId, 9003);
+            await InsertHubRelationAsync(twoActiveManifestIdB, twoActiveHubId, 9004);
+            await InsertHubRelationAsync(deprecatedNamedManifestId, siblingHubId, 9005);
 
             var repo = new NpgsqlContentBundleRepository(NullLogger<NpgsqlContentBundleRepository>.Instance, cs);
             var items = await repo.LoadHubNavigationSequenceAsync(CredentialManagementManifestId);
 
-            var singleActiveItem = Assert.Single(items, i => i.RelatedHubId == singleActiveHubId.ToString());
-            Assert.Equal(singleActiveManifestId.ToString(), singleActiveItem.TargetManifestId);
+            Assert.Equal(activeManifestId.ToString(), Assert.Single(items, i => i.SequencePosition == 9001).TargetManifestId);
+            Assert.Null(Assert.Single(items, i => i.SequencePosition == 9002).TargetManifestId);
+            Assert.Null(Assert.Single(items, i => i.SequencePosition == 9003).TargetManifestId);
 
-            var activePlusDeprecatedItem = Assert.Single(items, i => i.RelatedHubId == activePlusDeprecatedHubId.ToString());
-            Assert.Equal(activeAmongDeprecatedManifestId.ToString(), activePlusDeprecatedItem.TargetManifestId);
+            var explicitAmongTwo = Assert.Single(items, i => i.SequencePosition == 9004);
+            Assert.Equal(twoActiveManifestIdB.ToString(), explicitAmongTwo.TargetManifestId);
+            Assert.Equal(twoActiveHubId.ToString(), explicitAmongTwo.RelatedHubId);
 
-            var deprecatedOnlyItem = Assert.Single(items, i => i.RelatedHubId == deprecatedOnlyHubId.ToString());
-            Assert.Null(deprecatedOnlyItem.TargetManifestId);
+            Assert.Null(Assert.Single(items, i => i.SequencePosition == 9005).TargetManifestId);
 
-            var twoActiveItem = Assert.Single(items, i => i.RelatedHubId == twoActiveHubId.ToString());
-            Assert.Null(twoActiveItem.TargetManifestId);
+            // minimum_cardinality_completion_invariant.canonical_forward_resolvability_definition
+            // reuses the same resolution: manifest 092 stays resolvable through its own seed rows.
+            Assert.True(await repo.HasResolvableActiveHubRelationAsync(CredentialManagementManifestId));
         }
         finally
         {
+            foreach (var relationId in relationIds)
+                await ExecAsync("DELETE FROM hubs.hub_relations WHERE hub_relation_id = @rid", ("rid", relationId));
             await ExecAsync(
-                "DELETE FROM hubs.hub_relations WHERE topology_manifest_id = @mid AND related_hub_id IN (@h1, @h2, @h3, @h4)",
-                ("mid", CredentialManagementManifestId),
-                ("h1", singleActiveHubId), ("h2", activePlusDeprecatedHubId),
-                ("h3", deprecatedOnlyHubId), ("h4", twoActiveHubId));
-            await ExecAsync(
-                "DELETE FROM hubs.topology_manifests WHERE topology_manifest_id IN (@m1, @m2, @m3, @m4, @m5, @m6)",
-                ("m1", singleActiveManifestId), ("m2", activeAmongDeprecatedManifestId), ("m3", deprecatedSiblingManifestId),
-                ("m4", deprecatedOnlyManifestId), ("m5", twoActiveManifestIdA), ("m6", twoActiveManifestIdB));
-            await ExecAsync(
-                "DELETE FROM hubs.hub WHERE hub_id IN (@h1, @h2, @h3, @h4)",
-                ("h1", singleActiveHubId), ("h2", activePlusDeprecatedHubId),
-                ("h3", deprecatedOnlyHubId), ("h4", twoActiveHubId));
+                "DELETE FROM hubs.hub WHERE hub_id IN (@h1, @h2, @h3, @h4, @h5)",
+                ("h1", activeHubId), ("h2", deprecatedHubId), ("h3", draftHubId),
+                ("h4", twoActiveHubId), ("h5", siblingHubId));
         }
     }
 

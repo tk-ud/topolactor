@@ -105,9 +105,11 @@ internal static class HubRelationUiProjectionResolutionChainProof
     }
 
     /// <summary>
-    /// One relation-vector entry's expectation: a related hub, its sequence_position, and the
-    /// TargetManifestId it must resolve to (null when the exactly-one-active-manifest rule is
-    /// not met for that hub — see db-schema.yaml no_implicit_join_nullable_fallback_or_oldest_manifest_fallback).
+    /// One relation-vector entry's expectation, located by its sequence_position (unique per source
+    /// manifest): the related_hub_id legacy mirror it must carry, and the TargetManifestId it must
+    /// resolve to -- the row's own target_topology_manifest_id while that manifest is active, null
+    /// otherwise (db-schema.yaml hub_relations.target_reference_canonical_contract
+    /// .canonical_target_resolution_rule; never inferred from RelatedHubId).
     /// </summary>
     public sealed record ExpectedHubVectorEntry(Guid RelatedHubId, int SequencePosition, Guid? ExpectedTargetManifestId);
 
@@ -130,8 +132,8 @@ internal static class HubRelationUiProjectionResolutionChainProof
         foreach (var expected in expectedHubVector)
         {
             var navItem = Assert.Single(
-                emission.NavigationSequence!, i => i.RelatedHubId == expected.RelatedHubId.ToString());
-            Assert.Equal(expected.SequencePosition, navItem.SequencePosition);
+                emission.NavigationSequence!, i => i.SequencePosition == expected.SequencePosition);
+            Assert.Equal(expected.RelatedHubId.ToString(), navItem.RelatedHubId);
             Assert.Equal(expected.ExpectedTargetManifestId?.ToString(), navItem.TargetManifestId);
         }
     }

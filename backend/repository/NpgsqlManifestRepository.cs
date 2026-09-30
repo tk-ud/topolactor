@@ -374,9 +374,9 @@ public class NpgsqlManifestRepository : ManifestRepository
         {
             return (null, new ValidationError(
                 "HUB_RELATION_REQUIRED_FOR_PROMOTION",
-                $"Manifest {manifestId} cannot be promoted: it has no active hub_relations row that " +
-                "resolves to exactly one active target topology_manifest (zero relations, deprecated-only " +
-                "relations, and an unresolvable-target-only relation all fail this check)."));
+                $"Manifest {manifestId} cannot be promoted: it has no active hub_relations row whose " +
+                "target_topology_manifest_id names an active topology_manifest (zero relations, deprecated-only " +
+                "relations, and a missing-or-inactive-target-only relation all fail this check)."));
         }
 
         await using var conn = new NpgsqlConnection(_connectionString);
@@ -456,7 +456,7 @@ public class NpgsqlManifestRepository : ManifestRepository
         // Keep hubs.topology_manifests.status in the same draft/active/deprecated lifecycle phase
         // as public.manifest for this identity (topology_manifest_id == manifest_id by convention)
         // -- a deprecated manifest must also stop being a valid navigation/runtime target (see
-        // LoadHubNavigationSequenceAsync's tm2.status='active' target resolution). No-op (0 rows)
+        // LoadHubNavigationSequenceAsync's target-manifest status='active' resolution). No-op (0 rows)
         // when no topology_manifests row was ever projected for this manifest, which is not an error.
         await using (var tmCmd = conn.CreateCommand())
         {

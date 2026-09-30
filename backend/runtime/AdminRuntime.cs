@@ -3664,13 +3664,13 @@ public partial class AdminRuntime
         var payload = vector.Payload.Value;
         if (!payload.TryGetProperty("topologyManifestId", out var midEl) || !Guid.TryParse(midEl.GetString(), out var manifestId))
             return (null, new ValidationError("MALFORMED_PAYLOAD", "payload.topologyManifestId is required."));
-        if (!payload.TryGetProperty("relatedHubId", out var hidEl) || !Guid.TryParse(hidEl.GetString(), out var relatedHubId))
-            return (null, new ValidationError("MALFORMED_PAYLOAD", "payload.relatedHubId is required."));
+        if (!TryReadHubNavigationTargetManifestId(payload, out var targetManifestId, out var targetError))
+            return (null, targetError);
         if (!payload.TryGetProperty("sequencePosition", out var seqEl) || seqEl.ValueKind != JsonValueKind.Number)
             return (null, new ValidationError("MALFORMED_PAYLOAD", "payload.sequencePosition is required."));
 
         var (response, error) = await _contentBundleRepository.CreateHubRelationAsync(
-            manifestId, relatedHubId, seqEl.GetInt32(), ct);
+            manifestId, targetManifestId, seqEl.GetInt32(), ct);
         if (error is not null) return (null, error);
         return (JsonSerializer.SerializeToElement(response), null);
     }
@@ -3686,13 +3686,41 @@ public partial class AdminRuntime
         var payload = vector.Payload.Value;
         if (!payload.TryGetProperty("hubRelationId", out var hridEl) || !Guid.TryParse(hridEl.GetString(), out var hubRelationId))
             return (null, new ValidationError("MALFORMED_PAYLOAD", "payload.hubRelationId is required."));
-        if (!payload.TryGetProperty("relatedHubId", out var hidEl) || !Guid.TryParse(hidEl.GetString(), out var relatedHubId))
-            return (null, new ValidationError("MALFORMED_PAYLOAD", "payload.relatedHubId is required."));
+        if (!TryReadHubNavigationTargetManifestId(payload, out var targetManifestId, out var targetError))
+            return (null, targetError);
 
         var (response, error) = await _contentBundleRepository.UpdateHubRelationAsync(
-            hubRelationId, relatedHubId, ct);
+            hubRelationId, targetManifestId, ct);
         if (error is not null) return (null, error);
         return (JsonSerializer.SerializeToElement(response), null);
+    }
+
+    /// <summary>
+    /// hub_navigation:create/update target selection (docs/design/db-schema.yaml
+    /// hub_relations.target_reference_canonical_contract.write_path_legacy_mirror_contract):
+    /// payload.targetTopologyManifestId is the only caller-selected target. related_hub_id is derived
+    /// by the repository from that manifest's hub_id, so a caller-supplied payload.relatedHubId would
+    /// be a second, independent target authority -- it is rejected explicitly, never silently ignored.
+    /// </summary>
+    private static bool TryReadHubNavigationTargetManifestId(
+        JsonElement payload, out Guid targetManifestId, out ValidationError? error)
+    {
+        targetManifestId = Guid.Empty;
+        if (payload.TryGetProperty("relatedHubId", out _))
+        {
+            error = new ValidationError("MALFORMED_PAYLOAD",
+                "payload.relatedHubId is not a caller input; related_hub_id is derived from payload.targetTopologyManifestId.");
+            return false;
+        }
+        if (!payload.TryGetProperty("targetTopologyManifestId", out var tidEl) ||
+            tidEl.ValueKind != JsonValueKind.String ||
+            !Guid.TryParse(tidEl.GetString(), out targetManifestId))
+        {
+            error = new ValidationError("MALFORMED_PAYLOAD", "payload.targetTopologyManifestId is required.");
+            return false;
+        }
+        error = null;
+        return true;
     }
 
     private async Task<(JsonElement? data, ValidationError? error)> HubNavigationDeprecateAsync(

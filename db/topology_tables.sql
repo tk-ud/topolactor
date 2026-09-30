@@ -187,31 +187,51 @@ CREATE INDEX IF NOT EXISTS idx_physical_table_manifest_bindings_manifest
 -- Existing DBs with legacy hub_relations (hub_id / target_hub_id / relation_registry_id)
 -- require an explicit data-preserving migration:
 --   db/legacy_utils/hub_relations_legacy_to_manifest_scoped.sql
+--
+-- target_topology_manifest_id is the canonical fixed-navigation target reference (direct FK to
+-- hubs.topology_manifests, docs/design/db-schema.yaml hub_relations.target_reference_canonical_contract).
+-- Column-level nullable; non-null is required only for status='active' rows via
+-- hub_relations_active_target_topology_manifest_required. related_hub_id is a legacy compatibility
+-- mirror of the target manifest's own hub_id, written by the hub_navigation:create/update write path
+-- and re-synced by ManifestCanonicalProjection when that manifest's hub_id changes -- never an
+-- independent caller selection and never target-resolution authority.
+-- Existing DBs created before target_topology_manifest_id existed are brought up to this shape by
+--   db/legacy_utils/hub_relations_related_hub_id_to_target_topology_manifest_id.sql
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS hubs.hub_relations (
-    hub_relation_id       UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    topology_manifest_id  UUID        NOT NULL REFERENCES hubs.topology_manifests (topology_manifest_id) ON DELETE CASCADE,
-    related_hub_id        UUID        NOT NULL REFERENCES hubs.hub (hub_id) ON DELETE CASCADE,
-    sequence_position     INTEGER     NOT NULL,
-    relation_config       JSONB       NOT NULL DEFAULT '{}'::jsonb,
-    status                TEXT        NOT NULL DEFAULT 'active'
-                          CHECK (status IN ('active', 'deprecated')),
-    created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (topology_manifest_id, sequence_position)
+    hub_relation_id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    topology_manifest_id         UUID        NOT NULL REFERENCES hubs.topology_manifests (topology_manifest_id) ON DELETE CASCADE,
+    target_topology_manifest_id  UUID        REFERENCES hubs.topology_manifests (topology_manifest_id) ON DELETE CASCADE,
+    related_hub_id               UUID        NOT NULL REFERENCES hubs.hub (hub_id) ON DELETE CASCADE,
+    sequence_position            INTEGER     NOT NULL,
+    relation_config              JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    status                       TEXT        NOT NULL DEFAULT 'active'
+                                 CHECK (status IN ('active', 'deprecated')),
+    created_at                   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at                   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (topology_manifest_id, sequence_position),
+    CONSTRAINT hub_relations_active_target_topology_manifest_required
+        CHECK (status <> 'active' OR target_topology_manifest_id IS NOT NULL)
 );
 
 COMMENT ON TABLE hubs.hub_relations IS
     'Child of hubs.topology_manifests. Manifest-scoped hub sequence / UI transition order. '
-    'related_hub_id is the sequenced hub entry. sequence_position is the sequence authority. '
+    'target_topology_manifest_id is the navigable target (direct FK); related_hub_id is its legacy hub mirror. '
+    'sequence_position is the sequence authority. '
     'Source hub is derived via topology_manifests.hub_id, not hub_relations.hub_id. '
     'Canonical SQL Attention exploration field. Phase Attention x uses hit hub_relation_id identity; aggregate counts are deprecated support-cache statistics only.';
 
 COMMENT ON COLUMN hubs.hub_relations.topology_manifest_id IS
     'Parent topology manifest scope. Source hub authority flows through topology_manifests.hub_id.';
 
+COMMENT ON COLUMN hubs.hub_relations.target_topology_manifest_id IS
+    'Canonical fixed-navigation target: the hubs.topology_manifests row this relation navigates to. '
+    'Resolves only while that row has status=''active'' (no Hub-level inference, no fallback). '
+    'Required for status=''active'' rows (hub_relations_active_target_topology_manifest_required).';
+
 COMMENT ON COLUMN hubs.hub_relations.related_hub_id IS
-    'Sequenced hub entry within the manifest scope.';
+    'Legacy compatibility mirror: the target manifest''s own hubs.topology_manifests.hub_id, derived from '
+    'target_topology_manifest_id on write and re-synced on target hub_id change. Not target-resolution authority.';
 
 COMMENT ON COLUMN hubs.hub_relations.sequence_position IS
     'Sequence authority within topology_manifest_id. Lower value = earlier in sequence.';
@@ -228,6 +248,9 @@ CREATE INDEX IF NOT EXISTS idx_hub_relations_topology_manifest_id
 
 CREATE INDEX IF NOT EXISTS idx_hub_relations_related_hub_id
     ON hubs.hub_relations (related_hub_id);
+
+CREATE INDEX IF NOT EXISTS idx_hub_relations_target_topology_manifest_id
+    ON hubs.hub_relations (target_topology_manifest_id);
 
 CREATE INDEX IF NOT EXISTS idx_hub_relations_sequence_position
     ON hubs.hub_relations (topology_manifest_id, sequence_position);

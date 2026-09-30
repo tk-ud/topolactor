@@ -94,7 +94,7 @@ public class SchedulerSettingsHubRelationUiProjectionLiveDbTests
             var createPayload = JsonSerializer.SerializeToElement(new
             {
                 topologyManifestId = SchedulerSettingsManifestId.ToString(),
-                relatedHubId = targetHubId.ToString(),
+                targetTopologyManifestId = targetManifestId.ToString(),
                 sequencePosition = 1,
             });
             var createRequest = new EndpointRequestDto(
@@ -111,7 +111,9 @@ public class SchedulerSettingsHubRelationUiProjectionLiveDbTests
 
             var contentBundleRepo = new NpgsqlContentBundleRepository(NullLogger<NpgsqlContentBundleRepository>.Instance, cs);
             var relations = await contentBundleRepo.ListHubRelationsByManifestAsync(SchedulerSettingsManifestId);
-            var created = Assert.Single(relations, r => r.RelatedHubId == targetHubId.ToString());
+            var created = Assert.Single(relations, r => r.TargetTopologyManifestId == targetManifestId.ToString());
+            // related_hub_id is the derived legacy mirror of the selected target manifest's hub_id.
+            Assert.Equal(targetHubId.ToString(), created.RelatedHubId);
             createdHubRelationId = Guid.Parse(created.HubRelationId);
             Assert.Equal(1, created.SequencePosition);
             Assert.Equal("active", created.Status);

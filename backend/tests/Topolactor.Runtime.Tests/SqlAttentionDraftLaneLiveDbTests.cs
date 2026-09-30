@@ -107,8 +107,8 @@ INSERT INTO hubs.hub (hub_id, relation) VALUES (@hub_id, '{}'::jsonb);
 INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
 VALUES (@manifest_id, @hub_id, @manifest_key, 'active',
   '{""fields"":{""status"":""open"",""category"":""sales"",""order_id"":""x""}}'::jsonb);
-INSERT INTO hubs.hub_relations (hub_relation_id, topology_manifest_id, related_hub_id, sequence_position, status, relation_config)
-VALUES (@relation_id, @manifest_id, @hub_id, 1, 'active', '{""status"":""open"",""kind"":""sale""}'::jsonb);
+INSERT INTO hubs.hub_relations (hub_relation_id, topology_manifest_id, target_topology_manifest_id, related_hub_id, sequence_position, status, relation_config)
+VALUES (@relation_id, @manifest_id, @manifest_id, @hub_id, 1, 'active', '{""status"":""open"",""kind"":""sale""}'::jsonb);
 
 INSERT INTO logs.current (current_id, source_set_id, basis_window, physical_table_id, physical_table_name, l2_norm)
 VALUES (@current_id, @sid, @bw, '1', @manifest_key, 5.0);

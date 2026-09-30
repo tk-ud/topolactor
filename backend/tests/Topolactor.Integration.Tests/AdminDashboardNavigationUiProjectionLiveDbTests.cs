@@ -111,9 +111,9 @@ public class AdminDashboardNavigationUiProjectionLiveDbTests
                 "VALUES (@mid, @hid, @key, 'active')",
                 ("mid", relatedManifestId), ("hid", relatedHubId), ("key", $"live-db-admin-dashboard-nav-{suffix}"));
             await ExecAsync(
-                "INSERT INTO hubs.hub_relations (hub_relation_id, topology_manifest_id, related_hub_id, sequence_position, status) " +
-                "VALUES (@rid, @mid, @hid, 1, 'active')",
-                ("rid", relationUuid), ("mid", AdminDashboardNavigationManifestId), ("hid", relatedHubId));
+                "INSERT INTO hubs.hub_relations (hub_relation_id, topology_manifest_id, target_topology_manifest_id, related_hub_id, sequence_position, status) " +
+                "VALUES (@rid, @mid, @tid, @hid, 1, 'active')",
+                ("rid", relationUuid), ("mid", AdminDashboardNavigationManifestId), ("tid", relatedManifestId), ("hid", relatedHubId));
 
             var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
             var payload = System.Text.Json.JsonSerializer.SerializeToElement(new

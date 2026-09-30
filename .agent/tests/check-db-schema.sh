@@ -221,6 +221,11 @@ else
 fi
 rm -f "$LEGACY_MIGRATION_SIM_SQL"
 
+echo "=== Validating hub_relations target_topology_manifest_id utility idempotency (canonical DB) ==="
+run_sql_file "db/legacy_utils/hub_relations_related_hub_id_to_target_topology_manifest_id.sql"
+query_equals_zero "no hub_relations row left unresolved after target_topology_manifest_id utility on canonical seed" \
+  "SELECT COUNT(*) FROM hubs.hub_relations_target_manifest_classification();"
+
 echo "=== Validating table existence ==="
 query_equals_one "table exists: structure_maps" \
   "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'structure_maps' AND table_schema = 'topology';"
@@ -290,6 +295,16 @@ query_equals_one "column exists: hubs.hub_relations.topology_manifest_id" \
   "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'hubs' AND table_name = 'hub_relations' AND column_name = 'topology_manifest_id';"
 query_equals_one "column exists: hubs.hub_relations.related_hub_id" \
   "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'hubs' AND table_name = 'hub_relations' AND column_name = 'related_hub_id';"
+query_equals_one "column exists: hubs.hub_relations.target_topology_manifest_id" \
+  "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'hubs' AND table_name = 'hub_relations' AND column_name = 'target_topology_manifest_id' AND is_nullable = 'YES';"
+query_equals_one "fk: hub_relations.target_topology_manifest_id -> hubs.topology_manifests" \
+  "SELECT COUNT(*) FROM pg_constraint c JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey) WHERE c.conrelid = 'hubs.hub_relations'::regclass AND c.contype = 'f' AND a.attname = 'target_topology_manifest_id' AND c.confrelid = 'hubs.topology_manifests'::regclass;"
+query_equals_one "check: active hub_relations rows require target_topology_manifest_id" \
+  "SELECT COUNT(*) FROM pg_constraint WHERE conrelid = 'hubs.hub_relations'::regclass AND contype = 'c' AND conname = 'hub_relations_active_target_topology_manifest_required';"
+query_equals_zero "canonical seed: related_hub_id mirrors the target manifest's hub_id on every targeted row" \
+  "SELECT COUNT(*) FROM hubs.hub_relations hr JOIN hubs.topology_manifests tm ON tm.topology_manifest_id = hr.target_topology_manifest_id WHERE hr.related_hub_id <> tm.hub_id;"
+query_equals_one "canonical seed: manifest 092 owns its outbound hub_relations row to Admin Enum ae200" \
+  "SELECT COUNT(*) FROM hubs.hub_relations WHERE topology_manifest_id = '00000000-0000-0000-0000-000000000092' AND target_topology_manifest_id = '00000000-0000-0000-0000-0000000ae200' AND related_hub_id = '00000000-0000-0000-0000-0000000ae201' AND sequence_position = 2 AND status = 'active';"
 query_equals_zero "column absent: hubs.hub_relations.hub_id" \
   "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'hubs' AND table_name = 'hub_relations' AND column_name = 'hub_id';"
 query_equals_zero "column absent: hubs.hub_relations.target_hub_id" \

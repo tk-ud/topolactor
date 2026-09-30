@@ -201,6 +201,24 @@ public static class ManifestCanonicalProjection
         upsert.Parameters.AddWithValue("status", detail.Status);
         upsert.Parameters.AddWithValue("topo", topologyJsonb);
         await upsert.ExecuteNonQueryAsync(ct);
+
+        // mirror_freshness_boundary (docs/design/db-schema.yaml
+        // hub_relations.target_reference_canonical_contract): the upsert above can move an EXISTING
+        // manifest's hub_id in place (e.g. MergeCloneReplacementDraftToActiveAsync ->
+        // ProjectOnPromoteAsync). related_hub_id on every hub_relations row that targets this manifest
+        // is a mirror of that hub_id, so it is re-synced here on the same connection/transaction as the
+        // hub_id write -- for every such row regardless of the relation's own status (deprecated rows
+        // are still listed with their related_hub_id by ListHubRelationsByManifestAsync). Rows whose
+        // target_topology_manifest_id is NULL (legacy transition rows) have no target authority and are
+        // untouched. Propagation of the single hub_id authority, not a trigger or sync table.
+        await using var mirror = conn.CreateCommand();
+        mirror.Transaction = tx;
+        mirror.CommandText =
+            "UPDATE hubs.hub_relations SET related_hub_id = @hub, updated_at = now() " +
+            "WHERE target_topology_manifest_id = @id AND related_hub_id <> @hub";
+        mirror.Parameters.AddWithValue("id", detail.ManifestId);
+        mirror.Parameters.AddWithValue("hub", hubId);
+        await mirror.ExecuteNonQueryAsync(ct);
         return null;
     }
 

@@ -81,9 +81,8 @@ const HUB_RELATION_A = {
   sequencePosition: 1,
   relationConfig: null,
   status: "active",
+  targetTopologyManifestId: "cccccccc-cccc-cccc-cccc-cccccccccccc",
 };
-
-const HUB_B = { id: MANIFEST_A.hubId, label: "受注ハブ", summary: "受注ハブ概要" };
 
 function buildFetchMock(
   dispatchOverride: (body: { layer?: string; action?: string; payload?: unknown }) => Response | null,
@@ -102,12 +101,6 @@ function buildFetchMock(
       if (body.layer === "hub_navigation" && body.action === "list_manifests") {
         return new Response(
           JSON.stringify({ success: true, errors: [], emission: { data: [MANIFEST_A] } }),
-          { status: 200 },
-        );
-      }
-      if (body.layer === "content_bundle" && body.action === "list_hubs") {
-        return new Response(
-          JSON.stringify({ success: true, errors: [], emission: { data: [HUB_B] } }),
           { status: 200 },
         );
       }
@@ -139,8 +132,10 @@ Deno.test(
   async () => {
     const { container, cleanup } = setupDom();
     const originalFetch = globalThis.fetch;
+    let createPayload: Record<string, unknown> | null = null;
     globalThis.fetch = buildFetchMock((body) => {
       if (body.layer === "hub_navigation" && body.action === "create") {
+        createPayload = body.payload as Record<string, unknown>;
         return lifecycleResponse(
           false,
           "Self-loop: related_hub_id cannot equal source hub_id.",
@@ -163,15 +158,25 @@ Deno.test(
       clickButtonByText(container, "+ 追加");
       await flushUpdates();
 
-      const selects = container.querySelectorAll("select");
-      const destinationSelect = selects[selects.length - 1] as HTMLSelectElement;
-      destinationSelect.value = HUB_B.id;
+      // The destination picker lists target MANIFESTS (hub_navigation:list_manifests rows);
+      // picking the source manifest itself is the Hub-identity SELF_LOOP case.
+      const destinationSelect = container.querySelector(
+        "select[data-hub-navigation-target-manifest-picker]",
+      ) as HTMLSelectElement;
+      destinationSelect.value = MANIFEST_A.topologyManifestId;
       fireEvent(destinationSelect, "change");
       await flushUpdates();
 
       clickButtonByText(container, "登録");
       await acceptConfirmDialog(container);
       await waitFor(() => (container.textContent ?? "").includes("自分自身への遷移"));
+
+      // The create payload carries targetTopologyManifestId as the sole target selection --
+      // related_hub_id is derived backend-side, never sent (no dual authority).
+      assert(createPayload !== null, "hub_navigation:create must have been dispatched");
+      const sent = createPayload as Record<string, unknown>;
+      assert(sent.targetTopologyManifestId === MANIFEST_A.topologyManifestId);
+      assertFalse("relatedHubId" in sent, "relatedHubId must never be a caller input");
 
       const primary = visibleText(container);
       assert(
@@ -347,6 +352,84 @@ Deno.test(
         technical.includes("Hub relation deprecated."),
         "the raw backend carrier message must still be reachable inside a 技術情報 disclosure",
       );
+    } finally {
+      globalThis.fetch = originalFetch;
+      render(null, container);
+      cleanup();
+    }
+  },
+);
+
+Deno.test(
+  "HubNavigationAdmin (real mount): 編集 pre-selects the relation's target manifest and 更新 sends targetTopologyManifestId only (hub-relation-target-manifest-canonical-migration)",
+  async () => {
+    const { container, cleanup } = setupDom();
+    const originalFetch = globalThis.fetch;
+    const TARGET_MANIFEST = {
+      topologyManifestId: HUB_RELATION_A.targetTopologyManifestId,
+      manifestKey: "orders.detail.screen.read",
+      hubId: HUB_RELATION_A.relatedHubId,
+      hasHubRelations: false,
+      hubRelationCount: 0,
+      topologySystemName: "orders-detail",
+      userFacingTopologyLabel: "受注詳細",
+    };
+    const RETARGET_MANIFEST = {
+      topologyManifestId: "dddddddd-dddd-dddd-dddd-dddddddddddd",
+      manifestKey: "orders.summary.screen.read",
+      // Shares TARGET_MANIFEST's hub: still a distinct, individually selectable target.
+      hubId: HUB_RELATION_A.relatedHubId,
+      hasHubRelations: false,
+      hubRelationCount: 0,
+      topologySystemName: "orders-summary",
+      userFacingTopologyLabel: "受注サマリ",
+    };
+    let updatePayload: Record<string, unknown> | null = null;
+    globalThis.fetch = buildFetchMock((body) => {
+      if (body.layer === "hub_navigation" && body.action === "list_manifests") {
+        return new Response(
+          JSON.stringify({ success: true, errors: [], emission: { data: [MANIFEST_A, TARGET_MANIFEST, RETARGET_MANIFEST] } }),
+          { status: 200 },
+        );
+      }
+      if (body.layer === "hub_navigation" && body.action === "update") {
+        updatePayload = body.payload as Record<string, unknown>;
+        return lifecycleResponse(true, "Hub relation updated.");
+      }
+      return null;
+    });
+
+    try {
+      render(h(HubNavigationAdmin, {}), container);
+      await waitFor(() => container.querySelector("select") !== null);
+
+      const manifestSelect = container.querySelector("select") as HTMLSelectElement;
+      manifestSelect.value = MANIFEST_A.topologyManifestId;
+      fireEvent(manifestSelect, "change");
+      await waitFor(() =>
+        Array.from(container.querySelectorAll("button")).some((b) => b.textContent === "編集")
+      );
+
+      clickButtonByText(container, "編集");
+      await waitFor(() => container.querySelector("select[data-hub-navigation-target-manifest-picker]") !== null);
+      const picker = container.querySelector(
+        "select[data-hub-navigation-target-manifest-picker]",
+      ) as HTMLSelectElement;
+      assert(picker.value === TARGET_MANIFEST.topologyManifestId, "edit must pre-select the stored target manifest");
+      const optionLabels = Array.from(picker.querySelectorAll("option")).map((o) => o.textContent);
+      assert(optionLabels.includes("受注詳細") && optionLabels.includes("受注サマリ"));
+
+      picker.value = RETARGET_MANIFEST.topologyManifestId;
+      fireEvent(picker, "change");
+      await flushUpdates();
+      clickButtonByText(container, "更新");
+      await acceptConfirmDialog(container);
+      await waitFor(() => updatePayload !== null);
+
+      const sent = updatePayload as unknown as Record<string, unknown>;
+      assert(sent.hubRelationId === HUB_RELATION_A.hubRelationId);
+      assert(sent.targetTopologyManifestId === RETARGET_MANIFEST.topologyManifestId);
+      assertFalse("relatedHubId" in sent, "relatedHubId must never be a caller input");
     } finally {
       globalThis.fetch = originalFetch;
       render(null, container);

@@ -89,7 +89,7 @@ public class TeamDashboardHubRelationUiProjectionLiveDbTests
             var createPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
             {
                 topologyManifestId = sourceManifestId.ToString(),
-                relatedHubId = AdminHubId.ToString(),
+                targetTopologyManifestId = AdminManifestId.ToString(),
                 sequencePosition = 1,
             });
             var createRequest = new EndpointRequestDto(
@@ -104,7 +104,9 @@ public class TeamDashboardHubRelationUiProjectionLiveDbTests
 
             var contentBundleRepo = new NpgsqlContentBundleRepository(NullLogger<NpgsqlContentBundleRepository>.Instance, cs);
             var relations = await contentBundleRepo.ListHubRelationsByManifestAsync(sourceManifestId);
-            var created = Assert.Single(relations, r => r.RelatedHubId == AdminHubId.ToString());
+            var created = Assert.Single(relations, r => r.TargetTopologyManifestId == AdminManifestId.ToString());
+            // related_hub_id is the derived legacy mirror of the selected target manifest's hub_id.
+            Assert.Equal(AdminHubId.ToString(), created.RelatedHubId);
             createdHubRelationId = Guid.Parse(created.HubRelationId);
             Assert.Equal(1, created.SequencePosition);
             Assert.Equal("active", created.Status);

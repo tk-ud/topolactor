@@ -99,8 +99,7 @@ for term in \
   "SavedViewOperationPanel(frontend/components/SavedViewOperationPanel.tsx)" \
   "SavedViewAdjustmentAuthoringPanel(frontend/components/SavedViewAdjustmentAuthoringPanel.tsx)" \
   "adapter_owned_events: [preview, validate, explicit_confirm, write, diff_log]" \
-  "zero_active_target_manifest_for_related_hub_id" \
-  "multiple_active_target_manifests_for_related_hub_id" \
+  "target_manifest_missing_or_not_active" \
   "every design_blocking entry whose subbundle_status for that subBundle is not"; do
   require_term "$SSOT" "$term"
 done
@@ -220,7 +219,8 @@ require_term "$SSOT" "enum.group_items.position"
 require_term "$REPO_ROOT/docs/design/admin-master-roster-management-ssot.yaml" "auth_users:create"
 require_term "$REPO_ROOT/docs/design/admin-master-roster-management-ssot.yaml" "auth_users:delete"
 require_term "$REPO_ROOT/docs/design/auth-db-session-credential-ssot.yaml" "Login credentials live only in auth.credentials"
-require_term "$REPO_ROOT/docs/design/admin-console-workflow-ssot.yaml" "resolves to a target manifest only when exactly one active hubs.topology_manifests row"
+require_term "$REPO_ROOT/docs/design/admin-console-workflow-ssot.yaml" "a relation's target is its"
+require_term "$REPO_ROOT/docs/design/admin-console-workflow-ssot.yaml" "own target_topology_manifest_id, reachable only while that manifest is active"
 require_term "$REPO_ROOT/docs/design/admin-console-workflow-ssot.yaml" "first-match/oldest/MIN implicit fallback"
 require_term "$MD_VIEWER" "export type MdViewerProps"
 require_term "$MD_VIEWER" "savedView: SavedViewDetail"

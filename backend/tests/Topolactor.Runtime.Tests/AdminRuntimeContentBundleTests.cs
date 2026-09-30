@@ -310,7 +310,7 @@ public class AdminRuntimeContentBundleTests
         var payload = JsonSerializer.SerializeToElement(new
         {
             topologyManifestId = InMemoryContentBundleRepository.FixtureTopologyManifestId.ToString(),
-            relatedHubId = InMemoryContentBundleRepository.FixtureRelatedHubId.ToString(),
+            targetTopologyManifestId = InMemoryContentBundleRepository.FixtureRelatedHubManifestId.ToString(),
             sequencePosition = 99,
         });
         var (data, error) = await runtime.ExecuteDataAsync(
@@ -329,7 +329,7 @@ public class AdminRuntimeContentBundleTests
         var payload = JsonSerializer.SerializeToElement(new
         {
             topologyManifestId = InMemoryContentBundleRepository.FixtureTopologyManifestId.ToString(),
-            relatedHubId = InMemoryContentBundleRepository.FixtureRelatedHubId.ToString(),
+            targetTopologyManifestId = InMemoryContentBundleRepository.FixtureRelatedHubManifestId.ToString(),
             sequencePosition = 1, // already exists in seed
         });
         var (data, error) = await runtime.ExecuteDataAsync(
@@ -342,13 +342,17 @@ public class AdminRuntimeContentBundleTests
     }
 
     [Fact]
-    public async Task HubNavigation_Update_ChangesRelatedHubId()
+    public async Task HubNavigation_Update_RepointsTargetManifest_AndDerivesRelatedHubMirror()
     {
-        var runtime = CreateRuntime(new InMemoryContentBundleRepository());
+        var repo = new InMemoryContentBundleRepository();
+        var newTargetManifestId = Guid.NewGuid();
+        var newTargetHubId = Guid.NewGuid();
+        repo.AddTopologyManifestHub(newTargetManifestId, newTargetHubId);
+        var runtime = CreateRuntime(repo);
         var payload = JsonSerializer.SerializeToElement(new
         {
             hubRelationId = InMemoryContentBundleRepository.FixtureHubRelationId.ToString(),
-            relatedHubId = InMemoryContentBundleRepository.FixtureRelatedHubId.ToString(),
+            targetTopologyManifestId = newTargetManifestId.ToString(),
         });
         var (data, error) = await runtime.ExecuteDataAsync(
             new OperationVector("admin", "hub_navigation", "update", null, "admin", payload, null), default);
@@ -357,6 +361,70 @@ public class AdminRuntimeContentBundleTests
         Assert.True(data.HasValue);
         Assert.True(data.Value.GetProperty("ok").GetBoolean());
         Assert.Equal("active", data.Value.GetProperty("status").GetString());
+
+        // write_path_legacy_mirror_contract: the canonical target is what the caller selected, and
+        // related_hub_id is that target manifest's own hub_id -- derived, never a caller input.
+        var relation = Assert.Single(
+            await repo.ListHubRelationsByManifestAsync(InMemoryContentBundleRepository.FixtureTopologyManifestId),
+            r => r.HubRelationId == InMemoryContentBundleRepository.FixtureHubRelationId.ToString());
+        Assert.Equal(newTargetManifestId.ToString(), relation.TargetTopologyManifestId);
+        Assert.Equal(newTargetHubId.ToString(), relation.RelatedHubId);
+    }
+
+    [Theory]
+    [InlineData("create")]
+    [InlineData("update")]
+    public async Task HubNavigation_CreateOrUpdate_CallerSuppliedRelatedHubId_IsRejected_NoDualTargetAuthority(string action)
+    {
+        // related_hub_id is derived from targetTopologyManifestId; a caller-supplied relatedHubId would
+        // be a second, independently-selected target authority, so it fails closed explicitly (never
+        // silently ignored), even alongside a valid targetTopologyManifestId.
+        var repo = new InMemoryContentBundleRepository();
+        var runtime = CreateRuntime(repo);
+        var payload = action == "create"
+            ? JsonSerializer.SerializeToElement(new
+            {
+                topologyManifestId = InMemoryContentBundleRepository.FixtureTopologyManifestId.ToString(),
+                targetTopologyManifestId = InMemoryContentBundleRepository.FixtureRelatedHubManifestId.ToString(),
+                relatedHubId = InMemoryContentBundleRepository.FixtureRelatedHubId.ToString(),
+                sequencePosition = 50,
+            })
+            : JsonSerializer.SerializeToElement(new
+            {
+                hubRelationId = InMemoryContentBundleRepository.FixtureHubRelationId.ToString(),
+                targetTopologyManifestId = InMemoryContentBundleRepository.FixtureRelatedHubManifestId.ToString(),
+                relatedHubId = InMemoryContentBundleRepository.FixtureRelatedHubId.ToString(),
+            });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "hub_navigation", action, null, "admin", payload, null), default);
+
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("MALFORMED_PAYLOAD", error!.Code);
+        Assert.Single(await repo.ListHubRelationsByManifestAsync(InMemoryContentBundleRepository.FixtureTopologyManifestId));
+    }
+
+    [Theory]
+    [InlineData("create")]
+    [InlineData("update")]
+    public async Task HubNavigation_CreateOrUpdate_MissingTargetTopologyManifestId_IsMalformed(string action)
+    {
+        var runtime = CreateRuntime(new InMemoryContentBundleRepository());
+        var payload = action == "create"
+            ? JsonSerializer.SerializeToElement(new
+            {
+                topologyManifestId = InMemoryContentBundleRepository.FixtureTopologyManifestId.ToString(),
+                sequencePosition = 50,
+            })
+            : JsonSerializer.SerializeToElement(new
+            {
+                hubRelationId = InMemoryContentBundleRepository.FixtureHubRelationId.ToString(),
+            });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "hub_navigation", action, null, "admin", payload, null), default);
+
+        Assert.Null(data);
+        Assert.Equal("MALFORMED_PAYLOAD", error!.Code);
     }
 
     [Fact]
@@ -366,7 +434,8 @@ public class AdminRuntimeContentBundleTests
         var payload = JsonSerializer.SerializeToElement(new
         {
             topologyManifestId = InMemoryContentBundleRepository.FixtureTopologyManifestId.ToString(),
-            relatedHubId = InMemoryContentBundleRepository.FixtureHubId.ToString(), // same as source hub
+            // the source manifest itself: its hub_id equals the source hub
+            targetTopologyManifestId = InMemoryContentBundleRepository.FixtureTopologyManifestId.ToString(),
             sequencePosition = 2,
         });
         var (data, error) = await runtime.ExecuteDataAsync(
@@ -385,7 +454,8 @@ public class AdminRuntimeContentBundleTests
         var payload = JsonSerializer.SerializeToElement(new
         {
             hubRelationId = InMemoryContentBundleRepository.FixtureHubRelationId.ToString(),
-            relatedHubId = InMemoryContentBundleRepository.FixtureHubId.ToString(), // same as source hub
+            // the source manifest itself: its hub_id equals the source hub
+            targetTopologyManifestId = InMemoryContentBundleRepository.FixtureTopologyManifestId.ToString(),
         });
         var (data, error) = await runtime.ExecuteDataAsync(
             new OperationVector("admin", "hub_navigation", "update", null, "admin", payload, null), default);
@@ -393,6 +463,30 @@ public class AdminRuntimeContentBundleTests
         Assert.Null(error);
         Assert.True(data.HasValue);
         Assert.False(data.Value.GetProperty("ok").GetBoolean());
+        Assert.Equal("SELF_LOOP", data.Value.GetProperty("errorCode").GetString());
+    }
+
+    [Fact]
+    public async Task HubNavigation_Create_DifferentManifestSharingSourceHub_IsStillSelfLoop_HubIdentityGuardUnchanged()
+    {
+        // self_loop_authoring_guard_relationship: the guard stays a Hub-identity comparison. A target
+        // manifest that is NOT the source manifest but shares its hub_id is rejected too -- the guard
+        // is not narrowed to Manifest identity by the target_topology_manifest_id migration.
+        var repo = new InMemoryContentBundleRepository();
+        var siblingManifestId = Guid.NewGuid();
+        repo.AddTopologyManifestHub(siblingManifestId, InMemoryContentBundleRepository.FixtureHubId);
+        var runtime = CreateRuntime(repo);
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            topologyManifestId = InMemoryContentBundleRepository.FixtureTopologyManifestId.ToString(),
+            targetTopologyManifestId = siblingManifestId.ToString(),
+            sequencePosition = 2,
+        });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "hub_navigation", "create", null, "admin", payload, null), default);
+
+        Assert.Null(error);
+        Assert.False(data!.Value.GetProperty("ok").GetBoolean());
         Assert.Equal("SELF_LOOP", data.Value.GetProperty("errorCode").GetString());
     }
 
@@ -406,7 +500,7 @@ public class AdminRuntimeContentBundleTests
         var createPayload = JsonSerializer.SerializeToElement(new
         {
             topologyManifestId = InMemoryContentBundleRepository.FixtureTopologyManifestId.ToString(),
-            relatedHubId = InMemoryContentBundleRepository.FixtureRelatedHubId.ToString(),
+            targetTopologyManifestId = InMemoryContentBundleRepository.FixtureRelatedHubManifestId.ToString(),
             sequencePosition = 2,
         });
         await runtime.ExecuteDataAsync(
@@ -441,13 +535,13 @@ public class AdminRuntimeContentBundleTests
     }
 
     [Fact]
-    public async Task HubNavigation_Update_InvalidHub_ReturnsHubNotFound()
+    public async Task HubNavigation_Update_UnknownTargetManifest_ReturnsTargetManifestNotFound()
     {
         var runtime = CreateRuntime(new InMemoryContentBundleRepository());
         var payload = JsonSerializer.SerializeToElement(new
         {
             hubRelationId = InMemoryContentBundleRepository.FixtureHubRelationId.ToString(),
-            relatedHubId = Guid.NewGuid().ToString(),
+            targetTopologyManifestId = Guid.NewGuid().ToString(),
         });
         var (data, error) = await runtime.ExecuteDataAsync(
             new OperationVector("admin", "hub_navigation", "update", null, "admin", payload, null), default);
@@ -455,7 +549,7 @@ public class AdminRuntimeContentBundleTests
         Assert.Null(error);
         Assert.True(data.HasValue);
         Assert.False(data.Value.GetProperty("ok").GetBoolean());
-        Assert.Equal("HUB_NOT_FOUND", data.Value.GetProperty("errorCode").GetString());
+        Assert.Equal("TARGET_MANIFEST_NOT_FOUND", data.Value.GetProperty("errorCode").GetString());
     }
 
     [Fact]
@@ -470,6 +564,7 @@ public class AdminRuntimeContentBundleTests
         repo.AddHubRelation(
             Guid.NewGuid(),
             InMemoryContentBundleRepository.FixtureTopologyManifestId,
+            InMemoryContentBundleRepository.FixtureRelatedHubManifestId,
             InMemoryContentBundleRepository.FixtureRelatedHubId,
             2);
         var runtime = CreateRuntime(repo);

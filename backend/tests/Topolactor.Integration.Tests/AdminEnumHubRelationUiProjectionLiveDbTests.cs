@@ -670,7 +670,7 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             var createPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
             {
                 topologyManifestId = AdminEnumManagementManifestId.ToString(),
-                relatedHubId = targetHubId.ToString(),
+                targetTopologyManifestId = targetManifestId.ToString(),
                 sequencePosition = 1,
             });
             var createRequest = new EndpointRequestDto(
@@ -687,7 +687,9 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
 
             var contentBundleRepo = new NpgsqlContentBundleRepository(NullLogger<NpgsqlContentBundleRepository>.Instance, cs);
             var relations = await contentBundleRepo.ListHubRelationsByManifestAsync(AdminEnumManagementManifestId);
-            var created = Assert.Single(relations, r => r.RelatedHubId == targetHubId.ToString());
+            var created = Assert.Single(relations, r => r.TargetTopologyManifestId == targetManifestId.ToString());
+            // related_hub_id is the derived legacy mirror of the selected target manifest's hub_id.
+            Assert.Equal(targetHubId.ToString(), created.RelatedHubId);
             createdHubRelationId = Guid.Parse(created.HubRelationId);
             Assert.Equal(1, created.SequencePosition);
             Assert.Equal("active", created.Status);
@@ -1767,7 +1769,7 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
             var createPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
             {
                 topologyManifestId = AdminEnumManagementManifestId.ToString(),
-                relatedHubId = createGroupHubId.ToString(),
+                targetTopologyManifestId = createGroupManifestId,
                 sequencePosition = 1,
             });
             var createRequest = new EndpointRequestDto(
@@ -1781,7 +1783,8 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
 
             var contentBundleRepo = new NpgsqlContentBundleRepository(NullLogger<NpgsqlContentBundleRepository>.Instance, cs);
             var relations = await contentBundleRepo.ListHubRelationsByManifestAsync(AdminEnumManagementManifestId);
-            var created = Assert.Single(relations, r => r.RelatedHubId == createGroupHubId.ToString());
+            var created = Assert.Single(relations, r => r.TargetTopologyManifestId == createGroupManifestId);
+            Assert.Equal(createGroupHubId.ToString(), created.RelatedHubId);
             createdHubRelationId = Guid.Parse(created.HubRelationId);
 
             var payload = System.Text.Json.JsonSerializer.SerializeToElement(new

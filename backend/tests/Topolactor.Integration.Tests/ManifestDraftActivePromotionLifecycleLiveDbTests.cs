@@ -192,9 +192,9 @@ public class ManifestDraftActivePromotionLifecycleLiveDbTests
             // hub_navigation:deprecate guard (which would refuse to deprecate a manifest's only
             // active relation and so cannot itself be used to reach this state).
             await ExecAsync(cs,
-                "INSERT INTO hubs.hub_relations (topology_manifest_id, related_hub_id, sequence_position, status) " +
-                "VALUES (@mid, @hid, 1, 'deprecated')",
-                ("mid", sourceManifestId), ("hid", targetHubId));
+                "INSERT INTO hubs.hub_relations (topology_manifest_id, target_topology_manifest_id, related_hub_id, sequence_position, status) " +
+                "VALUES (@mid, @tid, @hid, 1, 'deprecated')",
+                ("mid", sourceManifestId), ("tid", targetManifestId), ("hid", targetHubId));
 
             // Proof item 5: deprecated-only-relation promotion fails closed.
             var (promoted, promoteError) = await manifestRepo.PromoteAsync(sourceManifestId, AllowedRuntimeDestinations);
@@ -245,7 +245,7 @@ public class ManifestDraftActivePromotionLifecycleLiveDbTests
 
             // Target manifest is created but deliberately left in draft (never promoted) -- its
             // hubs.topology_manifests row is therefore status='draft', so LoadHubNavigationSequenceAsync's
-            // tm2.status='active' resolution correlated subquery yields no row for it.
+            // target-manifest status='active' check resolves the relation's target to null.
             var targetTopology = BuildSourceTopology(targetHubId, $"lifecycle-proof-unresolved-target-{suffix}", suffix + "t");
             var (targetManifest, targetCreateError) = await manifestRepo.CreateDraftAsync(relationRegistryId: null, targetTopology);
             Assert.Null(targetCreateError);
@@ -255,7 +255,7 @@ public class ManifestDraftActivePromotionLifecycleLiveDbTests
             var createPayload = JsonSerializer.SerializeToElement(new
             {
                 topologyManifestId = sourceManifestId.ToString(),
-                relatedHubId = targetHubId.ToString(),
+                targetTopologyManifestId = targetManifestId.ToString(),
                 sequencePosition = 1,
             });
             var createResponse = await dispatcher.DispatchAsync(new EndpointRequestDto(
@@ -324,7 +324,7 @@ public class ManifestDraftActivePromotionLifecycleLiveDbTests
             var createPayload = JsonSerializer.SerializeToElement(new
             {
                 topologyManifestId = sourceManifestId.ToString(),
-                relatedHubId = targetHubId.ToString(),
+                targetTopologyManifestId = targetManifestId.ToString(),
                 sequencePosition = 1,
             });
             var createResponse = await dispatcher.DispatchAsync(new EndpointRequestDto(
@@ -391,16 +391,16 @@ public class ManifestDraftActivePromotionLifecycleLiveDbTests
                 "INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status) VALUES (@mid, @hid, @key, 'active')",
                 ("mid", farManifestId), ("hid", farHubId), ("key", $"lifecycle-proof-deprecate-far-{suffix}"));
             await ExecAsync(cs,
-                "INSERT INTO hubs.hub_relations (topology_manifest_id, related_hub_id, sequence_position, status) VALUES (@mid, @hid, 1, 'active')",
-                ("mid", targetManifestId), ("hid", farHubId));
+                "INSERT INTO hubs.hub_relations (topology_manifest_id, target_topology_manifest_id, related_hub_id, sequence_position, status) VALUES (@mid, @tid, @hid, 1, 'active')",
+                ("mid", targetManifestId), ("tid", farManifestId), ("hid", farHubId));
 
             var (promotedTarget, promoteError) = await manifestRepo.PromoteAsync(targetManifestId, AllowedRuntimeDestinations);
             Assert.Null(promoteError);
             Assert.Equal("active", promotedTarget!.Status);
 
             await ExecAsync(cs,
-                "INSERT INTO hubs.hub_relations (topology_manifest_id, related_hub_id, sequence_position, status) VALUES (@mid, @hid, 1, 'active')",
-                ("mid", upstreamManifestId), ("hid", targetHubId));
+                "INSERT INTO hubs.hub_relations (topology_manifest_id, target_topology_manifest_id, related_hub_id, sequence_position, status) VALUES (@mid, @tid, @hid, 1, 'active')",
+                ("mid", upstreamManifestId), ("tid", targetManifestId), ("hid", targetHubId));
 
             Assert.True(await contentBundleRepo.HasResolvableActiveHubRelationAsync(upstreamManifestId));
 
