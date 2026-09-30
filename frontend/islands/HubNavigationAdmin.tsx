@@ -9,11 +9,9 @@ import {
   updateHubRelation,
   deprecateHubRelation,
   reorderHubRelations,
-  listContentHubs,
   type HubNavigationManifestItem,
   type HubNavigationHubRelationItem,
   type HubNavigationLifecycleResult,
-  type ContentBundleListItem,
 } from "../api/adminApi.ts";
 import AdminHowTo from "../components/AdminHowTo.tsx";
 import AdminHelpPanel from "../components/AdminHelpPanel.tsx";
@@ -21,9 +19,8 @@ import { ValidationErrorPanel } from "../components/ValidationErrorPanel.tsx";
 import { ADMIN_HUB_NAVIGATION_GUIDE } from "../content/adminGuides.ts";
 import { UX_STATUS_LABELS, UX_HUB_NAV_DESTINATION_LABEL } from "../content/adminUxTerms.ts";
 import {
-  hubDestinationOptionLabel,
-  hubDestinationPickerOptions,
   hubNavigationErrorFriendlyText,
+  hubNavigationTargetManifestOptions,
   hubNavigationSuccessFriendlyText,
   type HubNavigationLifecycleAction,
 } from "../lib/hubNavigationPicker.ts";
@@ -35,15 +32,16 @@ type PanelError = { code?: string; message: string };
 type EditingState =
   | { mode: "none" }
   | { mode: "create" }
-  | { mode: "edit"; hubRelationId: string; relatedHubId: string };
+  | { mode: "edit"; hubRelationId: string };
 
 export default function HubNavigationAdmin(): JSX.Element {
   const [manifests, setManifests] = useState<HubNavigationManifestItem[]>([]);
-  const [hubs, setHubs] = useState<ContentBundleListItem[]>([]);
   const [selectedManifestId, setSelectedManifestId] = useState("");
   const [hubRelations, setHubRelations] = useState<HubNavigationHubRelationItem[]>([]);
   const [editing, setEditing] = useState<EditingState>({ mode: "none" });
-  const [draftRelatedHubId, setDraftRelatedHubId] = useState("");
+  // The only target the admin selects: a target MANIFEST (hub_navigation:create/update
+  // targetTopologyManifestId). The backend derives related_hub_id from it -- no target-hub picker.
+  const [draftTargetManifestId, setDraftTargetManifestId] = useState("");
   const [draftSequencePosition, setDraftSequencePosition] = useState(1);
   const [result, setResult] = useState<HubNavigationLifecycleResult | null>(null);
   const [resultAction, setResultAction] = useState<HubNavigationLifecycleAction | null>(null);
@@ -52,20 +50,19 @@ export default function HubNavigationAdmin(): JSX.Element {
   const [backendUnavailable, setBackendUnavailable] = useState(false);
   const { confirm, ConfirmDialogHost } = useConfirm();
 
-  const destinationHubOptions = useMemo(
-    () => hubDestinationPickerOptions(hubs),
-    [hubs],
+  const targetManifestOptions = useMemo(
+    () => hubNavigationTargetManifestOptions(manifests),
+    [manifests],
   );
 
   const loadManifests = async () => {
     try {
-      const [m, h] = await Promise.all([listHubNavigationManifests(), listContentHubs()]);
-      if (m === null || h === null) {
+      const m = await listHubNavigationManifests();
+      if (m === null) {
         setBackendUnavailable(true);
         return;
       }
       setManifests(m);
-      setHubs(h);
     } catch (e) {
       console.error("HUB_NAVIGATION_LOAD_FAILED", e);
       setErrors([{
@@ -107,12 +104,12 @@ export default function HubNavigationAdmin(): JSX.Element {
     if (manifest && !manifest.hasHubRelations) {
       setEditing({ mode: "create" });
       setDraftSequencePosition(1);
-      setDraftRelatedHubId("");
+      setDraftTargetManifestId("");
     }
   };
 
   const handleCreate = async () => {
-    if (!selectedManifestId || !draftRelatedHubId) {
+    if (!selectedManifestId || !draftTargetManifestId) {
       setErrors([{ message: "設定と遷移先の画面を選択してください。" }]);
       return;
     }
@@ -122,7 +119,7 @@ export default function HubNavigationAdmin(): JSX.Element {
     setLoading(true);
     setErrors([]);
     try {
-      const res = await createHubRelation(selectedManifestId, draftRelatedHubId, draftSequencePosition);
+      const res = await createHubRelation(selectedManifestId, draftTargetManifestId, draftSequencePosition);
       setResult(res);
       setResultAction("create");
       if (res.ok) {
@@ -147,7 +144,7 @@ export default function HubNavigationAdmin(): JSX.Element {
     setLoading(true);
     setErrors([]);
     try {
-      const res = await updateHubRelation(editing.hubRelationId, draftRelatedHubId);
+      const res = await updateHubRelation(editing.hubRelationId, draftTargetManifestId);
       setResult(res);
       setResultAction("update");
       if (res.ok) {
@@ -213,8 +210,9 @@ export default function HubNavigationAdmin(): JSX.Element {
   };
 
   const startEdit = (hr: HubNavigationHubRelationItem) => {
-    setEditing({ mode: "edit", hubRelationId: hr.hubRelationId, relatedHubId: hr.relatedHubId });
-    setDraftRelatedHubId(hr.relatedHubId);
+    setEditing({ mode: "edit", hubRelationId: hr.hubRelationId });
+    // A legacy transition row with no target yet starts empty: the admin must choose one explicitly.
+    setDraftTargetManifestId(hr.targetTopologyManifestId ?? "");
     setResult(null);
     setResultAction(null);
     setErrors([]);
@@ -285,7 +283,7 @@ export default function HubNavigationAdmin(): JSX.Element {
                   class="btn-secondary text-xs"
                   onClick={() => {
                     setEditing({ mode: "create" });
-                    setDraftRelatedHubId("");
+                    setDraftTargetManifestId("");
                     setDraftSequencePosition((hubRelations.filter(hr => hr.status === "active").length) + 1);
                     setResult(null);
                     setResultAction(null);
@@ -372,20 +370,26 @@ export default function HubNavigationAdmin(): JSX.Element {
                   </label>
                   <select
                     class="input-base w-full max-w-md"
-                    value={draftRelatedHubId}
-                    onChange={(e) => setDraftRelatedHubId((e.target as HTMLSelectElement).value)}
+                    value={draftTargetManifestId}
+                    onChange={(e) => setDraftTargetManifestId((e.target as HTMLSelectElement).value)}
+                    data-hub-navigation-target-manifest-picker
                   >
                     <option value="">— 画面を選択 —</option>
-                    {destinationHubOptions.map((h) => (
-                      <option key={h.id} value={h.id}>
-                        {hubDestinationOptionLabel(h)}
+                    {targetManifestOptions.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
                       </option>
                     ))}
                   </select>
-                  {draftRelatedHubId && (
+                  {draftTargetManifestId && (
                     <details class="mt-1">
                       <summary class="cursor-pointer text-xs text-gray-400 hover:text-gray-600">技術情報</summary>
-                      <code class="block mt-0.5 font-mono text-xs text-gray-500">{draftRelatedHubId}</code>
+                      <dl class="mt-0.5 grid grid-cols-[auto_1fr] gap-x-2 font-mono text-xs text-gray-500">
+                        <dt>manifest_key</dt>
+                        <dd>{manifests.find((m) => m.topologyManifestId === draftTargetManifestId)?.manifestKey ?? "—"}</dd>
+                        <dt>target_topology_manifest_id</dt>
+                        <dd>{draftTargetManifestId}</dd>
+                      </dl>
                     </details>
                   )}
                 </div>
@@ -421,7 +425,7 @@ export default function HubNavigationAdmin(): JSX.Element {
                   <button
                     class="btn-primary"
                     onClick={editing.mode === "create" ? handleCreate : handleUpdate}
-                    disabled={loading || !draftRelatedHubId}
+                    disabled={loading || !draftTargetManifestId}
                   >
                     {loading ? "処理中…" : editing.mode === "create" ? "登録" : "更新"}
                   </button>

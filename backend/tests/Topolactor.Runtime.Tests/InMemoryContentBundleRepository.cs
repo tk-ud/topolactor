@@ -17,7 +17,8 @@ internal class InMemoryContentBundleRepository : ContentBundleRepository
     public static readonly Guid FixtureTopologyManifestId = new("00000000-0000-0000-0000-000000000044");
     public static readonly Guid FixtureRelatedHubId = new("00000000-0000-0000-0000-00000000001d");
     public static readonly Guid ActiveStateId = new("00000000-0000-0000-0000-000000000001");
-    // Exactly one topology_manifest under FixtureRelatedHubId — target_manifest_id resolution fixture.
+    // The fixture relation's canonical target_topology_manifest_id; its hub (FixtureRelatedHubId) is
+    // the relation's derived related_hub_id mirror.
     public static readonly Guid FixtureRelatedHubManifestId = new("00000000-0000-0000-0000-000000000046");
 
     private readonly List<ContentEntityDraftRecord> _drafts = [];
@@ -302,29 +303,36 @@ internal class InMemoryContentBundleRepository : ContentBundleRepository
                 "Draft promoted to active entity.", readback), null));
     }
 
-    // Hub Navigation in-memory store
-    private readonly List<(Guid HubRelationId, Guid TopologyManifestId, Guid RelatedHubId, int SequencePosition, string Status)> _hubRelations =
+    // Hub Navigation in-memory store. Mirrors hubs.hub_relations: TargetTopologyManifestId is the
+    // canonical target (nullable only for a legacy transition row), RelatedHubId its hub mirror.
+    private readonly List<(Guid HubRelationId, Guid TopologyManifestId, Guid? TargetTopologyManifestId, Guid RelatedHubId, int SequencePosition, string Status)> _hubRelations =
     [
-        (FixtureHubRelationId, FixtureTopologyManifestId, FixtureRelatedHubId, 1, "active"),
+        (FixtureHubRelationId, FixtureTopologyManifestId, FixtureRelatedHubManifestId, FixtureRelatedHubId, 1, "active"),
     ];
 
-    // hub_id -> topology_manifest_id registrations, mirroring hubs.topology_manifests, used to
-    // resolve HubNavigationSequenceItemDto.TargetManifestId the same way the production SQL
-    // resolves it (exactly one manifest for the related hub -> resolved; otherwise -> null).
+    // topology_manifest_id -> hub_id registrations, mirroring hubs.topology_manifests. A registered
+    // manifest is status='active' unless listed in _inactiveTopologyManifests.
     private readonly Dictionary<Guid, Guid> _topologyManifestHubs = new()
     {
         [FixtureTopologyManifestId] = FixtureHubId,
         [FixtureRelatedHubManifestId] = FixtureRelatedHubId,
     };
 
-    /// <summary>Test-only fixture extension: adds an active hub_relations row without disturbing
-    /// the default single-relation fixture other tests depend on.</summary>
-    public void AddHubRelation(Guid hubRelationId, Guid topologyManifestId, Guid relatedHubId, int sequencePosition, string status = "active") =>
-        _hubRelations.Add((hubRelationId, topologyManifestId, relatedHubId, sequencePosition, status));
+    private readonly HashSet<Guid> _inactiveTopologyManifests = [];
 
-    /// <summary>Test-only fixture extension: registers the single active topology_manifest for a hub.</summary>
-    public void AddTopologyManifestHub(Guid topologyManifestId, Guid hubId) =>
+    /// <summary>Test-only fixture extension: adds a hub_relations row as persisted (canonical target
+    /// plus its related_hub_id mirror) without disturbing the default single-relation fixture other
+    /// tests depend on. targetTopologyManifestId=null models a legacy transition-window row.</summary>
+    public void AddHubRelation(Guid hubRelationId, Guid topologyManifestId, Guid? targetTopologyManifestId, Guid relatedHubId, int sequencePosition, string status = "active") =>
+        _hubRelations.Add((hubRelationId, topologyManifestId, targetTopologyManifestId, relatedHubId, sequencePosition, status));
+
+    /// <summary>Test-only fixture extension: registers a topology_manifest and its hub.</summary>
+    public void AddTopologyManifestHub(Guid topologyManifestId, Guid hubId, string status = "active")
+    {
         _topologyManifestHubs[topologyManifestId] = hubId;
+        if (status == "active") _inactiveTopologyManifests.Remove(topologyManifestId);
+        else _inactiveTopologyManifests.Add(topologyManifestId);
+    }
 
     public override Task<IReadOnlyList<HubNavigationManifestItemDto>> ListTopologyManifestsAsync(CancellationToken ct = default)
     {
@@ -344,42 +352,42 @@ internal class InMemoryContentBundleRepository : ContentBundleRepository
             .Select(hr => new HubNavigationHubRelationItemDto(
                 hr.HubRelationId.ToString(), hr.TopologyManifestId.ToString(),
                 hr.RelatedHubId.ToString(), $"Hub {hr.RelatedHubId.ToString()[..8]}…",
-                hr.SequencePosition, null, hr.Status))
+                hr.SequencePosition, null, hr.Status, hr.TargetTopologyManifestId?.ToString()))
             .ToList();
         return Task.FromResult<IReadOnlyList<HubNavigationHubRelationItemDto>>(items);
     }
 
+    private const string SelfLoopMessage =
+        "Self-loop: the target manifest's hub_id (derived related_hub_id) cannot equal the source manifest's hub_id.";
+
     public override Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> CreateHubRelationAsync(
-        Guid topologyManifestId, Guid relatedHubId, int sequencePosition, CancellationToken ct = default)
+        Guid topologyManifestId, Guid targetTopologyManifestId, int sequencePosition, CancellationToken ct = default)
     {
-        if (topologyManifestId != FixtureTopologyManifestId)
+        if (!_topologyManifestHubs.TryGetValue(topologyManifestId, out var sourceHub))
             return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
                 (new HubNavigationLifecycleResponseDto(false, null, "error", "Manifest not found.", "MANIFEST_NOT_FOUND"), null));
-        if (_manifestSourceHubMap.TryGetValue(topologyManifestId, out var sourceHub) && sourceHub == relatedHubId)
+        if (!_topologyManifestHubs.TryGetValue(targetTopologyManifestId, out var targetHub))
             return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
-                (new HubNavigationLifecycleResponseDto(false, null, "error", "Self-loop: related_hub_id cannot equal source hub_id.", "SELF_LOOP"), null));
+                (new HubNavigationLifecycleResponseDto(false, null, "error", "Target manifest not found.", "TARGET_MANIFEST_NOT_FOUND"), null));
+        if (sourceHub == targetHub)
+            return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
+                (new HubNavigationLifecycleResponseDto(false, null, "error", SelfLoopMessage, "SELF_LOOP"), null));
         if (_hubRelations.Any(hr => hr.TopologyManifestId == topologyManifestId && hr.SequencePosition == sequencePosition && hr.Status == "active"))
             return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
                 (new HubNavigationLifecycleResponseDto(false, null, "error", $"Sequence position {sequencePosition} already exists.", "SEQUENCE_CONFLICT"), null));
 
         var newId = Guid.NewGuid();
-        _hubRelations.Add((newId, topologyManifestId, relatedHubId, sequencePosition, "active"));
+        _hubRelations.Add((newId, topologyManifestId, targetTopologyManifestId, targetHub, sequencePosition, "active"));
         return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
             (new HubNavigationLifecycleResponseDto(true, newId.ToString(), "active", "Hub relation created."), null));
     }
 
-    private static readonly HashSet<Guid> _validHubIds = [FixtureHubId, FixtureRelatedHubId];
-    private static readonly Dictionary<Guid, Guid> _manifestSourceHubMap = new()
-    {
-        { FixtureTopologyManifestId, FixtureHubId },
-    };
-
     public override Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> UpdateHubRelationAsync(
-        Guid hubRelationId, Guid relatedHubId, CancellationToken ct = default)
+        Guid hubRelationId, Guid targetTopologyManifestId, CancellationToken ct = default)
     {
-        if (!_validHubIds.Contains(relatedHubId))
+        if (!_topologyManifestHubs.TryGetValue(targetTopologyManifestId, out var targetHub))
             return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
-                (new HubNavigationLifecycleResponseDto(false, null, "error", "Related hub not found.", "HUB_NOT_FOUND"), null));
+                (new HubNavigationLifecycleResponseDto(false, null, "error", "Target manifest not found.", "TARGET_MANIFEST_NOT_FOUND"), null));
 
         var idx = _hubRelations.FindIndex(hr => hr.HubRelationId == hubRelationId && hr.Status == "active");
         if (idx < 0)
@@ -388,11 +396,11 @@ internal class InMemoryContentBundleRepository : ContentBundleRepository
                     "Hub relation not found or not active.", "HUB_RELATION_NOT_FOUND"), null));
 
         var existing = _hubRelations[idx];
-        if (_manifestSourceHubMap.TryGetValue(existing.TopologyManifestId, out var sourceHub) && sourceHub == relatedHubId)
+        if (_topologyManifestHubs.TryGetValue(existing.TopologyManifestId, out var sourceHub) && sourceHub == targetHub)
             return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
-                (new HubNavigationLifecycleResponseDto(false, null, "error", "Self-loop: related_hub_id cannot equal source hub_id.", "SELF_LOOP"), null));
+                (new HubNavigationLifecycleResponseDto(false, null, "error", SelfLoopMessage, "SELF_LOOP"), null));
 
-        _hubRelations[idx] = (existing.HubRelationId, existing.TopologyManifestId, relatedHubId, existing.SequencePosition, "active");
+        _hubRelations[idx] = (existing.HubRelationId, existing.TopologyManifestId, targetTopologyManifestId, targetHub, existing.SequencePosition, "active");
         return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
             (new HubNavigationLifecycleResponseDto(true, hubRelationId.ToString(), "active", "Hub relation updated."), null));
     }
@@ -419,7 +427,7 @@ internal class InMemoryContentBundleRepository : ContentBundleRepository
                     "would leave the manifest with zero active hub relations (navigation orphan).",
                     "HUB_RELATION_LAST_ACTIVE_FOR_MANIFEST"), null));
 
-        _hubRelations[idx] = (existing.HubRelationId, existing.TopologyManifestId, existing.RelatedHubId, existing.SequencePosition, "deprecated");
+        _hubRelations[idx] = existing with { Status = "deprecated" };
         return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
             (new HubNavigationLifecycleResponseDto(true, hubRelationId.ToString(), "deprecated", "Hub relation deprecated."), null));
     }
@@ -441,17 +449,17 @@ internal class InMemoryContentBundleRepository : ContentBundleRepository
     public override Task<IReadOnlyList<HubNavigationSequenceItemDto>> LoadHubNavigationSequenceAsync(
         Guid topologyManifestId, CancellationToken ct = default)
     {
+        // Same rule as the production SQL: the target is the row's own target_topology_manifest_id,
+        // resolved only while that manifest exists and is active -- never inferred from RelatedHubId.
         var items = _hubRelations
             .Where(hr => hr.Status == "active" && hr.TopologyManifestId == topologyManifestId)
             .OrderBy(hr => hr.SequencePosition)
             .Select(hr =>
             {
-                var manifestsForHub = _topologyManifestHubs
-                    .Where(kv => kv.Value == hr.RelatedHubId)
-                    .Select(kv => kv.Key)
-                    .ToList();
-                var targetManifestId = manifestsForHub.Count == 1
-                    ? manifestsForHub[0].ToString()
+                var target = hr.TargetTopologyManifestId;
+                var targetManifestId = target is { } t &&
+                    _topologyManifestHubs.ContainsKey(t) && !_inactiveTopologyManifests.Contains(t)
+                    ? t.ToString()
                     : null;
                 return new HubNavigationSequenceItemDto(
                     hr.HubRelationId.ToString(),
@@ -493,7 +501,7 @@ internal class InMemoryContentBundleRepository : ContentBundleRepository
         {
             var idx = _hubRelations.FindIndex(hr => hr.HubRelationId == item.HubRelationId && hr.Status == "active");
             var existing = _hubRelations[idx];
-            _hubRelations[idx] = (existing.HubRelationId, existing.TopologyManifestId, existing.RelatedHubId, item.NewSequencePosition, "active");
+            _hubRelations[idx] = existing with { SequencePosition = item.NewSequencePosition, Status = "active" };
         }
 
         return Task.FromResult<(HubNavigationReorderResponseDto, ValidationError?)>(

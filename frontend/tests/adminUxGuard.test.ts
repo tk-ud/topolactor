@@ -2567,11 +2567,14 @@ Deno.test("NodeEventAuthoringPanel: admin_runtime dispatch override is authored 
   assert(uiBuilderSrc.includes("onCommitDispatchOverrides="));
 });
 
-Deno.test("HubNavigationAdmin: destination picker uses page label not raw hub id", async () => {
+Deno.test("HubNavigationAdmin: destination picker selects a target manifest by page label, never a target hub", async () => {
   const src = await Deno.readTextFile(
     new URL("../islands/HubNavigationAdmin.tsx", import.meta.url),
   );
   assert(src.includes("UX_HUB_NAV_DESTINATION_LABEL"));
-  assert(src.includes("hubDestinationPickerOptions"));
-  assert(src.includes("hubDestinationOptionLabel"));
+  assert(src.includes("hubNavigationTargetManifestOptions"));
+  // docs/design/db-schema.yaml hub_relations.target_reference_canonical_contract
+  // .write_path_legacy_mirror_contract: no separate target-hub selection path may remain.
+  assertFalse(src.includes("listContentHubs"));
+  assertFalse(src.includes("relatedHubId"));
 });

@@ -84,8 +84,16 @@ public abstract class ContentBundleRepository
     // Hub Navigation methods
     public abstract Task<IReadOnlyList<HubNavigationManifestItemDto>> ListTopologyManifestsAsync(CancellationToken ct = default);
     public abstract Task<IReadOnlyList<HubNavigationHubRelationItemDto>> ListHubRelationsByManifestAsync(Guid topologyManifestId, CancellationToken ct = default);
-    public abstract Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> CreateHubRelationAsync(Guid topologyManifestId, Guid relatedHubId, int sequencePosition, CancellationToken ct = default);
-    public abstract Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> UpdateHubRelationAsync(Guid hubRelationId, Guid relatedHubId, CancellationToken ct = default);
+    /// <summary>
+    /// hub_navigation:create / hub_navigation:update write path (docs/design/db-schema.yaml
+    /// hub_relations.target_reference_canonical_contract.write_path_legacy_mirror_contract):
+    /// targetTopologyManifestId is the only caller-selected target. The implementation loads that
+    /// manifest and writes its own hub_id to related_hub_id in the same write as a legacy mirror.
+    /// SELF_LOOP stays the existing Hub-identity check (source manifest hub_id == target manifest
+    /// hub_id), per self_loop_authoring_guard_relationship -- not narrowed to Manifest identity.
+    /// </summary>
+    public abstract Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> CreateHubRelationAsync(Guid topologyManifestId, Guid targetTopologyManifestId, int sequencePosition, CancellationToken ct = default);
+    public abstract Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> UpdateHubRelationAsync(Guid hubRelationId, Guid targetTopologyManifestId, CancellationToken ct = default);
     public abstract Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> DeprecateHubRelationAsync(Guid hubRelationId, CancellationToken ct = default);
     public abstract Task<IReadOnlyList<HubNavigationSequenceItemDto>> LoadHubNavigationSequenceAsync(Guid topologyManifestId, CancellationToken ct = default);
     public abstract Task<(HubNavigationReorderResponseDto Response, ValidationError? Error)> ReorderHubRelationsAsync(Guid topologyManifestId, IReadOnlyList<(Guid HubRelationId, int NewSequencePosition)> items, CancellationToken ct = default);
@@ -125,12 +133,13 @@ public abstract class ContentBundleRepository
 
     /// <summary>
     /// production_projection_connectivity_invariant (docs/design/db-schema.yaml
-    /// hub_relations.minimum_cardinality_completion_invariant): true only when
-    /// topologyManifestId has at least one hub_relations row that is both status='active' AND
-    /// resolves to exactly one active target topology_manifest -- the same resolution semantics
-    /// LoadHubNavigationSequenceAsync already applies (reused here, not duplicated as a separate
-    /// COUNT-only query, per the reusable-abstraction-first rule: zero relations, deprecated-only
-    /// relations, and an active-but-unresolvable-target relation all correctly evaluate to false).
+    /// hub_relations.minimum_cardinality_completion_invariant.canonical_forward_resolvability_definition):
+    /// true only when topologyManifestId has at least one hub_relations row that is both
+    /// status='active' AND whose target_topology_manifest_id names an active topology_manifest -- the
+    /// same resolution semantics LoadHubNavigationSequenceAsync already applies (reused here, not
+    /// duplicated as a separate COUNT-only query, per the reusable-abstraction-first rule: zero
+    /// relations, deprecated-only relations, and an active relation whose target is missing or not
+    /// active all correctly evaluate to false).
     /// </summary>
     public virtual async Task<bool> HasResolvableActiveHubRelationAsync(
         Guid topologyManifestId, CancellationToken ct = default)

@@ -691,7 +691,8 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         cmd.CommandText =
             "SELECT hr.hub_relation_id::text, hr.topology_manifest_id::text, " +
             "       hr.related_hub_id::text, COALESCE(rr.name, hr.related_hub_id::text), " +
-            "       hr.sequence_position, hr.relation_config::text, hr.status " +
+            "       hr.sequence_position, hr.relation_config::text, hr.status, " +
+            "       hr.target_topology_manifest_id::text " +
             "FROM hubs.hub_relations hr " +
             "LEFT JOIN hubs.hub h ON h.hub_id = hr.related_hub_id " +
             "LEFT JOIN topology.relation_registry rr ON rr.relation_registry_id = h.relation_registry_id " +
@@ -707,48 +708,49 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
                 reader.GetString(0), reader.GetString(1), reader.GetString(2),
                 reader.GetString(3), reader.GetInt32(4),
                 reader.IsDBNull(5) ? null : reader.GetString(5),
-                reader.GetString(6)));
+                reader.GetString(6),
+                reader.IsDBNull(7) ? null : reader.GetString(7)));
         }
         return items;
     }
 
     public override async Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> CreateHubRelationAsync(
-        Guid topologyManifestId, Guid relatedHubId, int sequencePosition, CancellationToken ct = default)
+        Guid topologyManifestId, Guid targetTopologyManifestId, int sequencePosition, CancellationToken ct = default)
     {
         await using var conn = await OpenAsync(ct);
 
-        await using var checkManifest = conn.CreateCommand();
-        checkManifest.CommandText = "SELECT COUNT(*)::int FROM hubs.topology_manifests WHERE topology_manifest_id = @mid";
-        checkManifest.Parameters.AddWithValue("mid", topologyManifestId);
-        if ((int)(await checkManifest.ExecuteScalarAsync(ct) ?? 0) == 0)
+        var sourceHubId = await LoadTopologyManifestHubIdAsync(conn, topologyManifestId, ct);
+        if (sourceHubId is null)
             return (new HubNavigationLifecycleResponseDto(false, null, "error", "Manifest not found.", "MANIFEST_NOT_FOUND"), null);
 
-        await using var checkHub = conn.CreateCommand();
-        checkHub.CommandText = "SELECT COUNT(*)::int FROM hubs.hub WHERE hub_id = @hid";
-        checkHub.Parameters.AddWithValue("hid", relatedHubId);
-        if ((int)(await checkHub.ExecuteScalarAsync(ct) ?? 0) == 0)
-            return (new HubNavigationLifecycleResponseDto(false, null, "error", "Related hub not found.", "HUB_NOT_FOUND"), null);
+        var targetHubId = await LoadTopologyManifestHubIdAsync(conn, targetTopologyManifestId, ct);
+        if (targetHubId is null)
+            return (new HubNavigationLifecycleResponseDto(false, null, "error", "Target manifest not found.", "TARGET_MANIFEST_NOT_FOUND"), null);
 
-        await using var getSourceHub = conn.CreateCommand();
-        getSourceHub.CommandText = "SELECT hub_id::text FROM hubs.topology_manifests WHERE topology_manifest_id = @mid LIMIT 1";
-        getSourceHub.Parameters.AddWithValue("mid", topologyManifestId);
-        var sourceHubStr = (string?)await getSourceHub.ExecuteScalarAsync(ct);
-        if (sourceHubStr is not null && Guid.TryParse(sourceHubStr, out var sourceHubGuid) && sourceHubGuid == relatedHubId)
-            return (new HubNavigationLifecycleResponseDto(false, null, "error", "Self-loop: related_hub_id cannot equal source hub_id.", "SELF_LOOP"), null);
+        // Existing Hub-identity SELF_LOOP guard (db-schema.yaml
+        // target_reference_canonical_contract.self_loop_authoring_guard_relationship): compares the
+        // source manifest's hub_id with the hub_id the write path derives for related_hub_id.
+        if (sourceHubId.Value == targetHubId.Value)
+            return (new HubNavigationLifecycleResponseDto(false, null, "error", SelfLoopMessage, "SELF_LOOP"), null);
 
+        // related_hub_id is derived from the target manifest's own hub_id inside the same statement
+        // (legacy compatibility mirror), never taken from the caller.
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "INSERT INTO hubs.hub_relations " +
-            "    (topology_manifest_id, related_hub_id, sequence_position, relation_config, status) " +
-            "VALUES (@mid, @hid, @seq, '{}'::jsonb, 'active') " +
+            "    (topology_manifest_id, target_topology_manifest_id, related_hub_id, sequence_position, relation_config, status) " +
+            "SELECT @mid, tm.topology_manifest_id, tm.hub_id, @seq, '{}'::jsonb, 'active' " +
+            "FROM hubs.topology_manifests tm WHERE tm.topology_manifest_id = @tid " +
             "RETURNING hub_relation_id::text";
         cmd.Parameters.AddWithValue("mid", topologyManifestId);
-        cmd.Parameters.AddWithValue("hid", relatedHubId);
+        cmd.Parameters.AddWithValue("tid", targetTopologyManifestId);
         cmd.Parameters.AddWithValue("seq", sequencePosition);
 
         try
         {
             var resultId = (string?)await cmd.ExecuteScalarAsync(ct);
+            if (resultId is null)
+                return (new HubNavigationLifecycleResponseDto(false, null, "error", "Target manifest not found.", "TARGET_MANIFEST_NOT_FOUND"), null);
             return (new HubNavigationLifecycleResponseDto(true, resultId, "active", "Hub relation created."), null);
         }
         catch (Exception ex) when (ex.Message.Contains("unique") || ex.Message.Contains("duplicate"))
@@ -759,39 +761,53 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
     }
 
     public override async Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> UpdateHubRelationAsync(
-        Guid hubRelationId, Guid relatedHubId, CancellationToken ct = default)
+        Guid hubRelationId, Guid targetTopologyManifestId, CancellationToken ct = default)
     {
         await using var conn = await OpenAsync(ct);
-        await using var checkHub = conn.CreateCommand();
-        checkHub.CommandText = "SELECT 1 FROM hubs.hub WHERE hub_id = @hid LIMIT 1";
-        checkHub.Parameters.AddWithValue("hid", relatedHubId);
-        if (await checkHub.ExecuteScalarAsync(ct) is null)
-            return (new HubNavigationLifecycleResponseDto(false, null, "error", "Related hub not found.", "HUB_NOT_FOUND"), null);
+
+        var targetHubId = await LoadTopologyManifestHubIdAsync(conn, targetTopologyManifestId, ct);
+        if (targetHubId is null)
+            return (new HubNavigationLifecycleResponseDto(false, null, "error", "Target manifest not found.", "TARGET_MANIFEST_NOT_FOUND"), null);
 
         await using var getSourceHub = conn.CreateCommand();
         getSourceHub.CommandText =
-            "SELECT tm.hub_id::text FROM hubs.hub_relations hr " +
+            "SELECT tm.hub_id FROM hubs.hub_relations hr " +
             "JOIN hubs.topology_manifests tm ON tm.topology_manifest_id = hr.topology_manifest_id " +
             "WHERE hr.hub_relation_id = @id LIMIT 1";
         getSourceHub.Parameters.AddWithValue("id", hubRelationId);
-        var sourceHubStr = (string?)await getSourceHub.ExecuteScalarAsync(ct);
-        if (sourceHubStr is not null && Guid.TryParse(sourceHubStr, out var sourceHubGuid) && sourceHubGuid == relatedHubId)
-            return (new HubNavigationLifecycleResponseDto(false, null, "error", "Self-loop: related_hub_id cannot equal source hub_id.", "SELF_LOOP"), null);
+        if (await getSourceHub.ExecuteScalarAsync(ct) is Guid sourceHubId && sourceHubId == targetHubId.Value)
+            return (new HubNavigationLifecycleResponseDto(false, null, "error", SelfLoopMessage, "SELF_LOOP"), null);
 
+        // Re-points the canonical target and re-derives the legacy mirror in the same write. Also the
+        // explicit admin remediation path for a transition-window row whose target is still NULL
+        // (legacy_ambiguous_row_migration_disposition (4)).
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "UPDATE hubs.hub_relations " +
-            "SET related_hub_id = @hid, updated_at = now() " +
-            "WHERE hub_relation_id = @id AND status = 'active' " +
-            "RETURNING hub_relation_id::text";
+            "UPDATE hubs.hub_relations hr " +
+            "SET target_topology_manifest_id = tm.topology_manifest_id, related_hub_id = tm.hub_id, updated_at = now() " +
+            "FROM hubs.topology_manifests tm " +
+            "WHERE tm.topology_manifest_id = @tid AND hr.hub_relation_id = @id AND hr.status = 'active' " +
+            "RETURNING hr.hub_relation_id::text";
         cmd.Parameters.AddWithValue("id", hubRelationId);
-        cmd.Parameters.AddWithValue("hid", relatedHubId);
+        cmd.Parameters.AddWithValue("tid", targetTopologyManifestId);
 
         var resultId = (string?)await cmd.ExecuteScalarAsync(ct);
         if (resultId is null)
             return (new HubNavigationLifecycleResponseDto(false, hubRelationId.ToString(), "error",
                 "Hub relation not found or not active.", "HUB_RELATION_NOT_FOUND"), null);
         return (new HubNavigationLifecycleResponseDto(true, resultId, "active", "Hub relation updated."), null);
+    }
+
+    private const string SelfLoopMessage =
+        "Self-loop: the target manifest's hub_id (derived related_hub_id) cannot equal the source manifest's hub_id.";
+
+    private static async Task<Guid?> LoadTopologyManifestHubIdAsync(
+        NpgsqlConnection conn, Guid topologyManifestId, CancellationToken ct)
+    {
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT hub_id FROM hubs.topology_manifests WHERE topology_manifest_id = @mid";
+        cmd.Parameters.AddWithValue("mid", topologyManifestId);
+        return await cmd.ExecuteScalarAsync(ct) is Guid hubId ? hubId : null;
     }
 
     public override async Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> DeprecateHubRelationAsync(
@@ -818,7 +834,7 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         // every hubs.topology_manifests row must retain at least one active hub_relations row.
         // Deprecating the last one would regress an already-connected topology_manifest into a
         // navigation orphan, so it fails closed here rather than silently allowed. hub_navigation:update
-        // (in-place relatedHubId replacement) and hub_navigation:reorder never reduce the active count,
+        // (in-place target re-point) and hub_navigation:reorder never reduce the active count,
         // so this is the only existing mutation that can zero it out.
         await using (var countCmd = conn.CreateCommand())
         {
@@ -940,24 +956,21 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
     {
         await using var conn = await OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
-        // target_manifest_id: correlated subquery groups ACTIVE hubs.topology_manifests rows
-        // for the related hub and only returns a row when there is exactly one active manifest
-        // — HAVING COUNT(*) = 1 yields NULL (no fallback) when zero or multiple active
-        // manifests are registered for that hub. status='active' is required in the WHERE
-        // clause: a deprecated/inactive manifest must never be resolved as a navigable target,
-        // and a hub with one active + any number of deprecated manifests must still resolve to
-        // the single active one (not become ambiguous because of deprecated siblings).
+        // target_manifest_id: the row's own target_topology_manifest_id, returned only while that
+        // referenced hubs.topology_manifests row has status='active' (docs/design/db-schema.yaml
+        // hub_relations.target_reference_canonical_contract.canonical_target_resolution_rule) -- a
+        // direct FK existence+status check, never an inference over the related hub's manifests, and
+        // never a first-match/oldest fallback. A draft/deprecated target, or (legacy transition window
+        // only) a NULL target, resolves to NULL. related_hub_id is read only as the legacy mirror behind
+        // the display label, never to choose the target.
         cmd.CommandText =
             "SELECT hr.hub_relation_id::text, " +
             "       hr.related_hub_id::text, " +
             "       COALESCE(rr.name, hr.related_hub_id::text), " +
             "       hr.sequence_position, " +
-            "       (SELECT MIN(tm2.topology_manifest_id::text) " +
-            "        FROM hubs.topology_manifests tm2 " +
-            "        WHERE tm2.hub_id = hr.related_hub_id AND tm2.status = 'active' " +
-            "        GROUP BY tm2.hub_id " +
-            "        HAVING COUNT(*) = 1) AS target_manifest_id " +
+            "       CASE WHEN ttm.status = 'active' THEN ttm.topology_manifest_id::text END AS target_manifest_id " +
             "FROM hubs.hub_relations hr " +
+            "LEFT JOIN hubs.topology_manifests ttm ON ttm.topology_manifest_id = hr.target_topology_manifest_id " +
             "LEFT JOIN hubs.hub h ON h.hub_id = hr.related_hub_id " +
             "LEFT JOIN topology.relation_registry rr ON rr.relation_registry_id = h.relation_registry_id " +
             "WHERE hr.topology_manifest_id = @mid AND hr.status = 'active' " +

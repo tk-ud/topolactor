@@ -260,9 +260,11 @@ export type PropBinding = {
  * One entry in the manifest-scoped hub_relations navigation sequence ("current hub relation"
  * candidates) — hubs.hub_relations owns manifest-scoped hub sequence / UI transition order
  * (docs/design/db-schema.yaml manifest_hub_chain), not a global hub-to-hub relation graph.
- * targetManifestId is resolved backend-side only when exactly one active topology_manifest is
- * registered under relatedHubId (no implicit oldest/first-match fallback) — absent/null means
- * "not directly callable", never a guessed target.
+ * targetManifestId is the relation's own target_topology_manifest_id, resolved backend-side only
+ * while that manifest is active (docs/design/db-schema.yaml
+ * hub_relations.target_reference_canonical_contract; no implicit oldest/first-match fallback) —
+ * absent/null means "not directly callable", never a guessed target. relatedHubId /
+ * relatedHubLabel are the legacy hub mirror and its display label.
  * hubRelationId (the hubs.hub_relations row's own id) and topologyManifestId (the source manifest
  * this sequence was resolved for) satisfy
  * docs/design/admin-normal-surface-projection-seed-ssot.yaml

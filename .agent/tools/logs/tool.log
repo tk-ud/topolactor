@@ -136,3 +136,4 @@
 2026-09-29T09:54:14Z dc939a1e-2754-45b4-a21b-869cd99ceb9c hub-relation-two-goal-fresh-pr design_change
 2026-09-29T10:39:47Z bd3fa843-09a6-470d-a87e-2b8fde484c38 hub-relation-two-goal-followup-fix design_change
 2026-09-29T13:21:59Z 9c1dc11e-cad2-42b7-bbb2-0977ca4d84a0 hub-relation-mirror-freshness-status-scope-fix design_change
+2026-09-30T02:07:50Z d7c203e9-c100-4286-82e3-ebaf88e09e53 hub-relation-target-manifest-canonical-migration implementation_change

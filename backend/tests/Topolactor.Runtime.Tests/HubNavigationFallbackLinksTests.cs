@@ -79,8 +79,8 @@ public class HubNavigationFallbackLinksTests
         var adminTargetManifestId = Guid.NewGuid();
 
         repo.CanonicalDefaultEntryManifestId = manifestId;
-        repo.AddHubRelation(Guid.NewGuid(), manifestId, publicHubId, 1);
-        repo.AddHubRelation(Guid.NewGuid(), manifestId, adminHubId, 2);
+        repo.AddHubRelation(Guid.NewGuid(), manifestId, publicTargetManifestId, publicHubId, 1);
+        repo.AddHubRelation(Guid.NewGuid(), manifestId, adminTargetManifestId, adminHubId, 2);
         repo.AddTopologyManifestHub(publicTargetManifestId, publicHubId);
         repo.AddTopologyManifestHub(adminTargetManifestId, adminHubId);
 
@@ -104,15 +104,18 @@ public class HubNavigationFallbackLinksTests
     [Fact]
     public async Task RelationWithNoResolvableTargetManifest_IsExcluded_NotNavigable()
     {
-        // related_hub_id has zero or multiple active topology_manifests -> TargetManifestId is
-        // null (per LoadHubNavigationSequenceAsync's no_implicit_fallback contract). A link with no
-        // navigable target is not useful in a navigation link list and must not be included.
+        // A legacy transition-window row whose target_topology_manifest_id is still NULL (its
+        // related_hub_id had zero or multiple active manifests, so the migration left it
+        // unresolved) -> TargetManifestId is null (LoadHubNavigationSequenceAsync never infers a
+        // target from related_hub_id). A link with no navigable target is not useful in a
+        // navigation link list and must not be included.
         var repo = new InMemoryContentBundleRepository();
         var manifestId = Guid.NewGuid();
         var orphanHubId = Guid.NewGuid();
         repo.CanonicalDefaultEntryManifestId = manifestId;
-        repo.AddHubRelation(Guid.NewGuid(), manifestId, orphanHubId, 1);
-        // Deliberately do not register any topology_manifest for orphanHubId.
+        repo.AddHubRelation(Guid.NewGuid(), manifestId, targetTopologyManifestId: null, orphanHubId, 1);
+        // Even a single active topology_manifest under that hub must not be picked up by inference.
+        repo.AddTopologyManifestHub(Guid.NewGuid(), orphanHubId);
 
         var resolver = new HubNavigationResolver(repo, new RoleGatedFakeManifestRepository());
 
@@ -125,8 +128,8 @@ public class HubNavigationFallbackLinksTests
     public async Task RelationWithNonNullTargetManifestIdButNoSuchManifestRow_IsExcluded_FailClosed()
     {
         // Distinct from the above: here TargetManifestId itself resolves to a non-null GUID (the
-        // hub_navigation sequence layer found exactly one topology_manifest registered under the
-        // related hub), but that manifest id names a row the ManifestRepository does not actually
+        // relation's target_topology_manifest_id names an active topology_manifest row), but that
+        // manifest id names a row the ManifestRepository does not actually
         // have (ManifestRepository.LoadByIdAsync returns null — e.g. deleted/never-created row).
         // This must fail closed exactly like a null TargetManifestId, never be treated as "no
         // capability_requirement resolvable therefore visible to every caller".
@@ -135,7 +138,7 @@ public class HubNavigationFallbackLinksTests
         var relatedHubId = Guid.NewGuid();
         var danglingTargetManifestId = Guid.NewGuid();
         repo.CanonicalDefaultEntryManifestId = manifestId;
-        repo.AddHubRelation(Guid.NewGuid(), manifestId, relatedHubId, 1);
+        repo.AddHubRelation(Guid.NewGuid(), manifestId, danglingTargetManifestId, relatedHubId, 1);
         repo.AddTopologyManifestHub(danglingTargetManifestId, relatedHubId);
 
         var manifestRepo = new RoleGatedFakeManifestRepository();
@@ -200,7 +203,7 @@ public class HubNavigationFallbackLinksTests
         var relatedHubId = Guid.NewGuid();
         var targetManifestId = Guid.NewGuid();
         repo.CanonicalDefaultEntryManifestId = manifestId;
-        repo.AddHubRelation(Guid.NewGuid(), manifestId, relatedHubId, 1);
+        repo.AddHubRelation(Guid.NewGuid(), manifestId, targetManifestId, relatedHubId, 1);
         repo.AddTopologyManifestHub(targetManifestId, relatedHubId);
 
         var manifestRepo = new RoleGatedFakeManifestRepository();
@@ -222,7 +225,7 @@ public class HubNavigationFallbackLinksTests
         var relatedHubId = Guid.NewGuid();
         var targetManifestId = Guid.NewGuid();
         repo.CanonicalDefaultEntryManifestId = manifestId;
-        repo.AddHubRelation(Guid.NewGuid(), manifestId, relatedHubId, 1);
+        repo.AddHubRelation(Guid.NewGuid(), manifestId, targetManifestId, relatedHubId, 1);
         repo.AddTopologyManifestHub(targetManifestId, relatedHubId);
 
         var manifestRepo = new RoleGatedFakeManifestRepository();

@@ -55,6 +55,7 @@ public class HubNavigationDeprecateOrphanGuardTests
         repo.AddHubRelation(
             secondRelationId,
             InMemoryContentBundleRepository.FixtureTopologyManifestId,
+            InMemoryContentBundleRepository.FixtureRelatedHubManifestId,
             InMemoryContentBundleRepository.FixtureRelatedHubId,
             2);
         var runtime = CreateRuntime(repo);
@@ -87,7 +88,7 @@ public class HubNavigationDeprecateOrphanGuardTests
         var otherManifestId = Guid.NewGuid();
         var otherRelationId = Guid.NewGuid();
         var otherHubId = Guid.NewGuid();
-        repo.AddHubRelation(otherRelationId, otherManifestId, otherHubId, 1);
+        repo.AddHubRelation(otherRelationId, otherManifestId, InMemoryContentBundleRepository.FixtureRelatedHubManifestId, otherHubId, 1);
         var runtime = CreateRuntime(repo);
 
         var payload = JsonSerializer.SerializeToElement(new { hubRelationId = otherRelationId.ToString() });

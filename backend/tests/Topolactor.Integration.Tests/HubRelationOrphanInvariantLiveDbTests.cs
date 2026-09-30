@@ -12,7 +12,7 @@ namespace Topolactor.Integration.Tests;
 /// at least one active hub_relations row. The canonical fail-close boundary for this invariant is
 /// hub_navigation:deprecate (NpgsqlContentBundleRepository.DeprecateHubRelationAsync) — the only
 /// existing mutation that can reduce a topology_manifest's active hub_relations count
-/// (hub_navigation:update replaces relatedHubId in place; hub_navigation:reorder never changes
+/// (hub_navigation:update re-points the target in place; hub_navigation:reorder never changes
 /// status). This file proves the guard through the REAL hub_navigation:deprecate dispatch path
 /// against a real database, and that the resolution chain (Emission.NavigationSequence) reflects
 /// the DB state correctly in both the blocked and successful cases — not merely that the dispatch
@@ -68,7 +68,7 @@ public class HubRelationOrphanInvariantLiveDbTests
             var createPayload = JsonSerializer.SerializeToElement(new
             {
                 topologyManifestId = sourceManifestId.ToString(),
-                relatedHubId = targetHubId.ToString(),
+                targetTopologyManifestId = targetManifestId.ToString(),
                 sequencePosition = 1,
             });
             var createResponse = await dispatcher.DispatchAsync(new EndpointRequestDto(
@@ -170,12 +170,12 @@ public class HubRelationOrphanInvariantLiveDbTests
 
             var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
 
-            async Task<Guid> CreateRelationAsync(Guid relatedHubId, int seq)
+            async Task<Guid> CreateRelationAsync(Guid targetManifestId, int seq)
             {
                 var payload = JsonSerializer.SerializeToElement(new
                 {
                     topologyManifestId = sourceManifestId.ToString(),
-                    relatedHubId = relatedHubId.ToString(),
+                    targetTopologyManifestId = targetManifestId.ToString(),
                     sequencePosition = seq,
                 });
                 var response = await dispatcher.DispatchAsync(new EndpointRequestDto(
@@ -186,8 +186,8 @@ public class HubRelationOrphanInvariantLiveDbTests
                 return Guid.Parse(response.Emission!.Data!.Value.GetProperty("hubRelationId").GetString()!);
             }
 
-            var relationId1 = await CreateRelationAsync(targetHubId1, 1);
-            _ = await CreateRelationAsync(targetHubId2, 2);
+            var relationId1 = await CreateRelationAsync(targetManifestId1, 1);
+            _ = await CreateRelationAsync(targetManifestId2, 2);
 
             // Deprecating ONE of two active relations must succeed -- the manifest still has an
             // active relation remaining.
@@ -216,7 +216,7 @@ public class HubRelationOrphanInvariantLiveDbTests
             // Only the surviving relation (targetHubId2) is in the resolution chain now -- the
             // deprecated one (targetHubId1) must not appear.
             Assert.DoesNotContain(
-                rereadResponse.Emission!.NavigationSequence!, i => i.RelatedHubId == targetHubId1.ToString());
+                rereadResponse.Emission!.NavigationSequence!, i => i.HubRelationId == relationId1.ToString());
             HubRelationUiProjectionResolutionChainProof.AssertNavigationSequenceResolvesHubVector(
                 rereadResponse.Emission!,
                 sourceManifestId,

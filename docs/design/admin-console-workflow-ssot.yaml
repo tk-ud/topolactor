@@ -99,26 +99,24 @@ admin_console_workflow_ssot:
         defined anywhere in this SSOT family and are explicitly out of this Bundle's scope; a future
         dedicated Bundle would need its own SSOT authority if that need ever arises.
     resolution_rule: >-
-      CURRENT implementation (unchanged by canonical_forward_target_reference below, and still
-      an accurate description of production today), identical, non-negotiable rule as
-      docs/design/runtime-orchestration-ssot.yaml
-      dispatcher_contract.hub_navigation_resolution.target_manifest_resolution: a related_hub_id
-      resolves to a target manifest only when exactly one active hubs.topology_manifests row
-      exists for it. Zero or multiple active rows resolve to no target (null), never a
-      first-match/oldest/MIN implicit fallback. Source topology_manifest, related hub, and
-      sequence_position must each be explicit; only active relations and active target manifests
-      are reachable.
+      Identical, non-negotiable rule as docs/design/runtime-orchestration-ssot.yaml
+      dispatcher_contract.hub_navigation_resolution.target_manifest_resolution (updated in place
+      when canonical_forward_target_reference below was implemented): a relation's target is its
+      own target_topology_manifest_id, reachable only while that manifest is active; a missing or
+      non-active target resolves to no target (null), never a
+      first-match/oldest/MIN implicit fallback and never an inference over related_hub_id.
+      Source topology_manifest, target manifest, and sequence_position must each be explicit;
+      only active relations and active target manifests are reachable.
     canonical_forward_target_reference: >-
-      Owner canonical redesign (design_change, no SQL DDL/backend/frontend/test change yet):
       docs/design/db-schema.yaml hub_relations.target_reference_canonical_contract is the sole
-      canonical forward definition -- a direct target_topology_manifest_id FK the admin selects,
-      replacing the related-hub inference resolution_rule above describes. A future
-      implementation_change extends the authoring surface above so the admin picks a target
-      MANIFEST directly (reusing the same existing "list every hubs.topology_manifests row"
-      mechanism ManifestsAdmin.tsx already uses for SOURCE selection -- see authoring.surface
-      above; no new picker UI concept), instead of picking a target Hub via related_hub_id. Once
-      implemented, resolution_rule above is updated in place to match rather than kept as a
-      second, independently-drifting description.
+      canonical definition -- a direct target_topology_manifest_id FK the admin selects, which
+      replaced the former related-hub inference. Implemented: HubNavigationAdmin.tsx's
+      destination picker lists target MANIFESTS from the same hub_navigation:list_manifests rows
+      it already uses for SOURCE selection (lib/hubNavigationPicker.ts
+      hubNavigationTargetManifestOptions; no new picker UI concept) and hub_navigation:create/update
+      send payload.targetTopologyManifestId only -- the target Hub picker (content_bundle:list_hubs)
+      and payload.relatedHubId are gone, related_hub_id being derived backend-side. resolution_rule
+      above was updated in place to match.
     connection_state_authority: >-
       Whether any specific hubs.hub_relations row currently exists between two manifests is
       runtime/admin data, observed via /admin/manifests (HubNavigationAdmin.tsx) or a direct
@@ -158,28 +156,34 @@ admin_console_workflow_ssot:
         backend/tests/Topolactor.Integration.Tests/AdminEnumHubRelationUiProjectionLiveDbTests.cs
         DispatchAsync_AdminEnumManagementManifest_HubNavigationCreate_RealAuthoringPath_ThenResolutionChainReflectsIt
         (a real hub_navigation:create dispatch, never a raw SQL insert, with the full
-        resolution_chain reaching ae200's own real seed rows). This design_change's Goal 1 is not
-        "make the mechanism work" -- it already does -- but "author the production row": no
-        hubs.hub_relations row in db/seed_empty.sql currently names ae200 as a target from any
-        Admin-axis source, so no Admin surface a caller might actually be standing on (starting
-        with 00000000-0000-0000-0000-000000000092, auth.external.credential_management.projection,
-        this Bundle's originally-reported symptom) can reach it today. Closing this is the ordinary
-        hub_navigation:create authoring pattern applied as a permanent db/seed_empty.sql addition on
-        a future implementation_change (docs/design/db-schema.yaml bootstrap_policy: standard
-        operational method is a fresh docker-compose-v bootstrap, migration_policy retired, so the
-        row must be a canonical seed row surviving that bootstrap, not only an ephemeral row a
-        live-DB test creates and rolls back): 092 authors its OWN outbound hubs.hub_relations row to
-        ae200, at the next available sequence_position for 092 -- using the identical, already-proven
-        mechanism above, not a new one. HubNavigationResolver.
+        resolution_chain reaching ae200's own real seed rows). Goal 1 of Bundle
+        hub-relation-target-manifest-canonical-migration was not "make the mechanism work" -- it
+        already did -- but "author the production row": before it, no hubs.hub_relations row in
+        db/seed_empty.sql named ae200 as a target from any Admin-axis source, so the originally
+        reported Admin surface (00000000-0000-0000-0000-000000000092,
+        auth.external.credential_management.projection) could not reach it. Closed as the ordinary
+        hub_navigation:create authoring pattern applied as a permanent db/seed_empty.sql row
+        (docs/design/db-schema.yaml bootstrap_policy: standard operational method is a fresh
+        docker-compose-v bootstrap, migration_policy retired, so the row is a canonical seed row
+        surviving that bootstrap, not only an ephemeral row a live-DB test creates and rolls back):
+        092 authors its OWN outbound hubs.hub_relations row 00000000-0000-0000-0000-0000000ae2b1 to
+        ae200 (target_topology_manifest_id=ae200, derived related_hub_id=ae201) at
+        sequence_position=2, the next available position for 092 -- using the identical,
+        already-proven mechanism above, not a new one. The nav-bar link label reuses the same
+        relation_registry label mechanism 092's own hub uses (relation_registry
+        00000000-0000-0000-0000-0000000ae207 on hub ae201, named after ae200's authored projection
+        root label "Enum dictionary management"). HubNavigationResolver.
         ResolveAsync -> ContentBundleRepository.LoadHubNavigationSequenceAsync(topologyManifestId)
         reads WHERE hr.topology_manifest_id = @mid only (source-scoped, forward-only, never another
         manifest's rows), so this authored row makes ae200 reachable from 092 specifically; any
         other existing Admin surface this Bundle's fixed scope requires the same jump from needs
         its own outbound row authored the same way -- no shared, reverse, or transitive-walk
-        mechanism is introduced to avoid this per-source authoring. Once authored, ae200 is directly
-        reachable in one click from 092's own rendered nav bar (frontend/islands/ProjectionShell.tsx's
-        existing resolveHubNavigationLinks over emission.navigationSequence, unmodified) -- no new
-        mechanism, field, table, endpoint, or UI component is introduced.
+        mechanism is introduced to avoid this per-source authoring. ae200 is directly reachable in
+        one click from 092's own rendered nav bar (frontend/islands/ProjectionShell.tsx's existing
+        resolveHubNavigationLinks over emission.navigationSequence, unmodified) -- no new
+        mechanism, field, table, endpoint, or UI component is introduced (proof:
+        HubRelationTargetManifestCanonicalMigrationLiveDbTests.cs +
+        frontend/tests/projectionShellHubNavigationRenderProof.test.ts).
       enum_dictionary: >-
         blocked — no per-screen ui_projection manifest exists yet for enum_dictionary (only
         per-action dispatcher_mapping-only manifests). 2026-07-18: the Bundle-level owner production

@@ -152,6 +152,13 @@ public record HubNavigationManifestItemDto(
     [property: JsonPropertyName("userFacingTopologyLabel")] string? UserFacingTopologyLabel = null
 );
 
+/// <summary>
+/// One /admin/manifests listing row (every status). TargetTopologyManifestId is the row's canonical
+/// target (docs/design/db-schema.yaml hub_relations.target_reference_canonical_contract) -- null only
+/// for a transition-window legacy row still awaiting explicit admin remediation. RelatedHubId /
+/// RelatedHubLabel are the legacy compatibility mirror (the target manifest's hub_id) and its display
+/// label, kept for this existing consumer; neither is a target-selection input.
+/// </summary>
 public record HubNavigationHubRelationItemDto(
     [property: JsonPropertyName("hubRelationId")] string HubRelationId,
     [property: JsonPropertyName("topologyManifestId")] string TopologyManifestId,
@@ -159,7 +166,8 @@ public record HubNavigationHubRelationItemDto(
     [property: JsonPropertyName("relatedHubLabel")] string RelatedHubLabel,
     [property: JsonPropertyName("sequencePosition")] int SequencePosition,
     [property: JsonPropertyName("relationConfig")] string? RelationConfig,
-    [property: JsonPropertyName("status")] string Status
+    [property: JsonPropertyName("status")] string Status,
+    [property: JsonPropertyName("targetTopologyManifestId")] string? TargetTopologyManifestId = null
 );
 
 public record HubNavigationLifecycleResponseDto(
@@ -174,15 +182,21 @@ public record HubNavigationGetRequestDto(
     [property: JsonPropertyName("topologyManifestId")] string TopologyManifestId
 );
 
+/// <summary>
+/// hub_navigation:create payload. TargetTopologyManifestId is the sole caller-selected target;
+/// related_hub_id is derived from that manifest's own hub_id by the write path, never a caller input
+/// (db-schema.yaml hub_relations.target_reference_canonical_contract.write_path_legacy_mirror_contract).
+/// </summary>
 public record HubNavigationCreateRequestDto(
     [property: JsonPropertyName("topologyManifestId")] string TopologyManifestId,
-    [property: JsonPropertyName("relatedHubId")] string RelatedHubId,
+    [property: JsonPropertyName("targetTopologyManifestId")] string TargetTopologyManifestId,
     [property: JsonPropertyName("sequencePosition")] int SequencePosition
 );
 
+/// <summary>hub_navigation:update payload -- same single-authority rule as HubNavigationCreateRequestDto.</summary>
 public record HubNavigationUpdateRequestDto(
     [property: JsonPropertyName("hubRelationId")] string HubRelationId,
-    [property: JsonPropertyName("relatedHubId")] string RelatedHubId
+    [property: JsonPropertyName("targetTopologyManifestId")] string TargetTopologyManifestId
 );
 
 public record HubNavigationDeprecateRequestDto(
@@ -190,12 +204,13 @@ public record HubNavigationDeprecateRequestDto(
 );
 
 /// <summary>
-/// TargetManifestId is the navigable topology_manifest under RelatedHubId, resolved only when
-/// exactly one active hubs.topology_manifests row exists for that hub — no implicit
-/// oldest/first-match fallback (mirrors topology.physical_table_manifest_bindings'
-/// no_implicit_join_nullable_fallback_or_oldest_manifest_fallback invariant). Null when zero or
-/// multiple manifests are registered under the related hub; callers must treat null as
-/// "not directly callable" rather than guessing a target.
+/// TargetManifestId is the row's hubs.hub_relations.target_topology_manifest_id, present only while
+/// that referenced hubs.topology_manifests row has status='active' (a direct FK existence+status
+/// check -- docs/design/db-schema.yaml hub_relations.target_reference_canonical_contract
+/// .canonical_target_resolution_rule). Null when the target manifest is not active or, during the
+/// legacy transition window only, when the row has no target yet; callers must treat null as
+/// "not directly callable" rather than guessing a target. RelatedHubId / RelatedHubLabel are the
+/// legacy hub mirror and its display label, never used to resolve the target.
 /// </summary>
 public record HubNavigationSequenceItemDto(
     [property: JsonPropertyName("hubRelationId")] string HubRelationId,

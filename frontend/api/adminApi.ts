@@ -1498,6 +1498,12 @@ export type HubNavigationManifestItem = {
   userFacingTopologyLabel?: string | null;
 };
 
+/**
+ * One /admin/manifests hub_relations row. targetTopologyManifestId is the canonical target
+ * (docs/design/db-schema.yaml hub_relations.target_reference_canonical_contract; null only for a
+ * legacy transition row awaiting remediation). relatedHubId / relatedHubLabel are the legacy hub
+ * mirror and its display label -- never a target-selection input.
+ */
 export type HubNavigationHubRelationItem = {
   hubRelationId: string;
   topologyManifestId: string;
@@ -1506,6 +1512,7 @@ export type HubNavigationHubRelationItem = {
   sequencePosition: number;
   relationConfig: string | null;
   status: string;
+  targetTopologyManifestId?: string | null;
 };
 
 export type HubNavigationLifecycleResult = {
@@ -1560,22 +1567,27 @@ export async function getHubRelationsByManifest(
   );
 }
 
+/**
+ * hub_navigation:create. targetTopologyManifestId is the only target the caller selects; the backend
+ * derives related_hub_id from that manifest's hub_id in the same write.
+ */
 export async function createHubRelation(
   topologyManifestId: string,
-  relatedHubId: string,
+  targetTopologyManifestId: string,
   sequencePosition: number,
 ): Promise<HubNavigationLifecycleResult> {
-  const body = await callHubNavigation("create", { topologyManifestId, relatedHubId, sequencePosition });
+  const body = await callHubNavigation("create", { topologyManifestId, targetTopologyManifestId, sequencePosition });
   if (body === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
   if (!body.success) throw new Error(body.errors?.[0]?.message ?? "create hub_relation failed");
   return body.emission?.data as HubNavigationLifecycleResult;
 }
 
+/** hub_navigation:update -- re-points the relation's target manifest (same single-authority rule). */
 export async function updateHubRelation(
   hubRelationId: string,
-  relatedHubId: string,
+  targetTopologyManifestId: string,
 ): Promise<HubNavigationLifecycleResult> {
-  const body = await callHubNavigation("update", { hubRelationId, relatedHubId });
+  const body = await callHubNavigation("update", { hubRelationId, targetTopologyManifestId });
   if (body === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
   if (!body.success) throw new Error(body.errors?.[0]?.message ?? "update hub_relation failed");
   return body.emission?.data as HubNavigationLifecycleResult;

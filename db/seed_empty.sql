@@ -2256,17 +2256,21 @@ ON CONFLICT (physical_table_id, topology_manifest_id) DO UPDATE
         updated_at         = now();
 
 -- Canonical hub_relations entry for manifest 092 (sequence_position=1). Self-referencing:
--- topology_manifest_id=092's own topology_manifest, related_hub_id=092's own existing hub
--- ('...a1', external_port_substrate) — no dedicated hub is introduced. hub '...a1' has exactly
--- one active hubs.topology_manifests row (092 itself), so TargetManifestId resolves
--- deterministically (docs/design/db-schema.yaml no_implicit_join_nullable_fallback semantics).
+-- topology_manifest_id=092's own topology_manifest, target_topology_manifest_id=092 itself (the
+-- canonical direct target FK, docs/design/db-schema.yaml
+-- hub_relations.target_reference_canonical_contract -- a Manifest self-reference is read-side legal),
+-- related_hub_id=092's own existing hub ('...a1', external_port_substrate) as the legacy mirror of
+-- that target manifest's hub_id — no dedicated hub is introduced. TargetManifestId resolves
+-- directly from target_topology_manifest_id while manifest 092 is status='active'.
 -- This is the canonical (non-demo) seed closing the prior gap where hubs.hub_relations existed
 -- only in db/demo_seed.sql (and there, only for the unrelated demo manifest).
 INSERT INTO hubs.hub_relations (
-    hub_relation_id, topology_manifest_id, related_hub_id, sequence_position, relation_config, status
+    hub_relation_id, topology_manifest_id, target_topology_manifest_id, related_hub_id,
+    sequence_position, relation_config, status
 )
 VALUES (
     '00000000-0000-0000-0000-0000000000b1',
+    '00000000-0000-0000-0000-000000000092',
     '00000000-0000-0000-0000-000000000092',
     '00000000-0000-0000-0000-0000000000a1',
     1,
@@ -3991,11 +3995,37 @@ ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index)
 -- pattern for all 7).
 -- =============================================================================
 
--- Hub owning the admin-enum-management topology_manifest. Never a
--- hub_relations target/source by itself -- required FK owner only.
-INSERT INTO hubs.hub (hub_id, relation)
-VALUES ('00000000-0000-0000-0000-0000000ae201', '{"description":"admin_enum_management","system":true}'::jsonb)
-ON CONFLICT (hub_id) DO NOTHING;
+-- relation_registry row carrying the admin-enum-management hub's human-readable navigation label,
+-- the same mechanism manifest 092's own hub uses (relation_registry '...cd016' above):
+-- NpgsqlContentBundleRepository.LoadHubNavigationSequenceAsync labels a navigation link with
+-- COALESCE(rr.name, hr.related_hub_id::text), so without this row the 092 -> ae200 link below would
+-- render the raw hub_id UUID as its nav-bar text. The label is the SAME human-readable projection
+-- label already authored on the admin-enum-management projection root
+-- ([projection key=admin_enum_management_projection label="Enum dictionary management"] in
+-- .agent/tests/fixtures/react-schema-topology-seed-translator/admin-enum-ae200.input.json), never a
+-- newly-invented label string.
+INSERT INTO topology.relation_registry (
+    relation_registry_id, name, master_ids, category, type, "order", weight, manifest_candidate, active
+)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae207',
+    'Enum dictionary management',
+    '{}', 'admin_hub_navigation', 'structural', 0, 1.0, false, true
+)
+ON CONFLICT (relation_registry_id) DO UPDATE
+    SET name = EXCLUDED.name;
+
+-- Hub owning the admin-enum-management topology_manifest. Required FK owner of the
+-- topology_manifest below; hubs.hub_relations rows name that MANIFEST (not this hub) as their
+-- target via target_topology_manifest_id, and mirror this hub_id into related_hub_id.
+INSERT INTO hubs.hub (hub_id, relation_registry_id, relation)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae201',
+    '00000000-0000-0000-0000-0000000ae207',
+    '{"description":"admin_enum_management","system":true}'::jsonb
+)
+ON CONFLICT (hub_id) DO UPDATE
+    SET relation_registry_id = EXCLUDED.relation_registry_id;
 
 -- Runtime manifest row: real ui_projection, reached via explicit
 -- payload.target_ref = manifest:<id>:projection_entry (same ?manifest=
@@ -4033,6 +4063,33 @@ ON CONFLICT (topology_manifest_id) DO UPDATE
         status         = EXCLUDED.status,
         topology_jsonb = EXCLUDED.topology_jsonb,
         updated_at     = now();
+
+-- hub-relation-target-manifest-canonical-migration Goal 1: Admin Credential (manifest 092,
+-- auth.external.credential_management.projection) authors its OWN ordinary outbound
+-- hubs.hub_relations row to Admin Enum (manifest ae200) -- the same row shape
+-- hub_navigation:create writes (docs/design/admin-console-workflow-ssot.yaml
+-- admin_hub_relation_navigation_contract.subbundle_target_readiness.admin-enum), persisted here as a
+-- canonical bootstrap seed row so it survives a fresh docker-compose-v bootstrap
+-- (docs/design/db-schema.yaml bootstrap_policy). sequence_position=2 follows 092's existing
+-- sequence_position=1 self-referencing canonical_default_entry row above, which is untouched.
+-- target_topology_manifest_id=ae200 is the canonical target; related_hub_id is ae200's own hub_id
+-- ('...ae201') as the derived legacy mirror (write_path_legacy_mirror_contract). HubNavigationResolver
+-- -> LoadHubNavigationSequenceAsync reads 092's own outbound rows only (source-scoped, forward-only),
+-- so this row is what puts ae200 into 092's ProjectionShell nav bar; no other mechanism is involved.
+INSERT INTO hubs.hub_relations (
+    hub_relation_id, topology_manifest_id, target_topology_manifest_id, related_hub_id,
+    sequence_position, relation_config, status
+)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae2b1',
+    '00000000-0000-0000-0000-000000000092',
+    '00000000-0000-0000-0000-0000000ae200',
+    '00000000-0000-0000-0000-0000000ae201',
+    2,
+    '{}'::jsonb,
+    'active'
+)
+ON CONFLICT (topology_manifest_id, sequence_position) DO NOTHING;
 
 -- admin-enum-management UI persistence (package/layout/wiring/tensor).
 INSERT INTO topology.ui_component_package (package_id, package_key, package_kind, package_schema_json, status)

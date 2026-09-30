@@ -331,21 +331,24 @@ ON CONFLICT (topology_manifest_id) DO NOTHING;
 
 -- ---------------------------------------------------------------------------
 -- hubs.hub_relations — manifest-scoped sequence entries (no hub_id source authority)
+-- target_topology_manifest_id is the canonical navigable target (docs/design/db-schema.yaml
+-- hub_relations.target_reference_canonical_contract); related_hub_id mirrors that target manifest's
+-- own hub_id. Only a relation with a real target manifest is authored here: the former
+-- sequence_position=1 entry pointed at the secondary demo hub ('...1d'), which owns no
+-- hubs.topology_manifests row at all, so it has no target manifest to name and a manifest must not be
+-- fabricated just to give it one (db-schema.yaml minimum_cardinality_completion_invariant
+-- does_not_authorize). An existing DB that already carries that row is handled by
+-- db/legacy_utils/hub_relations_related_hub_id_to_target_topology_manifest_id.sql (classified, left
+-- NULL, reported -- never auto-deprecated).
 -- ---------------------------------------------------------------------------
 INSERT INTO hubs.hub_relations (
-    hub_relation_id, topology_manifest_id, related_hub_id, sequence_position, relation_config, status
+    hub_relation_id, topology_manifest_id, target_topology_manifest_id, related_hub_id,
+    sequence_position, relation_config, status
 )
 VALUES
     (
-        '00000000-0000-0000-0000-000000000045',
-        '00000000-0000-0000-0000-000000000044',
-        '00000000-0000-0000-0000-00000000001d',
-        1,
-        '{"transition": "to_secondary_hub"}'::jsonb,
-        'active'
-    ),
-    (
         '00000000-0000-0000-0000-000000000046',
+        '00000000-0000-0000-0000-000000000044',
         '00000000-0000-0000-0000-000000000044',
         '00000000-0000-0000-0000-000000000010',
         2,

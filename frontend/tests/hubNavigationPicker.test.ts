@@ -1,40 +1,36 @@
 import { assertEquals, assertRejects } from "https://deno.land/std@0.208.0/assert/mod.ts";
-import type { ContentBundleListItem } from "../api/adminApi.ts";
-import {
-  hubDestinationOptionLabel,
-  hubDestinationPickerOptions,
-} from "../lib/hubNavigationPicker.ts";
+import type { HubNavigationManifestItem } from "../api/adminApi.ts";
+import { hubNavigationTargetManifestOptions } from "../lib/hubNavigationPicker.ts";
+import { UX_HUB_NAVIGATION_MANIFEST_UNNAMED_LABEL } from "../content/adminUxTerms.ts";
 
-function hub(
-  partial: Partial<ContentBundleListItem> & Pick<ContentBundleListItem, "id">,
-): ContentBundleListItem {
+function manifest(
+  partial: Partial<HubNavigationManifestItem> & Pick<HubNavigationManifestItem, "topologyManifestId">,
+): HubNavigationManifestItem {
   return {
-    kind: "hub",
-    label: "",
-    state: "active",
-    summary: "",
+    manifestKey: "k",
+    hubId: "h",
+    hasHubRelations: false,
+    hubRelationCount: 0,
     ...partial,
   };
 }
 
-Deno.test("hubDestinationPickerOptions: keeps hubs with summary or label only", () => {
-  const options = hubDestinationPickerOptions([
-    hub({ id: "a", summary: "顧客一覧", label: "customers" }),
-    hub({ id: "b", summary: "", label: "" }),
-    hub({ id: "c", summary: "", label: "注文" }),
+Deno.test("hubNavigationTargetManifestOptions: one option per topology manifest, valued by topologyManifestId (the target the backend receives), never a hub id", () => {
+  const options = hubNavigationTargetManifestOptions([
+    manifest({ topologyManifestId: "m-1", hubId: "hub-shared", userFacingTopologyLabel: "受注一覧" }),
+    manifest({ topologyManifestId: "m-2", hubId: "hub-shared", topologySystemName: "orders-detail" }),
   ]);
-  assertEquals(options.map((h) => h.id), ["a", "c"]);
+  // Two manifests under the same hub stay two distinct, individually selectable targets.
+  assertEquals(options.map((o) => o.value), ["m-1", "m-2"]);
 });
 
-Deno.test("hubDestinationOptionLabel: summary-first then label", () => {
-  assertEquals(
-    hubDestinationOptionLabel(hub({ id: "a", summary: "顧客一覧", label: "customers" })),
-    "顧客一覧",
-  );
-  assertEquals(
-    hubDestinationOptionLabel(hub({ id: "b", summary: "", label: "注文" })),
-    "注文",
-  );
+Deno.test("hubNavigationTargetManifestOptions: label follows the source selector's visibleName rule, fail-close placeholder instead of a raw id", () => {
+  const options = hubNavigationTargetManifestOptions([
+    manifest({ topologyManifestId: "m-1", userFacingTopologyLabel: "受注一覧", topologySystemName: "orders-list" }),
+    manifest({ topologyManifestId: "m-2", topologySystemName: "orders-detail" }),
+    manifest({ topologyManifestId: "m-3" }),
+  ]);
+  assertEquals(options.map((o) => o.label), ["受注一覧", "orders-detail", UX_HUB_NAVIGATION_MANIFEST_UNNAMED_LABEL]);
 });
 
 Deno.test("listContentHubs: rejects non-array emission.data (explicit API boundary)", async () => {
